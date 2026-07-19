@@ -49,6 +49,20 @@ jobs:
             --request POST \
             http://127.0.0.1:18080/api/adguard/bootstrap
 
+      - name: Verify Unbound configuration lifecycle
+        run: |
+          proposal='{"qname_minimisation":true,"prefetch":true,"serve_expired":true,"cache_min_ttl":120,"cache_max_ttl":86400,"threads":4}'
+          preview="$(curl --fail --silent --user admin:ci-rootguard-password --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
+          test "$(jq -r .changed <<<"$preview")" = "true"
+          curl --fail --silent --user admin:ci-rootguard-password --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
+          versions="$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/history)"
+          test "$(jq 'length' <<<"$versions")" -ge 2
+          baseline_id="$(jq -r '.[] | select(.settings.threads == 2) | .id' <<<"$versions")"
+          diagnostics="$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/diagnostics)"
+          test "$(jq -r .healthy <<<"$diagnostics")" = "true"
+          curl --fail --silent --user admin:ci-rootguard-password --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
+          test "$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/settings | jq -r .threads)" = "2"
+
       - name: Verify DNS through AdGuard and Unbound
         run: |
           answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
