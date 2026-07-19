@@ -1,0 +1,107 @@
+name: rootguard
+
+services:
+  unbound:
+    build:
+      context: ./rootguard-unbound
+    image: rootguard-unbound:dev
+    container_name: rootguard-unbound
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - unbound-config:/etc/unbound/unbound.d
+      - unbound-state:/var/lib/unbound
+    networks:
+      dns:
+        ipv4_address: 172.29.53.2
+
+  adguard:
+    image: adguard/adguardhome:v0.107.78
+    container_name: rootguard-adguard
+    restart: unless-stopped
+    depends_on:
+      unbound:
+        condition: service_healthy
+    ports:
+      - "${ROOTGUARD_DNS_BIND:-0.0.0.0}:${ROOTGUARD_DNS_PORT:-53}:53/tcp"
+      - "${ROOTGUARD_DNS_BIND:-0.0.0.0}:${ROOTGUARD_DNS_PORT:-53}:53/udp"
+    volumes:
+      - adguard-work:/opt/adguardhome/work
+      - adguard-config:/opt/adguardhome/conf
+    networks:
+      - dns
+
+  core:
+    build:
+      context: ./rootguard-core
+    image: rootguard-core:dev
+    container_name: rootguard-core
+    restart: unless-stopped
+    depends_on:
+      unbound:
+        condition: service_healthy
+      adguard:
+        condition: service_started
+    environment:
+      PORT: "8081"
+      ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      UNBOUND_CONFIG_DIR: /var/lib/rootguard/unbound
+      UNBOUND_CONTAINER_CONFIG_DIR: /etc/unbound/unbound.d
+      UNBOUND_CONTAINER_NAME: rootguard-unbound
+      ADGUARD_INSTALLER_URL: http://rootguard-adguard:3000
+      ADGUARD_API_URL: http://rootguard-adguard:80
+      ADGUARD_DATA_DIR: /var/lib/rootguard/adguard
+      ADGUARD_UPSTREAM: 172.29.53.2:5335
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - rootguard-data:/var/lib/rootguard
+      - unbound-config:/var/lib/rootguard/unbound
+    networks:
+      - control
+      - dns
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  webapp:
+    build:
+      context: ./rootguard-webapp
+    image: rootguard-webapp:dev
+    container_name: rootguard-webapp
+    restart: unless-stopped
+    depends_on:
+      core:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      ROOTGUARD_CORE_URL: http://core:8081
+      ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
+      ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
+    ports:
+      - "${ROOTGUARD_WEB_PORT:-8080}:8080/tcp"
+    networks:
+      - control
+      - edge
+
+networks:
+  edge:
+  control:
+    internal: true
+  dns:
+    ipam:
+      config:
+        - subnet: 172.29.53.0/24
+
+volumes:
+  adguard-work:
+  adguard-config:
+  unbound-config:
+  unbound-state:
+  rootguard-data:
