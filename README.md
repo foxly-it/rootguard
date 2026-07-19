@@ -130,7 +130,7 @@ The container ships with a secure Docker-compatible configuration:
 - DNSSEC enabled
 - Access restricted to:
   - localhost
-  - Docker bridge network
+  - private Docker networks (`10/8`, `172.16/12`, `192.168/16`)
 - Recursion enabled
 - Private address protection active
 
@@ -167,6 +167,13 @@ It should **not** be exposed directly to WAN.
           - ALL
         security_opt:
           - no-new-privileges:true
+        volumes:
+          - unbound-config:/etc/unbound/unbound.d
+          - unbound-state:/var/lib/unbound
+
+    volumes:
+      unbound-config:
+      unbound-state:
 
 ---
 
@@ -240,7 +247,7 @@ RootGuard will:
 
 - Generate modular configuration files
 - Validate configs using `unbound-checkconf`
-- Reload resolver without container restart
+- Activate validated settings atomically and restart the resolver
 - Provide GUI explanations for:
   - Local Zones
   - Conditional Forwarding
@@ -256,7 +263,7 @@ so the RootGuard application layer controls the dynamic logic.
 
 ## Roadmap
 
-- Live config reload via `unbound-control`
+- Live config reload via `unbound-control` without restart
 - Remote-control integration
 - Metrics endpoint integration
 - Config validation pipeline
