@@ -49,3 +49,20 @@ prüft Unbounds feste Adresse `172.29.53.2:5335` im internen DNS-Netz vor der
 Aktivierung und konfiguriert keinen öffentlichen Fallback. Eine generische
 Weiterleitung der AdGuard-API ist
 absichtlich ausgeschlossen.
+
+## Unbound-Konfigurationszyklus
+
+```text
+WebGUI-Entwurf
+  → Vorschau und Feldvergleich
+  → unbound-checkconf im Resolver
+  → atomare Aktivierung
+  → Resolver-Neustart
+  → versionierter Snapshot
+```
+
+Core speichert maximal 20 validierte Versionen. Ein manueller Rollback wird
+wie jede andere Änderung erneut gerendert und validiert. Scheitert ein Neustart
+nach der Aktivierung, stellt Core die zuvor gelesenen Konfigurations- und
+Einstellungsdateien wieder her und startet Unbound erneut. Die Webapp erhält
+keinen generischen Datei- oder Kommandozugriff.

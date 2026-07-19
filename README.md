@@ -51,6 +51,29 @@ die native AdGuard-Verwaltung noch Core und sein Docker-Zugriff werden nach
 außen veröffentlicht; privilegierte Aktionen laufen ausschließlich über die
 authentifizierte Webapp.
 
+### DNS im Router eintragen
+
+`localhost` bezeichnet ausschließlich den Zugriff auf die WebApp vom
+RootGuard-Host selbst. AdGuard Home veröffentlicht DNS standardmäßig über TCP
+und UDP Port 53 auf allen Host-Schnittstellen. Im Router wird deshalb die feste
+LAN-IP des RootGuard-Hosts eingetragen, beispielsweise `192.168.178.10` – nicht
+`127.0.0.1` und nicht die interne Docker-Adresse `172.29.53.2`.
+
+Der RootGuard-Host sollte dafür eine DHCP-Reservierung besitzen, dauerhaft
+laufen und eingehenden DNS-Verkehr auf TCP/UDP 53 erlauben. Der externe Bind
+kann über `ROOTGUARD_DNS_BIND` eingeschränkt werden.
+
+### Unbound über die WebGUI konfigurieren
+
+Unter **Unbound Settings** können Resolver- und Cache-Einstellungen bearbeitet
+werden. Vor dem Speichern zeigt RootGuard die einzelnen Änderungen und die
+generierte Unbound-Konfiguration. Core validiert sie im laufenden Resolver,
+aktiviert sie atomar und hält bis zu 20 Versionen bereit. Scheitert der
+Neustart, wird automatisch die vorherige Konfiguration wiederhergestellt.
+
+Die Oberfläche bietet außerdem einen bestätigten Rollback und Diagnosen für
+Konfigurationssyntax, rekursive DNS-Auflösung und DNSSEC-Validierung.
+
 > Der aktuelle Stack ist ein Entwicklungsstand. Vor dem Einsatz als DNS für
 > ein gesamtes Netzwerk müssen insbesondere HTTPS, Wiederherstellungstests und
 > die RootGuard-Oberflächen für Filter, Clients und Abfragestatistiken ergänzt
