@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="RootGuard vereint AdGuard Home, Unbound und eine sichere Weboberfläche zu einem selbst betriebenen DNS-Schutz für dein Netzwerk.">
+  <meta name="theme-color" content="#0d1218">
+  <meta property="og:title" content="RootGuard – DNS-Schutz unter deiner Kontrolle">
+  <meta property="og:description" content="AdGuard Home und Unbound, zentral und nachvollziehbar über eine Weboberfläche verwaltet.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://rootguard.foxly.de/">
+  <title>RootGuard – DNS-Schutz unter deiner Kontrolle</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">Zum Inhalt springen</a>
+  <div class="wrap">
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="RootGuard Startseite"><span class="brand-mark">R</span><span>Root<span>Guard</span></span></a>
+      <div class="nav-group">
+        <nav class="links" aria-label="Hauptnavigation">
+          <a href="#features" data-de="Features" data-en="Features">Features</a>
+          <a href="#architecture" data-de="Architektur" data-en="Architecture">Architektur</a>
+          <a href="#docs" data-de="Dokumentation" data-en="Documentation">Dokumentation</a>
+          <a href="#roadmap">Roadmap</a>
+          <a href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        </nav>
+        <div class="language-switch" aria-label="Sprache">
+          <button class="lang-button" id="btn-de" type="button" data-language="de">DE</button>
+          <button class="lang-button" id="btn-en" type="button" data-language="en">EN</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="content">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <div class="status"><span class="status-dot" aria-hidden="true"></span><span data-de="Aktiv in Entwicklung · Noch kein Production-Release" data-en="Actively developed · No production release yet">Aktiv in Entwicklung · Noch kein Production-Release</span></div>
+          <p class="eyebrow" data-de="Dein Netzwerk · Deine Regeln · Dein DNS" data-en="Your network · Your rules · Your DNS">Dein Netzwerk · Deine Regeln · Dein DNS</p>
+          <h1 data-de="DNS-Schutz.<br><em>Unter deiner Kontrolle.</em>" data-en="DNS protection.<br><em>Under your control.</em>">DNS-Schutz.<br><em>Unter deiner Kontrolle.</em></h1>
+          <p class="lead" data-de="RootGuard verbindet AdGuard Home mit einem eigenen rekursiven Unbound-Resolver und macht das Gesamtsystem über eine zentrale Weboberfläche steuerbar – für weniger Werbung, weniger Tracking und mehr Souveränität im eigenen Netzwerk." data-en="RootGuard combines AdGuard Home with a dedicated recursive Unbound resolver and makes the entire system manageable through one central web interface—for less advertising, less tracking, and more control over your own network.">RootGuard verbindet AdGuard Home mit einem eigenen rekursiven Unbound-Resolver und macht das Gesamtsystem über eine zentrale Weboberfläche steuerbar – für weniger Werbung, weniger Tracking und mehr Souveränität im eigenen Netzwerk.</p>
+          <div class="actions">
+            <a class="button" href="#docs" data-de="Projekt kennenlernen" data-en="Explore the project">Projekt kennenlernen</a>
+            <a class="button secondary" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" data-de="Quellcode ansehen" data-en="View source">Quellcode ansehen</a>
+          </div>
+        </div>
+
+        <div class="dashboard" aria-label="RootGuard Dashboard Vorschau">
+          <div class="window-head"><span></span><span></span><span></span><b>rootguard.local</b></div>
+          <div class="dashboard-body">
+            <div class="dashboard-nav"><strong><i>R</i> RootGuard</strong><span>Overview</span><span>DNS Services</span><span>Unbound</span><span>Security</span></div>
+            <div class="dashboard-main">
+              <div class="dash-title"><div><small data-de="NETZWERKSCHUTZ" data-en="NETWORK PROTECTION">NETZWERKSCHUTZ</small><strong data-de="Alles geschützt" data-en="Everything protected">Alles geschützt</strong></div><span class="healthy">● Healthy</span></div>
+              <div class="metrics"><div><small data-de="DNS-ANFRAGEN" data-en="DNS QUERIES">DNS-ANFRAGEN</small><b>48.219</b><span>+12.4% today</span></div><div><small data-de="BLOCKIERT" data-en="BLOCKED">BLOCKIERT</small><b class="purple">8.431</b><span>17.5% of traffic</span></div></div>
+              <div class="pipeline"><div><i>01</i><b data-de="Clients" data-en="Clients">Clients</b><span>192.168.1.0/24</span></div><em>→</em><div><i>02</i><b>AdGuard Home</b><span data-de="Filter &amp; Regeln" data-en="Filters &amp; rules">Filter &amp; Regeln</span></div><em>→</em><div><i>03</i><b>Unbound</b><span>DNSSEC · Recursive</span></div></div>
+              <div class="activity"><span></span><div><b>tracker.example</b><small data-de="Blockiert durch Tracking Protection" data-en="Blocked by Tracking Protection">Blockiert durch Tracking Protection</small></div><time>now</time></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features">
+        <p class="eyebrow" data-de="Ein System statt einzelner Bausteine" data-en="One system, not disconnected parts">Ein System statt einzelner Bausteine</p>
+        <h2 data-de="Filtern. Auflösen. Verwalten." data-en="Filter. Resolve. Manage.">Filtern. Auflösen. Verwalten.</h2>
+        <p class="section-lead" data-de="RootGuard schafft eine verständliche Bedienebene für einen leistungsfähigen, selbst betriebenen DNS-Stack." data-en="RootGuard provides an approachable control layer for a powerful, self-hosted DNS stack.">RootGuard schafft eine verständliche Bedienebene für einen leistungsfähigen, selbst betriebenen DNS-Stack.</p>
+        <div class="grid feature-grid">
+          <article class="card"><span class="icon">◎</span><h3 data-de="Werbung &amp; Tracker blockieren" data-en="Block ads &amp; trackers">Werbung &amp; Tracker blockieren</h3><p data-de="AdGuard Home filtert DNS-Anfragen zentral für alle Geräte – ohne Erweiterung auf jedem einzelnen Client." data-en="AdGuard Home filters DNS queries centrally for every device—without an extension on each client.">AdGuard Home filtert DNS-Anfragen zentral für alle Geräte – ohne Erweiterung auf jedem einzelnen Client.</p></article>
+          <article class="card"><span class="icon">⌁</span><h3 data-de="Selbst rekursiv auflösen" data-en="Resolve recursively">Selbst rekursiv auflösen</h3><p data-de="Unbound fragt die DNS-Hierarchie direkt ab. QNAME-Minimierung und DNSSEC bilden eine datensparsame, überprüfbare Basis." data-en="Unbound queries the DNS hierarchy directly. QNAME minimization and DNSSEC form a privacy-conscious, verifiable foundation.">Unbound fragt die DNS-Hierarchie direkt ab. QNAME-Minimierung und DNSSEC bilden eine datensparsame, überprüfbare Basis.</p></article>
+          <article class="card"><span class="icon">⌘</span><h3 data-de="Zentral steuern" data-en="Manage centrally">Zentral steuern</h3><p data-de="Status, Dienste und Unbound-Einstellungen werden in einer gemeinsamen Weboberfläche sichtbar und kontrollierbar." data-en="Status, services, and Unbound settings become visible and manageable in one shared web interface.">Status, Dienste und Unbound-Einstellungen werden in einer gemeinsamen Weboberfläche sichtbar und kontrollierbar.</p></article>
+          <article class="card"><span class="icon">◇</span><h3 data-de="Modular aufgebaut" data-en="Built modularly">Modular aufgebaut</h3><p data-de="Core, Webapp und Unbound bleiben eigenständige Komponenten. So lässt sich etwa das Unbound-Image auch unabhängig nutzen." data-en="Core, web app, and Unbound remain independent components, so the Unbound image can also be used on its own.">Core, Webapp und Unbound bleiben eigenständige Komponenten. So lässt sich etwa das Unbound-Image auch unabhängig nutzen.</p></article>
+          <article class="card"><span class="icon">▣</span><h3 data-de="Nachvollziehbar deployen" data-en="Deploy reproducibly">Nachvollziehbar deployen</h3><p data-de="Docker Compose verbindet die Komponenten reproduzierbar und hält privilegierte Steuerpfade aus dem öffentlichen Netz." data-en="Docker Compose connects all components reproducibly and keeps privileged control paths off the public network.">Docker Compose verbindet die Komponenten reproduzierbar und hält privilegierte Steuerpfade aus dem öffentlichen Netz.</p></article>
+          <article class="card"><span class="icon">↗</span><h3>Open Source</h3><p data-de="Code, Architektur und Entwicklungsstand sind öffentlich. Entscheidungen und Fortschritt bleiben überprüfbar." data-en="Code, architecture, and development status are public. Decisions and progress remain verifiable.">Code, Architektur und Entwicklungsstand sind öffentlich. Entscheidungen und Fortschritt bleiben überprüfbar.</p></article>
+        </div>
+      </section>
+
+      <section id="architecture">
+        <div class="split-heading"><div><p class="eyebrow" data-de="Klare Zuständigkeiten" data-en="Clear responsibilities">Klare Zuständigkeiten</p><h2 data-de="Sicherheit beginnt in der Architektur." data-en="Security starts with architecture.">Sicherheit beginnt in der Architektur.</h2></div><p class="section-lead" data-de="Die Webapp erhält keinen Docker-Socket. Privilegierte Aktionen laufen über Core, das ausschließlich im internen Control-Netz erreichbar ist." data-en="The web app never receives the Docker socket. Privileged operations run through Core, which is only reachable inside the internal control network.">Die Webapp erhält keinen Docker-Socket. Privilegierte Aktionen laufen über Core, das ausschließlich im internen Control-Netz erreichbar ist.</p></div>
+        <div class="architecture-map" role="img" aria-label="Browser verbindet sich mit Webapp und Core; DNS Clients verbinden sich mit AdGuard und Unbound">
+          <div class="arch-lane"><span class="lane-label">CONTROL PLANE</span><article><small>01</small><b>Browser</b><span>Basic Auth</span></article><i>→</i><article><small>02</small><b>WebApp</b><span data-de="UI &amp; API-Proxy" data-en="UI &amp; API proxy">UI &amp; API-Proxy</span></article><i>→</i><article class="accent"><small>03</small><b>Core</b><span>Bearer Token</span></article><i>→</i><article><small>04</small><b>Docker API</b><span data-de="intern" data-en="internal">intern</span></article></div>
+          <div class="arch-lane"><span class="lane-label">DNS PLANE</span><article><small>01</small><b data-de="Netzwerkgeräte" data-en="Network devices">Netzwerkgeräte</b><span>TCP / UDP 53</span></article><i>→</i><article><small>02</small><b>AdGuard Home</b><span data-de="Filter &amp; Policies" data-en="Filters &amp; policies">Filter &amp; Policies</span></article><i>→</i><article class="accent"><small>03</small><b>Unbound</b><span>Recursive DNS</span></article><i>→</i><article><small>04</small><b>DNS Root</b><span>DNSSEC</span></article></div>
+        </div>
+        <div class="security-notes">
+          <div><b data-de="Getrennte Netze" data-en="Separated networks">Getrennte Netze</b><span data-de="Control- und DNS-Datenverkehr besitzen klar abgegrenzte Wege." data-en="Control and DNS traffic follow clearly separated paths.">Control- und DNS-Datenverkehr besitzen klar abgegrenzte Wege.</span></div>
+          <div><b data-de="Minimale Rechte" data-en="Minimum privileges">Minimale Rechte</b><span data-de="Unbound läuft read-only, non-root und ohne zusätzliche Linux-Capabilities." data-en="Unbound runs read-only, non-root, and without additional Linux capabilities.">Unbound läuft read-only, non-root und ohne zusätzliche Linux-Capabilities.</span></div>
+          <div><b data-de="Geschützte Steuerung" data-en="Protected control">Geschützte Steuerung</b><span data-de="Externe Anmeldung und interne API-Authentifizierung sind getrennt." data-en="External login and internal API authentication remain separate.">Externe Anmeldung und interne API-Authentifizierung sind getrennt.</span></div>
+        </div>
+      </section>
+
+      <section id="docs">
+        <p class="eyebrow" data-de="Dokumentation" data-en="Documentation">Dokumentation</p>
+        <h2 data-de="Vom ersten Checkout zum DNS-Stack." data-en="From first checkout to DNS stack.">Vom ersten Checkout zum DNS-Stack.</h2>
+        <p class="section-lead" data-de="Der aktuelle Entwicklungsstack ist für Tests und Mitarbeit gedacht. Er ist noch keine Empfehlung für den produktiven DNS-Betrieb eines gesamten Netzwerks." data-en="The current development stack is intended for testing and contributions. It is not yet recommended as the production DNS service for an entire network.">Der aktuelle Entwicklungsstack ist für Tests und Mitarbeit gedacht. Er ist noch keine Empfehlung für den produktiven DNS-Betrieb eines gesamten Netzwerks.</p>
+        <div class="docs-layout">
+          <div class="quickstart">
+            <div class="terminal-head"><span></span><span></span><span></span><b>quickstart.sh</b></div>
+            <pre><code><span class="muted"># Repository und Komponenten laden</span>
+git clone --recurse-submodules \
+  https://github.com/foxly-it/rootguard.git
+cd rootguard
+
+<span class="muted"># Lokale Zugangsdaten vorbereiten</span>
+cp .env.example .env
+openssl rand -hex 32
+
+<span class="muted"># .env bearbeiten, dann Stack starten</span>
+docker compose up --build -d
+
+<span class="muted"># WebApp öffnen und AdGuard Home initialisieren</span>
+open http://localhost:8080/adguard</code></pre>
+            <div class="warning"><b data-de="Wichtig:" data-en="Important:">Wichtig:</b> <span data-de="Setze ein starkes Admin-Passwort und ein zufälliges API-Token. Vor öffentlichem Betrieb fehlen insbesondere HTTPS, automatisierte Wiederherstellungstests sowie Oberflächen für Filter und Clients." data-en="Set a strong admin password and a random API token. Before public use, HTTPS, automated recovery tests, and interfaces for filters and clients still need to be implemented.">Setze ein starkes Admin-Passwort und ein zufälliges API-Token. Vor öffentlichem Betrieb fehlen insbesondere HTTPS, automatisierte Wiederherstellungstests sowie Oberflächen für Filter und Clients.</span></div>
+          </div>
+          <div class="doc-links">
+            <a href="https://github.com/foxly-it/rootguard#readme" target="_blank" rel="noopener noreferrer"><span>01</span><div><b>Quickstart &amp; Compose</b><small data-de="Installation, Ports und lokale Konfiguration" data-en="Installation, ports, and local configuration">Installation, Ports und lokale Konfiguration</small></div><i>↗</i></a>
+            <a href="https://github.com/foxly-it/rootguard/blob/main/docs/architecture.md" target="_blank" rel="noopener noreferrer"><span>02</span><div><b data-de="Architekturdokumentation" data-en="Architecture documentation">Architekturdokumentation</b><small data-de="Komponenten, Netze und Vertrauensgrenzen" data-en="Components, networks, and trust boundaries">Komponenten, Netze und Vertrauensgrenzen</small></div><i>↗</i></a>
+            <a href="https://github.com/foxly-it/rootguard-core" target="_blank" rel="noopener noreferrer"><span>03</span><div><b>RootGuard Core</b><small data-de="Kontroll-API und sichere Docker-Orchestrierung" data-en="Control API and secure Docker orchestration">Kontroll-API und sichere Docker-Orchestrierung</small></div><i>↗</i></a>
+            <a href="https://github.com/foxly-it/rootguard-webapp" target="_blank" rel="noopener noreferrer"><span>04</span><div><b>RootGuard WebApp</b><small data-de="Oberfläche, Anmeldung und API-Proxy" data-en="Interface, authentication, and API proxy">Oberfläche, Anmeldung und API-Proxy</small></div><i>↗</i></a>
+            <a href="https://github.com/foxly-it/rootguard-unbound" target="_blank" rel="noopener noreferrer"><span>05</span><div><b>RootGuard Unbound</b><small data-de="Eigenständig nutzbarer rekursiver Resolver" data-en="Standalone recursive resolver">Eigenständig nutzbarer rekursiver Resolver</small></div><i>↗</i></a>
+          </div>
+        </div>
+      </section>
+
+      <section id="roadmap">
+        <p class="eyebrow" data-de="Aktive Entwicklung" data-en="Active development">Aktive Entwicklung</p>
+        <h2 data-de="Der Weg zum stabilen Release." data-en="The path to a stable release.">Der Weg zum stabilen Release.</h2>
+        <p class="section-lead" data-de="RootGuard wächst schrittweise zu einem sicheren, wartbaren Gesamtsystem. Die Reihenfolge priorisiert verlässlichen Betrieb vor zusätzlichen Komfortfunktionen." data-en="RootGuard is growing step by step into a secure, maintainable system. The order prioritizes reliable operation before additional convenience features.">RootGuard wächst schrittweise zu einem sicheren, wartbaren Gesamtsystem. Die Reihenfolge priorisiert verlässlichen Betrieb vor zusätzlichen Komfortfunktionen.</p>
+        <ol class="roadmap">
+          <li class="done"><span>01</span><div><b data-de="Sicherer Komponentenpfad" data-en="Secure component path">Sicherer Komponentenpfad</b><small data-de="WebApp → Core → Docker, Authentifizierung und getrennte Netze" data-en="WebApp → Core → Docker, authentication, and separated networks">WebApp → Core → Docker, Authentifizierung und getrennte Netze</small></div><em data-de="MVP" data-en="MVP">MVP</em></li>
+          <li class="done"><span>02</span><div><b data-de="Sichere AdGuard-Basis" data-en="Secure AdGuard foundation">Sichere AdGuard-Basis</b><small data-de="Automatische Ersteinrichtung, interne Zugangsdaten und geprüfter Unbound-Upstream" data-en="Automated onboarding, internal credentials, and a validated Unbound upstream">Automatische Ersteinrichtung, interne Zugangsdaten und geprüfter Unbound-Upstream</small></div><em data-de="MVP" data-en="MVP">MVP</em></li>
+          <li class="active"><span>03</span><div><b data-de="Filter &amp; Client-Regeln" data-en="Filters &amp; client rules">Filter &amp; Client-Regeln</b><small data-de="RootGuard-Oberflächen für Filterlisten, Ausnahmen und Geräte" data-en="RootGuard interfaces for filter lists, exceptions, and devices">RootGuard-Oberflächen für Filterlisten, Ausnahmen und Geräte</small></div><em data-de="Als Nächstes" data-en="Up next">Als Nächstes</em></li>
+          <li><span>04</span><div><b data-de="Observability &amp; DNS-Werkzeuge" data-en="Observability &amp; DNS tools">Observability &amp; DNS-Werkzeuge</b><small data-de="Abfragestatistiken, lokale Zonen, Split DNS und Diagnose" data-en="Query statistics, local zones, split DNS, and diagnostics">Abfragestatistiken, lokale Zonen, Split DNS und Diagnose</small></div><em data-de="Geplant" data-en="Planned">Geplant</em></li>
+          <li><span>05</span><div><b data-de="Produktionsreife" data-en="Production readiness">Produktionsreife</b><small data-de="HTTPS, Rollen, Backup, Wiederherstellung, Updates und Rollbacks" data-en="HTTPS, roles, backup, recovery, updates, and rollbacks">HTTPS, Rollen, Backup, Wiederherstellung, Updates und Rollbacks</small></div><em data-de="Geplant" data-en="Planned">Geplant</em></li>
+        </ol>
+        <div class="cta"><div><p class="eyebrow">Open Source · GitHub</p><h2 data-de="RootGuard entsteht öffentlich." data-en="RootGuard is built in public.">RootGuard entsteht öffentlich.</h2><p data-de="Verfolge die Entwicklung, melde Fehler oder bring deine Erfahrung mit DNS und Homelabs ein." data-en="Follow development, report issues, or contribute your DNS and homelab experience.">Verfolge die Entwicklung, melde Fehler oder bring deine Erfahrung mit DNS und Homelabs ein.</p></div><a class="button" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" data-de="Projekt auf GitHub" data-en="Project on GitHub">Projekt auf GitHub</a></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div><strong>RootGuard</strong><span data-de="Selbst betriebener DNS-Schutz für dein Netzwerk." data-en="Self-hosted DNS protection for your network.">Selbst betriebener DNS-Schutz für dein Netzwerk.</span></div>
+      <nav aria-label="Rechtliches und Projekt"><a href="https://github.com/foxly-it/rootguard">GitHub</a><a href="https://foxly.de/datenschutzerklaerung/" data-de="Datenschutz" data-en="Privacy">Datenschutz</a><a href="https://foxly.de/legal-notice/" data-de="Impressum" data-en="Legal notice">Impressum</a></nav>
+      <small>© <span id="year"></span> Mark Schenk · Made with 💜 by Foxly IT</small>
+    </footer>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

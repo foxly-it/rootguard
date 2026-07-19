@@ -1,9 +1,9 @@
 [submodule "rootguard-core"]
 	path = rootguard-core
-	url = git@github.com:foxly-it/rootguard-core.git
+	url = https://github.com/foxly-it/rootguard-core.git
 [submodule "rootguard-webapp"]
 	path = rootguard-webapp
-	url = git@github.com:foxly-it/rootguard-webapp.git
+	url = https://github.com/foxly-it/rootguard-webapp.git
 [submodule "rootguard-unbound"]
 	path = rootguard-unbound
 	url = https://github.com/foxly-it/rootguard-unbound.git

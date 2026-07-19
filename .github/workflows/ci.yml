@@ -1,0 +1,65 @@
+name: RootGuard Integration CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      ROOTGUARD_API_TOKEN: ci-rootguard-token
+      ROOTGUARD_ADMIN_USER: admin
+      ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
+      ROOTGUARD_WEB_PORT: "18080"
+      ROOTGUARD_DNS_BIND: 127.0.0.1
+      ROOTGUARD_DNS_PORT: "1053"
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Validate Compose model
+        run: docker compose config --quiet
+
+      - name: Build RootGuard stack
+        run: docker compose build
+
+      - name: Start RootGuard stack
+        run: docker compose up -d
+
+      - name: Wait for WebApp
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/version >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Bootstrap AdGuard Home
+        run: |
+          curl --fail --show-error --silent \
+            --user admin:ci-rootguard-password \
+            --request POST \
+            http://127.0.0.1:18080/api/adguard/bootstrap
+
+      - name: Verify DNS through AdGuard and Unbound
+        run: |
+          answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
+          test -n "$answer"
+          status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 dnssec-failed.org A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
+          test "$status" = "SERVFAIL"
+
+      - name: Show service logs after failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop RootGuard stack
+        if: always()
+        run: docker compose down --volumes
