@@ -72,3 +72,17 @@ auf dem Entwurf. Die Empfehlungen sind deterministisch, verändern keine Dateien
 und werden vor ihrer Rückgabe gegen dieselben Wertebereiche wie eine spätere
 Aktivierung geprüft. Dadurch umgehen weder Profile noch Vorschläge die
 Sicherheitskette.
+
+## Unbound-Expertenkonfiguration
+
+Die unveränderliche `/etc/unbound/unbound.conf` bindet Konfigurationsmodule aus
+`/etc/unbound/unbound.d/*.conf` ein. Der Experteneditor besitzt ausschließlich
+die Datei `90-rootguard-custom.conf`; `50-rootguard.conf` bleibt der typisierten
+WebGUI vorbehalten. Includes, Listener, Remote Control, Containerpfade,
+Trust-Anker und geführte Werte sind im freien Editor gesperrt.
+
+Vor einer Aktivierung prüft Core eine kombinierte Kandidatendatei. Danach werden
+Settings, Managed Config und Custom Config atomar geschrieben und die effektive
+`/etc/unbound/unbound.conf` erneut mit `unbound-checkconf` geprüft. Bei einem
+Prüf- oder Neustartfehler stellt Core alle drei vorherigen Dateien wieder her.
+Ein History-Eintrag bildet deshalb stets den gemeinsamen Resolverzustand ab.

@@ -76,6 +76,27 @@ jobs:
           status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 dnssec-failed.org A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
           test "$status" = "SERVFAIL"
 
+      - name: Verify Unbound expert configuration lifecycle
+        run: |
+          test "$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/directives | jq 'length')" -ge 15
+          custom=$'server:\n    local-zone: "home.arpa." static\n    local-data: "router.home.arpa. 300 IN A 192.168.1.1"\n'
+          payload="$(jq -n --arg content "$custom" '{content:$content}')"
+          preview="$(curl --fail --silent --user admin:ci-rootguard-password --header 'Content-Type: application/json' --data "$payload" http://127.0.0.1:18080/api/unbound/custom/preview)"
+          test "$(jq -r .changed <<<"$preview")" = "true"
+          test -n "$(jq -r .validation <<<"$preview")"
+          forbidden="$(jq -n --arg content 'include: "/etc/passwd"' '{content:$content}')"
+          http_status="$(curl --silent --output /tmp/custom-error.json --write-out '%{http_code}' --user admin:ci-rootguard-password --header 'Content-Type: application/json' --data "$forbidden" http://127.0.0.1:18080/api/unbound/custom/preview)"
+          test "$http_status" = "400"
+          curl --fail --silent --user admin:ci-rootguard-password --request PUT --header 'Content-Type: application/json' --data "$payload" http://127.0.0.1:18080/api/unbound/custom >/dev/null
+          test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 router.home.arpa A)" = "192.168.1.1"
+          versions="$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/history)"
+          custom_id="$(jq -r --arg content "$custom" '.[] | select(.custom_config == $content) | .id' <<<"$versions" | head -1)"
+          test -n "$custom_id"
+          baseline_id="$(jq -r '.[] | select((.custom_config // "") == "") | .id' <<<"$versions" | head -1)"
+          test -n "$baseline_id"
+          curl --fail --silent --user admin:ci-rootguard-password --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
+          test "$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/custom | jq -r .content)" = ""
+
       - name: Show service logs after failure
         if: failure()
         run: docker compose logs --no-color

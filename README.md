@@ -79,6 +79,13 @@ Verfügbarkeit, Cache-Effizienz und Ressourcenbedarf. Ein Profil wird niemals
 direkt aktiviert, sondern durchläuft denselben Vorschau-, `unbound-checkconf`-,
 Versions- und Rollback-Pfad wie eine manuelle Änderung.
 
+Der einklappbare **Expertenmodus** verwaltet zusätzlich die separate Datei
+`90-rootguard-custom.conf`. Der Editor bietet Syntaxhervorhebung, Vorlagen,
+Vervollständigung, kontextsensitive Erklärungen und Advisor-Hinweise. RootGuard
+blockiert systemkritische Direktiven, prüft zunächst einen kombinierten Entwurf
+und anschließend die vollständige effektive Konfiguration. Geführte und freie
+Konfiguration werden gemeinsam versioniert und wiederhergestellt.
+
 > Der aktuelle Stack ist ein Entwicklungsstand. Vor dem Einsatz als DNS für
 > ein gesamtes Netzwerk müssen insbesondere HTTPS, Wiederherstellungstests und
 > die RootGuard-Oberflächen für Filter, Clients und Abfragestatistiken ergänzt

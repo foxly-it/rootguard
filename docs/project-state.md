@@ -44,6 +44,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   and performance) that load only as drafts.
 - Deterministic draft advice for privacy, availability, cache efficiency, and
   resource usage, including explanations and recommended value ranges.
+- Separate `90-rootguard-custom.conf` expert editor with generic syntax
+  highlighting, templates, prefix completion, contextual documentation, risk
+  labels, deterministic advice, and a 64 KiB limit.
+- Custom configuration policy blocks file includes, listeners, remote control,
+  trust-anchor changes, DNSSEC bypasses, and values owned by guided settings.
+- Candidate and effective `unbound-checkconf` validation plus atomic activation;
+  guided settings and custom content share history and rollback.
 - Integration CI starts the complete stack and verifies AdGuard bootstrap,
   Unbound preview/apply/history/diagnostics/restore, positive DNS, and DNSSEC
   rejection.
@@ -69,6 +76,14 @@ Stack Center and production visibility:
 6. Local zones, conditional forwarding, custom diagnostics, and cache tools.
 7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
 8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer.
+
+## Tracked editor follow-ups
+
+- Generate and version the completion/documentation catalog for every directive
+  supported by the installed Unbound release; the current catalog covers the
+  common, safe RootGuard use cases.
+- Expand semantic Advisor rules beyond the current security-, forwarding-,
+  access-control-, and local-zone checks to cover more directive combinations.
 
 ## Release status
 
