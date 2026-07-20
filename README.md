@@ -72,7 +72,12 @@ aktiviert sie atomar und hält bis zu 20 Versionen bereit. Scheitert der
 Neustart, wird automatisch die vorherige Konfiguration wiederhergestellt.
 
 Die Oberfläche bietet außerdem einen bestätigten Rollback und Diagnosen für
-Konfigurationssyntax, rekursive DNS-Auflösung und DNSSEC-Validierung.
+Konfigurationssyntax, rekursive DNS-Auflösung und DNSSEC-Validierung. Vier
+geprüfte Betriebsprofile können als Entwurf geladen werden. Der RootGuard
+Advisor bewertet jeden Entwurf automatisch hinsichtlich Datenschutz,
+Verfügbarkeit, Cache-Effizienz und Ressourcenbedarf. Ein Profil wird niemals
+direkt aktiviert, sondern durchläuft denselben Vorschau-, `unbound-checkconf`-,
+Versions- und Rollback-Pfad wie eine manuelle Änderung.
 
 > Der aktuelle Stack ist ein Entwicklungsstand. Vor dem Einsatz als DNS für
 > ein gesamtes Netzwerk müssen insbesondere HTTPS, Wiederherstellungstests und
