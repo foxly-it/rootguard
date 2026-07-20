@@ -66,3 +66,9 @@ wie jede andere Änderung erneut gerendert und validiert. Scheitert ein Neustart
 nach der Aktivierung, stellt Core die zuvor gelesenen Konfigurations- und
 Einstellungsdateien wieder her und startet Unbound erneut. Die Webapp erhält
 keinen generischen Datei- oder Kommandozugriff.
+
+Vordefinierte Betriebsprofile und der RootGuard Advisor arbeiten ausschließlich
+auf dem Entwurf. Die Empfehlungen sind deterministisch, verändern keine Dateien
+und werden vor ihrer Rückgabe gegen dieselben Wertebereiche wie eine spätere
+Aktivierung geprüft. Dadurch umgehen weder Profile noch Vorschläge die
+Sicherheitskette.

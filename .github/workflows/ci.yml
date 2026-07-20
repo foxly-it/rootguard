@@ -51,6 +51,12 @@ jobs:
 
       - name: Verify Unbound configuration lifecycle
         run: |
+          presets="$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/presets)"
+          test "$(jq 'length' <<<"$presets")" = "4"
+          risky='{"qname_minimisation":false,"prefetch":false,"serve_expired":false,"cache_min_ttl":600,"cache_max_ttl":604800,"threads":16}'
+          advice="$(curl --fail --silent --user admin:ci-rootguard-password --header 'Content-Type: application/json' --data "$risky" http://127.0.0.1:18080/api/unbound/advice)"
+          test "$(jq -r .status <<<"$advice")" = "review"
+          test "$(jq '.recommendations | length' <<<"$advice")" -ge 4
           proposal='{"qname_minimisation":true,"prefetch":true,"serve_expired":true,"cache_min_ttl":120,"cache_max_ttl":86400,"threads":4}'
           preview="$(curl --fail --silent --user admin:ci-rootguard-password --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
           test "$(jq -r .changed <<<"$preview")" = "true"
