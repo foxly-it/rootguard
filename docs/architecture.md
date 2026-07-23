@@ -153,7 +153,11 @@ Rollback-Zyklus. DNSSEC bleibt für jede Weiterleitungszone standardmäßig akti
 Nur ein explizites `allow_unsigned` rendert innerhalb des `server`-Blocks eine
 zonenspezifische `domain-insecure`-Direktive. Damit funktionieren
 vertrauenswürdige unsignierte Split-DNS-Zonen, ohne die globale
-DNSSEC-Validierung abzuschalten.
+DNSSEC-Validierung abzuschalten. Entsprechend rendert nur
+`allow_private_addresses` eine zonenspezifische `private-domain`-Direktive.
+Unbounds Rebinding-Schutz bleibt damit global aktiv, während ausdrücklich
+vertrauenswürdige interne Zonen RFC1918- und andere geschützte private
+Adressantworten liefern dürfen.
 
 ## Unbound-Expertenkonfiguration
 
