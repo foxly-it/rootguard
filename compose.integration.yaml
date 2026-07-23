@@ -18,6 +18,31 @@ services:
     networks:
       dns:
         ipv4_address: 172.29.53.2
+      forwarding_test:
+
+  forwarder:
+    image: rootguard-unbound:dev
+    container_name: rootguard-forwarder
+    restart: unless-stopped
+    entrypoint: ["unbound", "-d", "-c", "/etc/unbound/forwarder.conf"]
+    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./testdata/forwarder/unbound.conf:/etc/unbound/forwarder.conf:ro
+    networks:
+      forwarding_test:
+        ipv4_address: 172.30.54.2
+    healthcheck:
+      test: ["CMD", "dig", "+short", "+time=1", "+tries=1", "@127.0.0.1", "-p", "53", "example.", "A"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
 
   adguard:
     image: adguard/adguardhome:v0.107.78
@@ -45,6 +70,8 @@ services:
     restart: unless-stopped
     depends_on:
       unbound:
+        condition: service_healthy
+      forwarder:
         condition: service_healthy
       adguard:
         condition: service_started
@@ -138,6 +165,11 @@ networks:
     ipam:
       config:
         - subnet: 172.29.53.0/24
+  forwarding_test:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.54.0/24
 
 volumes:
   adguard-work:

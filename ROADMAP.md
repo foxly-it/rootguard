@@ -88,7 +88,7 @@ The detailed ownership and directive plan lives in
 
 - [x] QNAME minimisation, prefetch, serve-expired, cache TTLs, and threads
 - [x] Local A, AAAA, and CNAME records
-- [ ] Conditional forwarding zones with multiple ordered servers
+- [x] Conditional forwarding zones with multiple ordered servers
 - [ ] Private domains and RFC1918 reverse-zone handling
 - [ ] Client network access rules using validated CIDRs
 - [ ] IPv4/IPv6 operating mode with capability and connectivity checks

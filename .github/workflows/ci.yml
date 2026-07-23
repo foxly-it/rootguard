@@ -120,6 +120,49 @@ jobs:
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
           test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/custom | jq -r .content)" = ""
 
+      - name: Verify guided conditional forwarding lifecycle
+        run: |
+          set -x
+          active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
+          test "$(jq '.forward_zones | length' <<<"$active")" = "0"
+          zones='[{"name":"example.","servers":["172.30.54.2"],"forward_first":false,"allow_unsigned":true}]'
+          checks="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -n --argjson zones "$zones" '{zones:$zones}')" \
+            http://127.0.0.1:18080/api/unbound/forward-check)"
+          test "$(jq 'length' <<<"$checks")" = "1"
+          test "$(jq -r '.[0].reachable' <<<"$checks")" = "true"
+          proposal="$(jq --argjson zones "$zones" '.forward_zones = $zones' <<<"$active")"
+          preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            --header 'Content-Type: application/json' --data "$proposal" \
+            http://127.0.0.1:18080/api/unbound/preview)"
+          test "$(jq -r .changed <<<"$preview")" = "true"
+          test "$(jq -r '.rendered_config | contains("forward-zone:") and contains("forward-addr: 172.30.54.2") and contains("domain-insecure: \"example.\"")' <<<"$preview")" = "true"
+          invalid="$(jq --argjson zones '[{"name":".","servers":["127.0.0.1"],"forward_first":false}]' '.forward_zones = $zones' <<<"$active")"
+          invalid_status="$(curl --silent --output /tmp/forward-error.json --write-out '%{http_code}' \
+            --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' \
+            --data "$invalid" http://127.0.0.1:18080/api/unbound/preview)"
+          test "$invalid_status" = "400"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
+            --header 'Content-Type: application/json' --data "$proposal" \
+            http://127.0.0.1:18080/api/unbound/settings >/dev/null
+          test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example. A)" = "192.0.2.80"
+          expert_forward=$'forward-zone:\n    name: "legacy.example."\n    forward-addr: 172.30.54.2\n'
+          conflict_status="$(curl --silent --output /tmp/forward-conflict.json --write-out '%{http_code}' \
+            --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' \
+            --data "$(jq -n --arg content "$expert_forward" '{content:$content}')" \
+            http://127.0.0.1:18080/api/unbound/custom/preview)"
+          test "$conflict_status" = "400"
+          versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
+          forward_id="$(jq -r '.[] | select((.settings.forward_zones // []) | length == 1) | .id' <<<"$versions" | head -1)"
+          baseline_id="$(jq -r '.[] | select((.settings.forward_zones // []) | length == 0) | .id' <<<"$versions" | head -1)"
+          test -n "$forward_id"
+          test -n "$baseline_id"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST \
+            "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
+          test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            http://127.0.0.1:18080/api/unbound/settings | jq '.forward_zones | length')" = "0"
+
       - name: Show service logs after failure
         if: failure()
         run: docker compose -f compose.integration.yaml logs --no-color
