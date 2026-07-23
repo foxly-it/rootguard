@@ -2,7 +2,7 @@
 
 ![Build Status](https://github.com/foxly-it/rootguard-unbound/actions/workflows/build.yml/badge.svg)
 ![Multi-Arch](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue)
 ![Debian](https://img.shields.io/badge/base-Debian%20stable--slim-red)
 ![DNSSEC](https://img.shields.io/badge/DNSSEC-enabled-success)
 
@@ -277,4 +277,6 @@ so the RootGuard application layer controls the dynamic logic.
 
 ## License
 
-MIT License
+GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later).
+
+See the `LICENSE` file for full details.
