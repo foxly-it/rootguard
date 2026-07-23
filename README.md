@@ -103,7 +103,9 @@ Schleifen zur eigenen DNS-Kette, prüft jedes Ziel aus dem Unbound-Container und
 erklärt den optionalen rekursiven Fallback. DNSSEC bleibt pro Zone standardmäßig
 aktiv; für vertrauenswürdige interne Server ohne signierte Antworten kann eine
 klar gekennzeichnete, zonenspezifische Ausnahme eingeschaltet werden. Der
-Entwurf wird anschließend über denselben Vorschau-, Versions- und Rollback-Pfad
+Rebinding-Schutz bleibt ebenfalls Standard; private RFC1918-Antworten werden nur
+nach einer zweiten, auf diese Zone begrenzten Freigabe akzeptiert. Der Entwurf
+wird anschließend über denselben Vorschau-, Versions- und Rollback-Pfad
 aktiviert.
 
 Die WebGUI bietet Deutsch und Englisch über den Sprachumschalter im Header.

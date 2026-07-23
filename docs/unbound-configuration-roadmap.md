@@ -42,8 +42,8 @@ history, and rollback.
 - Loop detection against RootGuard, AdGuard, and other forwarding zones
 - Reachability check and clear fallback semantics
 - Directives: `forward-zone`, `name`, `forward-addr`, optionally
-  `forward-first` and a zone-scoped `domain-insecure`, both with explicit
-  warnings
+  `forward-first`, zone-scoped `domain-insecure`, and zone-scoped
+  `private-domain`, all with explicit warnings
 
 RootGuard now owns this group as typed settings. The WebGUI preserves target
 order, probes every target from the running Unbound container, blocks
@@ -54,7 +54,9 @@ forwarding remains intentionally deferred until certificate identity can be
 modeled safely. DNSSEC validation remains enabled by default. A trusted private
 zone whose internal server returns unsigned answers can explicitly opt into a
 zone-scoped exception; the generated directive and active policy remain visible
-in the preview and zone card.
+in the preview and zone card. RFC1918 and other protected private-address
+answers stay blocked by default and require a separate, visible zone-scoped
+opt-in, preserving rebinding protection everywhere else.
 
 ### Private domains and reverse DNS
 

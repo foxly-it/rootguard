@@ -19,6 +19,7 @@ services:
       dns:
         ipv4_address: 172.29.53.2
       forwarding_test:
+        ipv4_address: 172.30.54.3
 
   forwarder:
     image: rootguard-unbound:dev
