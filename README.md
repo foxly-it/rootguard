@@ -100,8 +100,10 @@ Vorschau aktiviert.
 Unter **Conditional Forwarding** können mehrere kanonische DNS-Zonen an
 geordnete IPv4- und IPv6-Zielserver weitergeleitet werden. RootGuard blockiert
 Schleifen zur eigenen DNS-Kette, prüft jedes Ziel aus dem Unbound-Container und
-erklärt den optionalen rekursiven Fallback. DNSSEC bleibt pro Zone standardmäßig
-aktiv; für vertrauenswürdige interne Server ohne signierte Antworten kann eine
+akzeptiert es nur, wenn die konfigurierte Zone mit `NOERROR` und einem
+SOA-Eintrag bestätigt wird. Die Oberfläche erklärt außerdem den optionalen
+rekursiven Fallback. DNSSEC bleibt pro Zone standardmäßig aktiv; für
+vertrauenswürdige interne Server ohne signierte Antworten kann eine
 klar gekennzeichnete, zonenspezifische Ausnahme eingeschaltet werden. Der
 Rebinding-Schutz bleibt ebenfalls Standard; private RFC1918-Antworten werden nur
 nach einer zweiten, auf diese Zone begrenzten Freigabe akzeptiert. Der Entwurf

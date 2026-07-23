@@ -40,7 +40,7 @@ history, and rollback.
 - Multiple IPv4/IPv6 targets per zone
 - Optional TLS only when a supported authenticated target model exists
 - Loop detection against RootGuard, AdGuard, and other forwarding zones
-- Reachability check and clear fallback semantics
+- Authoritative zone check (`NOERROR` plus SOA) and clear fallback semantics
 - Directives: `forward-zone`, `name`, `forward-addr`, optionally
   `forward-first`, zone-scoped `domain-insecure`, and zone-scoped
   `private-domain`, all with explicit warnings
@@ -48,10 +48,13 @@ history, and rollback.
 RootGuard now owns this group as typed settings. The WebGUI preserves target
 order, probes every target from the running Unbound container, blocks
 RootGuard-internal and local loop targets, rejects duplicate zones and expert
-`forward-zone` conflicts, and keeps activation in the existing preview,
-effective-checkconf, history, and rollback lifecycle. Authenticated DNS-over-TLS
-forwarding remains intentionally deferred until certificate identity can be
-modeled safely. DNSSEC validation remains enabled by default. A trusted private
+`forward-zone` conflicts, and accepts a target only when the configured zone
+returns `NOERROR` with an SOA record. `NXDOMAIN`, `REFUSED`, timeouts, and empty
+successful responses stay visible as diagnostics but cannot unlock activation.
+The settings remain in the existing preview, effective-checkconf, history, and
+rollback lifecycle. Authenticated DNS-over-TLS forwarding remains intentionally
+deferred until certificate identity can be modeled safely. DNSSEC validation
+remains enabled by default. A trusted private
 zone whose internal server returns unsigned answers can explicitly opt into a
 zone-scoped exception; the generated directive and active policy remain visible
 in the preview and zone card. RFC1918 and other protected private-address
