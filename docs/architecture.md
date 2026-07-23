@@ -149,7 +149,11 @@ authentifizierter Reachability-Endpunkt führt ausschließlich DNS-SOA-Proben pe
 `dig` aus dem laufenden Unbound-Container aus. Anzahl, Parallelität, Ausgabe und
 Laufzeit sind begrenzt; der Endpunkt schreibt keine Konfiguration. Die spätere
 Aktivierung durchläuft weiterhin den vollständigen Checkconf-, Snapshot- und
-Rollback-Zyklus.
+Rollback-Zyklus. DNSSEC bleibt für jede Weiterleitungszone standardmäßig aktiv.
+Nur ein explizites `allow_unsigned` rendert innerhalb des `server`-Blocks eine
+zonenspezifische `domain-insecure`-Direktive. Damit funktionieren
+vertrauenswürdige unsignierte Split-DNS-Zonen, ohne die globale
+DNSSEC-Validierung abzuschalten.
 
 ## Unbound-Expertenkonfiguration
 

@@ -125,7 +125,7 @@ jobs:
           set -x
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
           test "$(jq '.forward_zones | length' <<<"$active")" = "0"
-          zones='[{"name":"example.","servers":["172.30.54.2"],"forward_first":false}]'
+          zones='[{"name":"example.","servers":["172.30.54.2"],"forward_first":false,"allow_unsigned":true}]'
           checks="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
             --header 'Content-Type: application/json' \
             --data "$(jq -n --argjson zones "$zones" '{zones:$zones}')" \
@@ -137,7 +137,7 @@ jobs:
             --header 'Content-Type: application/json' --data "$proposal" \
             http://127.0.0.1:18080/api/unbound/preview)"
           test "$(jq -r .changed <<<"$preview")" = "true"
-          test "$(jq -r '.rendered_config | contains("forward-zone:") and contains("forward-addr: 172.30.54.2")' <<<"$preview")" = "true"
+          test "$(jq -r '.rendered_config | contains("forward-zone:") and contains("forward-addr: 172.30.54.2") and contains("domain-insecure: \"example.\"")' <<<"$preview")" = "true"
           invalid="$(jq --argjson zones '[{"name":".","servers":["127.0.0.1"],"forward_first":false}]' '.forward_zones = $zones' <<<"$active")"
           invalid_status="$(curl --silent --output /tmp/forward-error.json --write-out '%{http_code}' \
             --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' \

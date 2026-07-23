@@ -90,8 +90,11 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   rejects root-zone, duplicate, loopback, link-local, multicast, RootGuard
   network, and expert-forwarding conflicts; a bounded authenticated probe checks
   every target from the running Unbound container before WebGUI activation.
-  Forwarding settings use the shared preview, effective `unbound-checkconf`,
-  version history, restart rollback, and restore lifecycle.
+  DNSSEC validation remains the per-zone default; trusted unsigned private
+  servers require an explicit, visible `allow_unsigned` opt-in that renders a
+  scoped `domain-insecure`. Forwarding settings use the shared preview,
+  effective `unbound-checkconf`, version history, restart rollback, and restore
+  lifecycle.
 - Unbound information architecture split into accessible Overview, Resolver,
   Local DNS, and Advanced tabs. The landing view now shows only configuration
   status, profile, versions, extensions, and on-demand diagnostics; cache
