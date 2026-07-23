@@ -24,19 +24,26 @@ jobs:
           submodules: recursive
 
       - name: Validate Compose model
-        run: docker compose config --quiet
+        run: docker compose -f compose.integration.yaml config --quiet
 
       - name: Build RootGuard stack
-        run: docker compose build
+        run: docker compose -f compose.integration.yaml build
 
       - name: Start RootGuard stack
-        run: docker compose up -d
+        run: docker compose -f compose.integration.yaml up -d
 
       - name: Wait for WebApp
         run: |
           for attempt in {1..60}; do
-            if curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/version >/dev/null; then
-              exit 0
+            login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --cookie-jar /tmp/rootguard-ci-cookies.txt \
+              --header 'Content-Type: application/json' \
+              --data '{"username":"admin","password":"ci-rootguard-password"}' \
+              http://127.0.0.1:18080/api/auth/login || true)"
+            if test "$login_status" = "200"; then
+              if curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/version >/dev/null; then
+                exit 0
+              fi
             fi
             sleep 2
           done
@@ -45,29 +52,45 @@ jobs:
       - name: Bootstrap AdGuard Home
         run: |
           curl --fail --show-error --silent \
-            --user admin:ci-rootguard-password \
+            --cookie /tmp/rootguard-ci-cookies.txt \
             --request POST \
             http://127.0.0.1:18080/api/adguard/bootstrap
 
+      - name: Verify control-plane updater wiring
+        run: |
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            --request POST http://127.0.0.1:18080/api/control-plane-updates/check >/dev/null
+          for attempt in {1..30}; do
+            status="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+              http://127.0.0.1:18080/api/control-plane-updates)"
+            if test "$(jq -r .state <<<"$status")" = "idle"; then
+              test "$(jq '.services | length' <<<"$status")" = "2"
+              test "$(jq '[.services[].update_available] | any' <<<"$status")" = "false"
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
       - name: Verify Unbound configuration lifecycle
         run: |
-          presets="$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/presets)"
+          presets="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/presets)"
           test "$(jq 'length' <<<"$presets")" = "4"
           risky='{"qname_minimisation":false,"prefetch":false,"serve_expired":false,"cache_min_ttl":600,"cache_max_ttl":604800,"threads":16}'
-          advice="$(curl --fail --silent --user admin:ci-rootguard-password --header 'Content-Type: application/json' --data "$risky" http://127.0.0.1:18080/api/unbound/advice)"
+          advice="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$risky" http://127.0.0.1:18080/api/unbound/advice)"
           test "$(jq -r .status <<<"$advice")" = "review"
           test "$(jq '.recommendations | length' <<<"$advice")" -ge 4
           proposal='{"qname_minimisation":true,"prefetch":true,"serve_expired":true,"cache_min_ttl":120,"cache_max_ttl":86400,"threads":4}'
-          preview="$(curl --fail --silent --user admin:ci-rootguard-password --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
+          preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
           test "$(jq -r .changed <<<"$preview")" = "true"
-          curl --fail --silent --user admin:ci-rootguard-password --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
-          versions="$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/history)"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
+          versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
           test "$(jq 'length' <<<"$versions")" -ge 2
           baseline_id="$(jq -r '.[] | select(.settings.threads == 2) | .id' <<<"$versions")"
-          diagnostics="$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/diagnostics)"
+          diagnostics="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/diagnostics)"
           test "$(jq -r .healthy <<<"$diagnostics")" = "true"
-          curl --fail --silent --user admin:ci-rootguard-password --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
-          test "$(curl --fail --silent --user admin:ci-rootguard-password http://127.0.0.1:18080/api/unbound/settings | jq -r .threads)" = "2"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
+          test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings | jq -r .threads)" = "2"
 
       - name: Verify DNS through AdGuard and Unbound
         run: |
@@ -76,10 +99,31 @@ jobs:
           status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 dnssec-failed.org A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
           test "$status" = "SERVFAIL"
 
+      - name: Verify Unbound expert configuration lifecycle
+        run: |
+          test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/directives | jq 'length')" -ge 15
+          custom=$'server:\n    local-zone: "home.arpa." static\n    local-data: "router.home.arpa. 300 IN A 192.168.1.1"\n'
+          payload="$(jq -n --arg content "$custom" '{content:$content}')"
+          preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$payload" http://127.0.0.1:18080/api/unbound/custom/preview)"
+          test "$(jq -r .changed <<<"$preview")" = "true"
+          test -n "$(jq -r .validation <<<"$preview")"
+          forbidden="$(jq -n --arg content 'include: "/etc/passwd"' '{content:$content}')"
+          http_status="$(curl --silent --output /tmp/custom-error.json --write-out '%{http_code}' --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$forbidden" http://127.0.0.1:18080/api/unbound/custom/preview)"
+          test "$http_status" = "400"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' --data "$payload" http://127.0.0.1:18080/api/unbound/custom >/dev/null
+          test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 router.home.arpa A)" = "192.168.1.1"
+          versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
+          custom_id="$(jq -r --arg content "$custom" '.[] | select(.custom_config == $content) | .id' <<<"$versions" | head -1)"
+          test -n "$custom_id"
+          baseline_id="$(jq -r '.[] | select((.custom_config // "") == "") | .id' <<<"$versions" | head -1)"
+          test -n "$baseline_id"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
+          test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/custom | jq -r .content)" = ""
+
       - name: Show service logs after failure
         if: failure()
-        run: docker compose logs --no-color
+        run: docker compose -f compose.integration.yaml logs --no-color
 
       - name: Stop RootGuard stack
         if: always()
-        run: docker compose down --volumes
+        run: docker compose -f compose.integration.yaml down --volumes

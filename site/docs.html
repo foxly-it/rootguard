@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="RootGuard Dokumentation: Installation, Einrichtung, DNS-Konfiguration, Updates, Sicherheit und Fehlerbehebung.">
+  <meta name="theme-color" content="#0d1218">
+  <meta property="og:title" content="RootGuard Dokumentation">
+  <meta property="og:description" content="Das vollständige Handbuch für Installation und Betrieb von RootGuard.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://rootguard.foxly.de/docs.html">
+  <title>RootGuard Dokumentation</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body data-title-de="RootGuard Dokumentation" data-title-en="RootGuard Documentation"
+      data-description-de="RootGuard Dokumentation: Installation, Einrichtung, DNS-Konfiguration, Updates, Sicherheit und Fehlerbehebung."
+      data-description-en="RootGuard documentation: installation, setup, DNS configuration, updates, security, and troubleshooting.">
+  <a class="skip-link" href="#documentation">Zum Inhalt springen</a>
+  <div class="wrap">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="RootGuard Startseite"><img class="brand-logo" src="rootguard-icon.svg" alt=""><span>Root<span>Guard</span></span></a>
+      <div class="nav-group">
+        <nav class="links" aria-label="Hauptnavigation">
+          <a href="index.html" data-de="Startseite" data-en="Home">Startseite</a>
+          <a href="wiki.html">Wiki</a>
+          <a class="active" href="docs.html" data-de="Dokumentation" data-en="Documentation">Dokumentation</a>
+          <a href="roadmap.html">Roadmap</a>
+          <a href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+        </nav>
+        <div class="language-switch" aria-label="Sprache">
+          <button class="lang-button" id="btn-de" type="button" data-language="de">DE</button>
+          <button class="lang-button" id="btn-en" type="button" data-language="en">EN</button>
+        </div>
+      </div>
+    </header>
+
+    <main id="documentation" class="manual">
+      <section class="manual-hero">
+        <div>
+          <p class="eyebrow" data-de="RootGuard Handbuch" data-en="RootGuard manual">RootGuard Handbuch</p>
+          <h1 data-de="Installation, Betrieb<br><em>und Kontrolle.</em>" data-en="Install, operate,<br><em>and stay in control.</em>">Installation, Betrieb<br><em>und Kontrolle.</em></h1>
+          <p class="lead" data-de="Von Docker Compose bis zum sicheren Update: Diese Dokumentation beschreibt den aktuellen Pre-Release-Alpha-Stand von RootGuard und wird zusammen mit dem Projekt weiterentwickelt." data-en="From Docker Compose to safe updates: this documentation covers the current RootGuard pre-release alpha and evolves together with the project.">Von Docker Compose bis zum sicheren Update: Diese Dokumentation beschreibt den aktuellen Pre-Release-Alpha-Stand von RootGuard und wird zusammen mit dem Projekt weiterentwickelt.</p>
+          <div class="actions">
+            <a class="button" href="#quickstart" data-de="Schnellstart" data-en="Quickstart">Schnellstart</a>
+            <a class="button secondary" href="https://github.com/foxly-it/rootguard/issues" target="_blank" rel="noopener noreferrer" data-de="Problem melden ↗" data-en="Report an issue ↗">Problem melden ↗</a>
+          </div>
+        </div>
+        <aside class="manual-status">
+          <span>DOCUMENTATION · PRE-RELEASE ALPHA</span>
+          <strong data-de="Aktueller Funktionsumfang" data-en="Current feature set">Aktueller Funktionsumfang</strong>
+          <ul>
+            <li data-de="Geführte AIO-Einrichtung" data-en="Guided AIO setup">Geführte AIO-Einrichtung</li>
+            <li data-de="AdGuard Home + rekursives Unbound" data-en="AdGuard Home + recursive Unbound">AdGuard Home + rekursives Unbound</li>
+            <li data-de="Deutsch/Englische WebGUI" data-en="German/English WebGUI">Deutsch/Englische WebGUI</li>
+            <li data-de="Backups und automatische Rollbacks" data-en="Backups and automatic rollbacks">Backups und automatische Rollbacks</li>
+          </ul>
+        </aside>
+      </section>
+
+      <div class="manual-layout">
+        <aside class="manual-nav" aria-label="Dokumentationsnavigation">
+          <strong data-de="Inhalt" data-en="Contents">Inhalt</strong>
+          <a href="#overview" data-de="Überblick" data-en="Overview">Überblick</a>
+          <a href="#requirements" data-de="Voraussetzungen" data-en="Requirements">Voraussetzungen</a>
+          <a href="#quickstart" data-de="Installation" data-en="Installation">Installation</a>
+          <a href="#first-setup" data-de="Erste Einrichtung" data-en="First setup">Erste Einrichtung</a>
+          <a href="#router" data-de="Router &amp; Clients" data-en="Router &amp; clients">Router &amp; Clients</a>
+          <a href="#webgui">WebGUI</a>
+          <a href="#unbound">Unbound</a>
+          <a href="#adguard">AdGuard Home</a>
+          <a href="#updates" data-de="Updates &amp; Rollback" data-en="Updates &amp; rollback">Updates &amp; Rollback</a>
+          <a href="#security" data-de="Sicherheit" data-en="Security">Sicherheit</a>
+          <a href="#operations" data-de="Betrieb" data-en="Operations">Betrieb</a>
+          <a href="#troubleshooting" data-de="Fehlerbehebung" data-en="Troubleshooting">Fehlerbehebung</a>
+          <a href="#configuration" data-de="Konfigurationswerte" data-en="Configuration">Konfigurationswerte</a>
+          <a href="#license" data-de="Lizenz" data-en="License">Lizenz</a>
+        </aside>
+
+        <div class="manual-content">
+          <section id="overview" class="manual-section">
+            <p class="eyebrow" data-de="01 · Überblick" data-en="01 · Overview">01 · Überblick</p>
+            <h2 data-de="Was RootGuard bereitstellt" data-en="What RootGuard provides">Was RootGuard bereitstellt</h2>
+            <p data-de="RootGuard kombiniert AdGuard Home als Netzwerkfilter mit Unbound als eigenem rekursiven und DNSSEC-validierenden Resolver. WebApp und Core verwalten den Stack; ein separater Updater tauscht Core und WebApp sicher als Paar aus." data-en="RootGuard combines AdGuard Home as a network filter with Unbound as a dedicated recursive, DNSSEC-validating resolver. WebApp and Core manage the stack; a separate updater safely replaces Core and WebApp as a pair.">RootGuard kombiniert AdGuard Home als Netzwerkfilter mit Unbound als eigenem rekursiven und DNSSEC-validierenden Resolver. WebApp und Core verwalten den Stack; ein separater Updater tauscht Core und WebApp sicher als Paar aus.</p>
+            <div class="manual-cards">
+              <article><b>WebApp</b><span data-de="Login, Dashboard und geführte Bedienung" data-en="Login, dashboard, and guided controls">Login, Dashboard und geführte Bedienung</span></article>
+              <article><b>Core</b><span data-de="Orchestrierung und geprüfte Konfigurationsänderungen" data-en="Orchestration and validated configuration changes">Orchestrierung und geprüfte Konfigurationsänderungen</span></article>
+              <article><b>Updater</b><span data-de="Atomare Core-/WebApp-Updates mit Rollback" data-en="Atomic Core/WebApp updates with rollback">Atomare Core-/WebApp-Updates mit Rollback</span></article>
+              <article><b>AdGuard + Unbound</b><span data-de="Filterung, Rekursion und DNSSEC" data-en="Filtering, recursion, and DNSSEC">Filterung, Rekursion und DNSSEC</span></article>
+            </div>
+          </section>
+
+          <section id="requirements" class="manual-section">
+            <p class="eyebrow" data-de="02 · Voraussetzungen" data-en="02 · Requirements">02 · Voraussetzungen</p>
+            <h2 data-de="Bevor du beginnst" data-en="Before you begin">Bevor du beginnst</h2>
+            <ul class="checklist">
+              <li data-de="Docker Engine oder Docker Desktop mit Docker Compose v2" data-en="Docker Engine or Docker Desktop with Docker Compose v2">Docker Engine oder Docker Desktop mit Docker Compose v2</li>
+              <li data-de="Eine feste LAN-IP oder DHCP-Reservierung für den RootGuard-Host" data-en="A fixed LAN IP or DHCP reservation for the RootGuard host">Eine feste LAN-IP oder DHCP-Reservierung für den RootGuard-Host</li>
+              <li data-de="Freier TCP- und UDP-Port 53 auf der gewählten Host-Adresse" data-en="Available TCP and UDP port 53 on the selected host address">Freier TCP- und UDP-Port 53 auf der gewählten Host-Adresse</li>
+              <li data-de="Git für Repository und Submodule" data-en="Git for the repository and submodules">Git für Repository und Submodule</li>
+              <li data-de="Ein starkes Admin-Passwort und ein zufälliges internes API-Token" data-en="A strong admin password and a random internal API token">Ein starkes Admin-Passwort und ein zufälliges internes API-Token</li>
+            </ul>
+            <div class="manual-callout warning"><b data-de="Alpha-Hinweis" data-en="Alpha notice">Alpha-Hinweis</b><span data-de="RootGuard ist noch kein fertiges Produktionsrelease. Verwende Backups und halte einen alternativen DNS-Weg bereit." data-en="RootGuard is not yet a production release. Keep backups and an alternative DNS path available.">RootGuard ist noch kein fertiges Produktionsrelease. Verwende Backups und halte einen alternativen DNS-Weg bereit.</span></div>
+          </section>
+
+          <section id="quickstart" class="manual-section">
+            <p class="eyebrow" data-de="03 · Installation" data-en="03 · Installation">03 · Installation</p>
+            <h2 data-de="Control Plane starten" data-en="Start the control plane">Control Plane starten</h2>
+            <div class="code-block"><div>shell</div><pre><code>git clone --recurse-submodules \
+  https://github.com/foxly-it/rootguard.git
+cd rootguard
+cp .env.example .env
+openssl rand -hex 32
+docker compose up --build -d</code></pre></div>
+            <p data-de="Trage den erzeugten Zufallswert als ROOTGUARD_API_TOKEN und ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Standardmäßig startet die Control Plane aus WebApp, Core und Updater; die DNS-Dienste werden erst im Setup erzeugt." data-en="Store the generated random value as ROOTGUARD_API_TOKEN and set your own strong ROOTGUARD_ADMIN_PASSWORD in .env. The control plane starts WebApp, Core, and Updater; DNS services are created later by Setup.">Trage den erzeugten Zufallswert als ROOTGUARD_API_TOKEN und ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Standardmäßig startet die Control Plane aus WebApp, Core und Updater; die DNS-Dienste werden erst im Setup erzeugt.</p>
+            <div class="code-block"><div>browser</div><pre><code>http://localhost:8080/login</code></pre></div>
+          </section>
+
+          <section id="first-setup" class="manual-section">
+            <p class="eyebrow" data-de="04 · Erste Einrichtung" data-en="04 · First setup">04 · Erste Einrichtung</p>
+            <h2 data-de="DNS-Stack geführt bereitstellen" data-en="Deploy the DNS stack with guidance">DNS-Stack geführt bereitstellen</h2>
+            <ol class="steps">
+              <li><span>1</span><div><b data-de="Anmelden" data-en="Sign in">Anmelden</b><p data-de="Verwende ROOTGUARD_ADMIN_USER und ROOTGUARD_ADMIN_PASSWORD. Die Sitzung bleibt serverseitig geschützt und läuft nach zwölf Stunden ab." data-en="Use ROOTGUARD_ADMIN_USER and ROOTGUARD_ADMIN_PASSWORD. The session is protected server-side and expires after twelve hours.">Verwende ROOTGUARD_ADMIN_USER und ROOTGUARD_ADMIN_PASSWORD. Die Sitzung bleibt serverseitig geschützt und läuft nach zwölf Stunden ab.</p></div></li>
+              <li><span>2</span><div><b data-de="Host-Adresse wählen" data-en="Choose host address">Host-Adresse wählen</b><p data-de="Wähle eine bereits vorhandene LAN-IP. 0.0.0.0 bindet alle Host-Adressen, eine konkrete LAN-IP begrenzt die Erreichbarkeit enger." data-en="Choose an existing LAN IP. 0.0.0.0 binds all host addresses; a specific LAN IP limits exposure more narrowly.">Wähle eine bereits vorhandene LAN-IP. 0.0.0.0 bindet alle Host-Adressen, eine konkrete LAN-IP begrenzt die Erreichbarkeit enger.</p></div></li>
+              <li><span>3</span><div><b data-de="Vorprüfung ausführen" data-en="Run preflight">Vorprüfung ausführen</b><p data-de="RootGuard prüft Adresse, Port, Docker Engine und Compose, bevor Container verändert werden." data-en="RootGuard validates address, port, Docker Engine, and Compose before changing containers.">RootGuard prüft Adresse, Port, Docker Engine und Compose, bevor Container verändert werden.</p></div></li>
+              <li><span>4</span><div><b data-de="Bereitstellen" data-en="Deploy">Bereitstellen</b><p data-de="Unbound wird gestartet und geprüft, danach AdGuard Home intern eingerichtet und ausschließlich mit Unbound als Upstream verbunden." data-en="Unbound is started and verified, then AdGuard Home is configured internally with Unbound as its only upstream.">Unbound wird gestartet und geprüft, danach AdGuard Home intern eingerichtet und ausschließlich mit Unbound als Upstream verbunden.</p></div></li>
+            </ol>
+          </section>
+
+          <section id="router" class="manual-section">
+            <p class="eyebrow" data-de="05 · Router &amp; Clients" data-en="05 · Router &amp; clients">05 · Router &amp; Clients</p>
+            <h2 data-de="RootGuard im Netzwerk verwenden" data-en="Use RootGuard on your network">RootGuard im Netzwerk verwenden</h2>
+            <p data-de="Trage die im Setup angezeigte feste Host-IP als DNS-Server im Router ein. Verwende niemals 127.0.0.1 oder die interne Docker-Adresse 172.29.53.2 auf anderen Geräten. Port 53 muss für TCP und UDP erreichbar sein." data-en="Enter the fixed host IP shown by Setup as DNS server in your router. Never use 127.0.0.1 or the internal Docker address 172.29.53.2 on other devices. Port 53 must be reachable over TCP and UDP.">Trage die im Setup angezeigte feste Host-IP als DNS-Server im Router ein. Verwende niemals 127.0.0.1 oder die interne Docker-Adresse 172.29.53.2 auf anderen Geräten. Port 53 muss für TCP und UDP erreichbar sein.</p>
+            <div class="code-block"><div data-de="Prüfung von einem Client" data-en="Check from a client">Prüfung von einem Client</div><pre><code>dig @192.168.178.10 example.com A
+dig +dnssec @192.168.178.10 dnssec-failed.org A</code></pre></div>
+            <p data-de="Die erste Abfrage muss eine Adresse liefern. Die zweite muss mit SERVFAIL enden; dadurch wird eine ungültige DNSSEC-Kette korrekt verworfen." data-en="The first query must return an address. The second must end with SERVFAIL, proving that an invalid DNSSEC chain is rejected.">Die erste Abfrage muss eine Adresse liefern. Die zweite muss mit SERVFAIL enden; dadurch wird eine ungültige DNSSEC-Kette korrekt verworfen.</p>
+          </section>
+
+          <section id="webgui" class="manual-section">
+            <p class="eyebrow">06 · WebGUI</p>
+            <h2 data-de="Die Bereiche der Oberfläche" data-en="Interface sections">Die Bereiche der Oberfläche</h2>
+            <div class="manual-table">
+              <div><b>Dashboard</b><span data-de="Installation, DNS-Endpunkt, Dienste, DNSSEC und Verbindungskette auf einen Blick." data-en="Installation, DNS endpoint, services, DNSSEC, and connection chain at a glance.">Installation, DNS-Endpunkt, Dienste, DNSSEC und Verbindungskette auf einen Blick.</span></div>
+              <div><b data-de="Einrichtung" data-en="Setup">Einrichtung</b><span data-de="Netzwerk-Preflight und persistenter AIO-Bereitstellungsfortschritt." data-en="Network preflight and persistent AIO deployment progress.">Netzwerk-Preflight und persistenter AIO-Bereitstellungsfortschritt.</span></div>
+              <div><b>Stack &amp; Updates</b><span data-de="Containerstatus, erlaubte Dienstaktionen, Data-Plane-Updates und Control-Plane-Updater." data-en="Container status, allowlisted service actions, data-plane updates, and control-plane updater.">Containerstatus, erlaubte Dienstaktionen, Data-Plane-Updates und Control-Plane-Updater.</span></div>
+              <div><b>Unbound</b><span data-de="Profile, geführte Einstellungen, Zonen, Live-Konfiguration, Experteneditor und Rollback." data-en="Profiles, guided settings, zones, live configuration, expert editor, and rollback.">Profile, geführte Einstellungen, Zonen, Live-Konfiguration, Experteneditor und Rollback.</span></div>
+              <div><b>AdGuard Home</b><span data-de="RootGuard-Status und geschützter Zugriff auf die native AdGuard-Oberfläche." data-en="RootGuard status and protected access to the native AdGuard interface.">RootGuard-Status und geschützter Zugriff auf die native AdGuard-Oberfläche.</span></div>
+            </div>
+          </section>
+
+          <section id="unbound" class="manual-section">
+            <p class="eyebrow">07 · Unbound</p>
+            <h2 data-de="Resolver sicher konfigurieren" data-en="Configure the resolver safely">Resolver sicher konfigurieren</h2>
+            <h3 data-de="Profile und Einstellungen" data-en="Profiles and settings">Profile und Einstellungen</h3>
+            <p data-de="Balanced, Privacy, Resilience und Performance laden ausschließlich einen Entwurf. QNAME-Minimierung, Prefetch, Serve Expired, Cache-TTLs und Threads werden erklärt und vor der Aktivierung als Änderungsvorschau dargestellt." data-en="Balanced, Privacy, Resilience, and Performance only load a draft. QNAME minimization, prefetch, serve-expired, cache TTLs, and threads are explained and previewed before activation.">Balanced, Privacy, Resilience und Performance laden ausschließlich einen Entwurf. QNAME-Minimierung, Prefetch, Serve Expired, Cache-TTLs und Threads werden erklärt und vor der Aktivierung als Änderungsvorschau dargestellt.</p>
+            <h3 data-de="Lokale Zonen" data-en="Local zones">Lokale Zonen</h3>
+            <p data-de="Der geführte Assistent erzeugt A-, AAAA- und CNAME-Einträge ohne manuelle Unbound-Syntax. Er erkennt parallele Änderungen und verwendet dieselbe Checkconf-, Versions- und Rollback-Kette." data-en="The guided assistant creates A, AAAA, and CNAME records without manual Unbound syntax. It detects concurrent changes and uses the same checkconf, versioning, and rollback pipeline.">Der geführte Assistent erzeugt A-, AAAA- und CNAME-Einträge ohne manuelle Unbound-Syntax. Er erkennt parallele Änderungen und verwendet dieselbe Checkconf-, Versions- und Rollback-Kette.</p>
+            <h3 data-de="Expertenmodus und Live-Konfiguration" data-en="Expert mode and live configuration">Expertenmodus und Live-Konfiguration</h3>
+            <p data-de="Der Editor besitzt nur 90-rootguard-custom.conf und blockiert gefährliche Includes, Listener, Remote Control sowie DNSSEC-Umgehungen. Die Live-Ansicht liest die tatsächlich aktiven Dateien read-only aus dem Container." data-en="The editor only owns 90-rootguard-custom.conf and blocks dangerous includes, listeners, remote control, and DNSSEC bypasses. The live view reads the actually active files from the container in read-only mode.">Der Editor besitzt nur 90-rootguard-custom.conf und blockiert gefährliche Includes, Listener, Remote Control sowie DNSSEC-Umgehungen. Die Live-Ansicht liest die tatsächlich aktiven Dateien read-only aus dem Container.</p>
+          </section>
+
+          <section id="adguard" class="manual-section">
+            <p class="eyebrow">08 · AdGuard Home</p>
+            <h2 data-de="Geschützte native Verwaltung" data-en="Protected native administration">Geschützte native Verwaltung</h2>
+            <p data-de="AdGuard Home erhält keinen öffentlichen Admin-Port. RootGuard führt den offiziellen Einrichtungsablauf intern durch, erzeugt Zugangsdaten im geschützten Core-Volume und stellt die Oberfläche ausschließlich unter /adguard-ui/ über die angemeldete WebApp bereit." data-en="AdGuard Home receives no public administration port. RootGuard runs the official setup internally, stores generated credentials in Core's protected volume, and exposes the interface only through /adguard-ui/ behind the authenticated WebApp.">AdGuard Home erhält keinen öffentlichen Admin-Port. RootGuard führt den offiziellen Einrichtungsablauf intern durch, erzeugt Zugangsdaten im geschützten Core-Volume und stellt die Oberfläche ausschließlich unter /adguard-ui/ über die angemeldete WebApp bereit.</p>
+            <div class="manual-callout"><b data-de="Upstream-Schutz" data-en="Upstream protection">Upstream-Schutz</b><span data-de="RootGuard erwartet Unbound fest unter 172.29.53.2:5335 und prüft diese Kette nach Start und Update." data-en="RootGuard expects Unbound at the fixed 172.29.53.2:5335 endpoint and verifies this chain after startup and updates.">RootGuard erwartet Unbound fest unter 172.29.53.2:5335 und prüft diese Kette nach Start und Update.</span></div>
+          </section>
+
+          <section id="updates" class="manual-section">
+            <p class="eyebrow" data-de="09 · Updates &amp; Rollback" data-en="09 · Updates &amp; rollback">09 · Updates &amp; Rollback</p>
+            <h2 data-de="Zwei getrennte Sicherheitswege" data-en="Two separate safety paths">Zwei getrennte Sicherheitswege</h2>
+            <h3 data-de="AdGuard Home und Unbound" data-en="AdGuard Home and Unbound">AdGuard Home und Unbound</h3>
+            <p data-de="Core zieht nur konfigurierte Ziel-Images, vergleicht echte Image-IDs, sichert persistente Dienstpfade und ersetzt genau einen Dienst. DNS, DNSSEC und Upstream werden danach geprüft. Bei Fehlern folgen Daten- und Image-Rollback." data-en="Core pulls only configured target images, compares actual image IDs, backs up persistent service paths, and replaces exactly one service. DNS, DNSSEC, and upstream are then verified. Failures trigger data and image rollback.">Core zieht nur konfigurierte Ziel-Images, vergleicht echte Image-IDs, sichert persistente Dienstpfade und ersetzt genau einen Dienst. DNS, DNSSEC und Upstream werden danach geprüft. Bei Fehlern folgen Daten- und Image-Rollback.</p>
+            <h3>Core und WebApp</h3>
+            <p data-de="Der separate Updater bleibt während des Austauschs aktiv. Er aktualisiert Core und WebApp nur gemeinsam, prüft beide Image-IDs und Health-Endpunkte und pinnt bei einem Fehler beide vorherigen Images. Browser-Anfragen können weder Image-Namen noch Compose-Argumente festlegen." data-en="The separate updater remains alive during replacement. It updates Core and WebApp only as a pair, verifies both image IDs and health endpoints, and pins both previous images on failure. Browser requests cannot choose image names or Compose arguments.">Der separate Updater bleibt während des Austauschs aktiv. Er aktualisiert Core und WebApp nur gemeinsam, prüft beide Image-IDs und Health-Endpunkte und pinnt bei einem Fehler beide vorherigen Images. Browser-Anfragen können weder Image-Namen noch Compose-Argumente festlegen.</p>
+            <div class="code-block"><div>.env</div><pre><code>ROOTGUARD_CORE_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-core:latest
+ROOTGUARD_WEBAPP_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-webapp:latest</code></pre></div>
+          </section>
+
+          <section id="security" class="manual-section">
+            <p class="eyebrow" data-de="10 · Sicherheit" data-en="10 · Security">10 · Sicherheit</p>
+            <h2 data-de="Vertrauensgrenzen" data-en="Trust boundaries">Vertrauensgrenzen</h2>
+            <ul class="checklist">
+              <li data-de="WebApp ohne Docker-Socket und ohne frei ausführbare Host-Befehle" data-en="WebApp without Docker socket or arbitrary host commands">WebApp ohne Docker-Socket und ohne frei ausführbare Host-Befehle</li>
+              <li data-de="HttpOnly-, SameSite-Strict-Sitzung und Same-Origin-Prüfung für Schreibzugriffe" data-en="HttpOnly, SameSite Strict session and same-origin checks for writes">HttpOnly-, SameSite-Strict-Sitzung und Same-Origin-Prüfung für Schreibzugriffe</li>
+              <li data-de="Core und Updater nur in internen Docker-Netzen und mit Bearer-Token" data-en="Core and Updater only on internal Docker networks and protected by bearer tokens">Core und Updater nur in internen Docker-Netzen und mit Bearer-Token</li>
+              <li data-de="Unbound read-only, non-root, ohne zusätzliche Capabilities" data-en="Unbound read-only, non-root, without additional capabilities">Unbound read-only, non-root, ohne zusätzliche Capabilities</li>
+              <li data-de="AdGuard-Administration ohne öffentlichen Port" data-en="AdGuard administration without a public port">AdGuard-Administration ohne öffentlichen Port</li>
+            </ul>
+            <div class="manual-callout warning"><b>HTTPS</b><span data-de="Die Appliance-WebGUI besitzt derzeit noch keine integrierte TLS-Terminierung. Veröffentliche sie nicht direkt im Internet. Nutze bis zur produktionsreifen HTTPS-Unterstützung ausschließlich ein vertrauenswürdiges lokales Netz oder einen korrekt konfigurierten Reverse Proxy." data-en="The appliance UI does not yet include integrated TLS termination. Do not expose it directly to the internet. Until production-ready HTTPS support exists, use only a trusted local network or a correctly configured reverse proxy.">Die Appliance-WebGUI besitzt derzeit noch keine integrierte TLS-Terminierung. Veröffentliche sie nicht direkt im Internet. Nutze bis zur produktionsreifen HTTPS-Unterstützung ausschließlich ein vertrauenswürdiges lokales Netz oder einen korrekt konfigurierten Reverse Proxy.</span></div>
+          </section>
+
+          <section id="operations" class="manual-section">
+            <p class="eyebrow" data-de="11 · Betrieb" data-en="11 · Operations">11 · Betrieb</p>
+            <h2 data-de="Nützliche Befehle" data-en="Useful commands">Nützliche Befehle</h2>
+            <div class="code-block"><div>shell</div><pre><code># Status der Control Plane
+docker compose ps
+
+# Logs
+docker compose logs --tail=200 core webapp updater
+
+# Control Plane neu starten
+docker compose restart core webapp updater
+
+# Aktuelle Images neu bauen
+docker compose up --build -d
+
+# DNS testen
+dig @ROOTGUARD_LAN_IP example.com A</code></pre></div>
+            <p data-de="Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entferne Volumes nicht mit docker compose down --volumes, solange du keine bewusste Neuinstallation durchführen willst." data-en="Configuration and installation state is stored in named Docker volumes. Do not remove volumes with docker compose down --volumes unless you intentionally want a clean installation.">Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entferne Volumes nicht mit docker compose down --volumes, solange du keine bewusste Neuinstallation durchführen willst.</p>
+          </section>
+
+          <section id="troubleshooting" class="manual-section">
+            <p class="eyebrow" data-de="12 · Fehlerbehebung" data-en="12 · Troubleshooting">12 · Fehlerbehebung</p>
+            <h2 data-de="Häufige Probleme" data-en="Common problems">Häufige Probleme</h2>
+            <details><summary data-de="Port 53 ist bereits belegt" data-en="Port 53 is already in use">Port 53 ist bereits belegt</summary><p data-de="Prüfe lokale Resolver wie systemd-resolved, dnsmasq oder andere DNS-Container. Alternativ kannst du für Tests einen anderen ROOTGUARD_DNS_PORT verwenden; Routerbetrieb benötigt üblicherweise Port 53." data-en="Check local resolvers such as systemd-resolved, dnsmasq, or other DNS containers. You may use another ROOTGUARD_DNS_PORT for testing; router operation normally requires port 53.">Prüfe lokale Resolver wie systemd-resolved, dnsmasq oder andere DNS-Container. Alternativ kannst du für Tests einen anderen ROOTGUARD_DNS_PORT verwenden; Routerbetrieb benötigt üblicherweise Port 53.</p></details>
+            <details><summary data-de="Die WebGUI ist erreichbar, aber APIs schlagen fehl" data-en="The UI loads, but APIs fail">Die WebGUI ist erreichbar, aber APIs schlagen fehl</summary><p data-de="Prüfe docker compose ps und die Logs von Core und Updater. Nach Ablauf einer Sitzung meldest du dich erneut an. Ein 401 bedeutet eine fehlende Sitzung; ein 502 weist typischerweise auf einen internen Dienst hin." data-en="Check docker compose ps and the Core and Updater logs. Sign in again after a session expires. A 401 means no valid session; a 502 usually points to an internal service.">Prüfe docker compose ps und die Logs von Core und Updater. Nach Ablauf einer Sitzung meldest du dich erneut an. Ein 401 bedeutet eine fehlende Sitzung; ein 502 weist typischerweise auf einen internen Dienst hin.</p></details>
+            <details><summary data-de="DNS funktioniert nur auf dem Host" data-en="DNS only works on the host">DNS funktioniert nur auf dem Host</summary><p data-de="Verwende auf Clients die LAN-IP des Hosts, nicht localhost. Prüfe Firewall, TCP/UDP 53 und ob der Router eigene DNS-Vorgaben oder DoH erzwingt." data-en="Use the host's LAN IP on clients, not localhost. Check the firewall, TCP/UDP 53, and whether the router enforces its own DNS or DoH.">Verwende auf Clients die LAN-IP des Hosts, nicht localhost. Prüfe Firewall, TCP/UDP 53 und ob der Router eigene DNS-Vorgaben oder DoH erzwingt.</p></details>
+            <details><summary data-de="Ein Update wurde zurückgerollt" data-en="An update was rolled back">Ein Update wurde zurückgerollt</summary><p data-de="Lies die Meldung unter Stack &amp; Updates und prüfe die Helper-/Core-Logs. Ein Rollback ist ein Schutzmechanismus: Die vorherigen Images bleiben aktiv, bis das Ziel-Image oder die Konfiguration korrigiert wurde." data-en="Read the message under Stack & Updates and inspect Helper/Core logs. A rollback is a safety mechanism: previous images remain active until the target image or configuration is corrected.">Lies die Meldung unter Stack &amp; Updates und prüfe die Helper-/Core-Logs. Ein Rollback ist ein Schutzmechanismus: Die vorherigen Images bleiben aktiv, bis das Ziel-Image oder die Konfiguration korrigiert wurde.</p></details>
+          </section>
+
+          <section id="configuration" class="manual-section">
+            <p class="eyebrow" data-de="13 · Konfiguration" data-en="13 · Configuration">13 · Konfiguration</p>
+            <h2 data-de="Wichtige Umgebungsvariablen" data-en="Important environment variables">Wichtige Umgebungsvariablen</h2>
+            <div class="env-table">
+              <div><code>ROOTGUARD_API_TOKEN</code><span data-de="Internes Geheimnis zwischen WebApp, Core und Updater." data-en="Internal secret shared by WebApp, Core, and Updater.">Internes Geheimnis zwischen WebApp, Core und Updater.</span></div>
+              <div><code>ROOTGUARD_ADMIN_USER</code><span data-de="Benutzername für die WebGUI; Standard admin." data-en="Username for the WebGUI; defaults to admin.">Benutzername für die WebGUI; Standard admin.</span></div>
+              <div><code>ROOTGUARD_ADMIN_PASSWORD</code><span data-de="Erforderliches starkes Passwort für die WebGUI." data-en="Required strong password for the WebGUI.">Erforderliches starkes Passwort für die WebGUI.</span></div>
+              <div><code>ROOTGUARD_WEB_PORT</code><span data-de="Host-Bindung der WebGUI, beispielsweise 127.0.0.1:8080." data-en="Host binding for the WebGUI, for example 127.0.0.1:8080.">Host-Bindung der WebGUI, beispielsweise 127.0.0.1:8080.</span></div>
+              <div><code>ROOTGUARD_UNBOUND_IMAGE</code><span data-de="Freigegebenes Unbound-Image für die Ersteinrichtung." data-en="Allowlisted Unbound image for initial setup.">Freigegebenes Unbound-Image für die Ersteinrichtung.</span></div>
+              <div><code>ROOTGUARD_ADGUARD_IMAGE</code><span data-de="Freigegebenes AdGuard-Image für die Ersteinrichtung." data-en="Allowlisted AdGuard image for initial setup.">Freigegebenes AdGuard-Image für die Ersteinrichtung.</span></div>
+              <div><code>ROOTGUARD_CORE_UPDATE_IMAGE</code><span data-de="Serverseitiges Ziel für Core-Updates." data-en="Server-side target for Core updates.">Serverseitiges Ziel für Core-Updates.</span></div>
+              <div><code>ROOTGUARD_WEBAPP_UPDATE_IMAGE</code><span data-de="Serverseitiges Ziel für WebApp-Updates." data-en="Server-side target for WebApp updates.">Serverseitiges Ziel für WebApp-Updates.</span></div>
+            </div>
+          </section>
+
+          <section id="license" class="manual-section">
+            <p class="eyebrow" data-de="14 · Lizenz" data-en="14 · License">14 · Lizenz</p>
+            <h2>GNU AGPL-3.0-or-later</h2>
+            <p data-de="RootGuard ist freie Open-Source-Software unter einer starken Copyleft-Lizenz. Nutzung, Prüfung, Veränderung und Weitergabe sind erlaubt. Wer eine veränderte Version verteilt oder Nutzern über ein Netzwerk bereitstellt, muss den entsprechenden Quellcode und die Lizenzhinweise zugänglich machen." data-en="RootGuard is free open-source software under a strong copyleft license. Use, inspection, modification, and redistribution are permitted. Anyone distributing a modified version or making it available to users over a network must provide the corresponding source and license notices.">RootGuard ist freie Open-Source-Software unter einer starken Copyleft-Lizenz. Nutzung, Prüfung, Veränderung und Weitergabe sind erlaubt. Wer eine veränderte Version verteilt oder Nutzern über ein Netzwerk bereitstellt, muss den entsprechenden Quellcode und die Lizenzhinweise zugänglich machen.</p>
+            <div class="manual-callout"><b data-de="Marke und Logo" data-en="Name and logo">Marke und Logo</b><span data-de="Die Softwarelizenz erteilt keine Rechte an den Namen RootGuard und Foxly IT oder an den zugehörigen Logos. Forks dürfen ihre Herkunft beschreiben, aber keine offizielle Unterstützung oder Zugehörigkeit vortäuschen." data-en="The software license grants no rights to the RootGuard and Foxly IT names or associated logos. Forks may describe their origin but must not imply official support or affiliation.">Die Softwarelizenz erteilt keine Rechte an den Namen RootGuard und Foxly IT oder an den zugehörigen Logos. Forks dürfen ihre Herkunft beschreiben, aber keine offizielle Unterstützung oder Zugehörigkeit vortäuschen.</span></div>
+            <div class="actions"><a class="button" href="https://github.com/foxly-it/rootguard/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" data-de="Lizenztext auf GitHub ↗" data-en="License text on GitHub ↗">Lizenztext auf GitHub ↗</a></div>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div><strong>RootGuard</strong><span data-de="Selbst betriebener DNS-Schutz für dein Netzwerk." data-en="Self-hosted DNS protection for your network.">Selbst betriebener DNS-Schutz für dein Netzwerk.</span></div>
+      <nav aria-label="Rechtliches und Projekt"><a href="index.html" data-de="Startseite" data-en="Home">Startseite</a><a href="wiki.html">Wiki</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/foxly-it/rootguard">GitHub</a><a href="https://github.com/foxly-it/rootguard/blob/main/LICENSE">AGPL-3.0</a><a href="https://foxly.de/datenschutzerklaerung/" data-de="Datenschutz" data-en="Privacy">Datenschutz</a><a href="https://foxly.de/legal-notice/" data-de="Impressum" data-en="Legal notice">Impressum</a></nav>
+      <small>© <span id="year"></span> Mark Schenk · Made with 💜 by Foxly IT</small>
+    </footer>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>

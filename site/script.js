@@ -18,8 +18,10 @@ function setLanguage(language, persist = true) {
   document.querySelectorAll(".lang-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.language === language);
   });
-  document.title = translations[language].title;
-  document.querySelector('meta[name="description"]').content = translations[language].description;
+  const pageTitle = document.body.dataset[language === "de" ? "titleDe" : "titleEn"];
+  const pageDescription = document.body.dataset[language === "de" ? "descriptionDe" : "descriptionEn"];
+  document.title = pageTitle || translations[language].title;
+  document.querySelector('meta[name="description"]').content = pageDescription || translations[language].description;
   if (persist) localStorage.setItem("rootguard-language", language);
 }
 
