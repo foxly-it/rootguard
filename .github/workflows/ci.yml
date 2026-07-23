@@ -124,7 +124,7 @@ jobs:
         run: |
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
           test "$(jq '.forward_zones | length' <<<"$active")" = "0"
-          zones='[{"name":"example.","servers":["1.1.1.1"],"forward_first":false}]'
+          zones='[{"name":"example.","servers":["172.30.54.2"],"forward_first":false}]'
           checks="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
             --header 'Content-Type: application/json' \
             --data "$(jq -n --argjson zones "$zones" '{zones:$zones}')" \
@@ -136,7 +136,7 @@ jobs:
             --header 'Content-Type: application/json' --data "$proposal" \
             http://127.0.0.1:18080/api/unbound/preview)"
           test "$(jq -r .changed <<<"$preview")" = "true"
-          test "$(jq -r '.rendered_config | contains("forward-zone:") and contains("forward-addr: 1.1.1.1")' <<<"$preview")" = "true"
+          test "$(jq -r '.rendered_config | contains("forward-zone:") and contains("forward-addr: 172.30.54.2")' <<<"$preview")" = "true"
           invalid="$(jq --argjson zones '[{"name":".","servers":["127.0.0.1"],"forward_first":false}]' '.forward_zones = $zones' <<<"$active")"
           invalid_status="$(curl --silent --output /tmp/forward-error.json --write-out '%{http_code}' \
             --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' \
@@ -145,8 +145,8 @@ jobs:
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
             --header 'Content-Type: application/json' --data "$proposal" \
             http://127.0.0.1:18080/api/unbound/settings >/dev/null
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example. A)"
-          expert_forward=$'forward-zone:\n    name: "legacy.example."\n    forward-addr: 1.1.1.1\n'
+          test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example. A)" = "192.0.2.80"
+          expert_forward=$'forward-zone:\n    name: "legacy.example."\n    forward-addr: 172.30.54.2\n'
           conflict_status="$(curl --silent --output /tmp/forward-conflict.json --write-out '%{http_code}' \
             --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' \
             --data "$(jq -n --arg content "$expert_forward" '{content:$content}')" \
