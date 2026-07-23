@@ -30,10 +30,11 @@ history, and rollback.
 | Maximum cache TTL | `cache-max-ttl` | Delivered |
 | Resolver parallelism | `num-threads` | Delivered |
 | Local records | `local-zone`, `local-data` | Delivered for A/AAAA/CNAME |
+| Conditional forwarding | `forward-zone`, `name`, `forward-addr`, `forward-first` | Delivered |
 
 ## Priority A — required for useful 0.2 administration
 
-### Conditional forwarding
+### Conditional forwarding — delivered
 
 - Multiple zones with canonical FQDN validation
 - Multiple IPv4/IPv6 targets per zone
@@ -42,6 +43,14 @@ history, and rollback.
 - Reachability check and clear fallback semantics
 - Directives: `forward-zone`, `name`, `forward-addr`, optionally
   `forward-first` with an explicit warning
+
+RootGuard now owns this group as typed settings. The WebGUI preserves target
+order, probes every target from the running Unbound container, blocks
+RootGuard-internal and local loop targets, rejects duplicate zones and expert
+`forward-zone` conflicts, and keeps activation in the existing preview,
+effective-checkconf, history, and rollback lifecycle. Authenticated DNS-over-TLS
+forwarding remains intentionally deferred until certificate identity can be
+modeled safely.
 
 ### Private domains and reverse DNS
 

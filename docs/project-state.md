@@ -85,6 +85,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   block remains visible in the expert configuration, preserves unrelated
   custom rules, detects concurrent edits, and uses the existing preview,
   effective `unbound-checkconf`, versioning, activation, and rollback pipeline.
+- Guided conditional forwarding manages multiple canonical zones with ordered
+  IPv4/IPv6 targets and an explicit, default-off recursive fallback. Core
+  rejects root-zone, duplicate, loopback, link-local, multicast, RootGuard
+  network, and expert-forwarding conflicts; a bounded authenticated probe checks
+  every target from the running Unbound container before WebGUI activation.
+  Forwarding settings use the shared preview, effective `unbound-checkconf`,
+  version history, restart rollback, and restore lifecycle.
 - Unbound information architecture split into accessible Overview, Resolver,
   Local DNS, and Advanced tabs. The landing view now shows only configuration
   status, profile, versions, extensions, and on-demand diagnostics; cache
@@ -164,15 +171,15 @@ Stack Center and production visibility:
 3. Harden backup retention, export/restore, and immutable release digests.
 4. DNS security advisor and production preflight checks.
 5. AdGuard filter lists, exceptions, clients, and query statistics.
-6. Local zones, conditional forwarding, custom diagnostics, and cache tools.
+6. Private domains, access networks, custom diagnostics, and cache tools.
 7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
 8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
    hardening.
 
 ## Tracked editor follow-ups
 
-- Extend the guided-assistant pattern to conditional forwarding, private
-  domains, and tightly scoped access-control rules.
+- Extend the guided-assistant pattern to private domains and tightly scoped
+  access-control rules.
 - Generate and version the completion/documentation catalog for every directive
   supported by the installed Unbound release; the current catalog covers the
   common, safe RootGuard use cases.

@@ -97,6 +97,12 @@ im Experteneditor sichtbar, werden zusammen mit der gesamten effektiven
 Konfiguration durch `unbound-checkconf` geprüft und erst nach einer expliziten
 Vorschau aktiviert.
 
+Unter **Conditional Forwarding** können mehrere kanonische DNS-Zonen an
+geordnete IPv4- und IPv6-Zielserver weitergeleitet werden. RootGuard blockiert
+Schleifen zur eigenen DNS-Kette, prüft jedes Ziel aus dem Unbound-Container und
+erklärt den optionalen rekursiven Fallback, bevor der Entwurf über denselben
+Vorschau-, Versions- und Rollback-Pfad aktiviert wird.
+
 Die WebGUI bietet Deutsch und Englisch über den Sprachumschalter im Header.
 Die Auswahl folgt beim ersten Aufruf der Browsersprache und wird anschließend
 lokal gespeichert. Weitere Übersetzungen können als Sprachkatalog über die
