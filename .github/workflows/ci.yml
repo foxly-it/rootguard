@@ -122,6 +122,7 @@ jobs:
 
       - name: Verify guided conditional forwarding lifecycle
         run: |
+          set -x
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
           test "$(jq '.forward_zones | length' <<<"$active")" = "0"
           zones='[{"name":"example.","servers":["172.30.54.2"],"forward_first":false}]'
