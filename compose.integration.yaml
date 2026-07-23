@@ -1,25 +1,57 @@
 name: rootguard
 
 services:
-  core:
+  unbound:
     build:
-      context: ./rootguard-core
-    image: "${ROOTGUARD_CORE_IMAGE:-rootguard-core:dev}"
-    container_name: rootguard-core
+      context: ./rootguard-unbound
+    image: rootguard-unbound:dev
+    container_name: rootguard-unbound
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - unbound-config:/etc/unbound/unbound.d
+      - unbound-state:/var/lib/unbound
+    networks:
+      dns:
+        ipv4_address: 172.29.53.2
+
+  adguard:
+    image: adguard/adguardhome:v0.107.78
+    container_name: rootguard-adguard
     restart: unless-stopped
     depends_on:
       updater:
         condition: service_healthy
+      unbound:
+        condition: service_healthy
+    ports:
+      - "${ROOTGUARD_DNS_BIND:-0.0.0.0}:${ROOTGUARD_DNS_PORT:-53}:53/tcp"
+      - "${ROOTGUARD_DNS_BIND:-0.0.0.0}:${ROOTGUARD_DNS_PORT:-53}:53/udp"
+    volumes:
+      - adguard-work:/opt/adguardhome/work
+      - adguard-config:/opt/adguardhome/conf
+    networks:
+      - dns
+
+  core:
+    build:
+      context: ./rootguard-core
+    image: rootguard-core:dev
+    container_name: rootguard-core
+    restart: unless-stopped
+    depends_on:
+      unbound:
+        condition: service_healthy
+      adguard:
+        condition: service_started
     environment:
       PORT: "8081"
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
-      ROOTGUARD_CORE_CONTAINER: rootguard-core
       ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
-      ROOTGUARD_UNBOUND_IMAGE: "${ROOTGUARD_UNBOUND_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:latest}"
-      ROOTGUARD_ADGUARD_IMAGE: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.78}"
-      ROOTGUARD_ADGUARD_UPDATE_IMAGE: "${ROOTGUARD_ADGUARD_UPDATE_IMAGE:-adguard/adguardhome:latest}"
-      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:latest}"
-      ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       UNBOUND_CONFIG_DIR: /var/lib/rootguard/unbound
@@ -35,6 +67,7 @@ services:
       - unbound-config:/var/lib/rootguard/unbound
     networks:
       - control
+      - dns
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/api/health"]
       interval: 15s
@@ -44,7 +77,7 @@ services:
   webapp:
     build:
       context: ./rootguard-webapp
-    image: "${ROOTGUARD_WEBAPP_IMAGE:-rootguard-webapp:dev}"
+    image: rootguard-webapp:dev
     container_name: rootguard-webapp
     restart: unless-stopped
     depends_on:
@@ -74,40 +107,42 @@ services:
     environment:
       ROOTGUARD_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
-      ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.yaml
+      ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.integration.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard
-      ROOTGUARD_CORE_UPDATE_IMAGE: "${ROOTGUARD_CORE_UPDATE_IMAGE:-rootguard-core:dev}"
-      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "${ROOTGUARD_WEBAPP_UPDATE_IMAGE:-rootguard-webapp:dev}"
-      ROOTGUARD_UPDATER_SKIP_PULL: "${ROOTGUARD_UPDATER_SKIP_PULL:-false}"
+      ROOTGUARD_CORE_UPDATE_IMAGE: rootguard-core:dev
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: rootguard-webapp:dev
+      ROOTGUARD_UPDATER_SKIP_PULL: "true"
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
       ROOTGUARD_WEB_PORT: "${ROOTGUARD_WEB_PORT:-8080}"
-      ROOTGUARD_CORE_IMAGE: "${ROOTGUARD_CORE_IMAGE:-rootguard-core:dev}"
-      ROOTGUARD_WEBAPP_IMAGE: "${ROOTGUARD_WEBAPP_IMAGE:-rootguard-webapp:dev}"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - rootguard-sessions:/var/lib/rootguard-sessions
-      - ./compose.yaml:/opt/rootguard/compose.yaml:ro
+      - ./compose.integration.yaml:/opt/rootguard/compose.integration.yaml:ro
     networks:
       - control
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8082/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 networks:
   edge:
   control:
     internal: true
+  dns:
+    ipam:
+      config:
+        - subnet: 172.29.53.0/24
 
 volumes:
+  adguard-work:
+  adguard-config:
   unbound-config:
-    name: rootguard-unbound-config
+  unbound-state:
   rootguard-data:
-    name: rootguard-data
   rootguard-sessions:
-    name: rootguard-sessions

@@ -1,0 +1,29 @@
+RootGuard
+Copyright (C) 2026 Mark Schenk / Foxly IT
+
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program. The complete license text is available from the GNU Project:
+
+https://www.gnu.org/licenses/agpl-3.0.html
+
+In particular, section 13 requires modified versions used to interact with
+users remotely over a computer network to offer those users access to the
+Corresponding Source.
+
+The license applies to the software and documentation in this repository unless
+a file or included third-party component states a different license. It does
+not grant permission to use the RootGuard or Foxly IT names, logos, or other
+brand identifiers except as necessary for reasonable attribution. See
+TRADEMARKS.md.
