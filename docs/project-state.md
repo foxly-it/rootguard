@@ -145,7 +145,8 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   Browser requests cannot supply images, services, or Compose arguments.
 - Bilingual project website deployed with enforced HTTPS at
   `https://rootguard.foxly.de`.
-- Public-alpha packaging is prepared around a single `compose.alpha.yaml` that
+- Public alpha `v0.1.0-alpha.2` is published around a single
+  `compose.alpha.yaml` that
   contains no local build contexts and pulls one named RootGuard version for
   Core, WebApp, Updater, and Unbound. Tag-driven workflows publish `amd64` and
   `arm64` images from the repository that owns each GHCR package, after which
@@ -208,6 +209,9 @@ Stack Center and production visibility:
 
 ## Release status
 
-RootGuard remains in active alpha development. The DNS and configuration paths
-are end-to-end tested, but update safety, backup/restore, authentication
-hardening and roles, and bare-metal support are not yet production complete.
+`v0.1.0-alpha.2` was published on 2026-07-26 as a GitHub pre-release with
+public `amd64`/`arm64` images for all four RootGuard components. Its clean
+GitHub-runner smoke test installed the released Compose and verified recursive
+DNS plus DNSSEC rejection. RootGuard remains in active alpha development:
+update safety, backup/restore, broader authentication hardening and roles, and
+bare-metal support are not yet production complete.
