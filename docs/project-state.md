@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-07-23
+Last updated: 2026-07-26
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -88,8 +88,9 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Guided conditional forwarding manages multiple canonical zones with ordered
   IPv4/IPv6 targets and an explicit, default-off recursive fallback. Core
   rejects root-zone, duplicate, loopback, link-local, multicast, RootGuard
-  network, and expert-forwarding conflicts; a bounded authenticated probe checks
-  every target from the running Unbound container before WebGUI activation.
+  network, and expert-forwarding conflicts; a bounded authenticated probe
+  requires every target to return `NOERROR` and an SOA record for the configured
+  zone from the running Unbound container before WebGUI activation.
   DNSSEC validation remains the per-zone default; trusted unsigned private
   servers require an explicit, visible `allow_unsigned` opt-in that renders a
   scoped `domain-insecure`. Rebinding protection likewise remains enabled by

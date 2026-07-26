@@ -132,6 +132,14 @@ jobs:
             http://127.0.0.1:18080/api/unbound/forward-check)"
           test "$(jq 'length' <<<"$checks")" = "1"
           test "$(jq -r '.[0].reachable' <<<"$checks")" = "true"
+          empty_zone='[{"name":"empty.example.","servers":["172.30.54.2"],"forward_first":false}]'
+          empty_checks="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -n --argjson zones "$empty_zone" '{zones:$zones}')" \
+            http://127.0.0.1:18080/api/unbound/forward-check)"
+          test "$(jq 'length' <<<"$empty_checks")" = "1"
+          test "$(jq -r '.[0].reachable' <<<"$empty_checks")" = "false"
+          test "$(jq -r '.[0].detail | contains("did not return an SOA")' <<<"$empty_checks")" = "true"
           proposal="$(jq --argjson zones "$zones" '.forward_zones = $zones' <<<"$active")"
           preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
             --header 'Content-Type: application/json' --data "$proposal" \

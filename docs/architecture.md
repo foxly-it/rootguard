@@ -146,10 +146,14 @@ kanonische FQDNs sein; Zielserver sind kanonische IPv4-/IPv6-Adressen. Root-Zone
 Loopback, Link-Local, Multicast, das interne RootGuard-DNS-Netz, Duplikate und
 parallele Experten-`forward-zone`-Blöcke werden abgewiesen. Ein
 authentifizierter Reachability-Endpunkt führt ausschließlich DNS-SOA-Proben per
-`dig` aus dem laufenden Unbound-Container aus. Anzahl, Parallelität, Ausgabe und
-Laufzeit sind begrenzt; der Endpunkt schreibt keine Konfiguration. Die spätere
-Aktivierung durchläuft weiterhin den vollständigen Checkconf-, Snapshot- und
-Rollback-Zyklus. DNSSEC bleibt für jede Weiterleitungszone standardmäßig aktiv.
+`dig` aus dem laufenden Unbound-Container aus. Nur `NOERROR` zusammen mit einem
+SOA-Eintrag für die konfigurierte Zone gilt als erfolgreich; `NXDOMAIN`,
+`REFUSED`, Transportfehler und leere erfolgreiche Antworten bleiben
+Diagnoseergebnisse, geben die Aktivierung aber nicht frei. Anzahl, Parallelität,
+Ausgabe und Laufzeit sind begrenzt; der Endpunkt schreibt keine Konfiguration.
+Die spätere Aktivierung durchläuft weiterhin den vollständigen Checkconf-,
+Snapshot- und Rollback-Zyklus. DNSSEC bleibt für jede Weiterleitungszone
+standardmäßig aktiv.
 Nur ein explizites `allow_unsigned` rendert innerhalb des `server`-Blocks eine
 zonenspezifische `domain-insecure`-Direktive. Damit funktionieren
 vertrauenswürdige unsignierte Split-DNS-Zonen, ohne die globale
