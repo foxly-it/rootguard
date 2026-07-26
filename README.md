@@ -151,12 +151,13 @@ der Komponenten und ein lokaler Image-Build sind dafür nicht erforderlich:
 
 ```sh
 mkdir rootguard-alpha && cd rootguard-alpha
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.1/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.1/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.2/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.2/.env.alpha.example
 ```
 
-In `.env` müssen anschließend `ROOTGUARD_API_TOKEN` und
-`ROOTGUARD_ADMIN_PASSWORD` ersetzt werden. Ein Token kann beispielsweise mit
+In `.env` müssen anschließend `ROOTGUARD_API_TOKEN`,
+`ROOTGUARD_ADMIN_PASSWORD` und der unabhängige `ROOTGUARD_RECOVERY_TOKEN`
+ersetzt werden. API- und Recovery-Token können jeweils separat mit
 `openssl rand -hex 32` erzeugt werden. Danach startet eine einzige Compose die
 vollständige RootGuard Control Plane:
 
@@ -172,7 +173,7 @@ reproduzierbarer Fehler gedacht, noch nicht als Produktionsempfehlung.
 
 Enthaltene Funktionen, bekannte Einschränkungen, Betriebsbefehle und Hinweise
 für Fehlerberichte stehen in den
-[`0.1.0-alpha.1` Release Notes](RELEASE_NOTES_0.1.0-alpha.1.md).
+[`0.1.0-alpha.2` Release Notes](RELEASE_NOTES_0.1.0-alpha.2.md).
 
 ## Website und Dokumentation
 

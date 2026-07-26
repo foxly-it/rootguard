@@ -9,7 +9,7 @@ on:
       version:
         description: Version without the leading v
         required: true
-        default: 0.1.0-alpha.1
+        default: 0.1.0-alpha.2
 
 permissions:
   contents: read
@@ -111,6 +111,7 @@ jobs:
       ROOTGUARD_API_TOKEN: alpha-smoke-test-token
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: alpha-smoke-test-password
+      ROOTGUARD_RECOVERY_TOKEN: alpha-smoke-test-recovery-token
       ROOTGUARD_WEB_BIND: 127.0.0.1
       ROOTGUARD_WEB_PORT: "18080"
     steps:
