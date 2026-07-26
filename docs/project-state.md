@@ -90,7 +90,9 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   rejects root-zone, duplicate, loopback, link-local, multicast, RootGuard
   network, and expert-forwarding conflicts; a bounded authenticated probe
   requires every target to return `NOERROR` and an SOA record for the configured
-  zone from the running Unbound container before WebGUI activation.
+  zone from the running Unbound container before WebGUI activation. Rejected
+  responses expose a stable, bounded status explanation instead of raw resolver
+  output.
   DNSSEC validation remains the per-zone default; trusted unsigned private
   servers require an explicit, visible `allow_unsigned` opt-in that renders a
   scoped `domain-insecure`. Rebinding protection likewise remains enabled by

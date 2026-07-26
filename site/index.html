@@ -45,15 +45,36 @@
           </div>
         </div>
 
-        <div class="dashboard" aria-label="RootGuard Dashboard Vorschau">
-          <div class="window-head"><span></span><span></span><span></span><b>rootguard.local</b></div>
+        <div class="dashboard dashboard-current" aria-label="RootGuard Dashboard Vorschau">
+          <div class="window-head"><span></span><span></span><span></span><b>rootguard.local/dashboard</b></div>
+          <div class="dashboard-appbar">
+            <strong><img src="rootguard-icon.svg" alt="">Root<span>Guard</span></strong><i></i>
+            <b>Dashboard</b><small>v0.1.0-alpha.1 · DE · admin</small>
+          </div>
           <div class="dashboard-body">
-            <div class="dashboard-nav"><strong><i>R</i> RootGuard</strong><span>Dashboard</span><span>Setup</span><span>Stack &amp; Updates</span><span>Unbound</span><span>AdGuard Home</span></div>
+            <nav class="dashboard-nav" aria-label="Dashboard-Navigation">
+              <span class="active">Dashboard</span><span>Setup</span><span>Stack &amp; Updates</span><span>Unbound</span><span>AdGuard Home</span>
+            </nav>
             <div class="dashboard-main">
-              <div class="dash-title"><div><small data-de="NETZWERKSCHUTZ" data-en="NETWORK PROTECTION">NETZWERKSCHUTZ</small><strong data-de="Alles geschützt" data-en="Everything protected">Alles geschützt</strong></div><span class="healthy">● Healthy</span></div>
-              <div class="metrics"><div><small data-de="DNS-DIENSTE" data-en="DNS SERVICES">DNS-DIENSTE</small><b>2 / 2</b><span data-de="AdGuard + Unbound aktiv" data-en="AdGuard + Unbound active">AdGuard + Unbound aktiv</span></div><div><small>DNSSEC</small><b class="purple" data-de="Aktiv" data-en="Active">Aktiv</b><span data-de="Validierung geprüft" data-en="Validation verified">Validierung geprüft</span></div></div>
-              <div class="pipeline"><div><i>01</i><b data-de="Clients" data-en="Clients">Clients</b><span>192.168.1.0/24</span></div><em>→</em><div><i>02</i><b>AdGuard Home</b><span data-de="Filter &amp; Regeln" data-en="Filters &amp; rules">Filter &amp; Regeln</span></div><em>→</em><div><i>03</i><b>Unbound</b><span>DNSSEC · Recursive</span></div></div>
-              <div class="activity"><span class="status-dot"></span><div><b data-de="Geschützter Upstream" data-en="Protected upstream">Geschützter Upstream</b><small>AdGuard Home → 172.29.53.2:5335 → Unbound</small></div><time data-de="geprüft" data-en="verified">geprüft</time></div>
+              <div class="preview-hero">
+                <div class="preview-copy">
+                  <small>ROOTGUARD CONTROL PLANE</small>
+                  <strong data-de="Dein DNS-Pfad ist geschützt." data-en="Your DNS path is protected.">Dein DNS-Pfad ist geschützt.</strong>
+                  <p data-de="AdGuard Home filtert und Unbound löst rekursiv mit DNSSEC auf." data-en="AdGuard Home filters while Unbound resolves recursively with DNSSEC.">AdGuard Home filtert und Unbound löst rekursiv mit DNSSEC auf.</p>
+                  <span data-de="Unbound konfigurieren →" data-en="Configure Unbound →">Unbound konfigurieren →</span>
+                </div>
+                <div class="preview-orbit"><i></i><b>✓</b><strong>PROTECTED</strong><small>192.168.1.10:53</small></div>
+              </div>
+              <div class="preview-kpis">
+                <div><i>⌁</i><span><small data-de="DNS-ENDPUNKT" data-en="DNS ENDPOINT">DNS-ENDPUNKT</small><b>192.168.1.10:53</b><em data-de="Adresse für deine Clients" data-en="Address for your clients">Adresse für deine Clients</em></span></div>
+                <div><i>▣</i><span><small data-de="DIENSTE" data-en="SERVICES">DIENSTE</small><b data-de="2 aktiv" data-en="2 running">2 aktiv</b><em>AdGuard + Unbound</em></span></div>
+                <div><i>✓</i><span><small>DNSSEC</small><b data-de="Validierung aktiv" data-en="Validation active">Validierung aktiv</b><em data-de="Signaturen werden geprüft" data-en="Signatures are verified">Signaturen werden geprüft</em></span></div>
+                <div><i>◇</i><span><small data-de="FILTERKETTE" data-en="FILTER CHAIN">FILTERKETTE</small><b data-de="Verbunden" data-en="Connected">Verbunden</b><em data-de="Kein externer Fallback" data-en="No external fallback">Kein externer Fallback</em></span></div>
+              </div>
+              <div class="preview-flow">
+                <small data-de="DNS-DATENFLUSS" data-en="DNS DATA FLOW">DNS-DATENFLUSS</small>
+                <div><span><b data-de="Clients" data-en="Clients">Clients</b></span><i>→</i><span><b>AdGuard Home</b></span><i>→</i><span><b>Unbound</b></span><i>→</i><span><b data-de="DNS-Hierarchie" data-en="DNS hierarchy">DNS-Hierarchie</b></span></div>
+              </div>
             </div>
           </div>
         </div>
