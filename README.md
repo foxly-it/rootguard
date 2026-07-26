@@ -135,6 +135,36 @@ Konfiguration werden gemeinsam versioniert und wiederhergestellt.
 > die RootGuard-Oberflächen für Filter, Clients und Abfragestatistiken ergänzt
 > werden.
 
+## Öffentliche Alpha ohne lokalen Build testen
+
+Die Alpha-Compose lädt versionierte Multi-Arch-Images aus GHCR. Ein Checkout
+der Komponenten und ein lokaler Image-Build sind dafür nicht erforderlich:
+
+```sh
+mkdir rootguard-alpha && cd rootguard-alpha
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.1/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.1/.env.alpha.example
+```
+
+In `.env` müssen anschließend `ROOTGUARD_API_TOKEN` und
+`ROOTGUARD_ADMIN_PASSWORD` ersetzt werden. Ein Token kann beispielsweise mit
+`openssl rand -hex 32` erzeugt werden. Danach startet eine einzige Compose die
+vollständige RootGuard Control Plane:
+
+```sh
+docker compose -f compose.alpha.yaml up -d
+```
+
+Die WebGUI ist anschließend standardmäßig unter
+`http://<IP-des-Docker-Hosts>:8080/login` erreichbar. Der geführte Setup-Dialog
+prüft die gewählte Host-Adresse und stellt danach AdGuard Home und Unbound als
+geschützte DNS-Kette bereit. Die Alpha ist zum Evaluieren und Melden
+reproduzierbarer Fehler gedacht, noch nicht als Produktionsempfehlung.
+
+Enthaltene Funktionen, bekannte Einschränkungen, Betriebsbefehle und Hinweise
+für Fehlerberichte stehen in den
+[`0.1.0-alpha.1` Release Notes](RELEASE_NOTES_0.1.0-alpha.1.md).
+
 ## Website und Dokumentation
 
 Die Projektwebsite wird aus `site/` über GitHub Pages veröffentlicht und ist

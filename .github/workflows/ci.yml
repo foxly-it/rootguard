@@ -26,6 +26,13 @@ jobs:
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet
 
+      - name: Validate public alpha Compose model
+        env:
+          ROOTGUARD_VERSION: 0.1.0-alpha.1
+        run: |
+          docker compose -f compose.alpha.yaml config --quiet
+          test "$(docker compose -f compose.alpha.yaml config --format json | jq -r 'any(.services[]; has("build"))')" = false
+
       - name: Build RootGuard stack
         run: docker compose -f compose.integration.yaml build
 

@@ -106,13 +106,12 @@
           <section id="quickstart" class="manual-section">
             <p class="eyebrow" data-de="03 · Installation" data-en="03 · Installation">03 · Installation</p>
             <h2 data-de="Control Plane starten" data-en="Start the control plane">Control Plane starten</h2>
-            <div class="code-block"><div>shell</div><pre><code>git clone --recurse-submodules \
-  https://github.com/foxly-it/rootguard.git
-cd rootguard
-cp .env.example .env
+            <div class="code-block"><div>shell</div><pre><code>mkdir rootguard-alpha &amp;&amp; cd rootguard-alpha
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.1/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.1/.env.alpha.example
 openssl rand -hex 32
-docker compose up --build -d</code></pre></div>
-            <p data-de="Trage den erzeugten Zufallswert als ROOTGUARD_API_TOKEN und ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Standardmäßig startet die Control Plane aus WebApp, Core und Updater; die DNS-Dienste werden erst im Setup erzeugt." data-en="Store the generated random value as ROOTGUARD_API_TOKEN and set your own strong ROOTGUARD_ADMIN_PASSWORD in .env. The control plane starts WebApp, Core, and Updater; DNS services are created later by Setup.">Trage den erzeugten Zufallswert als ROOTGUARD_API_TOKEN und ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Standardmäßig startet die Control Plane aus WebApp, Core und Updater; die DNS-Dienste werden erst im Setup erzeugt.</p>
+docker compose -f compose.alpha.yaml up -d</code></pre></div>
+            <p data-de="Trage den erzeugten Zufallswert als ROOTGUARD_API_TOKEN und ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Die Alpha lädt versionierte amd64-/arm64-Images aus GHCR; ein Checkout oder lokaler Build der Komponenten ist nicht erforderlich. Die Control Plane startet zuerst, die DNS-Dienste werden anschließend im Setup erzeugt." data-en="Store the generated random value as ROOTGUARD_API_TOKEN and set your own strong ROOTGUARD_ADMIN_PASSWORD in .env. The alpha pulls versioned amd64/arm64 images from GHCR; no component checkout or local build is required. The control plane starts first and Setup then creates the DNS services.">Trage den erzeugten Zufallswert als ROOTGUARD_API_TOKEN und ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Die Alpha lädt versionierte amd64-/arm64-Images aus GHCR; ein Checkout oder lokaler Build der Komponenten ist nicht erforderlich. Die Control Plane startet zuerst, die DNS-Dienste werden anschließend im Setup erzeugt.</p>
             <div class="code-block"><div>browser</div><pre><code>http://localhost:8080/login</code></pre></div>
           </section>
 
@@ -196,20 +195,21 @@ ROOTGUARD_WEBAPP_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-webapp:latest</code></p
             <p class="eyebrow" data-de="11 · Betrieb" data-en="11 · Operations">11 · Betrieb</p>
             <h2 data-de="Nützliche Befehle" data-en="Useful commands">Nützliche Befehle</h2>
             <div class="code-block"><div>shell</div><pre><code># Status der Control Plane
-docker compose ps
+docker compose -f compose.alpha.yaml ps
 
 # Logs
-docker compose logs --tail=200 core webapp updater
+docker compose -f compose.alpha.yaml logs --tail=200 core webapp updater
 
 # Control Plane neu starten
-docker compose restart core webapp updater
+docker compose -f compose.alpha.yaml restart core webapp updater
 
-# Aktuelle Images neu bauen
-docker compose up --build -d
+# Gestoppte Alpha wieder starten
+docker compose -f compose.alpha.yaml start
 
 # DNS testen
 dig @ROOTGUARD_LAN_IP example.com A</code></pre></div>
             <p data-de="Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entferne Volumes nicht mit docker compose down --volumes, solange du keine bewusste Neuinstallation durchführen willst." data-en="Configuration and installation state is stored in named Docker volumes. Do not remove volumes with docker compose down --volumes unless you intentionally want a clean installation.">Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entferne Volumes nicht mit docker compose down --volumes, solange du keine bewusste Neuinstallation durchführen willst.</p>
+            <div class="manual-callout warning"><b data-de="Saubere Neuinstallation" data-en="Clean reinstall">Saubere Neuinstallation</b><span data-de="Der Setup-Controller erzeugt zusätzliche benannte DNS-Volumes außerhalb der Control-Plane-Compose. Ein normales Stoppen löscht keine Daten. Entferne Container und Volumes nur bewusst nach einem Backup und anhand der versionsgleichen Release-Hinweise." data-en="Setup creates additional named DNS volumes outside the control-plane Compose project. A normal stop deletes no data. Remove containers and volumes only intentionally, after a backup, and by following the matching release notes.">Der Setup-Controller erzeugt zusätzliche benannte DNS-Volumes außerhalb der Control-Plane-Compose. Ein normales Stoppen löscht keine Daten. Entferne Container und Volumes nur bewusst nach einem Backup und anhand der versionsgleichen Release-Hinweise.</span></div>
           </section>
 
           <section id="troubleshooting" class="manual-section">

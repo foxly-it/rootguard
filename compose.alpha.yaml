@@ -1,0 +1,110 @@
+name: rootguard
+
+# RootGuard 0.1.0-alpha.1 public evaluation stack.
+# Copy .env.alpha.example to .env and replace both secrets before starting.
+
+services:
+  core:
+    image: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+    container_name: rootguard-core
+    restart: unless-stopped
+    depends_on:
+      updater:
+        condition: service_healthy
+    environment:
+      PORT: "8081"
+      ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      ROOTGUARD_CORE_CONTAINER: rootguard-core
+      ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
+      ROOTGUARD_UNBOUND_IMAGE: "ghcr.io/foxly-it/rootguard-unbound:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_ADGUARD_IMAGE: "adguard/adguardhome:v0.107.78"
+      ROOTGUARD_ADGUARD_UPDATE_IMAGE: "adguard/adguardhome:v0.107.78"
+      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-unbound:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
+      ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
+      ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      UNBOUND_CONFIG_DIR: /var/lib/rootguard/unbound
+      UNBOUND_CONTAINER_CONFIG_DIR: /etc/unbound/unbound.d
+      UNBOUND_CONTAINER_NAME: rootguard-unbound
+      ADGUARD_INSTALLER_URL: http://rootguard-adguard:3000
+      ADGUARD_API_URL: http://rootguard-adguard:80
+      ADGUARD_DATA_DIR: /var/lib/rootguard/adguard
+      ADGUARD_UPSTREAM: 172.29.53.2:5335
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - rootguard-data:/var/lib/rootguard
+      - unbound-config:/var/lib/rootguard/unbound
+    networks:
+      - control
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  webapp:
+    image: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+    container_name: rootguard-webapp
+    restart: unless-stopped
+    depends_on:
+      core:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      ROOTGUARD_CORE_URL: http://core:8081
+      ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
+      ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
+      ROOTGUARD_SESSION_FILE: /var/lib/rootguard-sessions/sessions.json
+    volumes:
+      - rootguard-sessions:/var/lib/rootguard-sessions
+    ports:
+      - "${ROOTGUARD_WEB_BIND:-0.0.0.0}:${ROOTGUARD_WEB_PORT:-8080}:8080/tcp"
+    networks:
+      - control
+      - edge
+
+  updater:
+    image: "ghcr.io/foxly-it/rootguard-updater:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+    container_name: rootguard-updater
+    restart: unless-stopped
+    environment:
+      ROOTGUARD_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
+      ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.alpha.yaml
+      ROOTGUARD_COMPOSE_PROJECT: rootguard
+      ROOTGUARD_CORE_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
+      ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
+      ROOTGUARD_WEB_BIND: "${ROOTGUARD_WEB_BIND:-0.0.0.0}"
+      ROOTGUARD_WEB_PORT: "${ROOTGUARD_WEB_PORT:-8080}"
+      ROOTGUARD_CORE_IMAGE: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_WEBAPP_IMAGE: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - rootguard-data:/var/lib/rootguard
+      - rootguard-sessions:/var/lib/rootguard-sessions
+      - ./compose.alpha.yaml:/opt/rootguard/compose.alpha.yaml:ro
+    networks:
+      - control
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8082/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+networks:
+  edge:
+  control:
+    internal: true
+
+volumes:
+  unbound-config:
+    name: rootguard-unbound-config
+  rootguard-data:
+    name: rootguard-data
+  rootguard-sessions:
+    name: rootguard-sessions
