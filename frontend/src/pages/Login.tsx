@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight, Check, Eye, EyeOff, Filter, LockKeyhole, Network, ShieldCheck } from "lucide-react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router";
 import logo from "../assets/rootguard-icon.svg";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";

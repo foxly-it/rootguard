@@ -4,7 +4,7 @@
 // =====================================================
 
 import type { ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink } from "react-router";
 import Header from "./Header";
 import { useI18n } from "../i18n";
 

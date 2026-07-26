@@ -1,4 +1,4 @@
-import { Navigate, Routes, Route, useLocation } from "react-router-dom";
+import { Navigate, Routes, Route, useLocation } from "react-router";
 import SidebarLayout from "./layout/SidebarLayout";
 import Overview from "./pages/Overview";
 import Unbound from "./pages/Unbound";

@@ -19,5 +19,10 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // These effects start asynchronous API synchronization; state updates
+      // happen from the resulting promise callbacks, not during render.
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])

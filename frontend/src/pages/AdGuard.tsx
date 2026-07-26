@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { ArrowRight, Check, ExternalLink, Filter, KeyRound, LockKeyhole, Network, ShieldCheck } from "lucide-react";
 import {
   bootstrapAdGuard,
