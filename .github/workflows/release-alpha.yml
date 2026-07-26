@@ -1,0 +1,169 @@
+name: Publish RootGuard alpha images
+
+on:
+  push:
+    tags:
+      - "v*-alpha.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version without the leading v
+        required: true
+        default: 0.1.0-alpha.1
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      value: ${{ steps.release.outputs.value }}
+    steps:
+      - id: release
+        env:
+          DISPATCH_VERSION: ${{ inputs.version }}
+        run: |
+          if [ -n "$DISPATCH_VERSION" ]; then
+            version="$DISPATCH_VERSION"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          case "$version" in
+            *-alpha.*) ;;
+            *) echo "Refusing non-alpha version: $version" >&2; exit 1 ;;
+          esac
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: rootguard-core/go.mod
+          cache: false
+      - run: go test ./...
+        working-directory: rootguard-core
+      - run: go test ./...
+        working-directory: rootguard-updater
+      - run: go test ./...
+        working-directory: rootguard-webapp/backend
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: rootguard-webapp/frontend/package-lock.json
+      - run: npm ci
+        working-directory: rootguard-webapp/frontend
+      - run: npm run lint
+        working-directory: rootguard-webapp/frontend
+      - run: npm run build
+        working-directory: rootguard-webapp/frontend
+
+  publish:
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: core
+            image: rootguard-core
+            context: rootguard-core
+          - component: webapp
+            image: rootguard-webapp
+            context: rootguard-webapp
+          - component: updater
+            image: rootguard-updater
+            context: rootguard-updater
+          - component: unbound
+            image: rootguard-unbound
+            context: rootguard-unbound
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.value }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.version.outputs.value }}
+          build-args: |
+            VERSION=${{ needs.version.outputs.value }}
+            COMMIT=${{ github.sha }}
+
+  smoke-test:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    env:
+      ROOTGUARD_VERSION: ${{ needs.version.outputs.value }}
+      ROOTGUARD_API_TOKEN: alpha-smoke-test-token
+      ROOTGUARD_ADMIN_USER: admin
+      ROOTGUARD_ADMIN_PASSWORD: alpha-smoke-test-password
+      ROOTGUARD_WEB_BIND: 127.0.0.1
+      ROOTGUARD_WEB_PORT: "18080"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start published control plane
+        run: docker compose -f compose.alpha.yaml up -d
+      - name: Install and verify the DNS stack
+        run: |
+          for attempt in {1..60}; do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --cookie-jar /tmp/rootguard-alpha-cookies.txt \
+              --header 'Content-Type: application/json' \
+              --data '{"username":"admin","password":"alpha-smoke-test-password"}' \
+              http://127.0.0.1:18080/api/auth/login || true)"
+            if [ "$code" = 200 ]; then break; fi
+            sleep 2
+          done
+          test "$code" = 200
+          config='{"dns_bind_address":"127.0.0.1","dns_port":1053}'
+          test "$(curl --fail --silent --cookie /tmp/rootguard-alpha-cookies.txt \
+            --header 'Content-Type: application/json' --data "$config" \
+            http://127.0.0.1:18080/api/installation/preflight | jq -r .ready)" = true
+          curl --fail --silent --cookie /tmp/rootguard-alpha-cookies.txt \
+            --header 'Content-Type: application/json' --data "$config" \
+            http://127.0.0.1:18080/api/installation/deploy >/dev/null
+          for attempt in {1..90}; do
+            installation="$(curl --fail --silent \
+              --cookie /tmp/rootguard-alpha-cookies.txt \
+              http://127.0.0.1:18080/api/installation)"
+            state="$(jq -r .state <<<"$installation")"
+            if [ "$state" = installed ]; then break; fi
+            if [ "$state" = failed ]; then echo "$installation"; exit 1; fi
+            sleep 2
+          done
+          test "$state" = installed
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
+          test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 \
+            dnssec-failed.org A | sed -n \
+            's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
+      - name: Show logs after failure
+        if: failure()
+        run: docker compose -f compose.alpha.yaml logs --no-color
+      - name: Stop stack
+        if: always()
+        run: docker compose -f compose.alpha.yaml down --volumes

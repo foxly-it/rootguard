@@ -22,6 +22,8 @@ body{overflow-x:hidden}
 }
 
 /* Current RootGuard dashboard preview */
+.docs-layout>*{min-width:0}
+.quickstart pre{max-width:100%;white-space:pre;overscroll-behavior-x:contain}
 .dashboard-current{background:#071521;border-color:#26384a}
 .dashboard-current .window-head{height:38px;background:#101c28;border-color:#26384a}
 .dashboard-appbar{display:flex;align-items:center;gap:9px;height:46px;padding:0 14px;border-bottom:1px solid rgba(255,255,255,.05);background:#0c1b29}

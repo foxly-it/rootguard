@@ -139,6 +139,11 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   Browser requests cannot supply images, services, or Compose arguments.
 - Bilingual project website deployed with enforced HTTPS at
   `https://rootguard.foxly.de`.
+- Public-alpha packaging is prepared around a single `compose.alpha.yaml` that
+  contains no local build contexts and pulls one named RootGuard version for
+  Core, WebApp, Updater, and Unbound. A tag-driven release workflow builds
+  `amd64` and `arm64` images and smoke-tests the published Compose through the
+  real guided AIO installation, DNS resolution, and DNSSEC rejection path.
 - Dedicated bilingual documentation at `/docs.html` covering installation,
   first setup, router and client configuration, the WebGUI, Unbound, AdGuard
   Home, updates and rollback, security, operations, troubleshooting, and
