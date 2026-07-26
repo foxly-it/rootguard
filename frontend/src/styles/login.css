@@ -345,6 +345,43 @@
   animation: rg-row-enter 0.25s ease both;
 }
 
+.login-success,
+.login-recovery-disabled {
+  padding: 11px 13px;
+  border: 1px solid rgba(45, 212, 191, 0.24);
+  border-radius: 9px;
+  color: #b7f7ec;
+  background: rgba(20, 184, 166, 0.08);
+  font-size: 0.74rem;
+  line-height: 1.5;
+}
+
+.login-recovery-disabled {
+  border-color: rgba(251, 191, 36, 0.24);
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.login-recovery-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 13px;
+  padding: 6px;
+  border: 0;
+  color: #8ba4bd;
+  background: transparent;
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.login-recovery-link:hover {
+  color: #67e8f9;
+}
+
 .login-submit {
   display: flex;
   align-items: center;

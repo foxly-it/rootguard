@@ -95,6 +95,7 @@ cd backend
 ROOTGUARD_CORE_URL=http://localhost:8081 \
 ROOTGUARD_API_TOKEN=development-token \
 ROOTGUARD_ADMIN_PASSWORD=change-me \
+ROOTGUARD_RECOVERY_TOKEN=separate-long-random-recovery-key \
 go run ./cmd/rootguard-webapp
 ````
 
@@ -123,6 +124,7 @@ docker run -p 8080:8080 \
   -e ROOTGUARD_CORE_URL=http://rootguard-core:8081 \
   -e ROOTGUARD_API_TOKEN=replace-me \
   -e ROOTGUARD_ADMIN_PASSWORD=replace-me \
+  -e ROOTGUARD_RECOVERY_TOKEN=separate-long-random-recovery-key \
   rootguard-webapp:dev
 ````
 
@@ -144,6 +146,12 @@ RootGuard WebApp follows strict design constraints:
 - API-only exposure of infrastructure actions  
 - Minimal runtime surface (distroless container)  
 - Deterministic build process  
+
+The login screen provides a local password-recovery flow when
+`ROOTGUARD_RECOVERY_TOKEN` is configured. A successful reset stores only a
+salted PBKDF2-SHA256 password verifier in the restricted session volume and
+invalidates every existing session. The recovery key must be generated
+independently from the administrator password and internal API token.
 
 ---
 

@@ -11,7 +11,7 @@ import (
 )
 
 func TestSessionAuthLoginProtectsAPIAndLogoutInvalidatesSession(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", time.Hour, "")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
 	handler := RequireSameOriginWrites(auth.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})))
@@ -67,7 +67,7 @@ func TestSessionAuthLoginProtectsAPIAndLogoutInvalidatesSession(t *testing.T) {
 }
 
 func TestSessionAuthRejectsWrongCredentialsAndCrossOriginLogin(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", time.Hour, "")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 	body := []byte(`{"username":"admin","password":"wrong"}`)
 
@@ -90,7 +90,7 @@ func TestSessionAuthRejectsWrongCredentialsAndCrossOriginLogin(t *testing.T) {
 
 func TestSessionSurvivesWebAppRestart(t *testing.T) {
 	sessionFile := filepath.Join(t.TempDir(), "sessions.json")
-	first := NewSessionAuth("admin", "secret", time.Hour, sessionFile)
+	first := NewSessionAuth("admin", "secret", "", time.Hour, sessionFile)
 	handler := first.Handler(http.NotFoundHandler())
 	body := []byte(`{"username":"admin","password":"secret"}`)
 	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
@@ -100,12 +100,75 @@ func TestSessionSurvivesWebAppRestart(t *testing.T) {
 		t.Fatalf("expected login 200, got %d", login.Code)
 	}
 
-	restarted := NewSessionAuth("admin", "secret", time.Hour, sessionFile)
+	restarted := NewSessionAuth("admin", "secret", "", time.Hour, sessionFile)
 	sessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
 	sessionRequest.AddCookie(login.Result().Cookies()[0])
 	sessionResponse := httptest.NewRecorder()
 	restarted.Handler(http.NotFoundHandler()).ServeHTTP(sessionResponse, sessionRequest)
 	if sessionResponse.Code != http.StatusOK {
 		t.Fatalf("expected persisted session after restart, got %d", sessionResponse.Code)
+	}
+}
+
+func TestPasswordRecoveryPersistsPasswordAndInvalidatesSessions(t *testing.T) {
+	sessionFile := filepath.Join(t.TempDir(), "sessions.json")
+	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, sessionFile)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	loginBody := []byte(`{"username":"admin","password":"old-password"}`)
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+	login := httptest.NewRecorder()
+	handler.ServeHTTP(login, loginRequest)
+	if login.Code != http.StatusOK {
+		t.Fatalf("expected initial login 200, got %d", login.Code)
+	}
+
+	resetBody := []byte(`{"recovery_token":"recovery-secret","new_password":"new-password-123"}`)
+	resetRequest := httptest.NewRequest(http.MethodPost, "/api/auth/recovery", bytes.NewReader(resetBody))
+	resetRequest.Header.Set("Origin", "http://example.com")
+	resetRequest.Host = "example.com"
+	reset := httptest.NewRecorder()
+	handler.ServeHTTP(reset, resetRequest)
+	if reset.Code != http.StatusOK {
+		t.Fatalf("expected reset 200, got %d: %s", reset.Code, reset.Body.String())
+	}
+
+	sessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	sessionRequest.AddCookie(login.Result().Cookies()[0])
+	sessionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(sessionResponse, sessionRequest)
+	if sessionResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("expected old session to be invalidated, got %d", sessionResponse.Code)
+	}
+
+	restarted := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, sessionFile)
+	newLoginBody := []byte(`{"username":"admin","password":"new-password-123"}`)
+	newLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(newLoginBody))
+	newLogin := httptest.NewRecorder()
+	restarted.Handler(http.NotFoundHandler()).ServeHTTP(newLogin, newLoginRequest)
+	if newLogin.Code != http.StatusOK {
+		t.Fatalf("expected persisted reset password to work, got %d", newLogin.Code)
+	}
+}
+
+func TestPasswordRecoveryRejectsInvalidTokenAndWeakPassword(t *testing.T) {
+	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, filepath.Join(t.TempDir(), "sessions.json"))
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	for name, testCase := range map[string]struct {
+		body       string
+		wantStatus int
+	}{
+		"invalid token": {`{"recovery_token":"wrong","new_password":"new-password-123"}`, http.StatusUnauthorized},
+		"weak password": {`{"recovery_token":"recovery-secret","new_password":"short"}`, http.StatusBadRequest},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/recovery", bytes.NewBufferString(testCase.body))
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("expected %d, got %d", testCase.wantStatus, response.Code)
+			}
+		})
 	}
 }

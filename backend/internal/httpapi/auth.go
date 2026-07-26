@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -16,14 +17,19 @@ import (
 )
 
 const sessionCookieName = "rootguard_session"
+const passwordIterations = 600_000
 
 type SessionAuth struct {
 	expectedUserHash     [32]byte
-	expectedPasswordHash [32]byte
+	expectedPasswordHash []byte
+	passwordSalt         []byte
+	recoveryTokenHash    [32]byte
+	recoveryEnabled      bool
 	ttl                  time.Duration
 	mu                   sync.Mutex
 	sessions             map[string]session
 	persistencePath      string
+	credentialsPath      string
 }
 
 type session struct {
@@ -36,17 +42,40 @@ type credentials struct {
 	Password string `json:"password"`
 }
 
-func NewSessionAuth(expectedUser, expectedPassword string, ttl time.Duration, persistencePath string) *SessionAuth {
+type passwordReset struct {
+	RecoveryToken string `json:"recovery_token"`
+	NewPassword   string `json:"new_password"`
+}
+
+type persistedCredentials struct {
+	Algorithm    string `json:"algorithm"`
+	Iterations   int    `json:"iterations"`
+	Salt         string `json:"salt"`
+	PasswordHash string `json:"password_hash"`
+}
+
+func NewSessionAuth(expectedUser, expectedPassword, recoveryToken string, ttl time.Duration, persistencePath string) *SessionAuth {
 	if ttl <= 0 {
 		ttl = 12 * time.Hour
 	}
+	passwordSalt, passwordHash, err := securePassword(expectedPassword)
+	if err != nil {
+		panic("unable to initialize password hash: " + err.Error())
+	}
 	auth := &SessionAuth{
 		expectedUserHash:     sha256.Sum256([]byte(expectedUser)),
-		expectedPasswordHash: sha256.Sum256([]byte(expectedPassword)),
+		expectedPasswordHash: passwordHash,
+		passwordSalt:         passwordSalt,
+		recoveryTokenHash:    sha256.Sum256([]byte(recoveryToken)),
+		recoveryEnabled:      recoveryToken != "",
 		ttl:                  ttl,
 		sessions:             make(map[string]session),
 		persistencePath:      persistencePath,
 	}
+	if persistencePath != "" {
+		auth.credentialsPath = filepath.Join(filepath.Dir(persistencePath), "credentials.json")
+	}
+	auth.loadCredentials()
 	auth.loadSessions()
 	return auth
 }
@@ -62,6 +91,9 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 			return
 		case "/api/auth/session":
 			a.handleSession(w, r)
+			return
+		case "/api/auth/recovery":
+			a.handleRecovery(w, r)
 			return
 		case "/health":
 			next.ServeHTTP(w, r)
@@ -79,6 +111,62 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 	})
 }
 
+func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if r.Method == http.MethodGet {
+		writeJSON(w, http.StatusOK, map[string]bool{"enabled": a.recoveryEnabled})
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !a.recoveryEnabled {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "recovery_disabled"})
+		return
+	}
+
+	var input passwordReset
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		return
+	}
+	tokenHash := sha256.Sum256([]byte(input.RecoveryToken))
+	if subtle.ConstantTimeCompare(tokenHash[:], a.recoveryTokenHash[:]) != 1 {
+		time.Sleep(250 * time.Millisecond)
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_recovery_token"})
+		return
+	}
+	if len(input.NewPassword) < 12 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "weak_password"})
+		return
+	}
+
+	passwordSalt, passwordHash, err := securePassword(input.NewPassword)
+	if err != nil {
+		http.Error(w, "Unable to secure credentials", http.StatusInternalServerError)
+		return
+	}
+	a.mu.Lock()
+	a.expectedPasswordHash = passwordHash
+	a.passwordSalt = passwordSalt
+	clear(a.sessions)
+	if err := a.persistCredentialsLocked(); err != nil {
+		a.mu.Unlock()
+		http.Error(w, "Unable to persist credentials", http.StatusInternalServerError)
+		return
+	}
+	if err := a.persistLocked(); err != nil {
+		a.mu.Unlock()
+		http.Error(w, "Unable to invalidate sessions", http.StatusInternalServerError)
+		return
+	}
+	a.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]bool{"reset": true})
+}
+
 func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -94,9 +182,14 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userHash := sha256.Sum256([]byte(input.Username))
-	passwordHash := sha256.Sum256([]byte(input.Password))
+	a.mu.Lock()
+	passwordSalt := append([]byte(nil), a.passwordSalt...)
+	expectedPasswordHash := append([]byte(nil), a.expectedPasswordHash...)
+	a.mu.Unlock()
+	passwordHash, err := pbkdf2.Key(sha256.New, input.Password, passwordSalt, passwordIterations, sha256.Size)
 	valid := subtle.ConstantTimeCompare(userHash[:], a.expectedUserHash[:]) == 1 &&
-		subtle.ConstantTimeCompare(passwordHash[:], a.expectedPasswordHash[:]) == 1
+		err == nil &&
+		subtle.ConstantTimeCompare(passwordHash, expectedPasswordHash) == 1
 	if !valid {
 		time.Sleep(250 * time.Millisecond)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_credentials"})
@@ -209,6 +302,68 @@ func (a *SessionAuth) loadSessions() {
 	defer a.mu.Unlock()
 	_ = json.Unmarshal(data, &a.sessions)
 	a.deleteExpiredLocked(time.Now())
+}
+
+func (a *SessionAuth) loadCredentials() {
+	if a.credentialsPath == "" {
+		return
+	}
+	data, err := os.ReadFile(a.credentialsPath)
+	if err != nil {
+		return
+	}
+	var stored persistedCredentials
+	if json.Unmarshal(data, &stored) != nil {
+		return
+	}
+	if stored.Algorithm != "pbkdf2-sha256" || stored.Iterations != passwordIterations {
+		return
+	}
+	salt, err := base64.RawStdEncoding.DecodeString(stored.Salt)
+	if err != nil || len(salt) != 16 {
+		return
+	}
+	passwordHash, err := base64.RawStdEncoding.DecodeString(stored.PasswordHash)
+	if err != nil || len(passwordHash) != sha256.Size {
+		return
+	}
+	a.passwordSalt = salt
+	a.expectedPasswordHash = passwordHash
+}
+
+func (a *SessionAuth) persistCredentialsLocked() error {
+	if a.credentialsPath == "" {
+		return errors.New("credential persistence is not configured")
+	}
+	if err := os.MkdirAll(filepath.Dir(a.credentialsPath), 0700); err != nil {
+		return err
+	}
+	data, err := json.Marshal(persistedCredentials{
+		Algorithm:    "pbkdf2-sha256",
+		Iterations:   passwordIterations,
+		Salt:         base64.RawStdEncoding.EncodeToString(a.passwordSalt),
+		PasswordHash: base64.RawStdEncoding.EncodeToString(a.expectedPasswordHash),
+	})
+	if err != nil {
+		return err
+	}
+	temp := a.credentialsPath + ".tmp"
+	if err := os.WriteFile(temp, data, 0600); err != nil {
+		return err
+	}
+	return os.Rename(temp, a.credentialsPath)
+}
+
+func securePassword(password string) ([]byte, []byte, error) {
+	salt := make([]byte, 16)
+	if _, err := rand.Read(salt); err != nil {
+		return nil, nil, err
+	}
+	passwordHash, err := pbkdf2.Key(sha256.New, password, salt, passwordIterations, sha256.Size)
+	if err != nil {
+		return nil, nil, err
+	}
+	return salt, passwordHash, nil
 }
 
 func (a *SessionAuth) persistLocked() error {

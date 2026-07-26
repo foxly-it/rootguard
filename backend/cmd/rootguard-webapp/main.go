@@ -67,6 +67,7 @@ func main() {
 	sessionAuth := httpapi.NewSessionAuth(
 		getEnv("ROOTGUARD_ADMIN_USER", "admin"),
 		adminPassword,
+		os.Getenv("ROOTGUARD_RECOVERY_TOKEN"),
 		12*time.Hour,
 		getEnv("ROOTGUARD_SESSION_FILE", "/var/lib/rootguard-sessions/sessions.json"),
 	)
