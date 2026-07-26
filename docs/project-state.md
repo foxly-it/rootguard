@@ -123,6 +123,12 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   sessions, same-origin checks cover login/logout, and the header exposes an
   explicit sign-out action. Sessions persist in a dedicated restricted volume
   so a controlled WebApp replacement does not force an unnecessary login.
+- The bilingual login includes local password recovery through a separate
+  installation recovery key. Successful resets persist only a salted
+  PBKDF2-SHA256 verifier in the restricted session volume and invalidate every
+  active session. The recovery key neither creates a session nor crosses the
+  WebApp/Core trust boundary; installations without one receive the explicit
+  local `.env` recovery procedure instead of a misleading email flow.
 - Lightweight vector RootGuard shield replaces the former embedded bitmap
   asset. The global header now identifies the current page next to the brand;
   the application shell adds a keyboard skip link, labelled main navigation,

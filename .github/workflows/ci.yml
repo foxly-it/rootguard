@@ -15,6 +15,7 @@ jobs:
       ROOTGUARD_API_TOKEN: ci-rootguard-token
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
+      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token
       ROOTGUARD_WEB_PORT: "18080"
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"
@@ -177,6 +178,28 @@ jobs:
             "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
           test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
             http://127.0.0.1:18080/api/unbound/settings | jq '.forward_zones | length')" = "0"
+
+      - name: Verify password recovery and persistence
+        run: |
+          test "$(curl --fail --silent http://127.0.0.1:18080/api/auth/recovery | jq -r .enabled)" = "true"
+          curl --fail --silent \
+            --header 'Content-Type: application/json' \
+            --data '{"recovery_token":"ci-rootguard-recovery-token","new_password":"ci-new-rootguard-password"}' \
+            http://127.0.0.1:18080/api/auth/recovery >/dev/null
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --cookie /tmp/rootguard-ci-cookies.txt \
+            http://127.0.0.1:18080/api/auth/session)" = "401"
+          docker compose -f compose.integration.yaml restart webapp
+          for attempt in {1..30}; do
+            login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --cookie-jar /tmp/rootguard-ci-recovered-cookies.txt \
+              --header 'Content-Type: application/json' \
+              --data '{"username":"admin","password":"ci-new-rootguard-password"}' \
+              http://127.0.0.1:18080/api/auth/login || true)"
+            if test "$login_status" = "200"; then exit 0; fi
+            sleep 2
+          done
+          exit 1
 
       - name: Show service logs after failure
         if: failure()
