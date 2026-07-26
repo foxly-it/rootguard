@@ -26,15 +26,18 @@ git submodule update --init --recursive
 
 ## Entwicklungsstack starten
 
-RootGuard benötigt ein internes API-Token und ein Passwort für die
-Weboberfläche. Beide Werte werden ausschließlich lokal in `.env` gespeichert:
+RootGuard benötigt ein internes API-Token, ein Passwort für die Weboberfläche
+und einen davon unabhängigen Recovery-Schlüssel. Alle Werte werden
+ausschließlich lokal in `.env` gespeichert:
 
 ```sh
 cp .env.example .env
 openssl rand -hex 32
+openssl rand -hex 32
 ```
 
-Den ausgegebenen Zufallswert als `ROOTGUARD_API_TOKEN` eintragen, ein starkes
+Die beiden Zufallswerte getrennt als `ROOTGUARD_API_TOKEN` und
+`ROOTGUARD_RECOVERY_TOKEN` eintragen, ein starkes
 `ROOTGUARD_ADMIN_PASSWORD` setzen und anschließend die RootGuard Control Plane
 starten:
 
@@ -45,6 +48,12 @@ docker compose up --build -d
 Danach sind erreichbar:
 
 - RootGuard WebApp: `http://localhost:8080`
+
+Über **Passwort vergessen?** auf der Login-Seite lässt sich mit dem
+Recovery-Schlüssel ein neues Admin-Passwort setzen. Der Schlüssel ist kein
+Ersatzpasswort: RootGuard speichert nach dem Reset nur einen gesalzenen
+PBKDF2-SHA256-Verifier im geschützten Session-Volume und beendet alle
+bestehenden Sitzungen.
 
 `compose.yaml` startet WebApp, Core und den nur intern erreichbaren
 Updater-Helper. Unter **Setup** wird

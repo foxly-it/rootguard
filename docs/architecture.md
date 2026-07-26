@@ -46,6 +46,20 @@ separate, intern erreichbare Updater-Helper besitzen Docker-Zugriff für
 unterschiedliche, fest freigegebene Aufgaben. Die Webapp kennt weder den Socket
 noch Host-Systembefehle.
 
+## Anmeldung und lokales Passwort-Recovery
+
+Die WebApp verwaltet HttpOnly-/SameSite-Strict-Sitzungen serverseitig im
+geschützten Session-Volume. Ein separater `ROOTGUARD_RECOVERY_TOKEN` ermöglicht
+auf der Login-Seite ausschließlich das Setzen eines neuen Admin-Passworts. Er
+gewährt weder eine Sitzung noch Zugriff auf Core oder AdGuard und muss
+unabhängig von Admin-Passwort und internem API-Token erzeugt werden.
+
+Nach einem erfolgreichen Reset liegt nur ein gesalzener
+PBKDF2-SHA256-Verifier mit 600.000 Iterationen im Session-Volume. Alle
+bestehenden Sitzungen werden ungültig. Ohne konfigurierten Recovery-Schlüssel
+bleibt der lokale Betreiberpfad über `.env` und eine kontrollierte Neuerstellung
+des WebApp-Containers; es gibt bewusst keinen E-Mail- oder Cloud-Recovery-Dienst.
+
 ## AIO-Bootstrap und Stack-Lebenszyklus
 
 Die öffentliche `compose.yaml` startet die dauerhafte Control Plane aus WebApp,
