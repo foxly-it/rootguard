@@ -74,9 +74,6 @@ jobs:
           - component: core
             image: rootguard-core
             context: rootguard-core
-          - component: webapp
-            image: rootguard-webapp
-            context: rootguard-webapp
           - component: updater
             image: rootguard-updater
             context: rootguard-updater
