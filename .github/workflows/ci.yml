@@ -29,7 +29,7 @@ jobs:
 
       - name: Validate public alpha Compose model
         env:
-          ROOTGUARD_VERSION: 0.1.0-alpha.1
+          ROOTGUARD_VERSION: 0.1.0-alpha.2
         run: |
           docker compose -f compose.alpha.yaml config --quiet
           test "$(docker compose -f compose.alpha.yaml config --format json | jq -r 'any(.services[]; has("build"))')" = false

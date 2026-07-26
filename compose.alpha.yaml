@@ -1,11 +1,11 @@
 name: rootguard
 
-# RootGuard 0.1.0-alpha.1 public evaluation stack.
+# RootGuard 0.1.0-alpha.2 public evaluation stack.
 # Copy .env.alpha.example to .env and replace both secrets before starting.
 
 services:
   core:
-    image: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+    image: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
     container_name: rootguard-core
     restart: unless-stopped
     depends_on:
@@ -16,10 +16,10 @@ services:
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_CORE_CONTAINER: rootguard-core
       ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
-      ROOTGUARD_UNBOUND_IMAGE: "ghcr.io/foxly-it/rootguard-unbound:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_UNBOUND_IMAGE: "ghcr.io/foxly-it/rootguard-unbound:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
       ROOTGUARD_ADGUARD_IMAGE: "adguard/adguardhome:v0.107.78"
       ROOTGUARD_ADGUARD_UPDATE_IMAGE: "adguard/adguardhome:v0.107.78"
-      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-unbound:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-unbound:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
       ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
@@ -43,7 +43,7 @@ services:
       retries: 5
 
   webapp:
-    image: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+    image: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
     container_name: rootguard-webapp
     restart: unless-stopped
     depends_on:
@@ -55,6 +55,7 @@ services:
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
+      ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
       ROOTGUARD_SESSION_FILE: /var/lib/rootguard-sessions/sessions.json
     volumes:
       - rootguard-sessions:/var/lib/rootguard-sessions
@@ -65,7 +66,7 @@ services:
       - edge
 
   updater:
-    image: "ghcr.io/foxly-it/rootguard-updater:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+    image: "ghcr.io/foxly-it/rootguard-updater:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
     container_name: rootguard-updater
     restart: unless-stopped
     environment:
@@ -73,15 +74,16 @@ services:
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.alpha.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard
-      ROOTGUARD_CORE_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
-      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_CORE_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
+      ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
       ROOTGUARD_WEB_BIND: "${ROOTGUARD_WEB_BIND:-0.0.0.0}"
       ROOTGUARD_WEB_PORT: "${ROOTGUARD_WEB_PORT:-8080}"
-      ROOTGUARD_CORE_IMAGE: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
-      ROOTGUARD_WEBAPP_IMAGE: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.1}"
+      ROOTGUARD_CORE_IMAGE: "ghcr.io/foxly-it/rootguard-core:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
+      ROOTGUARD_WEBAPP_IMAGE: "ghcr.io/foxly-it/rootguard-webapp:${ROOTGUARD_VERSION:-0.1.0-alpha.2}"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
