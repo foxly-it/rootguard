@@ -80,9 +80,6 @@ jobs:
           - component: updater
             image: rootguard-updater
             context: rootguard-updater
-          - component: unbound
-            image: rootguard-unbound
-            context: rootguard-unbound
     steps:
       - uses: actions/checkout@v5
         with:
