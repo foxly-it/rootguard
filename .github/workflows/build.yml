@@ -5,6 +5,11 @@ on:
     branches: [ "main" ]
   pull_request:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional RootGuard release tag for this image
+        required: false
+        type: string
   schedule:
     - cron: "0 3 * * *"   # Daily rebuild for security updates
 
@@ -74,3 +79,4 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.full }}
             ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.short }}
             ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.majorminor }}
+            ${{ inputs.release_tag != '' && format('ghcr.io/{0}/rootguard-unbound:{1}', github.repository_owner, inputs.release_tag) || '' }}
