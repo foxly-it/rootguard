@@ -68,6 +68,43 @@ func TestCheckForwardTargetsRequiresZoneSOA(t *testing.T) {
 	}
 }
 
+func TestCheckForwardTargetsReportsStableStatusError(t *testing.T) {
+	manager := newTestManager(t)
+	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		return []byte(";; Got answer:\n;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 1234\n;; flags: qr aa"), nil
+	}
+	checks, err := manager.CheckForwardTargets(context.Background(), []ForwardZone{{
+		Name:    "empty.example.",
+		Servers: []string{"192.0.2.53"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const expected = "DNS server did not return an SOA record for the forwarding zone (status: NXDOMAIN)"
+	if len(checks) != 1 || checks[0].Reachable || checks[0].Detail != expected {
+		t.Fatalf("unexpected rejected zone check: %+v", checks)
+	}
+}
+
+func TestCheckForwardTargetsRedactsIncompleteResponse(t *testing.T) {
+	manager := newTestManager(t)
+	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		return []byte("unexpected resolver response that must not reach the API"), nil
+	}
+	checks, err := manager.CheckForwardTargets(context.Background(), []ForwardZone{{
+		Name:    "empty.example.",
+		Servers: []string{"192.0.2.53"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(checks) != 1 || checks[0].Reachable ||
+		!strings.Contains(checks[0].Detail, "did not return an SOA") ||
+		strings.Contains(checks[0].Detail, "must not reach") {
+		t.Fatalf("unexpected incomplete response check: %+v", checks)
+	}
+}
+
 func TestCheckForwardTargetsReportsUnreachableServer(t *testing.T) {
 	manager := newTestManager(t)
 	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {

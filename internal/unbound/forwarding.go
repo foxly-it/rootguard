@@ -90,21 +90,42 @@ func (m *Manager) checkForwardTarget(ctx context.Context, zone, address string) 
 		}
 		return ForwardTargetCheck{Zone: zone, Address: address, Detail: boundForwardCheckDetail(detail)}
 	}
-	if !strings.Contains(detail, "status: NOERROR") {
-		return ForwardTargetCheck{Zone: zone, Address: address, Detail: boundForwardCheckDetail(detail)}
+	status := dnsResponseStatus(detail)
+	if status != "NOERROR" {
+		return ForwardTargetCheck{
+			Zone: zone, Address: address,
+			Detail: rejectedForwardResponseDetail(status),
+		}
 	}
 	hasSOA := hasSOARecord(detail)
 	if !hasSOA {
-		if detail != "" {
-			detail += "\n"
-		}
-		detail += "DNS server did not return an SOA record for the forwarding zone"
+		detail = rejectedForwardResponseDetail(status)
 	}
 	return ForwardTargetCheck{
 		Zone: zone, Address: address,
 		Reachable: hasSOA,
 		Detail:    boundForwardCheckDetail(detail),
 	}
+}
+
+func dnsResponseStatus(detail string) string {
+	const marker = "status:"
+	index := strings.Index(detail, marker)
+	if index < 0 {
+		return ""
+	}
+	fields := strings.Fields(detail[index+len(marker):])
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.TrimSuffix(fields[0], ",")
+}
+
+func rejectedForwardResponseDetail(status string) string {
+	if status == "" {
+		return "DNS server did not return an SOA record for the forwarding zone (missing response status)"
+	}
+	return fmt.Sprintf("DNS server did not return an SOA record for the forwarding zone (status: %s)", status)
 }
 
 func hasSOARecord(detail string) bool {
