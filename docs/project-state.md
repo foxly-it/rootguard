@@ -173,7 +173,7 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   capabilities instead of unavailable query statistics.
 - Consistent public-site header navigation keeps the manual and quick start
   directly reachable, groups Wiki, project status, roadmap, and GitHub under
-  Project, and groups the Foxly tool overview, MOTD, and AdGuard installer
+  Project, and groups the Foxly tool overview, MOTD, and AdGuard Home updater
   separately. Keyboard-friendly native dropdowns close on outside click or
   Escape. RootGuard now carries its own bilingual imprint and privacy notice
   tailored to the static GitHub Pages deployment instead of redirecting legal
