@@ -171,9 +171,11 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   policy, recovery, security, beta engineering, release candidate, and stable
   Docker appliance. Website status and dashboard mock now describe delivered
   capabilities instead of unavailable query statistics.
-- Consistent public-site header navigation keeps the manual, quick start,
-  project status, roadmap, GitHub, and Foxly tool overview reachable from every
-  page. RootGuard now carries its own bilingual imprint and privacy notice
+- Consistent public-site header navigation keeps the manual and quick start
+  directly reachable, groups Wiki, project status, roadmap, and GitHub under
+  Project, and groups the Foxly tool overview, MOTD, and AdGuard installer
+  separately. Keyboard-friendly native dropdowns close on outside click or
+  Escape. RootGuard now carries its own bilingual imprint and privacy notice
   tailored to the static GitHub Pages deployment instead of redirecting legal
   links to the Foxly blog.
 - Detailed Unbound configuration ownership and priority plan in
