@@ -10,7 +10,7 @@ Items are completed only when their acceptance criteria are verified.
 
 RootGuard is in **pre-release alpha development**. The end-to-end DNS path,
 guided setup, authenticated WebGUI, Unbound configuration lifecycle, AdGuard
-bootstrap, and guarded update paths exist. A production recommendation requires
+bootstrap, and guarded update paths exist. Use in a production environment requires
 recovery, immutable releases, broader system tests, and operational hardening.
 
 The 1.0 scope is a **single-node Docker appliance**. Bare-metal/systemd and
