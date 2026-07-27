@@ -19,6 +19,8 @@
 .nav-dropdown-menu a{border-radius:8px;color:var(--muted);padding:9px 11px;text-decoration:none;font-size:.8rem;white-space:nowrap}
 .nav-dropdown-menu a:hover,.nav-dropdown-menu a:focus-visible{background:var(--soft);color:var(--text);outline:none}
 .nav-dropdown-menu a.active{background:rgba(114,196,131,.1);color:var(--green)}
+.links .nav-language{gap:2px;margin-left:3px;border:0;border-left:1px solid var(--border);border-radius:0;background:transparent;padding:0 0 0 7px}
+.links .nav-language .lang-button{min-width:34px;padding:6px 8px}
 .activity>span.status-dot{background:var(--green);box-shadow:0 0 0 4px rgba(114,196,131,.1)}
 body{overflow-x:hidden}
 @media(max-width:1000px){
@@ -33,7 +35,6 @@ body{overflow-x:hidden}
   .links{grid-column:1/-1;grid-row:2;width:100%;max-width:100%;margin-top:7px;padding:5px}
   .links>a,.nav-dropdown>summary{min-height:36px;padding:6px 9px;font-size:.78rem}
   .nav-dropdown-menu{position:fixed;top:auto;right:12px!important;left:12px!important;margin-top:7px}
-  .language-switch{grid-column:2;grid-row:1}
   .project-main .button{width:100%;overflow-wrap:anywhere;text-align:center}
 }
 
