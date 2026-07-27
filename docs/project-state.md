@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-07-26
+Last updated: 2026-07-27
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -171,6 +171,11 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   policy, recovery, security, beta engineering, release candidate, and stable
   Docker appliance. Website status and dashboard mock now describe delivered
   capabilities instead of unavailable query statistics.
+- Consistent public-site header navigation keeps the manual, quick start,
+  project status, roadmap, GitHub, and Foxly tool overview reachable from every
+  page. RootGuard now carries its own bilingual imprint and privacy notice
+  tailored to the static GitHub Pages deployment instead of redirecting legal
+  links to the Foxly blog.
 - Detailed Unbound configuration ownership and priority plan in
   `docs/unbound-configuration-roadmap.md`: fixed secure base, typed guided
   values, guarded expert directives, and permanently blocked browser controls.
