@@ -90,3 +90,26 @@ body{overflow-x:hidden}
 @media(max-width:1000px){.home-quickstart{grid-template-columns:1fr;gap:35px}.project-metrics{grid-template-columns:1fr 1fr}.home-final-cta{align-items:flex-start;flex-direction:column;gap:20px}.home-final-cta .actions{width:100%}}
 @media(max-width:760px){.project-activity-grid,.release-log-grid{grid-template-columns:1fr}.release-card+.release-card{border-top:1px solid var(--border);border-left:0}}
 @media(max-width:520px){.quickstart-command pre{font-size:10px}.quickstart-open{align-items:flex-start;flex-direction:column;gap:4px}.project-metrics{grid-template-columns:1fr}.project-list a{grid-template-columns:56px minmax(0,1fr)}.project-list small{grid-column:2}.project-feed-head,.release-log-head{align-items:flex-start;flex-direction:column}.project-feed-head a,.release-log-head a{white-space:normal}}
+
+/* Hero dashboard motion shared with the Foxly product sites */
+@keyframes dashboard-settle{
+  from{transform:perspective(900px) rotateZ(1deg) rotateY(-8deg) translateX(16px)}
+  to{transform:perspective(900px) rotateZ(1deg) rotateY(0) translateX(0)}
+}
+@media(min-width:1021px) and (hover:hover) and (pointer:fine){
+  .hero .dashboard-current{
+    transform:perspective(900px) rotateZ(1deg) rotateY(0) translateX(0);
+    transform-style:preserve-3d;
+    transition:transform 280ms ease-in-out,box-shadow 280ms ease-in-out;
+    animation:dashboard-settle 700ms ease-out;
+    will-change:transform
+  }
+  .hero .dashboard-current:hover{
+    transform:perspective(900px) rotateZ(1deg) rotateY(-8deg) translateX(16px);
+    box-shadow:0 30px 85px rgba(0,0,0,.48)
+  }
+}
+@media(prefers-reduced-motion:reduce) and (min-width:1021px){
+  .hero .dashboard-current{animation:none;transition:none}
+  .hero .dashboard-current:hover{transform:perspective(900px) rotateZ(1deg) rotateY(0) translateX(0)}
+}
