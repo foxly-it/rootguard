@@ -1,187 +1,105 @@
-# 🛡 RootGuard Core
+# RootGuard Core
 
-![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)
-![Go](https://img.shields.io/badge/go-1.26+-00ADD8?logo=go)
-![Status](https://img.shields.io/badge/status-active--development-orange)
-![Architecture](https://img.shields.io/badge/architecture-engine--layer-purple)
+![RootGuard Core – Secure DNS orchestration](assets/rootguard-core-social-preview.png)
 
----
+**RootGuard Core is the authenticated control plane behind the RootGuard
+self-hosted DNS stack.** It deploys and manages AdGuard Home and Unbound,
+validates configuration changes, monitors the DNS chain, and performs protected
+updates with automatic rollback.
 
-## 📌 Overview
+[![CI](https://github.com/foxly-it/rootguard-core/actions/workflows/ci.yml/badge.svg)](https://github.com/foxly-it/rootguard-core/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](go.mod)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-72c483)](LICENSE)
+[![RootGuard](https://img.shields.io/badge/project-RootGuard-a98bea)](https://github.com/foxly-it/rootguard)
 
-RootGuard Core is the authenticated infrastructure control plane of the
-RootGuard ecosystem.
+[RootGuard](https://github.com/foxly-it/rootguard) ·
+[Website](https://rootguard.foxly.de/) ·
+[Architecture](https://github.com/foxly-it/rootguard/blob/main/docs/architecture.md) ·
+[Roadmap](https://github.com/foxly-it/rootguard/blob/main/ROADMAP.md)
 
-It provides deterministic orchestration logic for:
+> [!IMPORTANT]
+> Core is an internal service and must not be exposed directly to a LAN or the
+> internet. Use the complete RootGuard Compose stack for an end-user setup.
 
-- Docker stacks
-- DNS services (AdGuard + Unbound)
-- System service management
-- Health monitoring
-- Configuration generation
+## What Core does
 
-RootGuard Core contains **no UI layer**.  
-It is designed to be consumed by:
+- Deploys the managed AdGuard Home and Unbound DNS data plane.
+- Generates, previews, validates, versions, and restores Unbound configuration.
+- Verifies DNS resolution, DNSSEC rejection, and the protected AdGuard upstream.
+- Creates backups before service updates and rolls back failed replacements.
+- Coordinates atomic Core/WebApp updates through the independent updater path.
+- Keeps images, mounts, Compose content, and executable commands out of browser
+  input.
 
-- CLI tools
-- HTTP APIs
-- Automation systems
-- Future GitOps integrations
-
----
-
-## 🏗 Architecture Role
-
-```
-+----------------------+
-|   RootGuard WebApp   |
-|  (HTTP API + UI)     |
-+----------+-----------+
-           |
-           v
-+----------------------+
-|   RootGuard Core     |
-|  (Engine Layer)      |
-+----------+-----------+
-           |
-           v
-+----------------------+
-| Docker / Systemd /   |
-| AdGuard / Unbound    |
-+----------------------+
+```text
+Browser → RootGuard WebApp → RootGuard Core → Docker API
+                                      ├── AdGuard Home
+                                      └── Unbound
 ```
 
----
+## Local development
 
-## 📂 Repository Structure
+Requirements: Go 1.26+, Docker Engine, and a local RootGuard development
+environment.
 
-```
-rootguard-core/
-├── cmd/
-│   └── rootguard/
-│       └── main.go
-├── internal/
-│   ├── api/
-│   ├── installer/
-│   ├── configbuilder/
-│   ├── docker/
-│   ├── health/
-│   ├── stack/
-│   └── system/
-├── go.mod
-└── go.sum
-```
-
----
-
-## 🚀 Local Development
-
-### Build
-
-```bash
+```sh
+git clone https://github.com/foxly-it/rootguard-core.git
+cd rootguard-core
+go test ./...
+go vet ./...
 go build ./...
 ```
 
-### Run
+Run Core with a random internal API token:
 
-```bash
+```sh
 ROOTGUARD_API_TOKEN="$(openssl rand -hex 32)" go run ./cmd/rootguard
 ```
 
-Core listens on port `8081` by default. Except for `/api/health`, every route
-requires `Authorization: Bearer <ROOTGUARD_API_TOKEN>`. Core is intended for an
-internal container network and must not be exposed directly to a LAN or WAN.
+Core listens on port `8081` by default. Except for `/api/health`, routes require
+`Authorization: Bearer <ROOTGUARD_API_TOKEN>`.
 
-### Unbound settings API
+For the complete development stack, clone the
+[RootGuard main repository](https://github.com/foxly-it/rootguard) with its
+submodules and run `docker compose up --build -d`.
 
-`GET /api/unbound/settings` returns the active RootGuard settings. A validated
-`PUT` generates a modular Unbound configuration, checks it inside the resolver
-container and restarts Unbound only after successful validation.
+## API areas
 
-Unbound Configuration v2 adds the following authenticated endpoints:
+| Area | Responsibility |
+| --- | --- |
+| Installation | Preflight checks, persistent progress, managed DNS deployment |
+| Unbound | Settings, preview, validation, history, restore, diagnostics |
+| AdGuard Home | Bootstrap, health, protected administration proxy |
+| Service lifecycle | Allowlisted image checks, backup, update, rollback |
+| Control plane | Paired Core/WebApp update requests and status |
 
-- `GET /api/unbound/config` reads the immutable base and active managed
-  configuration directly from the running resolver for a read-only live view.
-- `POST /api/unbound/preview` renders and compares a proposal without writing.
-- `GET /api/unbound/history` returns up to 20 versioned configurations.
-- `POST /api/unbound/history/{id}/restore` validates and restores a version.
-- `GET /api/unbound/diagnostics` checks syntax, resolution, and DNSSEC rejection.
-- `GET /api/unbound/presets` returns validated operational profiles.
-- `POST /api/unbound/advice` returns deterministic guidance for a draft.
-- `GET /api/unbound/custom` reads the versioned expert configuration.
-- `POST /api/unbound/custom/preview` runs policy checks and `unbound-checkconf`.
-- `PUT /api/unbound/custom` validates and atomically activates the expert configuration.
-- `GET /api/unbound/directives` returns curated completion and documentation metadata.
+Every configuration change is validated before activation. If Unbound cannot
+restart or the DNS chain fails its health checks, Core restores the previous
+known-good state.
 
-Every successful change records the previous and active state. If Unbound
-cannot restart after a change, Core restores the previous files and restarts
-the resolver again before returning an error.
+## Security model
 
-### AdGuard bootstrap API
+- Token-authenticated internal API with a minimal public health endpoint.
+- No UI rendering and no user-supplied container specifications.
+- Allowlisted services, images, paths, and operations.
+- Deterministic configuration generation and bounded version history.
+- Backup-backed updates with DNS and DNSSEC verification.
 
-`GET /api/adguard/status` reports whether AdGuard Home is configured, healthy,
-and connected exclusively to the RootGuard Unbound resolver. `POST
-/api/adguard/bootstrap` performs the one-time installer flow, generates and
-stores credentials with owner-only permissions, validates Unbound through the
-official AdGuard API, and applies it without a public fallback resolver.
+See the project
+[architecture documentation](https://github.com/foxly-it/rootguard/blob/main/docs/architecture.md)
+for trust boundaries and network design.
 
-The AdGuard credentials never leave Core and the API deliberately exposes no
-generic AdGuard proxy. Persist `ADGUARD_DATA_DIR` (default:
-`/var/lib/rootguard/adguard`) when running the container.
+## Contributing
 
-### AIO installation API
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Good
+starting points are issues labeled
+[`good first issue`](https://github.com/foxly-it/rootguard-core/labels/good%20first%20issue)
+or [`help wanted`](https://github.com/foxly-it/rootguard-core/labels/help%20wanted).
+Report security vulnerabilities privately as described in
+[SECURITY.md](SECURITY.md).
 
-The long-lived WebApp and Core containers can start without an existing DNS
-data plane. Core exposes three authenticated, typed endpoints:
+## License
 
-- `GET /api/installation` returns persistent deployment state and progress.
-- `POST /api/installation/preflight` validates the DNS bind address, port,
-  Docker Engine access, and the Compose capability without changing the stack.
-- `POST /api/installation/deploy` starts the asynchronous, idempotent
-  deployment and protected AdGuard bootstrap.
-
-The browser cannot provide arbitrary images, Compose content, volume mounts, or
-commands. Core owns the generated stack definition and never publishes the
-native AdGuard administration ports.
-
----
-
-## 🎯 Design Principles
-
-RootGuard Core follows strict engineering constraints:
-
-- No UI coupling
-- No framework lock-in
-- No runtime shell dependency
-- Deterministic state transitions
-- Minimal external dependencies
-- Security-first defaults
-
----
-
-## 🔮 Project Direction
-
-RootGuard Core is intended to evolve into:
-
-- A full infrastructure control plane engine
-- API-consumable orchestration service
-- Multi-node DNS management backend
-- GitOps-ready stack controller
-- Extensible service abstraction layer
-
----
-
-## 📜 License
-
-Licensed under the GNU Affero General Public License v3.0 or later
-(AGPL-3.0-or-later).
-
-See the LICENSE file for full details.
-
----
-
-## ⚠ Development Status
-
-This project is under active development.
-
-Breaking changes may occur until the first stable release (v1.0.0).
+RootGuard Core is licensed under
+[GNU AGPL-3.0-or-later](LICENSE). The software license does not grant rights to
+the RootGuard or Foxly IT names or logos.
