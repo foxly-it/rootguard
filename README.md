@@ -1,185 +1,102 @@
-# 🛡 RootGuard WebApp
+# RootGuard WebApp
 
-![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue.svg)
-![Backend](https://img.shields.io/badge/backend-Go-00ADD8?logo=go)
-![Frontend](https://img.shields.io/badge/frontend-React-61DAFB?logo=react)
-![Docker](https://img.shields.io/badge/docker-ready-2496ED?logo=docker)
-![Status](https://img.shields.io/badge/status-active--development-orange)
+![RootGuard WebApp – One interface for your DNS stack](assets/rootguard-webapp-social-preview.png)
 
----
+**RootGuard WebApp is the secure browser interface for the RootGuard
+self-hosted DNS stack.** It provides guided setup, service health, Unbound
+configuration, AdGuard Home access, updates, rollback, and local password
+recovery without receiving the Docker socket.
 
-## 📌 Overview
+[![Build](https://github.com/foxly-it/rootguard-webapp/actions/workflows/build.yml/badge.svg)](https://github.com/foxly-it/rootguard-webapp/actions/workflows/build.yml)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](frontend/package.json)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](backend/go.mod)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-72c483)](LICENSE)
 
-RootGuard WebApp is the authenticated HTTP and UI layer of the RootGuard
-ecosystem. It contains no direct Docker control code and communicates with
-RootGuard Core over an internal token-protected API.
+[RootGuard](https://github.com/foxly-it/rootguard) ·
+[Live product view](https://rootguard.foxly.de/) ·
+[Manual](https://rootguard.foxly.de/docs.html) ·
+[Roadmap](https://rootguard.foxly.de/roadmap.html)
 
-It exposes infrastructure orchestration capabilities provided by **RootGuard Core** and delivers a modern web-based control plane for DNS stack management.
+> [!IMPORTANT]
+> The WebApp is one component of RootGuard. Use the
+> [versioned Compose quick start](https://github.com/foxly-it/rootguard#quick-start)
+> to evaluate the complete stack.
 
-The WebApp is intentionally separated from the engine layer to maintain:
+## What users get
 
-- Clear responsibility boundaries  
-- Replaceable transport layers  
-- Modular evolution  
-- Security isolation  
+- Guided all-in-one setup with non-mutating preflight checks and persistent
+  progress.
+- A dashboard based on real installation, container, DNSSEC, and upstream
+  health.
+- Guided and expert Unbound configuration with preview, validation, history,
+  diagnostics, and rollback.
+- Protected access to the native AdGuard Home interface without a separate
+  public administration port.
+- Controlled service and control-plane updates with visible status.
+- German and English UI plus local token-based password recovery.
 
----
+```text
+Browser → WebApp (Go + React) → token-protected Core API → DNS services
+```
 
-## 🏗 System Architecture
-
-`````
-Browser
-   ↓
-RootGuard WebApp
-   ├── REST API (Go)
-   └── UI (React + Vite)
-   ↓
-RootGuard Core (Engine)
-   ↓
-Docker / System Services
-`````
-
-RootGuard WebApp acts purely as a presentation and API transport layer.
-
-The current UI includes service health and lifecycle controls, previewed and
-validated Unbound settings with version history, rollback, and diagnostics,
-validated operational presets and draft recommendations, and a one-click
-AdGuard Home bootstrap that keeps generated credentials inside
-RootGuard Core.
-
-The Unbound expert mode manages a separate, versioned custom include with
-policy checks, full `unbound-checkconf` validation, contextual directive help,
-completion suggestions, advice, and automatic rollback.
-
-The guided Unbound page also displays the actual base, managed, and custom
-configuration read from the running resolver. Dashboard status is derived from
-the installation, containers, DNSSEC, and protected AdGuard upstream rather
-than synthetic metrics.
-
-The **Setup** page is the AIO entry point. It accepts only the DNS bind address
-and port, displays Core's non-mutating preflight checks, starts the managed DNS
-data plane, and polls the persistent deployment progress. The WebApp still has
-no Docker socket and contains no container specification logic.
-
----
-
-## 📂 Repository Structure
-
-`````
-rootguard-webapp/
-├── backend/
-│   ├── cmd/
-│   │   └── rootguard-webapp/
-│   ├── internal/
-│   │   ├── httpapi/
-│   │   └── unboundctl/
-│   └── go.mod
-│
-├── frontend/
-│   ├── src/
-│   ├── public/
-│   ├── package.json
-│   └── vite.config.ts
-│
-└── Dockerfile
-`````
-
----
-
-## 🚀 Local Development
+## Local development
 
 ### Backend
 
-````bash
+```sh
 cd backend
 ROOTGUARD_CORE_URL=http://localhost:8081 \
 ROOTGUARD_API_TOKEN=development-token \
-ROOTGUARD_ADMIN_PASSWORD=change-me \
+ROOTGUARD_ADMIN_PASSWORD=replace-with-a-strong-password \
 ROOTGUARD_RECOVERY_TOKEN=separate-long-random-recovery-key \
 go run ./cmd/rootguard-webapp
-````
+```
 
 ### Frontend
 
-````bash
+```sh
 cd frontend
-npm install
+npm ci
 npm run dev
-````
+```
 
----
+Run the checks before opening a pull request:
 
-## 🐳 Containerized Deployment
+```sh
+cd backend && go test ./...
+cd ../frontend && npm ci && npm run lint && npm run build
+```
 
-### Build Image
+The full RootGuard development stack is available from the
+[main repository](https://github.com/foxly-it/rootguard).
 
-````bash
-docker build -t rootguard-webapp:dev .
-````
+## Architecture and security
 
-### Run Container
+The Go backend owns authentication, sessions, same-origin checks, API proxying,
+and static frontend delivery. The React frontend contains presentation and
+guided workflows.
 
-````bash
-docker run -p 8080:8080 \
-  -e ROOTGUARD_CORE_URL=http://rootguard-core:8081 \
-  -e ROOTGUARD_API_TOKEN=replace-me \
-  -e ROOTGUARD_ADMIN_PASSWORD=replace-me \
-  -e ROOTGUARD_RECOVERY_TOKEN=separate-long-random-recovery-key \
-  rootguard-webapp:dev
-````
+- No Docker socket or arbitrary host command execution.
+- HttpOnly, SameSite-Strict sessions.
+- Internal Core and updater calls use a separate API token.
+- Distroless runtime image and deterministic frontend build.
+- Password resets require an independent local recovery token, store only a
+  salted verifier, and invalidate existing sessions.
 
-### Test Endpoints
+The complete trust model is documented in the
+[RootGuard architecture](https://github.com/foxly-it/rootguard/blob/main/docs/architecture.md).
 
-````bash
-curl http://localhost:8080/health
-curl -u admin:replace-me http://localhost:8080/api/version
-````
+## Contributing
 
----
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Good
+starting points are issues labeled
+[`good first issue`](https://github.com/foxly-it/rootguard-webapp/labels/good%20first%20issue)
+or [`help wanted`](https://github.com/foxly-it/rootguard-webapp/labels/help%20wanted).
+Visible changes should include a screenshot. Report vulnerabilities privately
+through [SECURITY.md](SECURITY.md).
 
-## 🔐 Design Principles
+## License
 
-RootGuard WebApp follows strict design constraints:
-
-- No orchestration logic duplication  
-- No direct system-level manipulation  
-- API-only exposure of infrastructure actions  
-- Minimal runtime surface (distroless container)  
-- Deterministic build process  
-
-The login screen provides a local password-recovery flow when
-`ROOTGUARD_RECOVERY_TOKEN` is configured. A successful reset stores only a
-salted PBKDF2-SHA256 password verifier in the restricted session volume and
-invalidates every existing session. The recovery key must be generated
-independently from the administrator password and internal API token.
-
----
-
-## 🛣 Roadmap
-
-Planned development stages:
-
-- DNS filtering and client-management UI
-- Extended installer recovery and host-network diagnostics
-- Live container monitoring  
-- Role management and optional external identity providers
-- Multi-architecture image builds  
-- GitHub Actions CI/CD  
-- GHCR image distribution  
-
----
-
-## 📜 License
-
-RootGuard WebApp is licensed under the GNU Affero General Public License v3.0
-or later (AGPL-3.0-or-later).
-
-See the `LICENSE` file for full details.
-
----
-
-## ⚠ Development Status
-
-This project is currently under active development.
-
-Breaking changes may occur prior to v1.0.0.
+RootGuard WebApp is licensed under
+[GNU AGPL-3.0-or-later](LICENSE). The software license does not grant rights to
+the RootGuard or Foxly IT names or logos.
