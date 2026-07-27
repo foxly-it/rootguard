@@ -21,8 +21,8 @@ vollständiger, selbst betriebener Docker-Stack.
 
 > [!IMPORTANT]
 > RootGuard befindet sich in einer öffentlichen Alpha. Die Version ist zum
-> Ausprobieren und für reproduzierbare Rückmeldungen gedacht, noch nicht als
-> Produktionsempfehlung für den einzigen DNS-Dienst eines gesamten Netzwerks.
+> Ausprobieren und für reproduzierbare Rückmeldungen gedacht. Sie ist noch nicht
+> für den Einsatz als einziger DNS-Dienst in einer Produktivumgebung vorgesehen.
 
 ## Warum RootGuard?
 
