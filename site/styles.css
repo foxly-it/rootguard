@@ -5,19 +5,34 @@
 @media(max-width:640px){.wrap{width:calc(100% - 24px)}.topbar{align-items:flex-start;padding:13px 0}.nav-group{align-items:flex-end;flex-direction:column}.hero{gap:38px;padding:42px 0 62px}.status{align-items:flex-start;border-radius:12px}h1{font-size:clamp(2.65rem,13vw,3.6rem)}section{padding:60px 0}.grid{grid-template-columns:1fr}.dashboard-body{grid-template-columns:1fr;min-height:360px}.dashboard-nav{display:none}.dashboard-main{padding:15px}.pipeline div{padding:8px}.pipeline div:first-child{display:none}.pipeline em:first-of-type{display:none}.architecture-map{padding:15px}.arch-lane{grid-template-columns:1fr auto 1fr;gap:7px}.lane-label{grid-column:1/-1}.arch-lane article:nth-of-type(3){grid-column:1}.arch-lane article:nth-of-type(4){grid-column:3}.arch-lane>i:nth-of-type(2){display:none}.arch-lane article{min-height:78px;padding:9px}.arch-lane b{font-size:.78rem}.quickstart pre{padding:18px;font-size:11px}.roadmap li{grid-template-columns:34px 1fr;gap:10px}.roadmap em{grid-column:2;justify-self:start}.cta{align-items:stretch;flex-direction:column;padding:25px}.footer{grid-template-columns:1fr}.footer nav{align-items:flex-start;flex-direction:column}.footer small{grid-column:1}.actions{display:grid}.button{text-align:center}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 .brand-logo{display:block;width:36px;height:36px;flex:0 0 auto}
+.links{gap:4px;border:1px solid rgba(255,255,255,.07);border-radius:14px;background:rgba(21,29,37,.74);padding:5px;box-shadow:0 10px 35px rgba(0,0,0,.16);backdrop-filter:blur(14px)}
+.links>a,.nav-dropdown>summary{display:flex;align-items:center;min-height:38px;margin:0!important;border-radius:9px;color:var(--muted);padding:7px 11px;text-decoration:none;font-size:.84rem;font-weight:700;white-space:nowrap;transition:background .18s ease,color .18s ease}
+.links>a:hover,.links>a:focus-visible,.nav-dropdown>summary:hover,.nav-dropdown>summary:focus-visible{background:var(--soft);color:var(--text);outline:none}
+.links>a.active,.nav-dropdown.active>summary{background:rgba(114,196,131,.11);color:var(--green);font-weight:800}
+.nav-dropdown{position:relative}
+.nav-dropdown>summary{cursor:pointer;list-style:none}
+.nav-dropdown>summary::-webkit-details-marker{display:none}
+.nav-dropdown>summary::after{width:6px;height:6px;margin:-3px 1px 0 8px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;content:"";transform:rotate(45deg);transition:transform .18s ease}
+.nav-dropdown[open]>summary::after{margin-top:3px;transform:rotate(225deg)}
+.nav-dropdown-menu{position:absolute;z-index:30;top:calc(100% + 9px);left:0;display:grid;min-width:210px;overflow:hidden;border:1px solid var(--border);border-radius:13px;background:rgba(15,22,29,.98);padding:6px;box-shadow:0 24px 65px rgba(0,0,0,.42)}
+.nav-dropdown:last-of-type .nav-dropdown-menu{right:0;left:auto}
+.nav-dropdown-menu a{border-radius:8px;color:var(--muted);padding:9px 11px;text-decoration:none;font-size:.8rem;white-space:nowrap}
+.nav-dropdown-menu a:hover,.nav-dropdown-menu a:focus-visible{background:var(--soft);color:var(--text);outline:none}
+.nav-dropdown-menu a.active{background:rgba(114,196,131,.1);color:var(--green)}
 .activity>span.status-dot{background:var(--green);box-shadow:0 0 0 4px rgba(114,196,131,.1)}
 body{overflow-x:hidden}
 @media(max-width:1000px){
   .topbar{flex-wrap:wrap}
-  .links{max-width:calc(100vw - 260px);overflow-x:auto;scrollbar-width:none}
-  .links::-webkit-scrollbar{display:none}
-  .links a:not(:last-child){display:inline}
-  .links a{flex:0 0 auto;white-space:nowrap}
+  .links{max-width:none;flex-wrap:wrap;overflow:visible}
+  .links a:not(:last-child){display:flex}
+  .links a{flex:0 0 auto}
 }
 @media(max-width:640px){
   .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto}
   .nav-group{display:contents}
-  .links{grid-column:1/-1;grid-row:2;width:100%;max-width:100%;padding:7px 0 4px}
+  .links{grid-column:1/-1;grid-row:2;width:100%;max-width:100%;margin-top:7px;padding:5px}
+  .links>a,.nav-dropdown>summary{min-height:36px;padding:6px 9px;font-size:.78rem}
+  .nav-dropdown-menu{position:fixed;top:auto;right:12px!important;left:12px!important;margin-top:7px}
   .language-switch{grid-column:2;grid-row:1}
   .project-main .button{width:100%;overflow-wrap:anywhere;text-align:center}
 }

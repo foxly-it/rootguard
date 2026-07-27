@@ -166,6 +166,36 @@ function initializeManualNavigation() {
   scheduleUpdate();
 }
 
+function initializeHeaderNavigation() {
+  const dropdowns = [...document.querySelectorAll(".nav-dropdown")];
+  if (!dropdowns.length) return;
+
+  dropdowns.forEach((dropdown) => {
+    dropdown.addEventListener("toggle", () => {
+      if (!dropdown.open) return;
+      dropdowns.forEach((other) => {
+        if (other !== dropdown) other.open = false;
+      });
+    });
+    dropdown.querySelectorAll("a").forEach((link) => {
+      link.addEventListener("click", () => { dropdown.open = false; });
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest(".nav-dropdown")) return;
+    dropdowns.forEach((dropdown) => { dropdown.open = false; });
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const openDropdown = dropdowns.find((dropdown) => dropdown.open);
+    if (!openDropdown) return;
+    openDropdown.open = false;
+    openDropdown.querySelector("summary")?.focus();
+  });
+}
+
 function setLanguage(language, persist = true) {
   if (!translations[language]) return;
   currentLanguage = language;
@@ -191,6 +221,7 @@ document.querySelectorAll(".lang-button").forEach((button) => {
 document.getElementById("year").textContent = new Date().getFullYear();
 const preferred = localStorage.getItem("rootguard-language") || (navigator.language.startsWith("de") ? "de" : "en");
 setLanguage(preferred, false);
+initializeHeaderNavigation();
 initializeManualNavigation();
 
 fetch("project-data.json", { cache: "no-cache" })
