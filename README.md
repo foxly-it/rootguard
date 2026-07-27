@@ -198,6 +198,11 @@ jeder Veröffentlichung und planmäßig alle sechs Stunden neu; die eingecheckte
 `site/project-data.json` dient lokal und bei vorübergehend nicht erreichbarer
 GitHub-API als Fallback.
 
+Als kompakter Einstieg erklärt die Startseite RootGuard bewusst ohne
+Vorkenntnisse, bietet einen Compose-Quick-Start und verweist für Architektur,
+Konfiguration und Betrieb in das Handbuch. Dessen Inhaltsnavigation markiert
+beim Scrollen automatisch den aktuell gelesenen Abschnitt.
+
 ## Komponenten aktualisieren
 
 Änderungen werden zuerst im jeweiligen Komponenten-Repository committed und

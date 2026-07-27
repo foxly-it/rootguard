@@ -10,8 +10,10 @@
 .manual-layout { display: grid; grid-template-columns: 225px minmax(0, 1fr); gap: 55px; align-items: start; }
 .manual-nav { position: sticky; top: 18px; display: grid; max-height: calc(100vh - 36px); overflow: auto; border: 1px solid var(--border); border-radius: 14px; background: rgba(21, 29, 37, .94); padding: 12px; }
 .manual-nav strong { padding: 9px 11px; color: var(--text); font-size: .76rem; text-transform: uppercase; letter-spacing: .1em; }
-.manual-nav a { border-radius: 8px; color: var(--muted); padding: 7px 11px; text-decoration: none; font-size: .78rem; }
-.manual-nav a:hover { background: var(--soft); color: var(--text); }
+.manual-nav a { position: relative; border-radius: 8px; color: var(--muted); padding: 7px 11px 7px 14px; text-decoration: none; font-size: .78rem; transition: background .18s ease, color .18s ease; }
+.manual-nav a:hover, .manual-nav a:focus-visible { background: var(--soft); color: var(--text); }
+.manual-nav a.current { background: rgba(114, 196, 131, .1); color: var(--text); font-weight: 750; }
+.manual-nav a.current::before { position: absolute; left: 5px; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: var(--green); content: ""; }
 .manual-content { min-width: 0; }
 .manual-section { padding: 58px 0; border-top: 1px solid var(--border); }
 .manual-section:first-child { border-top: 0; padding-top: 0; }

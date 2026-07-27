@@ -149,6 +149,10 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   pull requests, recent commits, and a release update log. The Pages workflow
   refreshes its public data during every deployment and every six hours, with
   a checked-in local fallback.
+- Reduced public landing page focused on a plain-language product explanation,
+  a Compose quick start, three user benefits, and a compact project status.
+  Technical depth stays in the manual, whose table of contents highlights the
+  section currently in view.
 - Public alpha `v0.1.0-alpha.2` is published around a single
   `compose.alpha.yaml` that
   contains no local build contexts and pulls one named RootGuard version for

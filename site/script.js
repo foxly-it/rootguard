@@ -72,7 +72,7 @@ function createReleaseCard(release, index) {
 }
 
 function renderProjectData() {
-  if (!projectData) return;
+  if (!projectData || !document.getElementById("project-status")) return;
   const commits = projectData.commits || [];
   const pulls = projectData.pull_requests || [];
   const releases = projectData.releases || [];
@@ -106,8 +106,36 @@ function renderProjectData() {
 
   const releaseList = document.getElementById("release-list");
   releaseList.replaceChildren(...(releases.length
-    ? releases.slice(0, 3).map(createReleaseCard)
+    ? releases.slice(0, 1).map(createReleaseCard)
     : [createEmptyState(currentLanguage === "de" ? "Noch keine Releases vorhanden." : "No releases yet.")]));
+}
+
+function initializeManualNavigation() {
+  const navigation = document.querySelector(".manual-nav");
+  if (!navigation) return;
+  const links = [...navigation.querySelectorAll('a[href^="#"]')];
+  const sections = links
+    .map((link) => document.getElementById(link.hash.slice(1)))
+    .filter(Boolean);
+
+  const markCurrent = (sectionId) => {
+    links.forEach((link) => {
+      const isCurrent = link.hash === `#${sectionId}`;
+      link.classList.toggle("current", isCurrent);
+      if (isCurrent) link.setAttribute("aria-current", "location");
+      else link.removeAttribute("aria-current");
+    });
+  };
+
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+    if (visible) markCurrent(visible.target.id);
+  }, { rootMargin: "-12% 0px -72% 0px", threshold: [0, 0.1, 0.5] });
+
+  sections.forEach((section) => observer.observe(section));
+  markCurrent(location.hash.slice(1) || sections[0]?.id);
 }
 
 function setLanguage(language, persist = true) {
@@ -135,6 +163,7 @@ document.querySelectorAll(".lang-button").forEach((button) => {
 document.getElementById("year").textContent = new Date().getFullYear();
 const preferred = localStorage.getItem("rootguard-language") || (navigator.language.startsWith("de") ? "de" : "en");
 setLanguage(preferred, false);
+initializeManualNavigation();
 
 fetch("project-data.json", { cache: "no-cache" })
   .then((response) => {
