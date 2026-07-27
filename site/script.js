@@ -118,24 +118,52 @@ function initializeManualNavigation() {
     .map((link) => document.getElementById(link.hash.slice(1)))
     .filter(Boolean);
 
+  let currentSectionId = "";
+  let updateScheduled = false;
+
   const markCurrent = (sectionId) => {
+    if (!sectionId || sectionId === currentSectionId) return;
+    currentSectionId = sectionId;
     links.forEach((link) => {
       const isCurrent = link.hash === `#${sectionId}`;
       link.classList.toggle("current", isCurrent);
       if (isCurrent) link.setAttribute("aria-current", "location");
       else link.removeAttribute("aria-current");
+      if (isCurrent) {
+        const linkTop = link.offsetTop;
+        const linkBottom = linkTop + link.offsetHeight;
+        if (linkTop < navigation.scrollTop + 12) navigation.scrollTop = Math.max(0, linkTop - 12);
+        else if (linkBottom > navigation.scrollTop + navigation.clientHeight - 12) {
+          navigation.scrollTop = linkBottom - navigation.clientHeight + 12;
+        }
+      }
     });
   };
 
-  const observer = new IntersectionObserver((entries) => {
-    const visible = entries
-      .filter((entry) => entry.isIntersecting)
-      .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-    if (visible) markCurrent(visible.target.id);
-  }, { rootMargin: "-12% 0px -72% 0px", threshold: [0, 0.1, 0.5] });
+  const updateCurrentSection = () => {
+    updateScheduled = false;
+    const readingLine = Math.min(180, window.innerHeight * 0.24);
+    let current = sections[0];
 
-  sections.forEach((section) => observer.observe(section));
-  markCurrent(location.hash.slice(1) || sections[0]?.id);
+    for (const section of sections) {
+      if (section.getBoundingClientRect().top <= readingLine) current = section;
+      else break;
+    }
+
+    const documentBottom = document.documentElement.scrollHeight - 2;
+    if (window.scrollY + window.innerHeight >= documentBottom) current = sections.at(-1);
+    markCurrent(current?.id);
+  };
+
+  const scheduleUpdate = () => {
+    if (updateScheduled) return;
+    updateScheduled = true;
+    requestAnimationFrame(updateCurrentSection);
+  };
+
+  window.addEventListener("scroll", scheduleUpdate, { passive: true });
+  window.addEventListener("resize", scheduleUpdate);
+  scheduleUpdate();
 }
 
 function setLanguage(language, persist = true) {
@@ -175,7 +203,10 @@ fetch("project-data.json", { cache: "no-cache" })
     renderProjectData();
   })
   .catch(() => {
-    document.getElementById("project-updated").textContent = currentLanguage === "de"
-      ? "Live-Daten sind vorübergehend nicht verfügbar."
-      : "Live data is temporarily unavailable.";
+    const projectUpdated = document.getElementById("project-updated");
+    if (projectUpdated) {
+      projectUpdated.textContent = currentLanguage === "de"
+        ? "Live-Daten sind vorübergehend nicht verfügbar."
+        : "Live data is temporarily unavailable.";
+    }
   });
