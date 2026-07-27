@@ -6,6 +6,8 @@ on:
     paths:
       - "site/**"
       - ".github/workflows/pages.yml"
+  schedule:
+    - cron: "17 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -29,6 +31,52 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v6
+
+      - name: Refresh public project data
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          releases="$(gh api "repos/$REPOSITORY/releases?per_page=100")"
+          pulls="$(gh api "repos/$REPOSITORY/pulls?state=open&per_page=100")"
+          commits="$(gh api "repos/$REPOSITORY/commits?per_page=5")"
+
+          jq -n \
+            --arg generated_at "$(date -u +%FT%TZ)" \
+            --argjson releases "$releases" \
+            --argjson pulls "$pulls" \
+            --argjson commits "$commits" \
+            '{
+              generated_at: $generated_at,
+              current_version: (($releases | map(select(.draft == false)) | first | .tag_name) // "unreleased"),
+              pull_requests: ($pulls | map({
+                number: .number,
+                title: .title,
+                updated_at: .updated_at,
+                html_url: .html_url
+              })),
+              commits: ($commits | map({
+                sha: .sha[0:7],
+                message: (.commit.message | split("\n")[0]),
+                date: .commit.author.date,
+                html_url: .html_url
+              })),
+              releases: ($releases | map({
+                tag: .tag_name,
+                name: (.name // .tag_name),
+                published_at: .published_at,
+                html_url: .html_url,
+                prerelease: .prerelease,
+                summary: (([.body | split("\n")[] | select(
+                  length > 0 and
+                  (startswith("#") | not) and
+                  (startswith("- ") | not) and
+                  (startswith("```") | not)
+                )][0]) // ""),
+                highlights: ([.body | split("\n")[] | select(startswith("- ")) | ltrimstr("- ")][0:4])
+              }))
+            }' > site/project-data.json
 
       - name: Upload website
         uses: actions/upload-pages-artifact@v5

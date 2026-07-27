@@ -1,0 +1,65 @@
+{
+  "generated_at": "2026-07-27T00:00:00Z",
+  "current_version": "v0.1.0-alpha.2",
+  "pull_requests": [],
+  "commits": [
+    {
+      "sha": "7954a97",
+      "message": "Record alpha.2 release status (#17)",
+      "date": "2026-07-26T09:26:53Z",
+      "html_url": "https://github.com/foxly-it/rootguard/commit/7954a979a59d77392240722a0577ee0a87f0903a"
+    },
+    {
+      "sha": "12681c3",
+      "message": "Prepare RootGuard v0.1.0-alpha.2 (#16)",
+      "date": "2026-07-26T09:16:34Z",
+      "html_url": "https://github.com/foxly-it/rootguard/commit/12681c3"
+    },
+    {
+      "sha": "258ab9f",
+      "message": "Integrate local password recovery (#15)",
+      "date": "2026-07-26T09:04:46Z",
+      "html_url": "https://github.com/foxly-it/rootguard/commit/258ab9f"
+    },
+    {
+      "sha": "654a7d5",
+      "message": "Announce public alpha on website (#14)",
+      "date": "2026-07-26T08:34:33Z",
+      "html_url": "https://github.com/foxly-it/rootguard/commit/654a7d5"
+    },
+    {
+      "sha": "56956c8",
+      "message": "Pin published alpha component revisions (#13)",
+      "date": "2026-07-26T08:30:19Z",
+      "html_url": "https://github.com/foxly-it/rootguard/commit/56956c8"
+    }
+  ],
+  "releases": [
+    {
+      "tag": "v0.1.0-alpha.2",
+      "name": "RootGuard v0.1.0-alpha.2",
+      "published_at": "2026-07-26T09:23:44Z",
+      "html_url": "https://github.com/foxly-it/rootguard/releases/tag/v0.1.0-alpha.2",
+      "prerelease": true,
+      "summary": "Security and usability follow-up for the public RootGuard alpha.",
+      "highlights": [
+        "Bilingual password recovery from the login page",
+        "Recovery token remains separate from the internal API token",
+        "Compose and documentation updated for the recovery workflow"
+      ]
+    },
+    {
+      "tag": "v0.1.0-alpha.1",
+      "name": "RootGuard v0.1.0-alpha.1",
+      "published_at": "2026-07-26T08:37:08Z",
+      "html_url": "https://github.com/foxly-it/rootguard/releases/tag/v0.1.0-alpha.1",
+      "prerelease": true,
+      "summary": "First public alpha of the complete RootGuard Docker stack.",
+      "highlights": [
+        "One Compose stack with WebApp, Core, Updater, AdGuard Home, and Unbound",
+        "Ready-made multi-architecture images for amd64 and arm64",
+        "Documented quickstart and initial project website"
+      ]
+    }
+  ]
+}

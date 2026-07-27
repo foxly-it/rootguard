@@ -191,6 +191,13 @@ kanonischen, überprüfbaren [`ROADMAP.md`](ROADMAP.md) zusammen. Änderungen an
 Funktionen gelten erst als vollständig, wenn WebGUI, Tests, Wiki,
 Dokumentation und Projektstatus gemeinsam aktualisiert wurden.
 
+Die Startseite enthält außerdem eine automatisch erzeugte Projektübersicht mit
+aktueller Version, offenen Pull Requests, letzten Commits und einem
+Release-basierten Update-Log. Der GitHub-Pages-Workflow erzeugt die Daten bei
+jeder Veröffentlichung und planmäßig alle sechs Stunden neu; die eingecheckte
+`site/project-data.json` dient lokal und bei vorübergehend nicht erreichbarer
+GitHub-API als Fallback.
+
 ## Komponenten aktualisieren
 
 Änderungen werden zuerst im jeweiligen Komponenten-Repository committed und
