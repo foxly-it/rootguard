@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: RootGuard Handbuch
+    url: https://rootguard.foxly.de/docs.html
+    about: Installation, Betrieb und Fehlerbehebung
+  - name: Sicherheitsproblem vertraulich melden
+    url: https://github.com/foxly-it/rootguard/security/advisories/new
+    about: Bitte keine Sicherheitslücken als öffentliches Issue melden
