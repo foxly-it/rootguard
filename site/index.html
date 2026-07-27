@@ -19,9 +19,9 @@
       <a class="brand" href="#top" aria-label="RootGuard Startseite"><img class="brand-logo" src="rootguard-icon.svg" alt=""><span>Root<span>Guard</span></span></a>
       <div class="nav-group">
         <nav class="links" aria-label="Hauptnavigation">
-          <a href="#features" data-de="Features" data-en="Features">Features</a>
+          <a href="#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a>
+          <a href="#features" data-de="Vorteile" data-en="Benefits">Vorteile</a>
           <a href="#project-status" data-de="Projektstatus" data-en="Project status">Projektstatus</a>
-          <a href="#architecture" data-de="Architektur" data-en="Architecture">Architektur</a>
           <a href="wiki.html">Wiki</a>
           <a href="roadmap.html">Roadmap</a>
           <a href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
@@ -37,12 +37,12 @@
       <section class="hero" id="top">
         <div class="hero-copy">
           <div class="status"><span class="status-dot" aria-hidden="true"></span><span data-de="0.1.0-alpha.2 · Öffentlich verfügbar" data-en="0.1.0-alpha.2 · Publicly available">0.1.0-alpha.2 · Öffentlich verfügbar</span></div>
-          <p class="eyebrow" data-de="Dein Netzwerk · Deine Regeln · Dein DNS" data-en="Your network · Your rules · Your DNS">Dein Netzwerk · Deine Regeln · Dein DNS</p>
-          <h1 data-de="DNS-Schutz.<br><em>Unter deiner Kontrolle.</em>" data-en="DNS protection.<br><em>Under your control.</em>">DNS-Schutz.<br><em>Unter deiner Kontrolle.</em></h1>
-          <p class="lead" data-de="RootGuard verbindet AdGuard Home mit einem eigenen rekursiven Unbound-Resolver und macht das Gesamtsystem über eine zentrale Weboberfläche steuerbar – für weniger Werbung, weniger Tracking und mehr Souveränität im eigenen Netzwerk." data-en="RootGuard combines AdGuard Home with a dedicated recursive Unbound resolver and makes the entire system manageable through one central web interface—for less advertising, less tracking, and more control over your own network.">RootGuard verbindet AdGuard Home mit einem eigenen rekursiven Unbound-Resolver und macht das Gesamtsystem über eine zentrale Weboberfläche steuerbar – für weniger Werbung, weniger Tracking und mehr Souveränität im eigenen Netzwerk.</p>
+          <p class="eyebrow" data-de="Ein DNS-Schutz für dein ganzes Zuhause" data-en="DNS protection for your entire home">Ein DNS-Schutz für dein ganzes Zuhause</p>
+          <h1 data-de="Weniger Werbung.<br><em>Mehr Privatsphäre.</em>" data-en="Fewer ads.<br><em>More privacy.</em>">Weniger Werbung.<br><em>Mehr Privatsphäre.</em></h1>
+          <p class="lead" data-de="RootGuard schützt alle Geräte in deinem Netzwerk zentral vor Werbung und bekannten Trackern. Eine übersichtliche Oberfläche verbindet dafür AdGuard Home und Unbound – ohne Erweiterung auf jedem Handy, Fernseher oder Computer." data-en="RootGuard centrally protects every device on your network from ads and known trackers. One clear interface brings AdGuard Home and Unbound together—without installing an extension on every phone, TV, or computer.">RootGuard schützt alle Geräte in deinem Netzwerk zentral vor Werbung und bekannten Trackern. Eine übersichtliche Oberfläche verbindet dafür AdGuard Home und Unbound – ohne Erweiterung auf jedem Handy, Fernseher oder Computer.</p>
           <div class="actions">
-            <a class="button" href="docs.html" data-de="Dokumentation öffnen" data-en="Open documentation">Dokumentation öffnen</a>
-            <a class="button secondary" href="https://github.com/foxly-it/rootguard/releases/tag/v0.1.0-alpha.2" target="_blank" rel="noopener noreferrer" data-de="Alpha-Release ansehen" data-en="View alpha release">Alpha-Release ansehen</a>
+            <a class="button" href="#quickstart" data-de="Jetzt ausprobieren" data-en="Try it now">Jetzt ausprobieren</a>
+            <a class="button secondary" href="docs.html" data-de="Zum Handbuch" data-en="Open the manual">Zum Handbuch</a>
           </div>
         </div>
 
@@ -81,18 +81,40 @@
         </div>
       </section>
 
-      <section id="features">
-        <p class="eyebrow" data-de="Ein System statt einzelner Bausteine" data-en="One system, not disconnected parts">Ein System statt einzelner Bausteine</p>
-        <h2 data-de="Filtern. Auflösen. Verwalten." data-en="Filter. Resolve. Manage.">Filtern. Auflösen. Verwalten.</h2>
-        <p class="section-lead" data-de="RootGuard schafft eine verständliche Bedienebene für einen leistungsfähigen, selbst betriebenen DNS-Stack." data-en="RootGuard provides an approachable control layer for a powerful, self-hosted DNS stack.">RootGuard schafft eine verständliche Bedienebene für einen leistungsfähigen, selbst betriebenen DNS-Stack.</p>
-        <div class="grid feature-grid">
-          <article class="card"><span class="icon feature-code">01</span><h3 data-de="Werbung &amp; Tracker blockieren" data-en="Block ads &amp; trackers">Werbung &amp; Tracker blockieren</h3><p data-de="AdGuard Home filtert DNS-Anfragen zentral für alle Geräte – ohne Erweiterung auf jedem einzelnen Client." data-en="AdGuard Home filters DNS queries centrally for every device—without an extension on each client.">AdGuard Home filtert DNS-Anfragen zentral für alle Geräte – ohne Erweiterung auf jedem einzelnen Client.</p></article>
-          <article class="card"><span class="icon feature-code">02</span><h3 data-de="Selbst rekursiv auflösen" data-en="Resolve recursively">Selbst rekursiv auflösen</h3><p data-de="Unbound fragt die DNS-Hierarchie direkt ab. QNAME-Minimierung und DNSSEC bilden eine datensparsame, überprüfbare Basis." data-en="Unbound queries the DNS hierarchy directly. QNAME minimization and DNSSEC form a privacy-conscious, verifiable foundation.">Unbound fragt die DNS-Hierarchie direkt ab. QNAME-Minimierung und DNSSEC bilden eine datensparsame, überprüfbare Basis.</p></article>
-          <article class="card"><span class="icon feature-code">03</span><h3 data-de="Geführt oder frei konfigurieren" data-en="Guided or advanced configuration">Geführt oder frei konfigurieren</h3><p data-de="Profile und Advisor führen durch Standardwerte. Der gesicherte Experteneditor ergänzt eigene Unbound-Regeln mit Syntaxhilfe, Checkconf, gemeinsamer Versionierung und Rollback." data-en="Profiles and the advisor guide standard settings. The secured expert editor adds custom Unbound rules with syntax help, checkconf, shared versioning, and rollback.">Profile und Advisor führen durch Standardwerte. Der gesicherte Experteneditor ergänzt eigene Unbound-Regeln mit Syntaxhilfe, Checkconf, gemeinsamer Versionierung und Rollback.</p></article>
-          <article class="card"><span class="icon feature-code">04</span><h3 data-de="Modular aufgebaut" data-en="Built modularly">Modular aufgebaut</h3><p data-de="Core, WebApp, Updater und Unbound besitzen klar getrennte Aufgaben. Das Unbound-Image lässt sich weiterhin eigenständig nutzen." data-en="Core, WebApp, Updater, and Unbound have clearly separated responsibilities. The Unbound image can still be used independently.">Core, WebApp, Updater und Unbound besitzen klar getrennte Aufgaben. Das Unbound-Image lässt sich weiterhin eigenständig nutzen.</p></article>
-          <article class="card"><span class="icon feature-code">05</span><h3 data-de="Kontrolliert aktualisieren" data-en="Update with control">Kontrolliert aktualisieren</h3><p data-de="AdGuard und Unbound erhalten Backup-Rollbacks. Core und WebApp werden durch einen unabhängigen Helper gemeinsam geprüft und bei Fehlern zurückgesetzt." data-en="AdGuard and Unbound use backup-backed rollbacks. Core and WebApp are verified together by an independent helper and restored on failure.">AdGuard und Unbound erhalten Backup-Rollbacks. Core und WebApp werden durch einen unabhängigen Helper gemeinsam geprüft und bei Fehlern zurückgesetzt.</p></article>
-          <article class="card"><span class="icon feature-code">06</span><h3>Open Source · AGPL</h3><p data-de="Der Code bleibt offen und überprüfbar. Wer RootGuard verändert und über ein Netzwerk anbietet, muss den zugehörigen Quellcode ebenfalls bereitstellen." data-en="The code stays open and auditable. Anyone modifying RootGuard and offering it over a network must also provide the corresponding source.">Der Code bleibt offen und überprüfbar. Wer RootGuard verändert und über ein Netzwerk anbietet, muss den zugehörigen Quellcode ebenfalls bereitstellen.</p></article>
+      <section id="quickstart" class="home-quickstart">
+        <div class="quickstart-copy">
+          <p class="eyebrow">Quick Start · Docker Compose</p>
+          <h2 data-de="In wenigen Minuten startklar." data-en="Up and running in minutes.">In wenigen Minuten startklar.</h2>
+          <p class="section-lead" data-de="Du brauchst Docker Compose und einen Rechner im Heimnetz. Lade die fertige Alpha, trage ein eigenes Passwort sowie zwei zufällige Sicherheitsschlüssel ein und starte den Stack." data-en="You need Docker Compose and a computer on your home network. Download the ready-made alpha, set your own password plus two random security keys, and start the stack.">Du brauchst Docker Compose und einen Rechner im Heimnetz. Lade die fertige Alpha, trage ein eigenes Passwort sowie zwei zufällige Sicherheitsschlüssel ein und starte den Stack.</p>
+          <ol class="quickstart-steps">
+            <li><span>01</span><div><b data-de="Dateien laden" data-en="Download files">Dateien laden</b><small data-de="Compose und Beispielkonfiguration herunterladen." data-en="Download Compose and the example configuration.">Compose und Beispielkonfiguration herunterladen.</small></div></li>
+            <li><span>02</span><div><b data-de="Zugang absichern" data-en="Secure access">Zugang absichern</b><small data-de="Passwort und getrennte API-/Recovery-Schlüssel in .env setzen." data-en="Set a password and separate API/recovery keys in .env.">Passwort und getrennte API-/Recovery-Schlüssel in .env setzen.</small></div></li>
+            <li><span>03</span><div><b data-de="Stack starten" data-en="Start the stack">Stack starten</b><small data-de="Weboberfläche öffnen und dem geführten Setup folgen." data-en="Open the web interface and follow guided setup.">Weboberfläche öffnen und dem geführten Setup folgen.</small></div></li>
+          </ol>
+          <a class="text-link" href="docs.html#quickstart" data-de="Vollständige Anleitung und Voraussetzungen →" data-en="Full instructions and requirements →">Vollständige Anleitung und Voraussetzungen →</a>
         </div>
+        <div class="quickstart-command">
+          <div class="terminal-head"><span></span><span></span><span></span><b>rootguard-alpha</b></div>
+          <pre><code>mkdir rootguard-alpha &amp;&amp; cd rootguard-alpha
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.2/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.2/.env.alpha.example
+
+# .env sicher ausfüllen, danach:
+docker compose -f compose.alpha.yaml up -d</code></pre>
+          <div class="quickstart-open"><span data-de="Danach öffnen" data-en="Then open">Danach öffnen</span><strong>http://localhost:8080/login</strong></div>
+        </div>
+      </section>
+
+      <section id="features">
+        <p class="eyebrow" data-de="Was RootGuard für dich übernimmt" data-en="What RootGuard does for you">Was RootGuard für dich übernimmt</p>
+        <h2 data-de="Einfacher Schutz für alle Geräte." data-en="Simple protection for every device.">Einfacher Schutz für alle Geräte.</h2>
+        <p class="section-lead" data-de="RootGuard bündelt bewährte Open-Source-Technik in einer verständlichen Oberfläche. Du behältst die Kontrolle, ohne jedes technische Detail kennen zu müssen." data-en="RootGuard combines proven open-source technology in one approachable interface. You stay in control without having to understand every technical detail.">RootGuard bündelt bewährte Open-Source-Technik in einer verständlichen Oberfläche. Du behältst die Kontrolle, ohne jedes technische Detail kennen zu müssen.</p>
+        <div class="grid feature-grid feature-grid-simple">
+          <article class="card"><span class="icon feature-code">01</span><h3 data-de="Stört weniger" data-en="Fewer distractions">Stört weniger</h3><p data-de="Werbung und bekannte Tracker werden zentral blockiert, bevor sie deine Geräte erreichen." data-en="Ads and known trackers are blocked centrally before they reach your devices.">Werbung und bekannte Tracker werden zentral blockiert, bevor sie deine Geräte erreichen.</p></article>
+          <article class="card"><span class="icon feature-code">02</span><h3 data-de="Schützt deine Anfragen" data-en="Protects your queries">Schützt deine Anfragen</h3><p data-de="DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft." data-en="DNS queries are handled by your own stack and checked for tampering with DNSSEC.">DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft.</p></article>
+          <article class="card"><span class="icon feature-code">03</span><h3 data-de="Bleibt unter deiner Kontrolle" data-en="Stays under your control">Bleibt unter deiner Kontrolle</h3><p data-de="Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host." data-en="Dashboard, configuration, and updates run on your own Docker host.">Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host.</p></article>
+        </div>
+        <p class="feature-more"><a class="text-link" href="docs.html#overview" data-de="Technik, Architektur und Sicherheitsmodell im Handbuch →" data-en="Technology, architecture, and security model in the manual →">Technik, Architektur und Sicherheitsmodell im Handbuch →</a></p>
       </section>
 
       <section id="project-status" class="project-status">
@@ -114,7 +136,7 @@
           <a class="project-metric" href="https://github.com/foxly-it/rootguard/releases" target="_blank" rel="noopener noreferrer"><span data-de="Veröffentlichungen" data-en="Releases">Veröffentlichungen</span><strong id="release-count">2</strong><small data-de="Release-Verlauf →" data-en="Release history →">Release-Verlauf →</small></a>
         </div>
 
-        <div class="project-activity-grid">
+        <div class="project-activity-grid" hidden>
           <article class="project-feed">
             <div class="project-feed-head"><div><span>COMMITS</span><h3 data-de="Letzte Änderungen" data-en="Latest changes">Letzte Änderungen</h3></div><a href="https://github.com/foxly-it/rootguard/commits/main" target="_blank" rel="noopener noreferrer" data-de="Alle ansehen ↗" data-en="View all ↗">Alle ansehen ↗</a></div>
             <ol class="project-list" id="commit-list"><li class="project-empty" data-de="Commits werden geladen …" data-en="Loading commits …">Commits werden geladen …</li></ol>
@@ -131,7 +153,12 @@
         </div>
       </section>
 
-      <section id="architecture">
+      <section class="home-final-cta">
+        <div><p class="eyebrow" data-de="Alles Weitere im Handbuch" data-en="Everything else in the manual">Alles Weitere im Handbuch</p><h2 data-de="Du möchtest tiefer einsteigen?" data-en="Want to go deeper?">Du möchtest tiefer einsteigen?</h2><p data-de="Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert." data-en="Installation, router setup, configuration, updates, security, and troubleshooting are documented in one clear manual.">Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert.</p></div>
+        <div class="actions"><a class="button" href="docs.html" data-de="Handbuch öffnen" data-en="Open the manual">Handbuch öffnen</a><a class="button secondary" href="roadmap.html" data-de="Roadmap ansehen" data-en="View roadmap">Roadmap ansehen</a></div>
+      </section>
+
+      <section id="architecture" hidden aria-hidden="true">
         <div class="split-heading"><div><p class="eyebrow" data-de="Klare Zuständigkeiten" data-en="Clear responsibilities">Klare Zuständigkeiten</p><h2 data-de="Sicherheit beginnt in der Architektur." data-en="Security starts with architecture.">Sicherheit beginnt in der Architektur.</h2></div><p class="section-lead" data-de="Die WebApp erhält keinen Docker-Socket. Core orchestriert die DNS-Dienste; der separate Updater darf ausschließlich Core und WebApp als festes Paar austauschen." data-en="The WebApp never receives the Docker socket. Core orchestrates DNS services; the separate updater may only replace Core and WebApp as a fixed pair.">Die WebApp erhält keinen Docker-Socket. Core orchestriert die DNS-Dienste; der separate Updater darf ausschließlich Core und WebApp als festes Paar austauschen.</p></div>
         <div class="architecture-map" role="img" aria-label="Browser verbindet sich mit Webapp und Core; DNS Clients verbinden sich mit AdGuard und Unbound">
           <div class="arch-lane"><span class="lane-label">CONTROL PLANE</span><article><small>01</small><b>Browser</b><span>HttpOnly Session</span></article><i>→</i><article><small>02</small><b>WebApp</b><span data-de="UI &amp; API-Proxy" data-en="UI &amp; API proxy">UI &amp; API-Proxy</span></article><i>→</i><article class="accent"><small>03</small><b>Core</b><span>Bearer Token</span></article><i>→</i><article><small>04</small><b>Docker API</b><span data-de="DNS-Dienste" data-en="DNS services">DNS-Dienste</span></article></div>
@@ -145,7 +172,7 @@
         </div>
       </section>
 
-      <section id="docs">
+      <section id="docs" hidden aria-hidden="true">
         <p class="eyebrow" data-de="Dokumentation" data-en="Documentation">Dokumentation</p>
         <h2 data-de="Vom ersten Checkout zum DNS-Stack." data-en="From first checkout to DNS stack.">Vom ersten Checkout zum DNS-Stack.</h2>
         <p class="section-lead" data-de="Der aktuelle Entwicklungsstack ist für Tests und Mitarbeit gedacht. Er ist noch keine Empfehlung für den produktiven DNS-Betrieb eines gesamten Netzwerks." data-en="The current development stack is intended for testing and contributions. It is not yet recommended as the production DNS service for an entire network.">Der aktuelle Entwicklungsstack ist für Tests und Mitarbeit gedacht. Er ist noch keine Empfehlung für den produktiven DNS-Betrieb eines gesamten Netzwerks.</p>
@@ -176,7 +203,7 @@ open http://localhost:8080/login</code></pre>
         </div>
       </section>
 
-      <section id="roadmap">
+      <section id="roadmap" hidden aria-hidden="true">
         <p class="eyebrow" data-de="Aktive Entwicklung" data-en="Active development">Aktive Entwicklung</p>
         <h2 data-de="Der Weg zum stabilen Release." data-en="The path to a stable release.">Der Weg zum stabilen Release.</h2>
         <p class="section-lead" data-de="RootGuard wächst schrittweise zu einem sicheren, wartbaren Gesamtsystem. Die Reihenfolge priorisiert verlässlichen Betrieb vor zusätzlichen Komfortfunktionen." data-en="RootGuard is growing step by step into a secure, maintainable system. The order prioritizes reliable operation before additional convenience features.">RootGuard wächst schrittweise zu einem sicheren, wartbaren Gesamtsystem. Die Reihenfolge priorisiert verlässlichen Betrieb vor zusätzlichen Komfortfunktionen.</p>
