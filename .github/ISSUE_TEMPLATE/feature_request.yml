@@ -1,0 +1,46 @@
+name: Verbesserung vorschlagen
+description: Eine verständlich begründete Produkt- oder Dokumentationsidee vorschlagen
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Welches Problem soll gelöst werden?
+      description: Beschreibe den konkreten Anwendungsfall, nicht nur eine gewünschte Technik.
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Gewünschtes Ergebnis
+      description: Wie würde eine gute Lösung aus Sicht der Nutzer aussehen?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternativen
+      description: Welche Umgehung oder Alternative nutzt du heute?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Bereich
+      options:
+        - Installation
+        - DNS-Filterung
+        - Unbound
+        - Weboberfläche
+        - Updates / Recovery
+        - Dokumentation
+        - Anderer Bereich
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Vor dem Absenden
+      options:
+        - label: Ich habe bestehende Issues und die Roadmap geprüft.
+          required: true

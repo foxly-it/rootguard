@@ -1,0 +1,71 @@
+name: Fehler melden
+description: Einen reproduzierbaren Fehler in RootGuard melden
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke für deine Meldung. Bitte entferne Passwörter, Tokens, öffentliche IP-Adressen und andere sensible Daten.
+  - type: input
+    id: version
+    attributes:
+      label: RootGuard-Version
+      placeholder: v0.1.0-alpha.2
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Betroffene Komponente
+      options:
+        - Compose / Installation
+        - WebApp
+        - Core
+        - Updater
+        - AdGuard Home
+        - Unbound
+        - Website / Dokumentation
+        - Unklar
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Fehlerbeschreibung
+      description: Was ist passiert und was wurde erwartet?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Schritte zum Reproduzieren
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Umgebung
+      description: Betriebssystem, Architektur, Docker- und Compose-Version
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Bereinigte Logs
+      description: Keine Passwörter, Tokens oder privaten Netzwerkdetails einfügen.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Vor dem Absenden
+      options:
+        - label: Ich habe bestehende Issues geprüft.
+          required: true
+        - label: Ich habe sensible Informationen aus Texten und Logs entfernt.
+          required: true
