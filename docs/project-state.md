@@ -175,7 +175,8 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   directly reachable, groups Wiki, project status, roadmap, and GitHub under
   Project, and groups the Foxly tool overview, MOTD, and AdGuard Home updater
   separately. Keyboard-friendly native dropdowns close on outside click or
-  Escape. RootGuard now carries its own bilingual imprint and privacy notice
+  Escape, and the language switch is integrated into the navigation surface.
+  RootGuard now carries its own bilingual imprint and privacy notice
   tailored to the static GitHub Pages deployment instead of redirecting legal
   links to the Foxly blog.
 - Detailed Unbound configuration ownership and priority plan in
