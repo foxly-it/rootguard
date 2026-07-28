@@ -25,6 +25,7 @@ import "../styles/unbound-structure.css";
 import UnboundExpertEditor from "../components/UnboundExpertEditor";
 import UnboundForwardZones from "../components/UnboundForwardZones";
 import UnboundGuidedZones from "../components/UnboundGuidedZones";
+import UnboundPrivateDomains from "../components/UnboundPrivateDomains";
 import { useI18n } from "../i18n";
 
 export default function Unbound() {
@@ -49,7 +50,12 @@ export default function Unbound() {
       fetchUnboundPresets(),
       fetchUnboundActiveConfiguration(),
     ]);
-    setSettings({ ...loadedSettings, forward_zones: loadedSettings.forward_zones ?? [] });
+    setSettings({
+      ...loadedSettings,
+      forward_zones: loadedSettings.forward_zones ?? [],
+      private_domains: loadedSettings.private_domains ?? [],
+      reverse_zones: loadedSettings.reverse_zones ?? [],
+    });
     setHistory(loadedHistory);
     setPresets(loadedPresets);
     setLiveConfig(loadedConfig);
@@ -74,7 +80,12 @@ export default function Unbound() {
     setBusy(true);
     clearFeedback();
     try {
-      const proposed = { ...preset.settings, forward_zones: settings.forward_zones };
+      const proposed = {
+        ...preset.settings,
+        forward_zones: settings.forward_zones,
+        private_domains: settings.private_domains,
+        reverse_zones: settings.reverse_zones,
+      };
       setSettings(proposed);
       setPreview(await previewUnboundSettings(proposed));
       setMessage(t("unbound.presetLoaded", { name: presetText(preset.id, "name", t, preset.name) }));
@@ -241,6 +252,7 @@ export default function Unbound() {
       <section id="unbound-panel-zones" role="tabpanel" aria-labelledby="unbound-tab-zones" hidden={activeSection !== "zones"} tabIndex={0}>
         <div className="section-introduction"><p className="unbound-eyebrow">{t("unbound.localDnsEyebrow")}</p><h2>{t("unbound.localDnsTitle")}</h2><p>{t("unbound.localDnsHelp")}</p></div>
         <UnboundGuidedZones version={history[0]?.id} onActivated={reload} />
+        <UnboundPrivateDomains version={history[0]?.id} onActivated={reload} />
         <UnboundForwardZones version={history[0]?.id} onActivated={reload} />
       </section>
 
@@ -306,7 +318,7 @@ function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolea
 }
 
 function fieldLabel(field: string, t: (key: string) => string) {
-  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), forward_zones: t("forward.title"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
+  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
   return labels[field] ?? field;
 }
 

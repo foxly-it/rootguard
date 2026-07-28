@@ -20,6 +20,7 @@ interface LocalRecord {
   type: RecordType;
   value: string;
   ttl: number;
+  create_ptr?: boolean;
 }
 
 interface LocalZone {
@@ -27,7 +28,7 @@ interface LocalZone {
   records: LocalRecord[];
 }
 
-const emptyRecord = (): LocalRecord => ({ name: "router", type: "A", value: "192.168.1.1", ttl: 300 });
+const emptyRecord = (): LocalRecord => ({ name: "router", type: "A", value: "192.168.1.1", ttl: 300, create_ptr: true });
 const emptyZone = (): LocalZone => ({ zone: "home.arpa", records: [emptyRecord()] });
 
 export default function UnboundGuidedZones({
@@ -71,9 +72,11 @@ export default function UnboundGuidedZones({
       const normalized = normalizeZone(draft);
       const duplicate = zones.some((zone, index) => zone.zone === normalized.zone && index !== editing);
       if (duplicate) throw new Error(`Die Zone ${normalized.zone} ist bereits vorhanden.`);
-      setZones((current) => editing === null
-        ? [...current, normalized]
-        : current.map((zone, index) => index === editing ? normalized : zone));
+      const next = editing === null
+        ? [...zones, normalized]
+        : zones.map((zone, index) => index === editing ? normalized : zone);
+      validatePTRUniqueness(next, t);
+      setZones(next);
       setDraft(emptyZone());
       setEditing(null);
       setOpen(false);
@@ -194,9 +197,13 @@ export default function UnboundGuidedZones({
             {draft.records.map((record, index) => (
               <div className="guided-record" key={index}>
                 <label><span>{t("zones.recordName")}</span><input value={record.name} onChange={(event) => updateRecord(index, { name: event.target.value })} placeholder="router" /></label>
-                <label><span>{t("zones.type")}</span><select value={record.type} onChange={(event) => updateRecord(index, { type: event.target.value as RecordType })}><option>A</option><option>AAAA</option><option>CNAME</option></select></label>
+                <label><span>{t("zones.type")}</span><select value={record.type} onChange={(event) => {
+                  const type = event.target.value as RecordType;
+                  updateRecord(index, { type, create_ptr: type === "CNAME" ? false : record.create_ptr });
+                }}><option>A</option><option>AAAA</option><option>CNAME</option></select></label>
                 <label className="record-value"><span>{record.type === "CNAME" ? t("zones.targetName") : t("zones.address")}</span><input value={record.value} onChange={(event) => updateRecord(index, { value: event.target.value })} placeholder={record.type === "AAAA" ? "fd00::1" : record.type === "CNAME" ? "server.home.arpa" : "192.168.1.1"} /></label>
                 <label><span>{t("zones.ttl")}</span><input type="number" min={30} max={86400} value={record.ttl} onChange={(event) => updateRecord(index, { ttl: Number(event.target.value) })} /></label>
+                {record.type !== "CNAME" && <label className="record-ptr"><input type="checkbox" checked={record.create_ptr ?? false} onChange={(event) => updateRecord(index, { create_ptr: event.target.checked })} /><span><b>PTR</b><small>{t("zones.ptrHelp")}</small></span></label>}
                 <button className="record-delete" type="button" aria-label={t("zones.deleteRecord")} disabled={draft.records.length === 1} onClick={() => setDraft({ ...draft, records: draft.records.filter((_, recordIndex) => recordIndex !== index) })}><Trash2 size={15} /></button>
               </div>
             ))}
@@ -213,7 +220,7 @@ export default function UnboundGuidedZones({
         {zones.map((zone, index) => (
           <article key={zone.zone}>
             <div className="zone-name"><span><MapPin size={15} /></span><div><strong>{zone.zone}</strong><small>{zone.records.length === 1 ? t("zones.oneRecord") : t("zones.manyRecords", { count: zone.records.length })}</small></div></div>
-            <div className="zone-record-summary">{zone.records.map((record) => <code key={`${record.name}-${record.type}`}>{record.name} · {record.type} · {record.value}</code>)}</div>
+            <div className="zone-record-summary">{zone.records.map((record) => <code key={`${record.name}-${record.type}`}>{record.name} · {record.type} · {record.value}{record.create_ptr ? " · PTR" : ""}</code>)}</div>
             <div className="zone-actions"><button type="button" onClick={() => editZone(index)}><Pencil size={14} /> {t("common.edit")}</button><button type="button" onClick={() => removeZone(index)}><Trash2 size={14} /> {t("common.remove")}</button></div>
           </article>
         ))}
@@ -267,6 +274,14 @@ function parseGuidedZones(content: string): { base: string; zones: LocalZone[] }
 function renderGuidedZones(base: string, zones: LocalZone[]) {
   const cleanBase = base.trim();
   if (zones.length === 0) return cleanBase ? cleanBase + "\n" : "";
+  const ptrCounts = new Map<string, number>();
+  for (const zone of zones) {
+    for (const record of zone.records) {
+      if (record.create_ptr && record.type !== "CNAME") {
+        ptrCounts.set(record.value, (ptrCounts.get(record.value) ?? 0) + 1);
+      }
+    }
+  }
   const lines = [beginMarker, "# Generated by RootGuard. Use the guided UI to edit this block.", "server:"];
   for (const zone of zones) {
     lines.push(`    ${zoneMetadataPrefix}${JSON.stringify(zone)}`);
@@ -274,6 +289,9 @@ function renderGuidedZones(base: string, zones: LocalZone[]) {
     lines.push(`    local-zone: "${zone.zone}" static`);
     for (const record of zone.records) {
       lines.push(`    local-data: "${absoluteRecordName(record.name, zone.zone)} ${record.ttl} IN ${record.type} ${recordValue(record)}"`);
+      if (record.create_ptr && record.type !== "CNAME" && ptrCounts.get(record.value) === 1) {
+        lines.push(`    local-data-ptr: "${record.value} ${absoluteRecordName(record.name, zone.zone)}"`);
+      }
     }
   }
   lines.push(endMarker);
@@ -291,7 +309,9 @@ function normalizeZone(zone: LocalZone): LocalZone {
     if (record.type === "A" && !validIPv4(value)) throw new Error(`${record.name}: Bitte eine gültige IPv4-Adresse eintragen.`);
     if (record.type === "AAAA" && !validIPv6(value)) throw new Error(`${record.name}: Bitte eine gültige IPv6-Adresse eintragen.`);
     if (record.type === "CNAME") normalizeDNSName(value, `${record.name}: CNAME-Ziel`);
-    return { name: recordName, type: record.type, value, ttl: record.ttl };
+    const normalized: LocalRecord = { name: recordName, type: record.type, value, ttl: record.ttl };
+    if (record.create_ptr !== undefined) normalized.create_ptr = record.type !== "CNAME" && record.create_ptr;
+    return normalized;
   });
   const keys = new Set<string>();
   for (const record of records) {
@@ -300,6 +320,17 @@ function normalizeZone(zone: LocalZone): LocalZone {
     keys.add(key);
   }
   return { zone: name, records };
+}
+
+function validatePTRUniqueness(zones: LocalZone[], t: (key: string, values?: Record<string, string | number>) => string) {
+  const addresses = new Set<string>();
+  for (const zone of zones) {
+    for (const record of zone.records) {
+      if (!record.create_ptr || record.type === "CNAME") continue;
+      if (addresses.has(record.value)) throw new Error(t("zones.ptrDuplicate", { address: record.value }));
+      addresses.add(record.value);
+    }
+  }
 }
 
 function normalizeDNSName(value: string, label: string) {

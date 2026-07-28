@@ -156,13 +156,45 @@
 
 .guided-record {
   display: grid;
-  grid-template-columns: minmax(110px, 0.7fr) 90px minmax(180px, 1.35fr) 100px 36px;
+  grid-template-columns: minmax(110px, 0.7fr) 90px minmax(180px, 1.35fr) 100px minmax(125px, 0.55fr) 36px;
   gap: 9px;
   align-items: end;
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.018);
+}
+
+.record-ptr {
+  min-height: 40px;
+  flex-direction: row !important;
+  align-items: center;
+  padding: 6px 8px;
+  border: 1px solid rgba(77, 174, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(77, 174, 255, 0.05);
+}
+
+.record-ptr input {
+  width: auto;
+  min-height: auto;
+}
+
+.record-ptr span,
+.record-ptr b,
+.record-ptr small {
+  display: block;
+}
+
+.record-ptr b {
+  color: #8dcbff;
+  font-size: 0.7rem;
+}
+
+.record-ptr small {
+  color: #70859e;
+  font-size: 0.62rem;
+  line-height: 1.25;
 }
 
 .record-delete {

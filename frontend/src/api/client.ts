@@ -116,6 +116,8 @@ export interface UnboundSettings {
   cache_max_ttl: number;
   threads: number;
   forward_zones: UnboundForwardZone[];
+  private_domains: string[];
+  reverse_zones: UnboundReverseZonePolicy[];
 }
 
 export interface UnboundForwardZone {
@@ -124,6 +126,11 @@ export interface UnboundForwardZone {
   forward_first: boolean;
   allow_unsigned: boolean;
   allow_private_addresses: boolean;
+}
+
+export interface UnboundReverseZonePolicy {
+  network: "10.0.0.0/8" | "172.16.0.0/12" | "192.168.0.0/16";
+  mode: "nxdomain" | "transparent";
 }
 
 export interface UnboundForwardTargetCheck {

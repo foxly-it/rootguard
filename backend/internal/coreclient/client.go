@@ -80,13 +80,15 @@ type ServiceActionResponse struct {
 }
 
 type UnboundSettings struct {
-	QnameMinimisation bool                 `json:"qname_minimisation"`
-	Prefetch          bool                 `json:"prefetch"`
-	ServeExpired      bool                 `json:"serve_expired"`
-	CacheMinTTL       int                  `json:"cache_min_ttl"`
-	CacheMaxTTL       int                  `json:"cache_max_ttl"`
-	Threads           int                  `json:"threads"`
-	ForwardZones      []UnboundForwardZone `json:"forward_zones"`
+	QnameMinimisation bool                       `json:"qname_minimisation"`
+	Prefetch          bool                       `json:"prefetch"`
+	ServeExpired      bool                       `json:"serve_expired"`
+	CacheMinTTL       int                        `json:"cache_min_ttl"`
+	CacheMaxTTL       int                        `json:"cache_max_ttl"`
+	Threads           int                        `json:"threads"`
+	ForwardZones      []UnboundForwardZone       `json:"forward_zones"`
+	PrivateDomains    []string                   `json:"private_domains"`
+	ReverseZones      []UnboundReverseZonePolicy `json:"reverse_zones"`
 }
 
 type UnboundForwardZone struct {
@@ -95,6 +97,11 @@ type UnboundForwardZone struct {
 	ForwardFirst          bool     `json:"forward_first"`
 	AllowUnsigned         bool     `json:"allow_unsigned"`
 	AllowPrivateAddresses bool     `json:"allow_private_addresses"`
+}
+
+type UnboundReverseZonePolicy struct {
+	Network string `json:"network"`
+	Mode    string `json:"mode"`
 }
 
 type UnboundForwardTargetCheck struct {
