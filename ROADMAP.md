@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-07-23
+Last reviewed: 2026-07-28
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -41,7 +41,7 @@ Every release candidate must satisfy all of these rules:
 
 ---
 
-## 0.1.0-alpha.1 — reproducible public alpha
+## 0.1.0-alpha.2 — reproducible public alpha
 
 Goal: an external tester can install a named RootGuard version and report a
 reproducible problem without relying on local `dev` images.
@@ -58,21 +58,32 @@ reproducible problem without relying on local `dev` images.
 - [x] Data-plane and paired Core/WebApp update foundations
 - [x] AGPL-3.0-or-later licensing and separate trademark notice
 
-### Release gate
+### Delivered release gate
 
 - [ ] Move Updater into a versioned component repository and pin it from the
       main repository
-- [ ] Commit clean component revisions and a reproducible root Compose model
-- [ ] Publish versioned `amd64` and `arm64` images to GHCR
+- [x] Commit clean component revisions and a reproducible root Compose model
+- [x] Publish versioned `amd64` and `arm64` images to GHCR
 - [ ] Replace release `latest` references with version tags and recorded digests
 - [ ] Run clean-install tests on Linux `amd64`, Linux `arm64`, and Docker Desktop
 - [ ] Test an actual paired Core/WebApp update and a deliberately failed rollback
 - [ ] Add typed diagnostics for occupied DNS ports, invalid host addresses,
       missing Compose, failed pulls, and interrupted deployment recovery
-- [ ] Publish release notes, upgrade notes, known limitations, and checksums
-- [ ] Run the complete integration workflow from a clean GitHub runner
+- [x] Publish release notes, upgrade notes, known limitations, and checksums
+- [x] Run the complete integration workflow from a clean GitHub runner
 
-Exit: a signed Git tag and GitHub pre-release named `0.1.0-alpha.1`.
+Published: Git tag and GitHub pre-release `v0.1.0-alpha.2`. The remaining
+unchecked items are alpha hardening work and stay ahead of beta readiness.
+
+### Current development slice — trustworthy Stack Center
+
+- [x] Show real runtime state, health, image reference, immutable image ID,
+      start time, restart count, and published ports for every managed service
+- [x] Translate Docker state into plain-language operator guidance without
+      exposing raw daemon output
+- [ ] Add bounded, redacted service logs with explicit retention
+- [ ] Persist update and rollback history across Core restarts
+- [ ] Pin release images by recorded digest and document retention policy
 
 ---
 
