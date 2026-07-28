@@ -86,6 +86,7 @@ type UnboundSettings struct {
 	CacheMinTTL       int                        `json:"cache_min_ttl"`
 	CacheMaxTTL       int                        `json:"cache_max_ttl"`
 	Threads           int                        `json:"threads"`
+	NetworkMode       string                     `json:"network_mode"`
 	ForwardZones      []UnboundForwardZone       `json:"forward_zones"`
 	PrivateDomains    []string                   `json:"private_domains"`
 	ReverseZones      []UnboundReverseZonePolicy `json:"reverse_zones"`
@@ -109,6 +110,14 @@ type UnboundForwardTargetCheck struct {
 	Address   string `json:"address"`
 	Reachable bool   `json:"reachable"`
 	Detail    string `json:"detail"`
+}
+
+type UnboundNetworkCapabilities struct {
+	IPv4Available bool      `json:"ipv4_available"`
+	IPv4Detail    string    `json:"ipv4_detail"`
+	IPv6Available bool      `json:"ipv6_available"`
+	IPv6Detail    string    `json:"ipv6_detail"`
+	CheckedAt     time.Time `json:"checked_at"`
 }
 
 type UnboundActiveConfiguration struct {
@@ -386,6 +395,12 @@ func (c *Client) UnboundAdvice(ctx context.Context, settings UnboundSettings) (U
 func (c *Client) CheckUnboundForwardTargets(ctx context.Context, zones []UnboundForwardZone) ([]UnboundForwardTargetCheck, error) {
 	var result []UnboundForwardTargetCheck
 	err := c.do(ctx, http.MethodPost, "/api/unbound/forward-check", map[string]any{"zones": zones}, &result)
+	return result, err
+}
+
+func (c *Client) UnboundNetworkCapabilities(ctx context.Context) (UnboundNetworkCapabilities, error) {
+	var result UnboundNetworkCapabilities
+	err := c.do(ctx, http.MethodGet, "/api/unbound/network-capabilities", nil, &result)
 	return result, err
 }
 

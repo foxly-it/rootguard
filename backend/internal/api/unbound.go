@@ -132,6 +132,15 @@ func HandleUnboundForwardCheck(w http.ResponseWriter, r *http.Request, core *cor
 	writeJSON(w, http.StatusOK, checks)
 }
 
+func HandleUnboundNetworkCapabilities(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	result, err := core.UnboundNetworkCapabilities(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 type customConfigRequest struct {
 	Content string `json:"content"`
 }

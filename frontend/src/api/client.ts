@@ -115,6 +115,7 @@ export interface UnboundSettings {
   cache_min_ttl: number;
   cache_max_ttl: number;
   threads: number;
+  network_mode: "ipv4" | "dual" | "ipv6";
   forward_zones: UnboundForwardZone[];
   private_domains: string[];
   reverse_zones: UnboundReverseZonePolicy[];
@@ -138,6 +139,14 @@ export interface UnboundForwardTargetCheck {
   address: string;
   reachable: boolean;
   detail: string;
+}
+
+export interface UnboundNetworkCapabilities {
+  ipv4_available: boolean;
+  ipv4_detail: string;
+  ipv6_available: boolean;
+  ipv6_detail: string;
+  checked_at: string;
 }
 
 export async function fetchUnboundSettings(): Promise<UnboundSettings> {
@@ -255,6 +264,10 @@ export async function checkUnboundForwardTargets(zones: UnboundForwardZone[]): P
     method: "POST",
     body: JSON.stringify({ zones }),
   });
+}
+
+export async function fetchUnboundNetworkCapabilities(): Promise<UnboundNetworkCapabilities> {
+  return request<UnboundNetworkCapabilities>("/api/unbound/network-capabilities");
 }
 
 export interface UnboundCustomDocument {

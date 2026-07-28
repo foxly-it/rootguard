@@ -239,6 +239,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 	mux.HandleFunc("POST /api/unbound/forward-check", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundForwardCheck(w, r, core)
 	})
+	mux.HandleFunc("GET /api/unbound/network-capabilities", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleUnboundNetworkCapabilities(w, r, core)
+	})
 
 	mux.HandleFunc("GET /api/unbound/custom", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleGetUnboundCustom(w, r, core)

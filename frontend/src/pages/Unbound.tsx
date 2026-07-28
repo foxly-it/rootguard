@@ -7,6 +7,7 @@ import {
   fetchUnboundActiveConfiguration,
   fetchUnboundPresets,
   fetchUnboundSettings,
+  fetchUnboundNetworkCapabilities,
   previewUnboundSettings,
   restoreUnboundVersion,
   updateUnboundSettings,
@@ -17,6 +18,7 @@ import {
   type UnboundPreset,
   type UnboundPreview,
   type UnboundSettings,
+  type UnboundNetworkCapabilities,
 } from "../api/client";
 import "../styles/unbound.css";
 import "../styles/unbound-live.css";
@@ -42,6 +44,7 @@ export default function Unbound() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<UnboundSection>("overview");
+  const [networkCapabilities, setNetworkCapabilities] = useState<UnboundNetworkCapabilities | null>(null);
 
   const reload = useCallback(async () => {
     const [loadedSettings, loadedHistory, loadedPresets, loadedConfig] = await Promise.all([
@@ -55,11 +58,26 @@ export default function Unbound() {
       forward_zones: loadedSettings.forward_zones ?? [],
       private_domains: loadedSettings.private_domains ?? [],
       reverse_zones: loadedSettings.reverse_zones ?? [],
+      network_mode: loadedSettings.network_mode ?? "ipv4",
     });
     setHistory(loadedHistory);
     setPresets(loadedPresets);
     setLiveConfig(loadedConfig);
   }, []);
+
+  async function checkNetworkCapabilities() {
+    if (busy) return;
+    setBusy(true);
+    clearFeedback();
+    try {
+      setNetworkCapabilities(await fetchUnboundNetworkCapabilities());
+      setMessage(t("network.checked"));
+    } catch (err) {
+      setError(errorMessage(err, t("network.checkError")));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   useEffect(() => {
     reload()
@@ -85,6 +103,7 @@ export default function Unbound() {
         forward_zones: settings.forward_zones,
         private_domains: settings.private_domains,
         reverse_zones: settings.reverse_zones,
+        network_mode: settings.network_mode,
       };
       setSettings(proposed);
       setPreview(await previewUnboundSettings(proposed));
@@ -225,6 +244,22 @@ export default function Unbound() {
             <Toggle directive="qname-minimisation" label={t("unbound.qname")} badge={t("unbound.qnameBadge")} description={t("unbound.qnameHelp")} checked={settings.qname_minimisation} onChange={(value) => setSettings({ ...settings, qname_minimisation: value })} />
             <Toggle directive="prefetch" label={t("unbound.prefetch")} badge={t("unbound.prefetchBadge")} description={t("unbound.prefetchHelp")} checked={settings.prefetch} onChange={(value) => setSettings({ ...settings, prefetch: value })} />
             <Toggle directive="serve-expired" label={t("unbound.expired")} badge={t("unbound.expiredBadge")} description={t("unbound.expiredHelp")} checked={settings.serve_expired} onChange={(value) => setSettings({ ...settings, serve_expired: value })} />
+            <div className="network-mode-setting">
+              <div className="network-mode-heading"><div><strong>{t("network.title")}</strong><small>{t("network.help")}</small></div><button className="secondary-action" type="button" disabled={busy} onClick={checkNetworkCapabilities}>{t("network.check")}</button></div>
+              {networkCapabilities && <div className="network-capabilities">
+                <span className={networkCapabilities.ipv4_available ? "available" : "unavailable"}><b>IPv4</b><small>{networkCapabilities.ipv4_available ? t("network.available") : networkCapabilities.ipv4_detail}</small></span>
+                <span className={networkCapabilities.ipv6_available ? "available" : "unavailable"}><b>IPv6</b><small>{networkCapabilities.ipv6_available ? t("network.available") : networkCapabilities.ipv6_detail}</small></span>
+              </div>}
+              <div className="network-mode-options" role="radiogroup" aria-label={t("network.title")}>
+                {(["ipv4", "dual", "ipv6"] as const).map((mode) => {
+                  const requiresIPv6 = mode !== "ipv4";
+                  const unavailable = requiresIPv6 && !networkCapabilities?.ipv6_available;
+                  return <label className={unavailable ? "unavailable" : ""} key={mode}><input type="radio" name="network-mode" checked={settings.network_mode === mode} disabled={unavailable} onChange={() => setSettings({ ...settings, network_mode: mode })} /><span><b>{t(`network.${mode}`)}</b><small>{t(`network.${mode}Help`)}</small></span></label>;
+                })}
+              </div>
+              {settings.network_mode !== "ipv4" && !networkCapabilities?.ipv6_available && <p className="network-warning">{t("network.activationBlocked")}</p>}
+              <code className="setting-directive">do-ip4 / do-ip6 / prefer-ip6</code>
+            </div>
             <details className="advanced-settings">
               <summary><span>{t("unbound.cachePerformance")}</span><small>{t("unbound.cachePerformanceHelp")}</small></summary>
               <div className="number-grid">
@@ -318,7 +353,7 @@ function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolea
 }
 
 function fieldLabel(field: string, t: (key: string) => string) {
-  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
+  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
   return labels[field] ?? field;
 }
 
