@@ -183,6 +183,7 @@ jobs:
 
       - name: Verify private DNS and reverse-zone lifecycle
         run: |
+          set -x
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
           proposal="$(jq \
             '.private_domains = ["home.example."] |
@@ -191,14 +192,14 @@ jobs:
                {"network":"172.16.0.0/12","mode":"nxdomain"},
                {"network":"192.168.0.0/16","mode":"transparent"}
              ]' <<<"$active")"
-          preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+          preview="$(curl --fail --show-error --silent --cookie /tmp/rootguard-ci-cookies.txt \
             --header 'Content-Type: application/json' --data "$proposal" \
             http://127.0.0.1:18080/api/unbound/preview)"
           test "$(jq -r '.rendered_config |
             contains("private-domain: \"home.example.\"") and
             contains("local-zone: \"10.in-addr.arpa.\" static") and
             contains("local-zone: \"168.192.in-addr.arpa.\" transparent")' <<<"$preview")" = "true"
-          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
+          curl --fail --show-error --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
             --header 'Content-Type: application/json' --data "$proposal" \
             http://127.0.0.1:18080/api/unbound/settings >/dev/null
           active_after="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
@@ -206,7 +207,7 @@ jobs:
           test "$(jq -r '.reverse_zones[] | select(.network == "192.168.0.0/16") | .mode' <<<"$active_after")" = "transparent"
           custom=$'server:\n    local-zone: "lab.home.example." static\n    local-data: "router.lab.home.example. 300 IN A 192.168.50.81"\n    local-data-ptr: "192.168.50.81 router.lab.home.example."\n'
           payload="$(jq -n --arg content "$custom" '{content:$content}')"
-          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
+          curl --fail --show-error --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
             --header 'Content-Type: application/json' --data "$payload" \
             http://127.0.0.1:18080/api/unbound/custom >/dev/null
           test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 router.lab.home.example A)" = "192.168.50.81"
