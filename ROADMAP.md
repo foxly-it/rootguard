@@ -130,20 +130,36 @@ Exit: normal resolver administration no longer depends on raw Unbound syntax.
 
 ---
 
-## 0.3 — AdGuard and DNS policy management
+## 0.3 — AdGuard integration without feature duplication
 
-Goal: RootGuard covers the daily DNS-filtering workflow without forcing users
-into the native interface for routine tasks.
+Goal: RootGuard integrates AdGuard Home safely and explains the complete DNS
+path without rebuilding functions already maintained by AdGuard Home.
 
-- [ ] Filter-list catalog, custom lists, enable/disable, refresh, and health
-- [ ] Allow/deny exceptions with validation and conflict visibility
-- [ ] Client inventory, friendly names, groups, and per-client policy
-- [ ] Query-log and aggregate statistics with configurable retention
-- [ ] Privacy controls for client identifiers and query history
-- [ ] Safe link to the native AdGuard interface for unsupported advanced tasks
+Product boundary:
+
+- AdGuard Home remains the primary interface for filter lists, allow/deny
+  exceptions, clients, query logs, statistics, and per-client policy.
+- RootGuard owns installation, protected access, the fixed Unbound upstream,
+  cross-service health, updates, backup/recovery, and plain-language guidance.
+- A native AdGuard function is added to RootGuard only when RootGuard must
+  coordinate it with another component or enforce an appliance safety boundary.
+
+### Integration work
+
+- [x] Protected same-origin gateway to the native AdGuard Home interface
+- [x] Automatic private bootstrap with generated credentials and fixed Unbound
+      upstream
+- [ ] Show AdGuard version, configuration state, protected upstream, and
+      gateway availability together in RootGuard
 - [ ] Cross-service diagnostics showing Client → AdGuard → Unbound → DNSSEC
+- [ ] Contextual links from RootGuard guidance to the relevant native AdGuard
+      page without exposing its administration port
+- [ ] Document backup and restore ownership for AdGuard configuration, work
+      data, query history, and filter state
+- [ ] Compatibility tests against every supported AdGuard Home release
 
-Exit: filters, clients, and common policy are first-class RootGuard features.
+Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
+coherent appliance lifecycle around it.
 
 ---
 
@@ -156,6 +172,14 @@ manual Docker forensics.
 - [ ] Real component versions, image digests, uptime, and health reasons
 - [ ] Persistent update and rollback history
 - [ ] Configurable backup retention with storage-usage visibility
+- [ ] Safe post-update cleanup with a preview and reclaimed-space report:
+      retain the active and previous successful image, prune only older image
+      IDs recorded by RootGuard, and never call global Docker prune commands
+- [ ] Prune only unused transient volumes carrying an explicit RootGuard cleanup
+      label; permanently protect configuration, data, session, state, and backup
+      volumes
+- [ ] Record every automatic or manual cleanup in the update history and expose
+      a clear no-op result when nothing can be removed safely
 - [ ] Encrypted or explicitly protected backup export
 - [ ] Full restore into a clean RootGuard installation
 - [ ] Pre-update snapshot and post-update restore verification
