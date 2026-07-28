@@ -223,6 +223,33 @@ jobs:
           test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
             http://127.0.0.1:18080/api/unbound/custom | jq -r .content)" = ""
 
+      - name: Verify capability-checked resolver protocol mode
+        run: |
+          capabilities="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            http://127.0.0.1:18080/api/unbound/network-capabilities)"
+          test "$(jq -r .ipv4_available <<<"$capabilities")" = "true"
+          active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            http://127.0.0.1:18080/api/unbound/settings)"
+          test "$(jq -r .network_mode <<<"$active")" = "ipv4"
+          preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            --header 'Content-Type: application/json' --data "$active" \
+            http://127.0.0.1:18080/api/unbound/preview)"
+          test "$(jq -r '.rendered_config |
+            contains("do-ip4: yes") and contains("do-ip6: no") and contains("prefer-ip6: no")' <<<"$preview")" = "true"
+          if test "$(jq -r .ipv6_available <<<"$capabilities")" = "false"; then
+            dual="$(jq '.network_mode = "dual"' <<<"$active")"
+            status="$(curl --silent --output /tmp/network-mode-error.json --write-out '%{http_code}' \
+              --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' \
+              --data "$dual" http://127.0.0.1:18080/api/unbound/settings)"
+            test "$status" = "400"
+          fi
+          expert=$'server:\n    do-ip6: yes\n'
+          status="$(curl --silent --output /tmp/network-expert-error.json --write-out '%{http_code}' \
+            --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' \
+            --data "$(jq -n --arg content "$expert" '{content:$content}')" \
+            http://127.0.0.1:18080/api/unbound/custom/preview)"
+          test "$status" = "400"
+
       - name: Verify password recovery and persistence
         run: |
           test "$(curl --fail --silent http://127.0.0.1:18080/api/auth/recovery | jq -r .enabled)" = "true"

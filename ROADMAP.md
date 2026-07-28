@@ -103,8 +103,10 @@ The detailed ownership and directive plan lives in
 - [x] Local A, AAAA, and CNAME records
 - [x] Conditional forwarding zones with multiple ordered servers
 - [x] Private domains and RFC1918 reverse-zone handling ([#41](https://github.com/foxly-it/rootguard/issues/41))
-- [ ] Client network access rules using validated CIDRs
-- [ ] IPv4/IPv6 operating mode with capability and connectivity checks
+- [x] Keep Unbound client access fixed to the internal RootGuard network;
+      end-client CIDR policy belongs to AdGuard Home by design
+- [x] IPv4/IPv6 operating mode with capability and connectivity checks
+      ([#43](https://github.com/foxly-it/rootguard/issues/43))
 - [ ] Cache memory sizing derived from an explicit resource profile
 - [ ] Serve-expired TTL and client timeout controls
 - [ ] Prefetch-key and aggressive NSEC controls with compatibility guidance

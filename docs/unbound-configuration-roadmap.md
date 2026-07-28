@@ -80,19 +80,22 @@ reverse data in the same visible, reversible configuration lifecycle.
 AdGuard Home's separate private reverse-resolver routing remains part of the
 later cross-service integration instead of being reimplemented in RootGuard.
 
-### Client access networks
+### Client access networks — fixed ownership
 
-- Allow only validated host and CIDR entries
-- Show rule order and effective result
-- Protect the internal Docker networks required by RootGuard
-- Never allow raw interface or socket selection
-- Directive: `access-control`
+RootGuard clients query AdGuard Home, not Unbound. Exposing Unbound CIDR rules
+would therefore duplicate AdGuard policy while implying protection it cannot
+provide. Unbound remains limited to loopback and RootGuard's internal DNS
+network; end-client access policy stays in AdGuard Home. Raw interfaces,
+listeners, and sockets remain unavailable to both guided and expert input.
 
-### Network and protocol mode
+### Network and protocol mode — delivered
 
-- IPv4, IPv6, or dual stack selected from detected host capability
-- Connectivity preflight before activation
-- Safe handling when IPv6 exists locally but has no upstream connectivity
+- IPv4-only safe default plus dual-stack and IPv6-only guided modes
+- Bounded IPv4 and IPv6 root-server probes from the running Unbound container
+- IPv6-dependent modes stay locked in the WebGUI and are rejected server-side
+  when authoritative connectivity is unavailable
+- Typed preview, effective `unbound-checkconf`, history, rollback, migration,
+  and expert ownership checks
 - Directives: `do-ip4`, `do-ip6`, `prefer-ip6`
 
 ### Cache and resource profile
