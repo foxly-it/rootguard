@@ -107,7 +107,13 @@ jobs:
     needs: [version, publish]
     runs-on: ubuntu-latest
     env:
-      ROOTGUARD_VERSION: ${{ needs.version.outputs.value }}
+      ROOTGUARD_CORE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.value }}
+      ROOTGUARD_WEBAPP_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.value }}
+      ROOTGUARD_UPDATER_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-updater:${{ needs.version.outputs.value }}
+      ROOTGUARD_UNBOUND_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ needs.version.outputs.value }}
+      ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.value }}
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.value }}
+      ROOTGUARD_UNBOUND_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ needs.version.outputs.value }}
       ROOTGUARD_API_TOKEN: alpha-smoke-test-token
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: alpha-smoke-test-password

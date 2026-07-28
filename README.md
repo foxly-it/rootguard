@@ -94,6 +94,7 @@ diesem Einstieg ausgelagert:
 - [Aktueller Projektstand](docs/project-state.md)
 - [Roadmap bis 1.0](ROADMAP.md)
 - [Release Notes v0.1.0-alpha.2](RELEASE_NOTES_0.1.0-alpha.2.md)
+- [Image-Digests und Aufbewahrungsregeln](docs/image-retention-policy.md)
 
 ## Entwicklung
 
