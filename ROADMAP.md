@@ -82,7 +82,7 @@ unchecked items are alpha hardening work and stay ahead of beta readiness.
 - [x] Translate Docker state into plain-language operator guidance without
       exposing raw daemon output
 - [x] Add bounded, redacted service logs with explicit retention
-- [ ] Persist update and rollback history across Core restarts
+- [x] Persist bounded update, rollback, and cleanup history across restarts
 - [ ] Pin release images by recorded digest and document retention policy
 
 ---
@@ -170,16 +170,17 @@ manual Docker forensics.
 
 - [ ] Bounded and redacted logs for every managed component
 - [ ] Real component versions, image digests, uptime, and health reasons
-- [ ] Persistent update and rollback history
+- [x] Persistent, bounded update and rollback history for data and control plane
 - [ ] Configurable backup retention with storage-usage visibility
-- [ ] Safe post-update cleanup with a preview and reclaimed-space report:
+- [x] Safe automatic post-update cleanup:
       retain the active and previous successful image, prune only older image
       IDs recorded by RootGuard, and never call global Docker prune commands
-- [ ] Prune only unused transient volumes carrying an explicit RootGuard cleanup
+- [x] Prune only unused transient volumes carrying an explicit RootGuard cleanup
       label; permanently protect configuration, data, session, state, and backup
       volumes
-- [ ] Record every automatic or manual cleanup in the update history and expose
+- [x] Record every automatic cleanup in the update history and expose
       a clear no-op result when nothing can be removed safely
+- [ ] Add an optional manual cleanup preview with a reclaimed-space estimate
 - [ ] Encrypted or explicitly protected backup export
 - [ ] Full restore into a clean RootGuard installation
 - [ ] Pre-update snapshot and post-update restore verification

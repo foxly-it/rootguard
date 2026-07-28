@@ -205,24 +205,30 @@ Trustworthy Stack Center and production visibility:
   restart count, and published ports, presented with plain-language guidance;
 - completed data-plane updates and paired Core/WebApp updates through the
   separate helper; immutable release digests and retention policies remain;
+- bounded update and rollback history survives restarts and is shown in the
+  Stack Center together with each automatic cleanup result;
+- post-update cleanup retains the active and previous successful image, removes
+  only older image IDs recorded by RootGuard, and considers only unused volumes
+  carrying the explicit `io.rootguard.cleanup=true` label;
 - safe start, stop, and restart controls with clear impact;
 - bounded, redacted on-demand service logs and actionable failure states;
 - production-hardening and end-to-end CI for the new AIO installer, including
   immutable release image digests, host port conflict diagnostics, and failed
   deployment recovery.
 
-The next storage slice must persist successful image history before deleting
-anything. Cleanup may retain the active and previous successful image and prune
+The storage safety slice persists successful image history before deleting
+anything. Cleanup retains the active and previous successful image and removes
 only older IDs recorded by RootGuard. Global `docker system prune`, `docker
-image prune`, and `docker volume prune` are prohibited. Configuration, AdGuard
-data, Unbound state, sessions, backups, and every unlabeled or foreign volume
-remain protected.
+image prune`, and `docker volume prune` remain prohibited. Configuration,
+AdGuard data, Unbound state, sessions, backups, and every unlabeled or foreign
+volume remain protected. A cleanup that has nothing safely eligible records a
+visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
 1. Cohesive responsive UI shell and real dashboard metrics.
-2. Complete Stack Center logs, richer health details, update history, and
-   signed/immutable Core/WebApp release metadata.
+2. Complete richer Stack Center health details and signed/immutable Core/WebApp
+   release metadata.
 3. Harden backup retention, export/restore, and immutable release digests.
 4. DNS security advisor and production preflight checks.
 5. Native AdGuard integration, contextual guidance, cross-service diagnostics,
