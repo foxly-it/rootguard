@@ -56,6 +56,12 @@ export interface ServiceInfo {
   displayName: string;
   description: string;
   status: "running" | "stopped";
+  health: "healthy" | "unhealthy" | "starting" | "unknown";
+  image?: string;
+  imageId?: string;
+  startedAt?: string;
+  restartCount: number;
+  ports?: string[];
 }
 
 export async function fetchServices(): Promise<ServiceInfo[]> {

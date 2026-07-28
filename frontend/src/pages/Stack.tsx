@@ -207,10 +207,23 @@ export default function Stack() {
                 </span>
               </div>
 
+              <div className={`stack-runtime-explainer ${runtimeTone(runtime)}`}>
+                <strong>{runtimeHeadline(runtime, t)}</strong>
+                <p>{runtimeGuidance(runtime, t)}</p>
+              </div>
+
+              <dl className="stack-runtime-data">
+                <div><dt>{t("stack.version")}</dt><dd>{imageVersion(runtime?.image)}</dd></div>
+                <div><dt>{t("stack.health")}</dt><dd>{healthLabel(runtime, t)}</dd></div>
+                <div><dt>{t("stack.started")}</dt><dd>{runtime?.startedAt ? formatDate(runtime.startedAt) : "–"}</dd></div>
+                <div><dt>{t("stack.restarts")}</dt><dd>{runtime?.restartCount ?? 0}</dd></div>
+                <div><dt>{t("stack.publishedPorts")}</dt><dd>{runtime?.ports?.length ? runtime.ports.join(", ") : t("stack.noPublishedPorts")}</dd></div>
+              </dl>
+
               <dl className="stack-image-data">
-                <div><dt>{t("stack.runningImage")}</dt><dd>{service.current_image || "–"}</dd></div>
+                <div><dt>{t("stack.runningImage")}</dt><dd>{runtime?.image || service.current_image || "–"}</dd></div>
                 <div><dt>{t("stack.target")}</dt><dd>{service.target_image}</dd></div>
-                <div><dt>{t("stack.imageId")}</dt><dd>{shortID(service.current_id)}</dd></div>
+                <div><dt>{t("stack.imageId")}</dt><dd>{shortID(runtime?.imageId || service.current_id)}</dd></div>
                 <div><dt>{t("stack.lastCheck")}</dt><dd>{service.checked_at && !service.checked_at.startsWith("0001-") ? formatDate(service.checked_at) : t("stack.neverChecked")}</dd></div>
               </dl>
 
@@ -248,6 +261,44 @@ function Summary({ icon, label, value }: { icon: React.ReactNode; label: string;
 function shortID(value?: string) {
   if (!value) return "–";
   return value.replace("sha256:", "").slice(0, 12);
+}
+
+type Translate = (key: string, values?: Record<string, string | number>) => string;
+
+function runtimeTone(service?: ServiceInfo) {
+  if (!service || service.status !== "running" || service.health === "unhealthy") return "danger";
+  if (service.health === "starting" || service.health === "unknown") return "attention";
+  return "good";
+}
+
+function runtimeHeadline(service: ServiceInfo | undefined, t: Translate) {
+  if (!service || service.status !== "running") return t("stack.runtimeStoppedTitle");
+  if (service.health === "unhealthy") return t("stack.runtimeUnhealthyTitle");
+  if (service.health === "starting") return t("stack.runtimeStartingTitle");
+  if (service.health === "unknown") return t("stack.runtimeUnknownTitle");
+  return t("stack.runtimeHealthyTitle");
+}
+
+function runtimeGuidance(service: ServiceInfo | undefined, t: Translate) {
+  if (!service || service.status !== "running") return t("stack.runtimeStoppedText");
+  if (service.health === "unhealthy") return t("stack.runtimeUnhealthyText");
+  if (service.health === "starting") return t("stack.runtimeStartingText");
+  if (service.health === "unknown") return t("stack.runtimeUnknownText");
+  return t("stack.runtimeHealthyText");
+}
+
+function healthLabel(service: ServiceInfo | undefined, t: Translate) {
+  if (!service || service.status !== "running") return t("stack.stopped");
+  return t(`stack.health.${service.health}`);
+}
+
+function imageVersion(image?: string) {
+  if (!image) return "–";
+  const digest = image.indexOf("@");
+  if (digest >= 0) return image.slice(digest + 1, digest + 20);
+  const slash = image.lastIndexOf("/");
+  const colon = image.lastIndexOf(":");
+  return colon > slash ? image.slice(colon + 1) : "latest";
 }
 
 function errorMessage(error: unknown, fallback: string) {
