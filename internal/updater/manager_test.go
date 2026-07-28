@@ -152,6 +152,47 @@ func TestFailedHealthCheckRestoresPreviousImageAndBackup(t *testing.T) {
 	}
 }
 
+func TestCleanupKeepsTwoImagesAndOnlyRemovesLabeledUnusedVolumes(t *testing.T) {
+	var commands []string
+	manager := NewManager(Options{
+		DataDir:  t.TempDir(),
+		Services: []ServiceSpec{{Name: "unbound", TargetImage: "unbound:latest"}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			command := strings.Join(arguments, " ")
+			commands = append(commands, command)
+			switch command {
+			case "ps -a --filter ancestor=sha256:old --format {{.ID}}":
+				return nil, nil
+			case "image rm sha256:old":
+				return []byte("removed"), nil
+			case "volume ls --quiet --filter label=io.rootguard.cleanup=true":
+				return []byte("rootguard-transient\n"), nil
+			case "ps -a --filter volume=rootguard-transient --format {{.ID}}":
+				return nil, nil
+			case "volume rm rootguard-transient":
+				return []byte("removed"), nil
+			default:
+				return nil, errors.New("unexpected command: " + command)
+			}
+		},
+	})
+	manager.status.History = []HistoryEntry{
+		{Service: "unbound", Outcome: "success", FromID: "sha256:previous", ToID: "sha256:current"},
+		{Service: "unbound", Outcome: "success", FromID: "sha256:old", ToID: "sha256:previous"},
+	}
+
+	result := manager.cleanupAfterSuccess(context.Background(), "unbound")
+	if strings.Join(result.RemovedImages, ",") != "sha256:old" ||
+		strings.Join(result.RemovedVolumes, ",") != "rootguard-transient" {
+		t.Fatalf("unexpected cleanup result: %#v", result)
+	}
+	all := strings.Join(commands, "\n")
+	if strings.Contains(all, "sha256:previous") || strings.Contains(all, "sha256:current") ||
+		strings.Contains(all, "prune") {
+		t.Fatalf("cleanup touched a protected resource:\n%s", all)
+	}
+}
+
 func waitForIdle(t *testing.T, manager *Manager) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

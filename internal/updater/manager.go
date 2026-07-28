@@ -49,11 +49,28 @@ type ServiceStatus struct {
 	Error           string    `json:"error,omitempty"`
 }
 
+type CleanupResult struct {
+	RemovedImages  []string `json:"removed_images,omitempty"`
+	RemovedVolumes []string `json:"removed_volumes,omitempty"`
+	Skipped        []string `json:"skipped,omitempty"`
+}
+
+type HistoryEntry struct {
+	Service   string        `json:"service"`
+	Outcome   string        `json:"outcome"`
+	FromID    string        `json:"from_id,omitempty"`
+	ToID      string        `json:"to_id,omitempty"`
+	Message   string        `json:"message"`
+	Cleanup   CleanupResult `json:"cleanup"`
+	CreatedAt time.Time     `json:"created_at"`
+}
+
 type Status struct {
 	State         string          `json:"state"`
 	ActiveService string          `json:"active_service,omitempty"`
 	Message       string          `json:"message"`
 	Services      []ServiceStatus `json:"services"`
+	History       []HistoryEntry  `json:"history,omitempty"`
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
@@ -236,6 +253,10 @@ func (m *Manager) update(service string) {
 		return
 	}
 	if candidateID == oldID {
+		m.recordHistory(HistoryEntry{
+			Service: service, Outcome: "no_change", FromID: oldID, ToID: candidateID,
+			Message: "Der Dienst verwendet bereits das aktuelle Image.", CreatedAt: time.Now().UTC(),
+		})
 		m.finish(service, currentImage, oldID, candidateID, false, "Der Dienst verwendet bereits das aktuelle Image.")
 		return
 	}
@@ -254,13 +275,108 @@ func (m *Manager) update(service string) {
 		m.setProgress(service, "Gesundheitsprüfung fehlgeschlagen – vorheriges Image wird wiederhergestellt.")
 		rollbackErr := m.rollback(ctx, spec, oldID, backupDir)
 		if rollbackErr != nil {
+			m.recordHistory(HistoryEntry{
+				Service: service, Outcome: "failed", FromID: oldID, ToID: candidateID,
+				Message: fmt.Sprintf("Update und Rollback fehlgeschlagen: %v", rollbackErr), CreatedAt: time.Now().UTC(),
+			})
 			m.fail(service, fmt.Errorf("update failed: %v; rollback failed: %w", updateErr, rollbackErr))
 			return
 		}
+		m.recordHistory(HistoryEntry{
+			Service: service, Outcome: "rolled_back", FromID: oldID, ToID: candidateID,
+			Message: "Das fehlerhafte Update wurde sicher zurückgesetzt.", CreatedAt: time.Now().UTC(),
+		})
 		m.fail(service, fmt.Errorf("update failed and was rolled back safely: %w", updateErr))
 		return
 	}
+	entry := HistoryEntry{
+		Service: service, Outcome: "success", FromID: oldID, ToID: candidateID,
+		Message: spec.DisplayName + " wurde aktualisiert und erfolgreich geprüft.", CreatedAt: time.Now().UTC(),
+	}
+	m.recordHistory(entry)
+	cleanup := m.cleanupAfterSuccess(ctx, service)
+	m.attachCleanup(cleanup)
 	m.finish(service, spec.TargetImage, candidateID, candidateID, false, spec.DisplayName+" wurde aktualisiert und erfolgreich geprüft.")
+}
+
+func (m *Manager) recordHistory(entry HistoryEntry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.status.History = append([]HistoryEntry{entry}, m.status.History...)
+	if len(m.status.History) > 50 {
+		m.status.History = m.status.History[:50]
+	}
+	_ = m.persistLocked()
+}
+
+func (m *Manager) attachCleanup(cleanup CleanupResult) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.status.History) > 0 {
+		m.status.History[0].Cleanup = cleanup
+	}
+	_ = m.persistLocked()
+}
+
+func (m *Manager) cleanupAfterSuccess(ctx context.Context, service string) CleanupResult {
+	result := CleanupResult{}
+	seen := map[string]bool{}
+	alreadyRemoved := map[string]bool{}
+	var ids []string
+	m.mu.RLock()
+	for _, entry := range m.status.History {
+		for _, id := range entry.Cleanup.RemovedImages {
+			alreadyRemoved[id] = true
+		}
+	}
+	for index := len(m.status.History) - 1; index >= 0; index-- {
+		entry := m.status.History[index]
+		if entry.Service != service || entry.Outcome != "success" {
+			continue
+		}
+		for _, id := range []string{entry.FromID, entry.ToID} {
+			if id != "" && !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	m.mu.RUnlock()
+	if len(ids) > 2 {
+		for _, id := range ids[:len(ids)-2] {
+			if alreadyRemoved[id] {
+				continue
+			}
+			containers, err := m.run(ctx, "ps", "-a", "--filter", "ancestor="+id, "--format", "{{.ID}}")
+			if err != nil || strings.TrimSpace(string(containers)) != "" {
+				result.Skipped = append(result.Skipped, id)
+				continue
+			}
+			if _, err := m.run(ctx, "image", "rm", id); err != nil {
+				result.Skipped = append(result.Skipped, id)
+			} else {
+				result.RemovedImages = append(result.RemovedImages, id)
+			}
+		}
+	}
+	volumes, err := m.run(ctx, "volume", "ls", "--quiet", "--filter", "label=io.rootguard.cleanup=true")
+	if err != nil {
+		result.Skipped = append(result.Skipped, "volume-scan")
+		return result
+	}
+	for _, volume := range strings.Fields(string(volumes)) {
+		containers, checkErr := m.run(ctx, "ps", "-a", "--filter", "volume="+volume, "--format", "{{.ID}}")
+		if checkErr != nil || strings.TrimSpace(string(containers)) != "" {
+			result.Skipped = append(result.Skipped, "volume:"+volume)
+			continue
+		}
+		if _, removeErr := m.run(ctx, "volume", "rm", volume); removeErr != nil {
+			result.Skipped = append(result.Skipped, "volume:"+volume)
+		} else {
+			result.RemovedVolumes = append(result.RemovedVolumes, volume)
+		}
+	}
+	return result
 }
 
 func (m *Manager) rollback(ctx context.Context, spec ServiceSpec, oldID, backupDir string) error {
@@ -514,6 +630,7 @@ func writeAtomic(path string, data []byte) error {
 func cloneStatus(status Status) Status {
 	clone := status
 	clone.Services = append([]ServiceStatus(nil), status.Services...)
+	clone.History = append([]HistoryEntry(nil), status.History...)
 	return clone
 }
 
