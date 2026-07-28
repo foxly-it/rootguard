@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -224,6 +224,12 @@ Trustworthy Stack Center and production visibility:
 - typed, bilingual AIO installation diagnostics for invalid host addresses,
   missing Compose, occupied DNS ports, failed image pulls, and interrupted
   deployment recovery; raw technical details remain available on demand.
+- guarded public-alpha clean-install verifier shared by Docker Desktop and
+  native GitHub-hosted Linux `amd64`/`arm64` jobs; it refuses existing
+  RootGuard resources, validates login, AIO deployment, recursive DNS and
+  DNSSEC rejection, then removes only resources created by the test. Docker
+  Desktop `arm64` and both native Linux jobs passed on 2026-07-28; the Linux
+  evidence is Actions run `30353823582`.
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

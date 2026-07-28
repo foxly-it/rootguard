@@ -66,7 +66,8 @@ reproducible problem without relying on local `dev` images.
 - [x] Publish versioned `amd64` and `arm64` images to GHCR
 - [x] Replace release `latest` references with readable version tags plus
       recorded immutable multi-architecture manifest digests
-- [ ] Run clean-install tests on Linux `amd64`, Linux `arm64`, and Docker Desktop
+- [x] Run clean-install tests on Linux `amd64`, Linux `arm64`, and Docker Desktop
+      ([issue #39](https://github.com/foxly-it/rootguard/issues/39))
 - [x] Test an actual paired Core/WebApp update and a deliberately failed rollback
 - [x] Add typed diagnostics for occupied DNS ports, invalid host addresses,
       missing Compose, failed pulls, and interrupted deployment recovery

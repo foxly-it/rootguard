@@ -95,6 +95,7 @@ diesem Einstieg ausgelagert:
 - [Roadmap bis 1.0](ROADMAP.md)
 - [Release Notes v0.1.0-alpha.2](RELEASE_NOTES_0.1.0-alpha.2.md)
 - [Image-Digests und Aufbewahrungsregeln](docs/image-retention-policy.md)
+- [Geprüfte Installationsplattformen](docs/platform-support.md)
 
 ## Entwicklung
 
