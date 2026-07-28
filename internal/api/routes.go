@@ -285,10 +285,16 @@ func dashboardHandler(w http.ResponseWriter, _ *http.Request) {
 }
 
 type serviceResponse struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
+	Name         string   `json:"name"`
+	DisplayName  string   `json:"displayName"`
+	Description  string   `json:"description"`
+	Status       string   `json:"status"`
+	Health       string   `json:"health"`
+	Image        string   `json:"image,omitempty"`
+	ImageID      string   `json:"imageId,omitempty"`
+	StartedAt    string   `json:"startedAt,omitempty"`
+	RestartCount int      `json:"restartCount"`
+	Ports        []string `json:"ports,omitempty"`
 }
 
 func servicesHandler(w http.ResponseWriter, _ *http.Request) {
@@ -297,12 +303,18 @@ func servicesHandler(w http.ResponseWriter, _ *http.Request) {
 		{
 			Name: "adguard", DisplayName: "AdGuard Home",
 			Description: "DNS filtering, blocklists and client policies",
-			Status:      runningStatus(status.AdGuard.Running),
+			Status:      runningStatus(status.AdGuard.Running), Health: status.AdGuard.Health,
+			Image: status.AdGuard.Image, ImageID: status.AdGuard.ImageID,
+			StartedAt: status.AdGuard.StartedAt, RestartCount: status.AdGuard.RestartCount,
+			Ports: status.AdGuard.Ports,
 		},
 		{
 			Name: "unbound", DisplayName: "Unbound DNS",
 			Description: "Recursive resolver with DNSSEC validation",
-			Status:      runningStatus(status.Unbound.Running),
+			Status:      runningStatus(status.Unbound.Running), Health: status.Unbound.Health,
+			Image: status.Unbound.Image, ImageID: status.Unbound.ImageID,
+			StartedAt: status.Unbound.StartedAt, RestartCount: status.Unbound.RestartCount,
+			Ports: status.Unbound.Ports,
 		},
 	})
 }
