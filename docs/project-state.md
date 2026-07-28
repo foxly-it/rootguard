@@ -158,6 +158,11 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   service: plain-language state guidance, health result, image version and
   immutable ID, start time, restart count, and actually published ports.
   Raw daemon output remains outside this endpoint.
+- Container health reporting distinguishes an absent Docker healthcheck from
+  a genuinely unknown inspection result. The official AdGuard Home image
+  therefore appears as a normally running service without a configured Docker
+  healthcheck instead of producing a misleading operator warning; starting,
+  unhealthy, stopped, and indeterminate states retain their warning severity.
 - Service diagnostics are loaded only after an explicit user action and are
   limited to 100 lines from the previous 30 minutes and 64 KiB. Core removes
   control characters and redacts common authorization, token, password,
