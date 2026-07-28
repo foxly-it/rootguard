@@ -376,6 +376,7 @@ function runtimeHeadline(service: ServiceInfo | undefined, t: Translate) {
   if (!service || service.status !== "running") return t("stack.runtimeStoppedTitle");
   if (service.health === "unhealthy") return t("stack.runtimeUnhealthyTitle");
   if (service.health === "starting") return t("stack.runtimeStartingTitle");
+  if (service.health === "not_configured") return t("stack.runtimeNoHealthcheckTitle");
   if (service.health === "unknown") return t("stack.runtimeUnknownTitle");
   return t("stack.runtimeHealthyTitle");
 }
@@ -384,6 +385,7 @@ function runtimeGuidance(service: ServiceInfo | undefined, t: Translate) {
   if (!service || service.status !== "running") return t("stack.runtimeStoppedText");
   if (service.health === "unhealthy") return t("stack.runtimeUnhealthyText");
   if (service.health === "starting") return t("stack.runtimeStartingText");
+  if (service.health === "not_configured") return t("stack.runtimeNoHealthcheckText");
   if (service.health === "unknown") return t("stack.runtimeUnknownText");
   return t("stack.runtimeHealthyText");
 }

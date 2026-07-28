@@ -56,7 +56,7 @@ export interface ServiceInfo {
   displayName: string;
   description: string;
   status: "running" | "stopped";
-  health: "healthy" | "unhealthy" | "starting" | "unknown";
+  health: "healthy" | "unhealthy" | "starting" | "not_configured" | "unknown";
   image?: string;
   imageId?: string;
   startedAt?: string;
