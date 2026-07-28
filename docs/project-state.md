@@ -227,7 +227,9 @@ Trustworthy Stack Center and production visibility:
 - guarded public-alpha clean-install verifier shared by Docker Desktop and
   native GitHub-hosted Linux `amd64`/`arm64` jobs; it refuses existing
   RootGuard resources, validates login, AIO deployment, recursive DNS and
-  DNSSEC rejection, then removes only resources created by the test.
+  DNSSEC rejection, then removes only resources created by the test. Docker
+  Desktop `arm64` and both native Linux jobs passed on 2026-07-28; the Linux
+  evidence is Actions run `30353823582`.
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
