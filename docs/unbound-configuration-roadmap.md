@@ -61,12 +61,24 @@ in the preview and zone card. RFC1918 and other protected private-address
 answers stay blocked by default and require a separate, visible zone-scoped
 opt-in, preserving rebinding protection everywhere else.
 
-### Private domains and reverse DNS
+### Private domains and reverse DNS — delivered
 
-- Guided private-domain list
-- RFC1918 reverse zones with clear NXDOMAIN versus transparent behavior
-- Local PTR records derived from guided A/AAAA entries where unambiguous
+- Guided, canonical private-domain list with duplicate and ownership checks
+- Explicit RFC1918 reverse-zone policy per network: safe NXDOMAIN or transparent
+  fallback with a leakage warning
+- Optional local PTR records derived from guided A/AAAA entries only when the
+  address is unambiguous across all guided zones
+- Typed preview, effective `unbound-checkconf`, version history, activation,
+  rollback, and expert-setting conflict detection
 - Directives: `private-domain`, `local-zone`, `local-data-ptr`
+
+RootGuard now owns the three standard RFC1918 ranges as typed settings. New and
+migrated installations default to NXDOMAIN; transparent fallback requires a
+separate choice for each range. The local-zone assistant offers PTR generation
+for A and AAAA records, suppresses ambiguous duplicates, and keeps the generated
+reverse data in the same visible, reversible configuration lifecycle.
+AdGuard Home's separate private reverse-resolver routing remains part of the
+later cross-service integration instead of being reimplemented in RootGuard.
 
 ### Client access networks
 
