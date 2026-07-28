@@ -1,0 +1,62 @@
+name: Public alpha clean install
+
+on:
+  pull_request:
+    paths:
+      - "compose.alpha.yaml"
+      - ".env.alpha.example"
+      - "scripts/verify-clean-install.sh"
+      - ".github/workflows/clean-install.yml"
+  push:
+    branches: [main]
+    paths:
+      - "compose.alpha.yaml"
+      - ".env.alpha.example"
+      - "scripts/verify-clean-install.sh"
+      - ".github/workflows/clean-install.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clean-install-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install DNS test client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes dnsutils
+
+      - name: Verify clean installation
+        env:
+          ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
+        run: ./scripts/verify-clean-install.sh
+
+      - name: Record platform evidence
+        if: always()
+        run: |
+          {
+            echo "### Linux ${{ matrix.arch }}"
+            echo
+            echo "- Runner: \`${{ matrix.runner }}\`"
+            echo "- Docker architecture: \`$(docker info --format '{{.Architecture}}')\`"
+            echo "- Docker Engine: \`$(docker version --format '{{.Server.Version}}')\`"
+            echo "- Docker Compose: \`$(docker compose version --short)\`"
+          } >> "$GITHUB_STEP_SUMMARY"

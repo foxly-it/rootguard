@@ -63,6 +63,7 @@
           <strong data-de="Inhalt" data-en="Contents">Inhalt</strong>
           <a href="#overview" data-de="Überblick" data-en="Overview">Überblick</a>
           <a href="#requirements" data-de="Voraussetzungen" data-en="Requirements">Voraussetzungen</a>
+          <a href="#platforms" data-de="Plattformen" data-en="Platforms">Plattformen</a>
           <a href="#quickstart" data-de="Installation" data-en="Installation">Installation</a>
           <a href="#first-setup" data-de="Erste Einrichtung" data-en="First setup">Erste Einrichtung</a>
           <a href="#router" data-de="Router &amp; Clients" data-en="Router &amp; clients">Router &amp; Clients</a>
@@ -101,6 +102,18 @@
               <li data-de="Ein starkes Admin-Passwort und ein zufälliges internes API-Token" data-en="A strong admin password and a random internal API token">Ein starkes Admin-Passwort und ein zufälliges internes API-Token</li>
             </ul>
             <div class="manual-callout warning"><b data-de="Alpha-Hinweis" data-en="Alpha notice">Alpha-Hinweis</b><span data-de="RootGuard ist noch nicht für den Einsatz in Produktivumgebungen freigegeben. Verwende Backups und halte einen alternativen DNS-Weg bereit." data-en="RootGuard is not yet approved for production environments. Keep backups and an alternative DNS path available.">RootGuard ist noch nicht für den Einsatz in Produktivumgebungen freigegeben. Verwende Backups und halte einen alternativen DNS-Weg bereit.</span></div>
+          </section>
+
+          <section id="platforms" class="manual-section">
+            <p class="eyebrow" data-de="02A · Plattformnachweis" data-en="02A · Platform verification">02A · Plattformnachweis</p>
+            <h2 data-de="Saubere Installation, gleiche Prüfung" data-en="Clean install, same verification">Saubere Installation, gleiche Prüfung</h2>
+            <p data-de="Die öffentliche Alpha wird mit demselben geschützten Ende-zu-Ende-Test auf nativen Linux-amd64-/arm64-Runnern und Docker Desktop geprüft. Der Test umfasst Login, AIO-Bereitstellung, rekursive DNS-Auflösung und die Ablehnung einer ungültigen DNSSEC-Kette." data-en="The public alpha is verified with the same guarded end-to-end test on native Linux amd64/arm64 runners and Docker Desktop. It covers login, AIO deployment, recursive DNS resolution, and rejection of an invalid DNSSEC chain.">Die öffentliche Alpha wird mit demselben geschützten Ende-zu-Ende-Test auf nativen Linux-amd64-/arm64-Runnern und Docker Desktop geprüft. Der Test umfasst Login, AIO-Bereitstellung, rekursive DNS-Auflösung und die Ablehnung einer ungültigen DNSSEC-Kette.</p>
+            <div class="manual-cards">
+              <article><b>Linux amd64</b><span data-de="Nativer automatischer GitHub-Runner" data-en="Native automated GitHub runner">Nativer automatischer GitHub-Runner</span></article>
+              <article><b>Linux arm64</b><span data-de="Nativer automatischer GitHub-Runner" data-en="Native automated GitHub runner">Nativer automatischer GitHub-Runner</span></article>
+              <article><b>Docker Desktop</b><span data-de="Apple Silicon / arm64 am 28.07.2026 erfolgreich" data-en="Apple Silicon / arm64 passed on 2026-07-28">Apple Silicon / arm64 am 28.07.2026 erfolgreich</span></article>
+            </div>
+            <p><a href="https://github.com/foxly-it/rootguard/blob/main/docs/platform-support.md" target="_blank" rel="noopener noreferrer" data-de="Prüfmatrix und sicheren Wiederholungstest öffnen ↗" data-en="Open verification matrix and safe repeatable test ↗">Prüfmatrix und sicheren Wiederholungstest öffnen ↗</a></p>
           </section>
 
           <section id="quickstart" class="manual-section">
