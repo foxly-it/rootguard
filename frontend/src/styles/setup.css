@@ -551,6 +551,18 @@
   line-height: 1.45;
 }
 
+.check-row > div {
+  min-width: 0;
+}
+
+.check-row small {
+  display: block;
+  margin-top: 4px;
+  color: #f5b8b8;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
 .step-row {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -611,6 +623,104 @@
   background: rgba(239, 68, 68, 0.08);
 }
 
+.setup-diagnostic {
+  margin-top: 18px;
+  padding: 19px;
+  color: #dbe8f5;
+  border: 1px solid rgba(251, 146, 60, 0.25);
+  border-radius: 13px;
+  background: linear-gradient(135deg, rgba(124, 45, 18, 0.16), rgba(3, 12, 22, 0.72));
+  animation: rg-row-enter 0.3s ease both;
+}
+
+.diagnostic-heading {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.diagnostic-heading > span {
+  display: grid;
+  place-items: center;
+  width: 35px;
+  height: 35px;
+  color: #fdba74;
+  border-radius: 9px;
+  background: rgba(251, 146, 60, 0.11);
+}
+
+.diagnostic-heading small,
+.diagnostic-heading strong {
+  display: block;
+}
+
+.diagnostic-heading small {
+  margin-bottom: 3px;
+  color: #fdba74;
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.diagnostic-heading code {
+  padding: 5px 7px;
+  color: #91a8bf;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  font-size: 0.64rem;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.diagnostic-action {
+  margin: 16px 0 0 47px;
+  padding-left: 13px;
+  border-left: 2px solid rgba(251, 146, 60, 0.35);
+}
+
+.diagnostic-action b {
+  color: #f8c99d;
+  font-size: 0.72rem;
+}
+
+.diagnostic-action p {
+  margin: 4px 0 0;
+  color: #9eb2c7;
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.diagnostic-retry {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 0 47px;
+  color: #93c5fd;
+  font-size: 0.7rem;
+}
+
+.setup-diagnostic details {
+  margin: 14px 0 0 47px;
+  color: #849bb2;
+  font-size: 0.7rem;
+}
+
+.setup-diagnostic summary {
+  cursor: pointer;
+}
+
+.setup-diagnostic pre {
+  max-height: 180px;
+  margin: 9px 0 0;
+  padding: 11px;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: #9eb2c7;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
 @keyframes setup-signal {
   0% { transform: translateX(-110%); opacity: 0; }
   25%, 70% { opacity: 1; }
@@ -652,6 +762,18 @@
   }
   .step-status {
     grid-column: 2;
+  }
+  .diagnostic-heading {
+    grid-template-columns: auto 1fr;
+  }
+  .diagnostic-heading code {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .diagnostic-action,
+  .diagnostic-retry,
+  .setup-diagnostic details {
+    margin-left: 0;
   }
 }
 

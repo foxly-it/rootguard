@@ -208,8 +208,11 @@ type InstallationConfig struct {
 
 type InstallationCheck struct {
 	ID      string `json:"id"`
+	Code    string `json:"code"`
 	OK      bool   `json:"ok"`
 	Message string `json:"message"`
+	Detail  string `json:"detail,omitempty"`
+	Action  string `json:"action,omitempty"`
 }
 
 type InstallationPreflight struct {
@@ -224,12 +227,22 @@ type InstallationStep struct {
 	Message string `json:"message"`
 }
 
+type InstallationDiagnostic struct {
+	Code      string `json:"code"`
+	Phase     string `json:"phase"`
+	Message   string `json:"message"`
+	Detail    string `json:"detail,omitempty"`
+	Action    string `json:"action"`
+	Retryable bool   `json:"retryable"`
+}
+
 type InstallationStatus struct {
-	State     string              `json:"state"`
-	Config    *InstallationConfig `json:"config,omitempty"`
-	Steps     []InstallationStep  `json:"steps"`
-	Error     string              `json:"error,omitempty"`
-	UpdatedAt time.Time           `json:"updated_at"`
+	State      string                  `json:"state"`
+	Config     *InstallationConfig     `json:"config,omitempty"`
+	Steps      []InstallationStep      `json:"steps"`
+	Error      string                  `json:"error,omitempty"`
+	Diagnostic *InstallationDiagnostic `json:"diagnostic,omitempty"`
+	UpdatedAt  time.Time               `json:"updated_at"`
 }
 
 type UpdateServiceStatus struct {

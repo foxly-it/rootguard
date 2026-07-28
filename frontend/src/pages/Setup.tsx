@@ -4,12 +4,13 @@ import {
   fetchInstallationStatus,
   preflightInstallation,
   type InstallationConfig,
+  type InstallationDiagnostic,
   type InstallationPreflight,
   type InstallationStatus,
 } from "../api/client";
 import "../styles/setup.css";
 import { useI18n } from "../i18n";
-import { ArrowRight, Check, Filter, Network, ServerCog, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Filter, Network, RotateCcw, ServerCog, ShieldCheck } from "lucide-react";
 
 const defaultConfig: InstallationConfig = {
   dns_bind_address: "0.0.0.0",
@@ -182,7 +183,12 @@ export default function Setup() {
             {preflight.checks.map((check) => (
               <div className={`check-row ${check.ok ? "ok" : "failed"}`} key={check.id}>
                 <span aria-hidden="true">{check.ok ? "✓" : "!"}</span>
-                <p>{t(`setup.check.${check.id}.${check.ok ? "ok" : "failed"}`)}</p>
+                <div>
+                  <p>{diagnosticText(t, check.code, "message", check.message, check.detail)}</p>
+                  {!check.ok && check.action && (
+                    <small>{diagnosticText(t, check.code, "action", check.action, check.detail)}</small>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -227,7 +233,9 @@ export default function Setup() {
         </section>
       )}
 
-      {(error || status?.error) && (
+      {status?.diagnostic && !error && <DiagnosticPanel diagnostic={status.diagnostic} />}
+
+      {(error || (status?.error && !status.diagnostic)) && (
         <div className="setup-error" role="alert">
           <strong>{t("setup.failed")}</strong>
           <span>{error || status?.error}</span>
@@ -248,6 +256,50 @@ function BlueprintNode({ icon, label, detail }: { icon: React.ReactNode; label: 
 
 function ProgressStep({ number, label, active, complete }: { number: string; label: string; active: boolean; complete?: boolean }) {
   return <div className={`${active ? "active" : ""} ${complete ? "complete" : ""}`}><i>{complete ? <Check size={13} /> : number}</i><strong>{label}</strong></div>;
+}
+
+function DiagnosticPanel({ diagnostic }: { diagnostic: InstallationDiagnostic }) {
+  const { t } = useI18n();
+  return (
+    <section className="setup-diagnostic" role="alert">
+      <div className="diagnostic-heading">
+        <span><AlertTriangle size={18} /></span>
+        <div>
+          <small>{t("setup.diagnostic.title")}</small>
+          <strong>{diagnosticText(t, diagnostic.code, "message", diagnostic.message)}</strong>
+        </div>
+        <code>{diagnostic.code}</code>
+      </div>
+      <div className="diagnostic-action">
+        <b>{t("setup.diagnostic.action")}</b>
+        <p>{diagnosticText(t, diagnostic.code, "action", diagnostic.action)}</p>
+      </div>
+      {diagnostic.retryable && (
+        <div className="diagnostic-retry"><RotateCcw size={14} /> {t("setup.diagnostic.retryable")}</div>
+      )}
+      {diagnostic.detail && (
+        <details>
+          <summary>{t("setup.diagnostic.technical")}</summary>
+          <pre>{diagnostic.detail}</pre>
+        </details>
+      )}
+    </section>
+  );
+}
+
+function diagnosticText(
+  t: (key: string, values?: Record<string, string | number>) => string,
+  code: string,
+  field: "message" | "action",
+  fallback: string,
+  detail = ""
+): string {
+  if (!code) {
+    return fallback;
+  }
+  const key = `setup.diagnostic.${code}.${field}`;
+  const translated = t(key, { detail: detail ? ` (${detail})` : "" });
+  return translated === key ? fallback : translated;
 }
 
 function messageFrom(cause: unknown, fallback: string): string {

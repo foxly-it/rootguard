@@ -327,8 +327,11 @@ export interface InstallationConfig {
 
 export interface InstallationCheck {
   id: string;
+  code: string;
   ok: boolean;
   message: string;
+  detail?: string;
+  action?: string;
 }
 
 export interface InstallationPreflight {
@@ -348,7 +351,17 @@ export interface InstallationStatus {
   config?: InstallationConfig;
   steps: InstallationStep[];
   error?: string;
+  diagnostic?: InstallationDiagnostic;
   updated_at: string;
+}
+
+export interface InstallationDiagnostic {
+  code: string;
+  phase: string;
+  message: string;
+  detail?: string;
+  action: string;
+  retryable: boolean;
 }
 
 export async function fetchInstallationStatus(): Promise<InstallationStatus> {
