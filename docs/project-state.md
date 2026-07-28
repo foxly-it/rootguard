@@ -152,6 +152,10 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   persists status outside either target, verifies exact image IDs and both
   health endpoints, and pins both previous images if either check fails.
   Browser requests cannot supply images, services, or Compose arguments.
+- Updater source and history live in the independently versioned
+  `foxly-it/rootguard-updater` component repository. Its own CI runs tests,
+  vetting, and `amd64`/`arm64` image builds; the main repository pins the exact
+  reviewed component commit as a Git submodule.
 - Bilingual project website deployed with enforced HTTPS at
   `https://rootguard.foxly.de`.
 - GitHub-backed project overview on the website with current version, open
@@ -165,8 +169,8 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Public alpha `v0.1.0-alpha.2` is published around a single
   `compose.alpha.yaml` that
   contains no local build contexts and pulls one named RootGuard version for
-  Core, WebApp, Updater, and Unbound. Tag-driven workflows publish `amd64` and
-  `arm64` images from the repository that owns each GHCR package, after which
+  Core, WebApp, Updater, and Unbound. Component-owned tag workflows publish
+  `amd64` and `arm64` images, after which
   the main release workflow smoke-tests the published Compose through the real
   guided AIO installation, DNS resolution, and DNSSEC rejection path.
 - Dedicated bilingual documentation at `/docs.html` covering installation,

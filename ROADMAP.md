@@ -60,7 +60,7 @@ reproducible problem without relying on local `dev` images.
 
 ### Delivered release gate
 
-- [ ] Move Updater into a versioned component repository and pin it from the
+- [x] Move Updater into a versioned component repository and pin it from the
       main repository
 - [x] Commit clean component revisions and a reproducible root Compose model
 - [x] Publish versioned `amd64` and `arm64` images to GHCR
