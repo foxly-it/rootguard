@@ -98,6 +98,39 @@ func TestControlPlaneUpdateRollsBackBothImagesWhenHealthFails(t *testing.T) {
 	}
 }
 
+func TestControlPlaneCleanupNeverUsesGlobalPrune(t *testing.T) {
+	var commands []string
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		command := strings.Join(arguments, " ")
+		commands = append(commands, command)
+		switch command {
+		case "ps -a --filter ancestor=sha256:core-old --format {{.ID}}":
+			return nil, nil
+		case "image rm sha256:core-old":
+			return []byte("removed"), nil
+		case "volume ls --quiet --filter label=io.rootguard.cleanup=true":
+			return nil, nil
+		default:
+			return nil, nil
+		}
+	}
+	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", testSpecs(), run)
+	manager.status.History = []historyEntry{
+		{Outcome: "success", FromIDs: map[string]string{"core": "sha256:core-previous"}, ToIDs: map[string]string{"core": "sha256:core-current"}},
+		{Outcome: "success", FromIDs: map[string]string{"core": "sha256:core-old"}, ToIDs: map[string]string{"core": "sha256:core-previous"}},
+	}
+
+	result := manager.cleanupAfterSuccess(context.Background())
+	if strings.Join(result.RemovedImages, ",") != "sha256:core-old" {
+		t.Fatalf("unexpected cleanup result: %#v", result)
+	}
+	all := strings.Join(commands, "\n")
+	if strings.Contains(all, "sha256:core-previous") || strings.Contains(all, "sha256:core-current") ||
+		strings.Contains(all, "prune") {
+		t.Fatalf("cleanup touched a protected resource:\n%s", all)
+	}
+}
+
 func testSpecs() []serviceSpec {
 	return []serviceSpec{
 		{Name: "core", DisplayName: "Core", Container: "rootguard-core", TargetImage: "core:new", HealthURL: "http://core/health"},

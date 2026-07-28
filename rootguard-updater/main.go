@@ -44,10 +44,26 @@ type serviceStatus struct {
 	Error           string    `json:"error,omitempty"`
 }
 
+type cleanupResult struct {
+	RemovedImages  []string `json:"removed_images,omitempty"`
+	RemovedVolumes []string `json:"removed_volumes,omitempty"`
+	Skipped        []string `json:"skipped,omitempty"`
+}
+
+type historyEntry struct {
+	Outcome   string            `json:"outcome"`
+	FromIDs   map[string]string `json:"from_ids,omitempty"`
+	ToIDs     map[string]string `json:"to_ids,omitempty"`
+	Message   string            `json:"message"`
+	Cleanup   cleanupResult     `json:"cleanup"`
+	CreatedAt time.Time         `json:"created_at"`
+}
+
 type status struct {
 	State     string          `json:"state"`
 	Message   string          `json:"message"`
 	Services  []serviceStatus `json:"services"`
+	History   []historyEntry  `json:"history,omitempty"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
@@ -276,6 +292,10 @@ func (m *manager) update() {
 		changed = changed || candidateID != oldImages[name]
 	}
 	if !changed {
+		m.recordHistory(historyEntry{
+			Outcome: "no_change", FromIDs: oldImages, ToIDs: candidateIDs,
+			Message: "Core und WebApp verwenden bereits die aktuellen Images.", CreatedAt: time.Now().UTC(),
+		})
 		m.finish(candidateImages, candidateIDs, "Core und WebApp verwenden bereits die aktuellen Images.")
 		return
 	}
@@ -290,16 +310,116 @@ func (m *manager) update() {
 		updateErr = m.verifyWithRetry(ctx, candidateIDs)
 	}
 	if updateErr == nil {
+		m.recordHistory(historyEntry{
+			Outcome: "success", FromIDs: oldImages, ToIDs: candidateIDs,
+			Message: "Core und WebApp wurden aktualisiert und erfolgreich geprüft.", CreatedAt: time.Now().UTC(),
+		})
+		cleanup := m.cleanupAfterSuccess(ctx)
+		m.attachCleanup(cleanup)
 		m.finish(candidateImages, candidateIDs, "Core und WebApp wurden aktualisiert und erfolgreich geprüft.")
 		return
 	}
 
 	m.progress("Prüfung fehlgeschlagen – beide Control-Plane-Images werden zurückgesetzt.")
 	if rollbackErr := m.rollback(ctx, oldImages); rollbackErr != nil {
+		m.recordHistory(historyEntry{
+			Outcome: "failed", FromIDs: oldImages, ToIDs: candidateIDs,
+			Message: fmt.Sprintf("Update und Rollback fehlgeschlagen: %v", rollbackErr), CreatedAt: time.Now().UTC(),
+		})
 		m.fail(fmt.Errorf("control-plane update failed: %v; rollback failed: %w", updateErr, rollbackErr))
 		return
 	}
+	m.recordHistory(historyEntry{
+		Outcome: "rolled_back", FromIDs: oldImages, ToIDs: candidateIDs,
+		Message: "Das fehlerhafte Control-Plane-Update wurde sicher zurückgesetzt.", CreatedAt: time.Now().UTC(),
+	})
 	m.fail(fmt.Errorf("control-plane update failed and was rolled back safely: %w", updateErr))
+}
+
+func (m *manager) recordHistory(entry historyEntry) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.status.History = append([]historyEntry{entry}, m.status.History...)
+	if len(m.status.History) > 50 {
+		m.status.History = m.status.History[:50]
+	}
+	_ = m.persistLocked()
+}
+
+func (m *manager) attachCleanup(cleanup cleanupResult) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.status.History) > 0 {
+		m.status.History[0].Cleanup = cleanup
+	}
+	_ = m.persistLocked()
+}
+
+func (m *manager) cleanupAfterSuccess(ctx context.Context) cleanupResult {
+	result := cleanupResult{}
+	alreadyRemoved := map[string]bool{}
+	m.mu.RLock()
+	for _, entry := range m.status.History {
+		for _, id := range entry.Cleanup.RemovedImages {
+			alreadyRemoved[id] = true
+		}
+	}
+	m.mu.RUnlock()
+	for _, spec := range m.specs {
+		seen := map[string]bool{}
+		var ids []string
+		m.mu.RLock()
+		for index := len(m.status.History) - 1; index >= 0; index-- {
+			entry := m.status.History[index]
+			if entry.Outcome != "success" {
+				continue
+			}
+			for _, id := range []string{entry.FromIDs[spec.Name], entry.ToIDs[spec.Name]} {
+				if id != "" && !seen[id] {
+					seen[id] = true
+					ids = append(ids, id)
+				}
+			}
+		}
+		m.mu.RUnlock()
+		if len(ids) <= 2 {
+			continue
+		}
+		for _, id := range ids[:len(ids)-2] {
+			if alreadyRemoved[id] {
+				continue
+			}
+			containers, err := m.run(ctx, "ps", "-a", "--filter", "ancestor="+id, "--format", "{{.ID}}")
+			if err != nil || strings.TrimSpace(string(containers)) != "" {
+				result.Skipped = append(result.Skipped, id)
+				continue
+			}
+			if _, err := m.run(ctx, "image", "rm", id); err != nil {
+				result.Skipped = append(result.Skipped, id)
+			} else {
+				result.RemovedImages = append(result.RemovedImages, id)
+				alreadyRemoved[id] = true
+			}
+		}
+	}
+	volumes, err := m.run(ctx, "volume", "ls", "--quiet", "--filter", "label=io.rootguard.cleanup=true")
+	if err != nil {
+		result.Skipped = append(result.Skipped, "volume-scan")
+		return result
+	}
+	for _, volume := range strings.Fields(string(volumes)) {
+		containers, checkErr := m.run(ctx, "ps", "-a", "--filter", "volume="+volume, "--format", "{{.ID}}")
+		if checkErr != nil || strings.TrimSpace(string(containers)) != "" {
+			result.Skipped = append(result.Skipped, "volume:"+volume)
+			continue
+		}
+		if _, removeErr := m.run(ctx, "volume", "rm", volume); removeErr != nil {
+			result.Skipped = append(result.Skipped, "volume:"+volume)
+		} else {
+			result.RemovedVolumes = append(result.RemovedVolumes, volume)
+		}
+	}
+	return result
 }
 
 func (m *manager) rollback(ctx context.Context, images map[string]string) error {
@@ -476,6 +596,7 @@ func (m *manager) reconcile() {
 func cloneStatus(value status) status {
 	result := value
 	result.Services = append([]serviceStatus(nil), value.Services...)
+	result.History = append([]historyEntry(nil), value.History...)
 	return result
 }
 
