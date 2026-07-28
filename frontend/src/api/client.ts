@@ -389,11 +389,30 @@ export interface UpdateServiceStatus {
   error?: string;
 }
 
+export interface UpdateCleanupResult {
+  removed_images?: string[];
+  removed_volumes?: string[];
+  skipped?: string[];
+}
+
+export interface UpdateHistoryEntry {
+  service?: string;
+  outcome: "success" | "rolled_back" | "failed" | "no_change";
+  from_id?: string;
+  to_id?: string;
+  from_ids?: Record<string, string>;
+  to_ids?: Record<string, string>;
+  message: string;
+  cleanup: UpdateCleanupResult;
+  created_at: string;
+}
+
 export interface UpdateStatus {
   state: "idle" | "checking" | "updating" | "failed";
   active_service?: string;
   message: string;
   services: UpdateServiceStatus[];
+  history?: UpdateHistoryEntry[];
   updated_at: string;
 }
 
@@ -417,6 +436,7 @@ export interface ControlPlaneUpdateStatus {
   state: "idle" | "checking" | "updating" | "failed";
   message: string;
   services: ControlPlaneUpdateServiceStatus[];
+  history?: UpdateHistoryEntry[];
   updated_at: string;
 }
 

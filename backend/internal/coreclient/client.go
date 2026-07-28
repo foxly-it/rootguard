@@ -244,11 +244,30 @@ type UpdateServiceStatus struct {
 	Error           string    `json:"error,omitempty"`
 }
 
+type UpdateCleanupResult struct {
+	RemovedImages  []string `json:"removed_images,omitempty"`
+	RemovedVolumes []string `json:"removed_volumes,omitempty"`
+	Skipped        []string `json:"skipped,omitempty"`
+}
+
+type UpdateHistoryEntry struct {
+	Service   string              `json:"service,omitempty"`
+	Outcome   string              `json:"outcome"`
+	FromID    string              `json:"from_id,omitempty"`
+	ToID      string              `json:"to_id,omitempty"`
+	FromIDs   map[string]string   `json:"from_ids,omitempty"`
+	ToIDs     map[string]string   `json:"to_ids,omitempty"`
+	Message   string              `json:"message"`
+	Cleanup   UpdateCleanupResult `json:"cleanup"`
+	CreatedAt time.Time           `json:"created_at"`
+}
+
 type UpdateStatus struct {
 	State         string                `json:"state"`
 	ActiveService string                `json:"active_service,omitempty"`
 	Message       string                `json:"message"`
 	Services      []UpdateServiceStatus `json:"services"`
+	History       []UpdateHistoryEntry  `json:"history,omitempty"`
 	UpdatedAt     time.Time             `json:"updated_at"`
 }
 
@@ -256,6 +275,7 @@ type ControlPlaneUpdateStatus struct {
 	State     string                `json:"state"`
 	Message   string                `json:"message"`
 	Services  []UpdateServiceStatus `json:"services"`
+	History   []UpdateHistoryEntry  `json:"history,omitempty"`
 	UpdatedAt time.Time             `json:"updated_at"`
 }
 

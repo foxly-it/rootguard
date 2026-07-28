@@ -27,6 +27,7 @@ import {
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
+  type UpdateHistoryEntry,
 } from "../api/client";
 import "../styles/stack.css";
 import { useI18n } from "../i18n";
@@ -72,6 +73,13 @@ export default function Stack() {
   const available = useMemo(
     () => (updates?.services.filter((service) => service.update_available).length ?? 0)
       + (controlPlane?.services.filter((service) => service.update_available).length ?? 0),
+    [updates, controlPlane],
+  );
+  const history = useMemo(
+    () => [
+      ...(updates?.history ?? []).map((entry) => ({ ...entry, scope: entry.service || "DNS" })),
+      ...(controlPlane?.history ?? []).map((entry) => ({ ...entry, scope: "Control Plane" })),
+    ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)).slice(0, 12),
     [updates, controlPlane],
   );
 
@@ -287,6 +295,23 @@ export default function Stack() {
         })}
       </section>
 
+      <section className="stack-history">
+        <div className="stack-history-heading">
+          <div>
+            <span className="stack-eyebrow">{t("stack.historyEyebrow")}</span>
+            <h2>{t("stack.historyTitle")}</h2>
+          </div>
+          <p>{t("stack.historyIntro")}</p>
+        </div>
+        {history.length ? (
+          <div className="stack-history-list">
+            {history.map((entry, index) => (
+              <HistoryRow key={`${entry.created_at}-${entry.scope}-${index}`} entry={entry} scope={entry.scope} formatDate={formatDate} t={t} />
+            ))}
+          </div>
+        ) : <p className="stack-history-empty">{t("stack.historyEmpty")}</p>}
+      </section>
+
       <section className="stack-safety">
         <ShieldCheck size={23} />
         <div>
@@ -295,6 +320,38 @@ export default function Stack() {
         </div>
       </section>
     </div>
+  );
+}
+
+function HistoryRow({
+  entry,
+  scope,
+  formatDate,
+  t,
+}: {
+  entry: UpdateHistoryEntry;
+  scope: string;
+  formatDate: (value: string) => string;
+  t: Translate;
+}) {
+  const removed = (entry.cleanup?.removed_images?.length ?? 0) + (entry.cleanup?.removed_volumes?.length ?? 0);
+  const skipped = entry.cleanup?.skipped?.length ?? 0;
+  return (
+    <article>
+      <span className={`stack-history-state ${entry.outcome}`}>{t(`stack.outcome.${entry.outcome}`)}</span>
+      <div>
+        <strong>{scope}</strong>
+        <p>{entry.message}</p>
+        <small>
+          {removed
+            ? t("stack.cleanupRemoved", { count: removed })
+            : skipped
+              ? t("stack.cleanupSkipped", { count: skipped })
+              : t("stack.cleanupNoop")}
+        </small>
+      </div>
+      <time dateTime={entry.created_at}>{formatDate(entry.created_at)}</time>
+    </article>
   );
 }
 
