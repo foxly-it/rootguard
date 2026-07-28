@@ -74,9 +74,6 @@ jobs:
           - component: core
             image: rootguard-core
             context: rootguard-core
-          - component: updater
-            image: rootguard-updater
-            context: rootguard-updater
     steps:
       - uses: actions/checkout@v5
         with:
@@ -127,6 +124,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify independently published component images
+        run: |
+          docker buildx imagetools inspect "$ROOTGUARD_WEBAPP_IMAGE"
+          docker buildx imagetools inspect "$ROOTGUARD_UPDATER_IMAGE"
+          docker buildx imagetools inspect "$ROOTGUARD_UNBOUND_IMAGE"
       - name: Start published control plane
         run: docker compose -f compose.alpha.yaml up -d
       - name: Install and verify the DNS stack

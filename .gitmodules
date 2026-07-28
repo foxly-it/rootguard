@@ -7,3 +7,6 @@
 [submodule "rootguard-unbound"]
 	path = rootguard-unbound
 	url = https://github.com/foxly-it/rootguard-unbound.git
+[submodule "rootguard-updater"]
+	path = rootguard-updater
+	url = https://github.com/foxly-it/rootguard-updater.git
