@@ -20,6 +20,8 @@
 .manual-section h2 { font-size: clamp(1.9rem, 3.5vw, 2.7rem); }
 .manual-section h3 { margin: 32px 0 8px; font-size: 1.15rem; }
 .manual-section > p:not(.eyebrow) { color: var(--muted); }
+.manual-section a:not(.button) { color: var(--green); font-weight: 700; text-decoration-color: rgba(114, 196, 131, .55); text-underline-offset: .2em; transition: color .18s ease, text-decoration-color .18s ease; }
+.manual-section a:not(.button):hover, .manual-section a:not(.button):focus-visible { color: var(--text); text-decoration-color: var(--green); }
 .manual-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 25px; }
 .manual-cards article { display: grid; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 17px; }
 .manual-cards span { color: var(--muted); font-size: .82rem; }
