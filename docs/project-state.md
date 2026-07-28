@@ -106,7 +106,8 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   A/AAAA records can generate `local-data-ptr` only when the address is unique
   across the complete guided draft. Core validation, expert conflict checks,
   preview, effective `unbound-checkconf`, history, activation, and rollback all
-  cover the new settings.
+  cover the new settings. AdGuard Home's own private reverse-resolver routing
+  remains an integration responsibility rather than duplicated resolver logic.
 - Unbound information architecture split into accessible Overview, Resolver,
   Local DNS, and Advanced tabs. The landing view now shows only configuration
   status, profile, versions, extensions, and on-demand diagnostics; cache

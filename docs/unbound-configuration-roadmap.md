@@ -77,6 +77,8 @@ migrated installations default to NXDOMAIN; transparent fallback requires a
 separate choice for each range. The local-zone assistant offers PTR generation
 for A and AAAA records, suppresses ambiguous duplicates, and keeps the generated
 reverse data in the same visible, reversible configuration lifecycle.
+AdGuard Home's separate private reverse-resolver routing remains part of the
+later cross-service integration instead of being reimplemented in RootGuard.
 
 ### Client access networks
 

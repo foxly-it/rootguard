@@ -183,7 +183,6 @@ jobs:
 
       - name: Verify private DNS and reverse-zone lifecycle
         run: |
-          set -x
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
           proposal="$(jq \
             '.private_domains = ["home.example."] |
@@ -211,7 +210,7 @@ jobs:
             --header 'Content-Type: application/json' --data "$payload" \
             http://127.0.0.1:18080/api/unbound/custom >/dev/null
           test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 router.lab.home.example A)" = "192.168.50.81"
-          test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 -x 192.168.50.81)" = "router.lab.home.example."
+          test "$(docker exec rootguard-unbound dig +short +time=5 +tries=2 @127.0.0.1 -p 5335 -x 192.168.50.81)" = "router.lab.home.example."
           versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
           baseline_id="$(jq -r '.[] |
             select(((.settings.private_domains // []) | length) == 0) |
