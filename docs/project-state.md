@@ -141,7 +141,12 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Stack Center runtime cards expose bounded Docker metadata for each DNS
   service: plain-language state guidance, health result, image version and
   immutable ID, start time, restart count, and actually published ports.
-  Raw daemon output and container logs remain outside this endpoint.
+  Raw daemon output remains outside this endpoint.
+- Service diagnostics are loaded only after an explicit user action and are
+  limited to 100 lines from the previous 30 minutes and 64 KiB. Core removes
+  control characters and redacts common authorization, token, password,
+  secret, and API-key patterns. The WebGUI explains the window and reminds
+  operators to review diagnostic text before sharing it.
 - Separate internal control-plane updater for allowlisted Core and WebApp
   images. It remains alive while both containers are replaced as a pair,
   persists status outside either target, verifies exact image IDs and both
@@ -201,7 +206,7 @@ Trustworthy Stack Center and production visibility:
 - completed data-plane updates and paired Core/WebApp updates through the
   separate helper; immutable release digests and retention policies remain;
 - safe start, stop, and restart controls with clear impact;
-- bounded, redacted service logs and actionable failure states.
+- bounded, redacted on-demand service logs and actionable failure states;
 - production-hardening and end-to-end CI for the new AIO installer, including
   immutable release image digests, host port conflict diagnostics, and failed
   deployment recovery.

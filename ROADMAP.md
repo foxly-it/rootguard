@@ -81,7 +81,7 @@ unchecked items are alpha hardening work and stay ahead of beta readiness.
       start time, restart count, and published ports for every managed service
 - [x] Translate Docker state into plain-language operator guidance without
       exposing raw daemon output
-- [ ] Add bounded, redacted service logs with explicit retention
+- [x] Add bounded, redacted service logs with explicit retention
 - [ ] Persist update and rollback history across Core restarts
 - [ ] Pin release images by recorded digest and document retention policy
 
