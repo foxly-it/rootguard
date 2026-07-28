@@ -61,6 +61,10 @@ docker build -t rootguard-updater:test .
 
 Changes to update, verification, rollback, image retention, or Docker command
 construction require tests that demonstrate the allowlist and failure path.
+`integration/run.sh` additionally builds real old, new, and deliberately
+unhealthy fixture images. It proves that the running Core/WebApp containers are
+updated as a pair and that both previous image IDs are restored when either
+candidate fails its HTTP health check.
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
