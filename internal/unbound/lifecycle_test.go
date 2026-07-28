@@ -30,6 +30,23 @@ func TestPreviewReportsChangesWithoutWriting(t *testing.T) {
 	}
 }
 
+func TestPreviewReportsPrivateDomainAndReversePolicyChanges(t *testing.T) {
+	manager := newTestManager(t)
+	settings := DefaultSettings()
+	settings.PrivateDomains = []string{"home.example."}
+	settings.ReverseZones = []ReverseZonePolicy{{Network: "192.168.0.0/16", Mode: reverseModeTransparent}}
+
+	preview, err := manager.Preview(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Changes) != 2 ||
+		preview.Changes[0].Field != "private_domains" ||
+		preview.Changes[1].Field != "reverse_zones" {
+		t.Fatalf("unexpected private network preview: %+v", preview)
+	}
+}
+
 func TestApplyCreatesHistoryAndRestore(t *testing.T) {
 	manager := newTestManager(t)
 	settings := DefaultSettings()

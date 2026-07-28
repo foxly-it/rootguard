@@ -72,7 +72,7 @@ func (m *Manager) Preview(settings Settings) (Preview, error) {
 }
 
 func settingsChanges(before, after Settings) []Change {
-	changes := make([]Change, 0, 7)
+	changes := make([]Change, 0, 9)
 	add := func(field string, oldValue, newValue any) {
 		oldText, newText := fmt.Sprint(oldValue), fmt.Sprint(newValue)
 		if oldText != newText {
@@ -92,7 +92,43 @@ func settingsChanges(before, after Settings) []Change {
 			After:  formatForwardZones(after.ForwardZones),
 		})
 	}
+	if !slicesEqual(before.PrivateDomains, after.PrivateDomains) {
+		changes = append(changes, Change{
+			Field: "private_domains", Before: formatJSON(before.PrivateDomains),
+			After: formatJSON(after.PrivateDomains),
+		})
+	}
+	if !reverseZonesEqual(before.ReverseZones, after.ReverseZones) {
+		changes = append(changes, Change{
+			Field: "reverse_zones", Before: formatJSON(before.ReverseZones),
+			After: formatJSON(after.ReverseZones),
+		})
+	}
 	return changes
+}
+
+func slicesEqual(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func reverseZonesEqual(left, right []ReverseZonePolicy) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func forwardZonesEqual(left, right []ForwardZone) bool {
@@ -109,6 +145,14 @@ func formatForwardZones(zones []ForwardZone) string {
 	data, err := json.Marshal(zones)
 	if err != nil {
 		return fmt.Sprintf("%d zones", len(zones))
+	}
+	return string(data)
+}
+
+func formatJSON(value any) string {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Sprint(value)
 	}
 	return string(data)
 }

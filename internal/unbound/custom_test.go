@@ -125,3 +125,20 @@ func TestGuidedForwardingRejectsExpertForwardZoneConflict(t *testing.T) {
 		t.Fatalf("expected apply conflict, got %v", err)
 	}
 }
+
+func TestGuidedPrivateSettingsRejectExpertDirectiveConflicts(t *testing.T) {
+	manager := newTestManager(t)
+	if _, err := manager.ApplyCustom(context.Background(), "server:\n    private-domain: \"legacy.example.\"\n"); err != nil {
+		t.Fatal(err)
+	}
+	settings := DefaultSettings()
+	settings.PrivateDomains = []string{"home.example."}
+	if _, err := manager.Preview(settings); !errors.Is(err, ErrInvalidCustomConfig) {
+		t.Fatalf("expected private-domain conflict, got %v", err)
+	}
+
+	manager = newTestManager(t)
+	if _, err := manager.ApplyCustom(context.Background(), "server:\n    local-zone: \"168.192.in-addr.arpa.\" transparent\n"); !errors.Is(err, ErrInvalidCustomConfig) {
+		t.Fatalf("expected guided reverse-zone ownership conflict, got %v", err)
+	}
+}

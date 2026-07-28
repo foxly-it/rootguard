@@ -168,3 +168,79 @@ func TestForwardZoneValidationRejectsDuplicateZonesAndLimits(t *testing.T) {
 		t.Fatalf("expected zone limit rejection, got %v", err)
 	}
 }
+
+func TestPrivateDomainsAndRFC1918ReversePoliciesRender(t *testing.T) {
+	settings := DefaultSettings()
+	settings.PrivateDomains = []string{"home.example."}
+	settings.ReverseZones = []ReverseZonePolicy{
+		{Network: "10.0.0.0/8", Mode: reverseModeNXDOMAIN},
+		{Network: "172.16.0.0/12", Mode: reverseModeTransparent},
+		{Network: "192.168.0.0/16", Mode: reverseModeNXDOMAIN},
+	}
+	config, err := settings.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := string(config)
+	for _, expected := range []string{
+		`private-domain: "home.example."`,
+		`local-zone: "10.in-addr.arpa." static`,
+		`local-zone: "16.172.in-addr.arpa." transparent`,
+		`local-zone: "31.172.in-addr.arpa." transparent`,
+		`local-zone: "168.192.in-addr.arpa." static`,
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Errorf("rendered private network config does not contain %q", expected)
+		}
+	}
+}
+
+func TestPrivateDomainValidationRejectsUnsafeAndDuplicateInputs(t *testing.T) {
+	tests := []Settings{
+		func() Settings {
+			settings := DefaultSettings()
+			settings.PrivateDomains = []string{"Home.Example"}
+			return settings
+		}(),
+		func() Settings {
+			settings := DefaultSettings()
+			settings.PrivateDomains = []string{"home.example.", "home.example."}
+			return settings
+		}(),
+		func() Settings {
+			settings := DefaultSettings()
+			settings.PrivateDomains = []string{"home.example."}
+			settings.ForwardZones = []ForwardZone{{
+				Name: "home.example.", Servers: []string{"192.0.2.53"}, AllowPrivateAddresses: true,
+			}}
+			return settings
+		}(),
+	}
+	for _, settings := range tests {
+		if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+			t.Fatalf("expected invalid private domain settings, got %v", err)
+		}
+	}
+}
+
+func TestRFC1918ReversePolicyValidationRejectsUnknownRangesAndModes(t *testing.T) {
+	tests := []ReverseZonePolicy{
+		{Network: "192.0.2.0/24", Mode: reverseModeNXDOMAIN},
+		{Network: "10.0.0.0/8", Mode: "forward"},
+	}
+	for _, policy := range tests {
+		settings := DefaultSettings()
+		settings.ReverseZones = []ReverseZonePolicy{policy}
+		if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+			t.Fatalf("expected invalid reverse policy %#v, got %v", policy, err)
+		}
+	}
+	settings := DefaultSettings()
+	settings.ReverseZones = []ReverseZonePolicy{
+		{Network: "10.0.0.0/8", Mode: reverseModeNXDOMAIN},
+		{Network: "10.0.0.0/8", Mode: reverseModeTransparent},
+	}
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected duplicate reverse network rejection, got %v", err)
+	}
+}

@@ -18,9 +18,12 @@ import (
 var ErrInvalidSettings = errors.New("invalid unbound settings")
 
 const (
-	maxForwardZones   = 32
-	maxForwardServers = 8
-	maxForwardTargets = 32
+	maxForwardZones        = 32
+	maxForwardServers      = 8
+	maxForwardTargets      = 32
+	maxPrivateDomains      = 32
+	reverseModeNXDOMAIN    = "nxdomain"
+	reverseModeTransparent = "transparent"
 )
 
 var rootGuardDNSNetwork = netip.MustParsePrefix("172.29.53.0/24")
@@ -33,14 +36,21 @@ type ForwardZone struct {
 	AllowPrivateAddresses bool     `json:"allow_private_addresses"`
 }
 
+type ReverseZonePolicy struct {
+	Network string `json:"network"`
+	Mode    string `json:"mode"`
+}
+
 type Settings struct {
-	QnameMinimisation bool          `json:"qname_minimisation"`
-	Prefetch          bool          `json:"prefetch"`
-	ServeExpired      bool          `json:"serve_expired"`
-	CacheMinTTL       int           `json:"cache_min_ttl"`
-	CacheMaxTTL       int           `json:"cache_max_ttl"`
-	Threads           int           `json:"threads"`
-	ForwardZones      []ForwardZone `json:"forward_zones"`
+	QnameMinimisation bool                `json:"qname_minimisation"`
+	Prefetch          bool                `json:"prefetch"`
+	ServeExpired      bool                `json:"serve_expired"`
+	CacheMinTTL       int                 `json:"cache_min_ttl"`
+	CacheMaxTTL       int                 `json:"cache_max_ttl"`
+	Threads           int                 `json:"threads"`
+	ForwardZones      []ForwardZone       `json:"forward_zones"`
+	PrivateDomains    []string            `json:"private_domains"`
+	ReverseZones      []ReverseZonePolicy `json:"reverse_zones"`
 }
 
 type ActiveConfiguration struct {
@@ -59,6 +69,12 @@ func DefaultSettings() Settings {
 		CacheMaxTTL:       86400,
 		Threads:           2,
 		ForwardZones:      []ForwardZone{},
+		PrivateDomains:    []string{},
+		ReverseZones: []ReverseZonePolicy{
+			{Network: "10.0.0.0/8", Mode: reverseModeNXDOMAIN},
+			{Network: "172.16.0.0/12", Mode: reverseModeNXDOMAIN},
+			{Network: "192.168.0.0/16", Mode: reverseModeNXDOMAIN},
+		},
 	}
 }
 
@@ -111,7 +127,55 @@ func (s Settings) Validate() error {
 			servers[address] = struct{}{}
 		}
 	}
+	if len(s.PrivateDomains) > maxPrivateDomains {
+		return fmt.Errorf("%w: private_domains must contain at most %d domains", ErrInvalidSettings, maxPrivateDomains)
+	}
+	privateNames := make(map[string]struct{}, len(s.PrivateDomains))
+	for domainIndex, domain := range s.PrivateDomains {
+		if err := validateCanonicalZoneName(domain); err != nil {
+			return fmt.Errorf("%w: private_domains[%d]: %v", ErrInvalidSettings, domainIndex, err)
+		}
+		if _, exists := privateNames[domain]; exists {
+			return fmt.Errorf("%w: private_domains[%d] duplicates %q", ErrInvalidSettings, domainIndex, domain)
+		}
+		privateNames[domain] = struct{}{}
+		for _, zone := range s.ForwardZones {
+			if zone.AllowPrivateAddresses && zone.Name == domain {
+				return fmt.Errorf("%w: private domain %q duplicates the forwarding-zone rebinding exception", ErrInvalidSettings, domain)
+			}
+		}
+	}
+	if len(s.ReverseZones) > len(rfc1918ReverseZones) {
+		return fmt.Errorf("%w: reverse_zones contains unsupported entries", ErrInvalidSettings)
+	}
+	reverseNetworks := make(map[string]struct{}, len(s.ReverseZones))
+	for policyIndex, policy := range s.ReverseZones {
+		if _, supported := rfc1918ReverseZones[policy.Network]; !supported {
+			return fmt.Errorf("%w: reverse_zones[%d].network is not a supported RFC1918 range", ErrInvalidSettings, policyIndex)
+		}
+		if policy.Mode != reverseModeNXDOMAIN && policy.Mode != reverseModeTransparent {
+			return fmt.Errorf("%w: reverse_zones[%d].mode must be nxdomain or transparent", ErrInvalidSettings, policyIndex)
+		}
+		if _, exists := reverseNetworks[policy.Network]; exists {
+			return fmt.Errorf("%w: reverse_zones[%d] duplicates %q", ErrInvalidSettings, policyIndex, policy.Network)
+		}
+		reverseNetworks[policy.Network] = struct{}{}
+	}
 	return nil
+}
+
+var rfc1918ReverseZones = map[string][]string{
+	"10.0.0.0/8":     {"10.in-addr.arpa."},
+	"172.16.0.0/12":  reverse172Zones(),
+	"192.168.0.0/16": {"168.192.in-addr.arpa."},
+}
+
+func reverse172Zones() []string {
+	zones := make([]string, 0, 16)
+	for secondOctet := 16; secondOctet <= 31; secondOctet++ {
+		zones = append(zones, fmt.Sprintf("%d.172.in-addr.arpa.", secondOctet))
+	}
+	return zones
 }
 
 func validateCanonicalZoneName(name string) error {
@@ -146,7 +210,9 @@ func settingsEqual(left, right Settings) bool {
 		left.CacheMinTTL != right.CacheMinTTL ||
 		left.CacheMaxTTL != right.CacheMaxTTL ||
 		left.Threads != right.Threads ||
-		len(left.ForwardZones) != len(right.ForwardZones) {
+		len(left.ForwardZones) != len(right.ForwardZones) ||
+		len(left.PrivateDomains) != len(right.PrivateDomains) ||
+		len(left.ReverseZones) != len(right.ReverseZones) {
 		return false
 	}
 	for index, leftZone := range left.ForwardZones {
@@ -162,6 +228,16 @@ func settingsEqual(left, right Settings) bool {
 			if leftServer != rightZone.Servers[serverIndex] {
 				return false
 			}
+		}
+	}
+	for index, domain := range left.PrivateDomains {
+		if domain != right.PrivateDomains[index] {
+			return false
+		}
+	}
+	for index, policy := range left.ReverseZones {
+		if policy != right.ReverseZones[index] {
+			return false
 		}
 	}
 	return true
@@ -187,6 +263,10 @@ func (s Settings) Render() ([]byte, error) {
 	fmt.Fprintf(&out, "    cache-max-ttl: %d\n", s.CacheMaxTTL)
 	fmt.Fprintln(&out, "    # Parallel resolver workers; match this to the available CPU resources.")
 	fmt.Fprintf(&out, "    num-threads: %d\n", s.Threads)
+	for _, domain := range s.PrivateDomains {
+		fmt.Fprintln(&out, "    # Private domain: allow protected private-address answers only for this trusted DNS suffix.")
+		fmt.Fprintf(&out, "    private-domain: %q\n", domain)
+	}
 	for _, zone := range s.ForwardZones {
 		if zone.AllowUnsigned {
 			fmt.Fprintln(&out, "    # Split DNS: explicitly trust unsigned answers for this private forwarding zone.")
@@ -195,6 +275,12 @@ func (s Settings) Render() ([]byte, error) {
 		if zone.AllowPrivateAddresses {
 			fmt.Fprintln(&out, "    # DNS rebinding: allow RFC1918 and other configured private-address answers only for this zone.")
 			fmt.Fprintf(&out, "    private-domain: %q\n", zone.Name)
+		}
+	}
+	for _, policy := range s.ReverseZones {
+		for _, zone := range rfc1918ReverseZones[policy.Network] {
+			fmt.Fprintln(&out, "    # RFC1918 reverse DNS: static returns local data or NXDOMAIN; transparent permits normal resolution.")
+			fmt.Fprintf(&out, "    local-zone: %q %s\n", zone, reverseZoneType(policy.Mode))
 		}
 	}
 	for _, zone := range s.ForwardZones {
@@ -211,6 +297,13 @@ func (s Settings) Render() ([]byte, error) {
 		fmt.Fprintf(&out, "    forward-first: %s\n", yesNo(zone.ForwardFirst))
 	}
 	return out.Bytes(), nil
+}
+
+func reverseZoneType(mode string) string {
+	if mode == reverseModeTransparent {
+		return "transparent"
+	}
+	return "static"
 }
 
 func yesNo(value bool) string {
@@ -257,6 +350,12 @@ func (m *Manager) Load() (Settings, error) {
 	}
 	if settings.ForwardZones == nil {
 		settings.ForwardZones = []ForwardZone{}
+	}
+	if settings.PrivateDomains == nil {
+		settings.PrivateDomains = []string{}
+	}
+	if settings.ReverseZones == nil {
+		settings.ReverseZones = DefaultSettings().ReverseZones
 	}
 	return settings, settings.Validate()
 }

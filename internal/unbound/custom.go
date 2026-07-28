@@ -133,7 +133,30 @@ func validateGuidedConflicts(settings Settings, custom string) error {
 	if len(settings.ForwardZones) > 0 && containsDirective(custom, "forward-zone") {
 		return fmt.Errorf("%w: expert forward-zone blocks cannot be combined with guided conditional forwarding", ErrInvalidCustomConfig)
 	}
+	ownsPrivateDomains := len(settings.PrivateDomains) > 0
+	for _, zone := range settings.ForwardZones {
+		ownsPrivateDomains = ownsPrivateDomains || zone.AllowPrivateAddresses
+	}
+	if ownsPrivateDomains && containsDirective(custom, "private-domain") {
+		return fmt.Errorf("%w: expert private-domain directives cannot be combined with guided private-domain settings", ErrInvalidCustomConfig)
+	}
+	for _, policy := range settings.ReverseZones {
+		for _, zone := range rfc1918ReverseZones[policy.Network] {
+			if containsZoneDirective(custom, "local-zone", zone) {
+				return fmt.Errorf("%w: expert local-zone %q conflicts with guided RFC1918 reverse handling", ErrInvalidCustomConfig, zone)
+			}
+		}
+	}
 	return nil
+}
+
+func containsZoneDirective(content, expected, zone string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		if directiveKey(line) == expected && strings.Contains(line, `"`+zone+`"`) {
+			return true
+		}
+	}
+	return false
 }
 
 func containsDirective(content, expected string) bool {
