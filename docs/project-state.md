@@ -221,8 +221,9 @@ Trustworthy Stack Center and production visibility:
   carrying the explicit `io.rootguard.cleanup=true` label;
 - safe start, stop, and restart controls with clear impact;
 - bounded, redacted on-demand service logs and actionable failure states;
-- production-hardening and end-to-end CI for the new AIO installer, including
-  host port conflict diagnostics and failed deployment recovery.
+- typed, bilingual AIO installation diagnostics for invalid host addresses,
+  missing Compose, occupied DNS ports, failed image pulls, and interrupted
+  deployment recovery; raw technical details remain available on demand.
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

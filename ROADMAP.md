@@ -68,7 +68,7 @@ reproducible problem without relying on local `dev` images.
       recorded immutable multi-architecture manifest digests
 - [ ] Run clean-install tests on Linux `amd64`, Linux `arm64`, and Docker Desktop
 - [x] Test an actual paired Core/WebApp update and a deliberately failed rollback
-- [ ] Add typed diagnostics for occupied DNS ports, invalid host addresses,
+- [x] Add typed diagnostics for occupied DNS ports, invalid host addresses,
       missing Compose, failed pulls, and interrupted deployment recovery
 - [x] Publish release notes, upgrade notes, known limitations, and checksums
 - [x] Run the complete integration workflow from a clean GitHub runner
