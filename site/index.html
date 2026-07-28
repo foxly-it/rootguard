@@ -21,14 +21,14 @@
         <nav class="links" aria-label="Hauptnavigation">
           <a class="active" href="index.html" aria-current="page" data-de="Startseite" data-en="Home">Startseite</a>
           <a href="index.html#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a>
-          <a href="docs.html" data-de="Handbuch" data-en="Manual">Handbuch</a>
-          <details class="nav-dropdown"><summary data-de="Projekt" data-en="Project">Projekt</summary><div class="nav-dropdown-menu"><a href="#project-status" data-de="Projektstatus" data-en="Project status">Projektstatus</a><a href="wiki.html">Wiki</a><a href="roadmap.html">Roadmap</a><a href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer">GitHub ↗</a></div></details>
+          <a href="docs.html" data-de="Docs" data-en="Documentation">Docs</a>
+          <details class="nav-dropdown"><summary data-de="Projekt" data-en="Project">Projekt</summary><div class="nav-dropdown-menu"><a href="#project-status" data-de="Projektstatus" data-en="Project status">Projektstatus</a><a href="wiki.html">Wiki</a><a href="roadmap.html">Roadmap</a></div></details>
           <details class="nav-dropdown"><summary data-de="Foxly Tools" data-en="Foxly tools">Foxly Tools</summary><div class="nav-dropdown-menu"><a href="tools.html" data-de="Übersicht" data-en="Overview">Übersicht</a><a href="https://motd.foxly.de" target="_blank" rel="noopener noreferrer">MOTD ↗</a><a href="https://install.foxly.de" target="_blank" rel="noopener noreferrer">AdGuard Updater ↗</a></div></details>
           <div class="language-switch nav-language" aria-label="Sprache">
           <button class="lang-button" id="btn-de" type="button" data-language="de">DE</button>
           <button class="lang-button" id="btn-en" type="button" data-language="en">EN</button>
           </div>
-        </nav>
+        </nav><a class="github-button" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" aria-label="RootGuard auf GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.2.8-.5v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.3 11.3 0 0 0 12 .7Z"/></svg></a>
       </div>
     </header>
 
@@ -41,7 +41,7 @@
           <p class="lead" data-de="RootGuard schützt alle Geräte in deinem Netzwerk zentral vor Werbung und bekannten Trackern. Eine übersichtliche Oberfläche verbindet dafür AdGuard Home und Unbound – ohne Erweiterung auf jedem Handy, Fernseher oder Computer." data-en="RootGuard centrally protects every device on your network from ads and known trackers. One clear interface brings AdGuard Home and Unbound together—without installing an extension on every phone, TV, or computer.">RootGuard schützt alle Geräte in deinem Netzwerk zentral vor Werbung und bekannten Trackern. Eine übersichtliche Oberfläche verbindet dafür AdGuard Home und Unbound – ohne Erweiterung auf jedem Handy, Fernseher oder Computer.</p>
           <div class="actions">
             <a class="button" href="#quickstart" data-de="Jetzt ausprobieren" data-en="Try it now">Jetzt ausprobieren</a>
-            <a class="button secondary" href="docs.html" data-de="Zum Handbuch" data-en="Open the manual">Zum Handbuch</a>
+            <a class="button secondary" href="docs.html" data-de="Docs öffnen" data-en="Open documentation">Docs öffnen</a>
           </div>
         </div>
 
@@ -113,7 +113,7 @@ docker compose -f compose.alpha.yaml up -d</code></pre>
           <article class="card"><span class="icon feature-code">02</span><h3 data-de="Schützt deine Anfragen" data-en="Protects your queries">Schützt deine Anfragen</h3><p data-de="DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft." data-en="DNS queries are handled by your own stack and checked for tampering with DNSSEC.">DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft.</p></article>
           <article class="card"><span class="icon feature-code">03</span><h3 data-de="Bleibt unter deiner Kontrolle" data-en="Stays under your control">Bleibt unter deiner Kontrolle</h3><p data-de="Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host." data-en="Dashboard, configuration, and updates run on your own Docker host.">Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host.</p></article>
         </div>
-        <p class="feature-more"><a class="text-link" href="docs.html#overview" data-de="Technik, Architektur und Sicherheitsmodell im Handbuch →" data-en="Technology, architecture, and security model in the manual →">Technik, Architektur und Sicherheitsmodell im Handbuch →</a></p>
+        <p class="feature-more"><a class="text-link" href="docs.html#overview" data-de="Technik, Architektur und Sicherheitsmodell in den Docs →" data-en="Technology, architecture, and security model in the documentation →">Technik, Architektur und Sicherheitsmodell in den Docs →</a></p>
       </section>
 
       <section id="project-status" class="project-status">
@@ -153,8 +153,8 @@ docker compose -f compose.alpha.yaml up -d</code></pre>
       </section>
 
       <section class="home-final-cta">
-        <div><p class="eyebrow" data-de="Alles Weitere im Handbuch" data-en="Everything else in the manual">Alles Weitere im Handbuch</p><h2 data-de="Du möchtest tiefer einsteigen?" data-en="Want to go deeper?">Du möchtest tiefer einsteigen?</h2><p data-de="Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert." data-en="Installation, router setup, configuration, updates, security, and troubleshooting are documented in one clear manual.">Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert.</p></div>
-        <div class="actions"><a class="button" href="docs.html" data-de="Handbuch öffnen" data-en="Open the manual">Handbuch öffnen</a><a class="button secondary" href="roadmap.html" data-de="Roadmap ansehen" data-en="View roadmap">Roadmap ansehen</a></div>
+        <div><p class="eyebrow" data-de="Alles Weitere in den Docs" data-en="Everything else in the documentation">Alles Weitere in den Docs</p><h2 data-de="Du möchtest tiefer einsteigen?" data-en="Want to go deeper?">Du möchtest tiefer einsteigen?</h2><p data-de="Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert." data-en="Installation, router setup, configuration, updates, security, and troubleshooting are covered in one clear documentation hub.">Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert.</p></div>
+        <div class="actions"><a class="button" href="docs.html" data-de="Docs öffnen" data-en="Open documentation">Docs öffnen</a><a class="button secondary" href="roadmap.html" data-de="Roadmap ansehen" data-en="View roadmap">Roadmap ansehen</a></div>
       </section>
 
       <section id="architecture" hidden aria-hidden="true">
@@ -194,7 +194,7 @@ open http://localhost:8080/login</code></pre>
           </div>
           <div class="doc-links">
             <a href="wiki.html"><span>01</span><div><b>RootGuard Wiki</b><small data-de="Zentraler Einstieg in System, Wissen und aktuellen Status" data-en="Central entry point for system knowledge and current status">Zentraler Einstieg in System, Wissen und aktuellen Status</small></div><i>→</i></a>
-            <a href="docs.html"><span>02</span><div><b data-de="RootGuard Handbuch" data-en="RootGuard manual">RootGuard Handbuch</b><small data-de="Installation, Einrichtung, Betrieb, Updates und Fehlerbehebung" data-en="Installation, setup, operations, updates, and troubleshooting">Installation, Einrichtung, Betrieb, Updates und Fehlerbehebung</small></div><i>→</i></a>
+            <a href="docs.html"><span>02</span><div><b data-de="RootGuard Docs" data-en="RootGuard documentation">RootGuard Docs</b><small data-de="Installation, Einrichtung, Betrieb, Updates und Fehlerbehebung" data-en="Installation, setup, operations, updates, and troubleshooting">Installation, Einrichtung, Betrieb, Updates und Fehlerbehebung</small></div><i>→</i></a>
             <a href="roadmap.html"><span>03</span><div><b data-de="Fahrplan bis 1.0" data-en="Roadmap to 1.0">Fahrplan bis 1.0</b><small data-de="Release-Gates, Unbound-Prioritäten und Eignung für Produktivumgebungen" data-en="Release gates, Unbound priorities, and production-environment readiness">Release-Gates, Unbound-Prioritäten und Eignung für Produktivumgebungen</small></div><i>→</i></a>
             <a href="https://github.com/foxly-it/rootguard/blob/main/docs/architecture.md" target="_blank" rel="noopener noreferrer"><span>04</span><div><b data-de="Architekturdokumentation" data-en="Architecture documentation">Architekturdokumentation</b><small data-de="Komponenten, Netze und Vertrauensgrenzen" data-en="Components, networks, and trust boundaries">Komponenten, Netze und Vertrauensgrenzen</small></div><i>↗</i></a>
             <a href="https://github.com/foxly-it/rootguard/blob/main/ROADMAP.md" target="_blank" rel="noopener noreferrer"><span>05</span><div><b data-de="Kanonischer Entwicklungsplan" data-en="Canonical development plan">Kanonischer Entwicklungsplan</b><small data-de="Prüfbare Aufgaben und Definition of Done im Repository" data-en="Verifiable tasks and definition of done in the repository">Prüfbare Aufgaben und Definition of Done im Repository</small></div><i>↗</i></a>
@@ -220,7 +220,7 @@ open http://localhost:8080/login</code></pre>
 
     <footer class="footer">
       <div><strong>RootGuard</strong><span data-de="Selbst betriebener DNS-Schutz für dein Netzwerk." data-en="Self-hosted DNS protection for your network.">Selbst betriebener DNS-Schutz für dein Netzwerk.</span></div>
-      <nav aria-label="Rechtliches und Projekt"><a href="wiki.html">Wiki</a><a href="docs.html" data-de="Handbuch" data-en="Manual">Handbuch</a><a href="roadmap.html">Roadmap</a><a href="tools.html" data-de="Weitere Tools" data-en="More tools">Weitere Tools</a><a href="https://github.com/foxly-it/rootguard">GitHub</a><a href="https://github.com/foxly-it/rootguard/blob/main/LICENSE">AGPL-3.0</a><a href="privacy.html" data-de="Datenschutz" data-en="Privacy">Datenschutz</a><a href="imprint.html" data-de="Impressum" data-en="Legal notice">Impressum</a></nav>
+      <nav aria-label="Rechtliches und Projekt"><a href="wiki.html">Wiki</a><a href="docs.html" data-de="Docs" data-en="Documentation">Docs</a><a href="roadmap.html">Roadmap</a><a href="tools.html" data-de="Weitere Tools" data-en="More tools">Weitere Tools</a><a href="https://github.com/foxly-it/rootguard">GitHub</a><a href="https://github.com/foxly-it/rootguard/blob/main/LICENSE">AGPL-3.0</a><a href="privacy.html" data-de="Datenschutz" data-en="Privacy">Datenschutz</a><a href="imprint.html" data-de="Impressum" data-en="Legal notice">Impressum</a></nav>
       <small>© <span id="year"></span> Mark Schenk · Made with 💜 by Foxly IT</small>
     </footer>
   </div>
