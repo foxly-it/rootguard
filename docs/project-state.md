@@ -138,6 +138,10 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   asynchronous and persistent, creates protected data backups, replaces one
   service, performs DNS-chain health checks, and automatically restores the
   previous image and backup on failure.
+- Stack Center runtime cards expose bounded Docker metadata for each DNS
+  service: plain-language state guidance, health result, image version and
+  immutable ID, start time, restart count, and actually published ports.
+  Raw daemon output and container logs remain outside this endpoint.
 - Separate internal control-plane updater for allowlisted Core and WebApp
   images. It remains alive while both containers are replaced as a pair,
   persists status outside either target, verifies exact image IDs and both
@@ -190,9 +194,10 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 
 ## Current development slice
 
-Stack Center and production visibility:
+Trustworthy Stack Center and production visibility:
 
-- trustworthy service state and actual component versions;
+- real service state, health, image reference, immutable image ID, start time,
+  restart count, and published ports, presented with plain-language guidance;
 - completed data-plane updates and paired Core/WebApp updates through the
   separate helper; immutable release digests and retention policies remain;
 - safe start, stop, and restart controls with clear impact;
