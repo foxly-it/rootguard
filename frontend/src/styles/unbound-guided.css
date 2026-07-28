@@ -119,22 +119,25 @@
 .guided-field input,
 .guided-record input,
 .guided-record select {
-  min-height: 40px;
+  min-height: 46px;
   box-sizing: border-box;
-  padding: 0 11px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
+  padding: 0 13px;
+  border: 1px solid rgba(159, 180, 212, 0.18);
+  border-radius: 10px;
   outline: none;
-  color: #e5f3ff;
-  background: rgba(4, 15, 27, 0.68);
+  color: var(--rg-text-primary);
+  background: rgba(3, 13, 24, 0.58);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: 0.84rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .guided-field input:focus,
 .guided-record input:focus,
 .guided-record select:focus {
-  border-color: rgba(103, 232, 249, 0.55);
+  border-color: rgba(103, 232, 249, 0.72);
+  background: rgba(3, 16, 28, 0.8);
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.09);
 }
 
 .record-heading {

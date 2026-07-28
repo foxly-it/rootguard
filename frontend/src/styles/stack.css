@@ -345,12 +345,14 @@
 .stack-runtime,
 .stack-update-badge {
   display: inline-flex;
+  align-items: center;
   padding: 4px 8px;
   border-radius: 999px;
   color: #fca5a5;
   background: rgba(239, 68, 68, 0.1);
   font-size: 0.63rem;
   font-weight: 850;
+  line-height: 1;
   letter-spacing: 0.1em;
 }
 
@@ -362,6 +364,8 @@
 }
 
 .stack-runtime.running::before {
+  display: block;
+  flex: 0 0 5px;
   width: 5px;
   height: 5px;
   border-radius: 50%;
