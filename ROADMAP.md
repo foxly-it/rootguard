@@ -102,7 +102,7 @@ The detailed ownership and directive plan lives in
 - [x] QNAME minimisation, prefetch, serve-expired, cache TTLs, and threads
 - [x] Local A, AAAA, and CNAME records
 - [x] Conditional forwarding zones with multiple ordered servers
-- [ ] Private domains and RFC1918 reverse-zone handling
+- [x] Private domains and RFC1918 reverse-zone handling ([#41](https://github.com/foxly-it/rootguard/issues/41))
 - [ ] Client network access rules using validated CIDRs
 - [ ] IPv4/IPv6 operating mode with capability and connectivity checks
 - [ ] Cache memory sizing derived from an explicit resource profile

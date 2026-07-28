@@ -100,6 +100,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   `private-domain` for trusted RFC1918/private answers. Forwarding settings use
   the shared preview, effective `unbound-checkconf`, version history, restart
   rollback, and restore lifecycle.
+- Guided private DNS manages canonical `private-domain` entries and an explicit
+  NXDOMAIN-or-transparent policy for each RFC1918 reverse range. NXDOMAIN is the
+  safe default; transparent fallback carries a visible leakage warning. Guided
+  A/AAAA records can generate `local-data-ptr` only when the address is unique
+  across the complete guided draft. Core validation, expert conflict checks,
+  preview, effective `unbound-checkconf`, history, activation, and rollback all
+  cover the new settings.
 - Unbound information architecture split into accessible Overview, Resolver,
   Local DNS, and Advanced tabs. The landing view now shows only configuration
   status, profile, versions, extensions, and on-demand diagnostics; cache
@@ -249,15 +256,14 @@ visible no-op instead of widening its scope.
 5. Native AdGuard integration, contextual guidance, cross-service diagnostics,
    and compatibility testing without duplicating filter, client, or query-log
    management.
-6. Private domains, access networks, custom diagnostics, and cache tools.
+6. Access networks, custom diagnostics, and cache tools.
 7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
 8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
    hardening.
 
 ## Tracked editor follow-ups
 
-- Extend the guided-assistant pattern to private domains and tightly scoped
-  access-control rules.
+- Extend the guided-assistant pattern to tightly scoped access-control rules.
 - Generate and version the completion/documentation catalog for every directive
   supported by the installed Unbound release; the current catalog covers the
   common, safe RootGuard use cases.

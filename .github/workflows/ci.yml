@@ -89,7 +89,8 @@ jobs:
           advice="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$risky" http://127.0.0.1:18080/api/unbound/advice)"
           test "$(jq -r .status <<<"$advice")" = "review"
           test "$(jq '.recommendations | length' <<<"$advice")" -ge 4
-          proposal='{"qname_minimisation":true,"prefetch":true,"serve_expired":true,"cache_min_ttl":120,"cache_max_ttl":86400,"threads":4}'
+          active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
+          proposal="$(jq '.qname_minimisation = true | .prefetch = true | .serve_expired = true | .cache_min_ttl = 120 | .cache_max_ttl = 86400 | .threads = 4' <<<"$active")"
           preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
           test "$(jq -r .changed <<<"$preview")" = "true"
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
@@ -179,6 +180,48 @@ jobs:
             "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
           test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
             http://127.0.0.1:18080/api/unbound/settings | jq '.forward_zones | length')" = "0"
+
+      - name: Verify private DNS and reverse-zone lifecycle
+        run: |
+          active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
+          proposal="$(jq \
+            '.private_domains = ["home.example."] |
+             .reverse_zones = [
+               {"network":"10.0.0.0/8","mode":"nxdomain"},
+               {"network":"172.16.0.0/12","mode":"nxdomain"},
+               {"network":"192.168.0.0/16","mode":"transparent"}
+             ]' <<<"$active")"
+          preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            --header 'Content-Type: application/json' --data "$proposal" \
+            http://127.0.0.1:18080/api/unbound/preview)"
+          test "$(jq -r '.rendered_config |
+            contains("private-domain: \"home.example.\"") and
+            contains("local-zone: \"10.in-addr.arpa.\" static") and
+            contains("local-zone: \"168.192.in-addr.arpa.\" transparent")' <<<"$preview")" = "true"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
+            --header 'Content-Type: application/json' --data "$proposal" \
+            http://127.0.0.1:18080/api/unbound/settings >/dev/null
+          active_after="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
+          test "$(jq -r '.private_domains == ["home.example."]' <<<"$active_after")" = "true"
+          test "$(jq -r '.reverse_zones[] | select(.network == "192.168.0.0/16") | .mode' <<<"$active_after")" = "transparent"
+          custom=$'server:\n    local-zone: "lab.home.example." static\n    local-data: "router.lab.home.example. 300 IN A 192.168.50.81"\n    local-data-ptr: "192.168.50.81 router.lab.home.example."\n'
+          payload="$(jq -n --arg content "$custom" '{content:$content}')"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT \
+            --header 'Content-Type: application/json' --data "$payload" \
+            http://127.0.0.1:18080/api/unbound/custom >/dev/null
+          test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 router.lab.home.example A)" = "192.168.50.81"
+          test "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 -x 192.168.50.81)" = "router.lab.home.example."
+          versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
+          baseline_id="$(jq -r '.[] |
+            select(((.settings.private_domains // []) | length) == 0) |
+            select((.custom_config // "") == "") | .id' <<<"$versions" | head -1)"
+          test -n "$baseline_id"
+          curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST \
+            "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
+          restored="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
+          test "$(jq '.private_domains | length' <<<"$restored")" = "0"
+          test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
+            http://127.0.0.1:18080/api/unbound/custom | jq -r .content)" = ""
 
       - name: Verify password recovery and persistence
         run: |

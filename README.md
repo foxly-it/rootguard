@@ -36,6 +36,9 @@ und eine gemeinsame Bedienoberfläche.
   validiert DNSSEC.
 - **Zentrale Verwaltung:** Setup, Konfiguration, Updates und Rollbacks laufen
   über die RootGuard-Weboberfläche.
+- **Geführtes lokales DNS:** Lokale Einträge, private Domains, Conditional
+  Forwarding und sichere RFC1918-Reverse-Zonen kommen ohne rohe
+  Unbound-Konfiguration aus.
 - **Self-hosted und offen:** Daten und Kontrolle bleiben auf dem eigenen
   Docker-Host; der Quellcode ist unter AGPL-3.0-or-later verfügbar.
 
