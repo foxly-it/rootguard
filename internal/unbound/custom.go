@@ -232,6 +232,9 @@ var blockedDirectives = map[string]string{
 	"cache-min-ttl":          "use the guided RootGuard setting instead",
 	"cache-max-ttl":          "use the guided RootGuard setting instead",
 	"num-threads":            "use the guided RootGuard setting instead",
+	"do-ip4":                 "use the guided RootGuard network mode instead",
+	"do-ip6":                 "use the guided RootGuard network mode instead",
+	"prefer-ip6":             "use the guided RootGuard network mode instead",
 }
 
 func adviseCustom(content string) []CustomAdvice {

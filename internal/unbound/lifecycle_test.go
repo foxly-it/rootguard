@@ -47,6 +47,19 @@ func TestPreviewReportsPrivateDomainAndReversePolicyChanges(t *testing.T) {
 	}
 }
 
+func TestPreviewReportsNetworkModeChange(t *testing.T) {
+	manager := newTestManager(t)
+	settings := DefaultSettings()
+	settings.NetworkMode = networkModeDual
+	preview, err := manager.Preview(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Changes) != 1 || preview.Changes[0].Field != "network_mode" {
+		t.Fatalf("unexpected network mode preview: %+v", preview)
+	}
+}
+
 func TestApplyCreatesHistoryAndRestore(t *testing.T) {
 	manager := newTestManager(t)
 	settings := DefaultSettings()

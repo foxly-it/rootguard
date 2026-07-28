@@ -24,6 +24,9 @@ const (
 	maxPrivateDomains      = 32
 	reverseModeNXDOMAIN    = "nxdomain"
 	reverseModeTransparent = "transparent"
+	networkModeIPv4        = "ipv4"
+	networkModeDual        = "dual"
+	networkModeIPv6        = "ipv6"
 )
 
 var rootGuardDNSNetwork = netip.MustParsePrefix("172.29.53.0/24")
@@ -48,6 +51,7 @@ type Settings struct {
 	CacheMinTTL       int                 `json:"cache_min_ttl"`
 	CacheMaxTTL       int                 `json:"cache_max_ttl"`
 	Threads           int                 `json:"threads"`
+	NetworkMode       string              `json:"network_mode"`
 	ForwardZones      []ForwardZone       `json:"forward_zones"`
 	PrivateDomains    []string            `json:"private_domains"`
 	ReverseZones      []ReverseZonePolicy `json:"reverse_zones"`
@@ -68,6 +72,7 @@ func DefaultSettings() Settings {
 		CacheMinTTL:       0,
 		CacheMaxTTL:       86400,
 		Threads:           2,
+		NetworkMode:       networkModeIPv4,
 		ForwardZones:      []ForwardZone{},
 		PrivateDomains:    []string{},
 		ReverseZones: []ReverseZonePolicy{
@@ -90,6 +95,9 @@ func (s Settings) Validate() error {
 	}
 	if s.Threads < 1 || s.Threads > 32 {
 		return fmt.Errorf("%w: threads must be between 1 and 32", ErrInvalidSettings)
+	}
+	if s.NetworkMode != networkModeIPv4 && s.NetworkMode != networkModeDual && s.NetworkMode != networkModeIPv6 {
+		return fmt.Errorf("%w: network_mode must be ipv4, dual, or ipv6", ErrInvalidSettings)
 	}
 	if len(s.ForwardZones) > maxForwardZones {
 		return fmt.Errorf("%w: forward_zones must contain at most %d zones", ErrInvalidSettings, maxForwardZones)
@@ -210,6 +218,7 @@ func settingsEqual(left, right Settings) bool {
 		left.CacheMinTTL != right.CacheMinTTL ||
 		left.CacheMaxTTL != right.CacheMaxTTL ||
 		left.Threads != right.Threads ||
+		left.NetworkMode != right.NetworkMode ||
 		len(left.ForwardZones) != len(right.ForwardZones) ||
 		len(left.PrivateDomains) != len(right.PrivateDomains) ||
 		len(left.ReverseZones) != len(right.ReverseZones) {
@@ -263,6 +272,10 @@ func (s Settings) Render() ([]byte, error) {
 	fmt.Fprintf(&out, "    cache-max-ttl: %d\n", s.CacheMaxTTL)
 	fmt.Fprintln(&out, "    # Parallel resolver workers; match this to the available CPU resources.")
 	fmt.Fprintf(&out, "    num-threads: %d\n", s.Threads)
+	fmt.Fprintln(&out, "    # Network mode: enable only protocol families confirmed by the RootGuard connectivity check.")
+	fmt.Fprintf(&out, "    do-ip4: %s\n", yesNo(s.NetworkMode != networkModeIPv6))
+	fmt.Fprintf(&out, "    do-ip6: %s\n", yesNo(s.NetworkMode != networkModeIPv4))
+	fmt.Fprintf(&out, "    prefer-ip6: %s\n", yesNo(s.NetworkMode == networkModeIPv6))
 	for _, domain := range s.PrivateDomains {
 		fmt.Fprintln(&out, "    # Private domain: allow protected private-address answers only for this trusted DNS suffix.")
 		fmt.Fprintf(&out, "    private-domain: %q\n", domain)
@@ -357,6 +370,9 @@ func (m *Manager) Load() (Settings, error) {
 	if settings.ReverseZones == nil {
 		settings.ReverseZones = DefaultSettings().ReverseZones
 	}
+	if settings.NetworkMode == "" {
+		settings.NetworkMode = networkModeIPv4
+	}
 	return settings, settings.Validate()
 }
 
@@ -400,6 +416,12 @@ func (m *Manager) Apply(ctx context.Context, settings Settings) error {
 }
 
 func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custom string) error {
+	if settings.NetworkMode == networkModeDual || settings.NetworkMode == networkModeIPv6 {
+		capabilities := m.NetworkCapabilities(ctx)
+		if !capabilities.IPv6Available {
+			return fmt.Errorf("%w: IPv6 mode is unavailable: %s", ErrInvalidSettings, capabilities.IPv6Detail)
+		}
+	}
 	config, err := settings.Render()
 	if err != nil {
 		return err

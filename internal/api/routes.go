@@ -55,6 +55,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/unbound/presets", unboundPresetsHandler)
 	apiMux.HandleFunc("POST /api/unbound/advice", unboundAdviceHandler)
 	apiMux.HandleFunc("POST /api/unbound/forward-check", unboundForwardCheckHandler(deps.Unbound))
+	apiMux.HandleFunc("GET /api/unbound/network-capabilities", unboundNetworkCapabilitiesHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/custom", getUnboundCustomHandler(deps.Unbound))
 	apiMux.HandleFunc("POST /api/unbound/custom/preview", previewUnboundCustomHandler(deps.Unbound))
 	apiMux.HandleFunc("PUT /api/unbound/custom", putUnboundCustomHandler(deps.Unbound))
@@ -69,6 +70,12 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	})
 	root.Handle("/api/", requireBearerToken(deps.Token, apiMux))
 	return root
+}
+
+func unboundNetworkCapabilitiesHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, manager.NetworkCapabilities(r.Context()))
+	}
 }
 
 func controlPlaneStatusHandler(client *controlplane.Client) http.HandlerFunc {

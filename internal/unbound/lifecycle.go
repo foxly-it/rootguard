@@ -72,7 +72,7 @@ func (m *Manager) Preview(settings Settings) (Preview, error) {
 }
 
 func settingsChanges(before, after Settings) []Change {
-	changes := make([]Change, 0, 9)
+	changes := make([]Change, 0, 10)
 	add := func(field string, oldValue, newValue any) {
 		oldText, newText := fmt.Sprint(oldValue), fmt.Sprint(newValue)
 		if oldText != newText {
@@ -85,6 +85,7 @@ func settingsChanges(before, after Settings) []Change {
 	add("cache_min_ttl", before.CacheMinTTL, after.CacheMinTTL)
 	add("cache_max_ttl", before.CacheMaxTTL, after.CacheMaxTTL)
 	add("threads", before.Threads, after.Threads)
+	add("network_mode", before.NetworkMode, after.NetworkMode)
 	if !forwardZonesEqual(before.ForwardZones, after.ForwardZones) {
 		changes = append(changes, Change{
 			Field:  "forward_zones",

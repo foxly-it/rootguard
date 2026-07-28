@@ -22,6 +22,9 @@ func TestDefaultSettingsRender(t *testing.T) {
 		"serve-expired: yes",
 		"cache-max-ttl: 86400",
 		"num-threads: 2",
+		"do-ip4: yes",
+		"do-ip6: no",
+		"prefer-ip6: no",
 	} {
 		if !strings.Contains(string(config), expected) {
 			t.Errorf("rendered config does not contain %q", expected)
@@ -64,6 +67,35 @@ func TestSettingsValidation(t *testing.T) {
 	settings.Threads = 0
 	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
 		t.Fatalf("expected ErrInvalidSettings, got %v", err)
+	}
+}
+
+func TestNetworkModesRenderAndValidate(t *testing.T) {
+	tests := []struct {
+		mode string
+		want []string
+	}{
+		{networkModeIPv4, []string{"do-ip4: yes", "do-ip6: no", "prefer-ip6: no"}},
+		{networkModeDual, []string{"do-ip4: yes", "do-ip6: yes", "prefer-ip6: no"}},
+		{networkModeIPv6, []string{"do-ip4: no", "do-ip6: yes", "prefer-ip6: yes"}},
+	}
+	for _, test := range tests {
+		settings := DefaultSettings()
+		settings.NetworkMode = test.mode
+		config, err := settings.Render()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, expected := range test.want {
+			if !strings.Contains(string(config), expected) {
+				t.Errorf("%s did not render %q", test.mode, expected)
+			}
+		}
+	}
+	settings := DefaultSettings()
+	settings.NetworkMode = "automatic"
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected invalid network mode, got %v", err)
 	}
 }
 
