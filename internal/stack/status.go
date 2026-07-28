@@ -91,7 +91,7 @@ func decodeContainerInspect(payload []byte) (ContainerInfo, error) {
 		}
 	}
 	sort.Strings(ports)
-	health := "unknown"
+	health := "not_configured"
 	if data[0].State.Health != nil && data[0].State.Health.Status != "" {
 		health = data[0].State.Health.Status
 	}

@@ -34,3 +34,20 @@ func TestDecodeContainerInspectHandlesMissingContainer(t *testing.T) {
 		t.Fatalf("unexpected missing state: %+v", info)
 	}
 }
+
+func TestDecodeContainerInspectDistinguishesMissingHealthcheck(t *testing.T) {
+	payload := []byte(`[{
+		"State":{"Running":true,"Status":"running","StartedAt":"2026-07-28T08:15:00Z"},
+		"Config":{"Image":"adguard/adguardhome:v0.107.78"},
+		"Image":"sha256:abcdef1234567890",
+		"RestartCount":0,
+		"NetworkSettings":{"Ports":{}}
+	}]`)
+	info, err := decodeContainerInspect(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Running || info.Health != "not_configured" {
+		t.Fatalf("expected a running container without a healthcheck, got %+v", info)
+	}
+}
