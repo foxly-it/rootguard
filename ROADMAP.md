@@ -67,7 +67,7 @@ reproducible problem without relying on local `dev` images.
 - [x] Replace release `latest` references with readable version tags plus
       recorded immutable multi-architecture manifest digests
 - [ ] Run clean-install tests on Linux `amd64`, Linux `arm64`, and Docker Desktop
-- [ ] Test an actual paired Core/WebApp update and a deliberately failed rollback
+- [x] Test an actual paired Core/WebApp update and a deliberately failed rollback
 - [ ] Add typed diagnostics for occupied DNS ports, invalid host addresses,
       missing Compose, failed pulls, and interrupted deployment recovery
 - [x] Publish release notes, upgrade notes, known limitations, and checksums

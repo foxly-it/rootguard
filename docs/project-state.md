@@ -156,6 +156,10 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   `foxly-it/rootguard-updater` component repository. Its own CI runs tests,
   vetting, and `amd64`/`arm64` image builds; the main repository pins the exact
   reviewed component commit as a Git submodule.
+- The Updater CI also runs two real Docker scenarios with old and new
+  Core/WebApp fixture images. It verifies both running image IDs after a paired
+  update, then introduces an HTTP-503 WebApp candidate and proves that both
+  previous image IDs are restored with a persisted `rolled_back` outcome.
 - Bilingual project website deployed with enforced HTTPS at
   `https://rootguard.foxly.de`.
 - GitHub-backed project overview on the website with current version, open
