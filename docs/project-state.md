@@ -122,6 +122,11 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   tuning, live files, expert rules, and rollback use progressive disclosure.
   Tabs support arrow-key navigation, clear focus states, responsive overflow,
   and labelled tab panels without changing the validation and rollback paths.
+- Guided Unbound text, number, and select controls share the Setup page's
+  consistent field height, surface, border, typography, and visible focus
+  treatment across local zones, forwarding, private domains, and resolver
+  tuning. Stack runtime badges center their pulsing indicator independently of
+  browser text baselines for stable Safari rendering.
 - Extensible WebApp localisation registry with German and English catalogs,
   browser-language detection, persistent selection, document language and
   locale-aware date/number formatting. Navigation, setup, dashboard, stack
