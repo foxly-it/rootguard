@@ -51,10 +51,26 @@ type Dashboard struct {
 }
 
 type Service struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName"`
-	Description string `json:"description"`
-	Status      string `json:"status"`
+	Name         string   `json:"name"`
+	DisplayName  string   `json:"displayName"`
+	Description  string   `json:"description"`
+	Status       string   `json:"status"`
+	Health       string   `json:"health"`
+	Image        string   `json:"image,omitempty"`
+	ImageID      string   `json:"imageId,omitempty"`
+	StartedAt    string   `json:"startedAt,omitempty"`
+	RestartCount int      `json:"restartCount"`
+	Ports        []string `json:"ports,omitempty"`
+}
+
+type ServiceLogs struct {
+	Service     string   `json:"service"`
+	Lines       []string `json:"lines"`
+	Tail        int      `json:"tail"`
+	Since       string   `json:"since"`
+	Truncated   bool     `json:"truncated"`
+	Redacted    bool     `json:"redacted"`
+	Description string   `json:"description"`
 }
 
 type ServiceActionResponse struct {
@@ -258,6 +274,12 @@ func (c *Client) System(ctx context.Context) (map[string]string, error) {
 func (c *Client) Services(ctx context.Context) ([]Service, error) {
 	var result []Service
 	err := c.do(ctx, http.MethodGet, "/api/services", nil, &result)
+	return result, err
+}
+
+func (c *Client) ServiceLogs(ctx context.Context, service string) (ServiceLogs, error) {
+	var result ServiceLogs
+	err := c.do(ctx, http.MethodGet, "/api/services/"+service+"/logs", nil, &result)
 	return result, err
 }
 

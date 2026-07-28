@@ -137,6 +137,10 @@ func NewRouter(core *coreclient.Client) http.Handler {
 
 	})
 
+	mux.HandleFunc("GET /api/services/{name}/logs", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleServiceLogs(w, r, core)
+	})
+
 	// ==================================================
 	// Service Control Endpoint
 	//

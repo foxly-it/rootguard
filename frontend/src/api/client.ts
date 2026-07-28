@@ -68,6 +68,20 @@ export async function fetchServices(): Promise<ServiceInfo[]> {
   return request<ServiceInfo[]>("/api/services");
 }
 
+export interface ServiceLogs {
+  service: "adguard" | "unbound";
+  lines: string[];
+  tail: number;
+  since: string;
+  truncated: boolean;
+  redacted: boolean;
+  description: string;
+}
+
+export async function fetchServiceLogs(name: ServiceInfo["name"]): Promise<ServiceLogs> {
+  return request<ServiceLogs>(`/api/services/${name}/logs`);
+}
+
 // =====================================================
 // Service Action Endpoint
 // =====================================================

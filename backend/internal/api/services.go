@@ -36,3 +36,12 @@ func HandleServices(w http.ResponseWriter, r *http.Request, core *coreclient.Cli
 	}
 	writeJSON(w, http.StatusOK, serviceList)
 }
+
+func HandleServiceLogs(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	logs, err := core.ServiceLogs(r.Context(), r.PathValue("name"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
+}

@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   Cpu,
   Download,
+  FileText,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
@@ -16,11 +17,13 @@ import {
   checkUpdates,
   fetchControlPlaneUpdateStatus,
   fetchServices,
+  fetchServiceLogs,
   fetchUpdateStatus,
   installServiceUpdate,
   installControlPlaneUpdates,
   serviceAction,
   type ServiceInfo,
+  type ServiceLogs,
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
@@ -33,6 +36,8 @@ export default function Stack() {
   const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [controlPlane, setControlPlane] = useState<ControlPlaneUpdateStatus | null>(null);
   const [services, setServices] = useState<ServiceInfo[]>([]);
+  const [serviceLogs, setServiceLogs] = useState<Partial<Record<ServiceInfo["name"], ServiceLogs>>>({});
+  const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -114,6 +119,27 @@ export default function Stack() {
       await load();
     } catch (cause) {
       setError(errorMessage(cause, "Dienstaktion fehlgeschlagen."));
+    }
+  }
+
+  async function toggleLogs(name: ServiceInfo["name"]) {
+    if (serviceLogs[name]) {
+      setServiceLogs((current) => {
+        const next = { ...current };
+        delete next[name];
+        return next;
+      });
+      return;
+    }
+    setLoadingLogs(name);
+    setError("");
+    try {
+      const logs = await fetchServiceLogs(name);
+      setServiceLogs((current) => ({ ...current, [name]: logs }));
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.logsError")));
+    } finally {
+      setLoadingLogs("");
     }
   }
 
@@ -237,7 +263,25 @@ export default function Stack() {
                 <button type="button" className="quiet" disabled={busy} onClick={() => control(service.name, runtime?.status === "running" ? "stop" : "start")}>
                   {runtime?.status === "running" ? t("common.stop") : t("common.start")}
                 </button>
+                <button type="button" className="quiet" disabled={loadingLogs === service.name} onClick={() => toggleLogs(service.name)}>
+                  {loadingLogs === service.name ? <LoaderCircle className="spin" size={15} /> : <FileText size={15} />}
+                  {serviceLogs[service.name] ? t("stack.hideLogs") : t("stack.showLogs")}
+                </button>
               </div>
+
+              {serviceLogs[service.name] && (
+                <section className="stack-log-view" aria-label={t("stack.logsFor", { service: service.display_name })}>
+                  <div>
+                    <strong>{t("stack.logsTitle")}</strong>
+                    <span>{t("stack.logsWindow")}</span>
+                  </div>
+                  <p>{t("stack.logsPrivacy")}</p>
+                  <pre>{serviceLogs[service.name]?.lines.length
+                    ? serviceLogs[service.name]?.lines.join("\n")
+                    : t("stack.logsEmpty")}</pre>
+                  {serviceLogs[service.name]?.truncated && <small>{t("stack.logsTruncated")}</small>}
+                </section>
+              )}
             </article>
           );
         })}
