@@ -204,7 +204,8 @@ Trustworthy Stack Center and production visibility:
 - real service state, health, image reference, immutable image ID, start time,
   restart count, and published ports, presented with plain-language guidance;
 - completed data-plane updates and paired Core/WebApp updates through the
-  separate helper; immutable release digests and retention policies remain;
+  separate helper; the public alpha Compose now records and pins every
+  RootGuard and AdGuard multi-architecture manifest digest;
 - bounded update and rollback history survives restarts and is shown in the
   Stack Center together with each automatic cleanup result;
 - post-update cleanup retains the active and previous successful image, removes
@@ -213,8 +214,7 @@ Trustworthy Stack Center and production visibility:
 - safe start, stop, and restart controls with clear impact;
 - bounded, redacted on-demand service logs and actionable failure states;
 - production-hardening and end-to-end CI for the new AIO installer, including
-  immutable release image digests, host port conflict diagnostics, and failed
-  deployment recovery.
+  host port conflict diagnostics and failed deployment recovery.
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

@@ -64,7 +64,8 @@ reproducible problem without relying on local `dev` images.
       main repository
 - [x] Commit clean component revisions and a reproducible root Compose model
 - [x] Publish versioned `amd64` and `arm64` images to GHCR
-- [ ] Replace release `latest` references with version tags and recorded digests
+- [x] Replace release `latest` references with readable version tags plus
+      recorded immutable multi-architecture manifest digests
 - [ ] Run clean-install tests on Linux `amd64`, Linux `arm64`, and Docker Desktop
 - [ ] Test an actual paired Core/WebApp update and a deliberately failed rollback
 - [ ] Add typed diagnostics for occupied DNS ports, invalid host addresses,
@@ -83,7 +84,7 @@ unchecked items are alpha hardening work and stay ahead of beta readiness.
       exposing raw daemon output
 - [x] Add bounded, redacted service logs with explicit retention
 - [x] Persist bounded update, rollback, and cleanup history across restarts
-- [ ] Pin release images by recorded digest and document retention policy
+- [x] Pin release images by recorded digest and document retention policy
 
 ---
 
