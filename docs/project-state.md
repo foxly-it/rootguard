@@ -151,7 +151,7 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   a checked-in local fallback.
 - Reduced public landing page focused on a plain-language product explanation,
   a Compose quick start, three user benefits, and a compact project status.
-  Technical depth stays in the manual, whose table of contents highlights the
+  Technical depth stays in the documentation, whose table of contents highlights the
   section currently in view.
 - Public alpha `v0.1.0-alpha.2` is published around a single
   `compose.alpha.yaml` that
@@ -171,11 +171,12 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   policy, recovery, security, beta engineering, release candidate, and stable
   Docker appliance. Website status and dashboard mock now describe delivered
   capabilities instead of unavailable query statistics.
-- Consistent public-site header navigation keeps the manual and quick start
-  directly reachable, groups Wiki, project status, roadmap, and GitHub under
+- Consistent public-site header navigation keeps Docs and quick start directly
+  reachable, groups Wiki, project status, and roadmap under
   Project, and groups the Foxly tool overview, MOTD, and AdGuard Home updater
   separately. Keyboard-friendly native dropdowns close on outside click or
   Escape, and the language switch is integrated into the navigation surface.
+  A dedicated GitHub icon beside the navigation links directly to the repository.
   RootGuard now carries its own bilingual imprint and privacy notice
   tailored to the static GitHub Pages deployment instead of redirecting legal
   links to the Foxly blog.
