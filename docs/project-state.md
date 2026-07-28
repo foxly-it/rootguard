@@ -108,6 +108,14 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   preview, effective `unbound-checkconf`, history, activation, and rollback all
   cover the new settings. AdGuard Home's own private reverse-resolver routing
   remains an integration responsibility rather than duplicated resolver logic.
+- Guided resolver protocol mode defaults to IPv4 and offers dual-stack or
+  IPv6-only operation only after the running Unbound container reaches an
+  authoritative root server over IPv6. Core repeats this decision server-side
+  during activation, renders `do-ip4`, `do-ip6`, and `prefer-ip6`, blocks expert
+  duplication, and keeps preview, checkconf, history, and rollback intact.
+- Client CIDR policy intentionally remains owned by AdGuard Home: Unbound is an
+  internal resolver reached by AdGuard, so a separate end-client access editor
+  in RootGuard would be ineffective duplication.
 - Unbound information architecture split into accessible Overview, Resolver,
   Local DNS, and Advanced tabs. The landing view now shows only configuration
   status, profile, versions, extensions, and on-demand diagnostics; cache
@@ -257,7 +265,7 @@ visible no-op instead of widening its scope.
 5. Native AdGuard integration, contextual guidance, cross-service diagnostics,
    and compatibility testing without duplicating filter, client, or query-log
    management.
-6. Access networks, custom diagnostics, and cache tools.
+6. Custom diagnostics and cache tools.
 7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
 8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
    hardening.
