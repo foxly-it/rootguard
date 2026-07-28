@@ -17,6 +17,8 @@ var serviceContainers = map[string]string{
 	"unbound": "rootguard-unbound",
 }
 
+var execCommandContext = exec.CommandContext
+
 func ControlService(ctx context.Context, service, action string) error {
 	container, ok := serviceContainers[service]
 	if !ok {

@@ -34,6 +34,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/stack/status", stackStatusHandler)
 	apiMux.HandleFunc("GET /api/dashboard", dashboardHandler)
 	apiMux.HandleFunc("GET /api/services", servicesHandler)
+	apiMux.HandleFunc("GET /api/services/{name}/logs", serviceLogsHandler)
 	apiMux.HandleFunc("POST /api/services/{name}/{action}", serviceActionHandler)
 	apiMux.HandleFunc("GET /api/installation", installationStatusHandler(deps.Installer))
 	apiMux.HandleFunc("POST /api/installation/preflight", installationPreflightHandler(deps.Installer))
@@ -343,6 +344,19 @@ func serviceActionHandler(w http.ResponseWriter, r *http.Request) {
 		"action":  action,
 		"status":  "ok",
 	})
+}
+
+func serviceLogsHandler(w http.ResponseWriter, r *http.Request) {
+	logs, err := stack.ReadServiceLogs(r.Context(), r.PathValue("name"))
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, stack.ErrUnknownService) {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
 }
 
 func getUnboundSettingsHandler(manager *unbound.Manager) http.HandlerFunc {
