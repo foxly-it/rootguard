@@ -3,6 +3,8 @@ package installer
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -56,6 +58,63 @@ func TestPreflightRequiresDockerAndCompose(t *testing.T) {
 
 	if report.Ready {
 		t.Fatal("expected missing compose plugin to fail preflight")
+	}
+}
+
+func TestPreflightReportsOccupiedDockerDNSPort(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "ps" {
+				return []byte("existing-dns|0.0.0.0:53->53/tcp, 0.0.0.0:53->53/udp\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress: "192.168.1.2",
+		DNSPort:        53,
+	})
+	if report.Ready {
+		t.Fatal("expected occupied DNS port to fail preflight")
+	}
+	check := report.Checks[len(report.Checks)-1]
+	if check.Code != "dns_port_occupied" || check.Detail != "existing-dns" || check.Action == "" {
+		t.Fatalf("unexpected occupied-port diagnostic: %#v", check)
+	}
+}
+
+func TestDeploymentErrorsUseStableDiagnosticCodes(t *testing.T) {
+	tests := []struct {
+		phase string
+		err   error
+		code  string
+	}{
+		{"pull", errors.New("registry unavailable"), "image_pull_failed"},
+		{"start", errors.New("Bind for 0.0.0.0:53 failed: port is already allocated"), "dns_port_occupied"},
+		{"start", errors.New("listen tcp: cannot assign requested address"), "host_address_unavailable"},
+		{"prepare", errors.New("read-only file system"), "state_write_failed"},
+	}
+	for _, test := range tests {
+		diagnostic := classifyDeploymentError(test.phase, test.err)
+		if diagnostic.Code != test.code || diagnostic.Phase != test.phase || diagnostic.Action == "" || !diagnostic.Retryable {
+			t.Fatalf("unexpected diagnostic for %s: %#v", test.code, diagnostic)
+		}
+	}
+}
+
+func TestInterruptedDeploymentGetsRecoverableDiagnostic(t *testing.T) {
+	dataDir := t.TempDir()
+	data := `{"state":"deploying","steps":[{"id":"pull","status":"running","message":"pulling"}],"updated_at":"2026-07-28T00:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(dataDir, "status.json"), []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(Options{DataDir: dataDir})
+	status := manager.Status()
+	if status.State != StateFailed || status.Diagnostic == nil ||
+		status.Diagnostic.Code != "deployment_interrupted" || !status.Diagnostic.Retryable {
+		t.Fatalf("unexpected interrupted status: %#v", status)
 	}
 }
 

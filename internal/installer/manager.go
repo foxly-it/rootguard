@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,8 +35,11 @@ type Config struct {
 
 type Check struct {
 	ID      string `json:"id"`
+	Code    string `json:"code"`
 	OK      bool   `json:"ok"`
 	Message string `json:"message"`
+	Detail  string `json:"detail,omitempty"`
+	Action  string `json:"action,omitempty"`
 }
 
 type Preflight struct {
@@ -49,12 +54,22 @@ type Step struct {
 	Message string `json:"message"`
 }
 
+type Diagnostic struct {
+	Code      string `json:"code"`
+	Phase     string `json:"phase"`
+	Message   string `json:"message"`
+	Detail    string `json:"detail,omitempty"`
+	Action    string `json:"action"`
+	Retryable bool   `json:"retryable"`
+}
+
 type Status struct {
-	State     string    `json:"state"`
-	Config    *Config   `json:"config,omitempty"`
-	Steps     []Step    `json:"steps"`
-	Error     string    `json:"error,omitempty"`
-	UpdatedAt time.Time `json:"updated_at"`
+	State      string      `json:"state"`
+	Config     *Config     `json:"config,omitempty"`
+	Steps      []Step      `json:"steps"`
+	Error      string      `json:"error,omitempty"`
+	Diagnostic *Diagnostic `json:"diagnostic,omitempty"`
+	UpdatedAt  time.Time   `json:"updated_at"`
 }
 
 type CommandRunner func(context.Context, ...string) ([]byte, error)
@@ -106,7 +121,12 @@ func NewManager(options Options) *Manager {
 	manager.load()
 	if manager.status.State == StateDeploying {
 		manager.status.State = StateFailed
-		manager.status.Error = "The previous deployment was interrupted. It can be started again safely."
+		manager.setDiagnosticLocked(Diagnostic{
+			Code: "deployment_interrupted", Phase: "recovery",
+			Message:   "The previous deployment was interrupted.",
+			Action:    "Review the completed steps and start the deployment again. RootGuard reuses its persisted configuration safely.",
+			Retryable: true,
+		})
 		manager.status.UpdatedAt = time.Now().UTC()
 		_ = manager.persist()
 	}
@@ -138,28 +158,55 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 	config = normalizeConfig(config)
 	checks := validateConfig(config)
 
+	dockerOK := true
 	if _, err := m.run(ctx, "version", "--format", "{{.Server.Version}}"); err != nil {
+		dockerOK = false
 		checks = append(checks, Check{
-			ID: "docker", OK: false,
+			ID: "docker", Code: "docker_unreachable", OK: false,
 			Message: "Docker Engine is not reachable through the RootGuard controller.",
+			Action:  "Verify the Docker socket mount and Docker Engine status.",
 		})
 	} else {
 		checks = append(checks, Check{
-			ID: "docker", OK: true,
+			ID: "docker", Code: "docker_reachable", OK: true,
 			Message: "Docker Engine is reachable.",
 		})
 	}
 
 	if _, err := m.run(ctx, "compose", "version", "--short"); err != nil {
 		checks = append(checks, Check{
-			ID: "compose", OK: false,
+			ID: "compose", Code: "compose_unavailable", OK: false,
 			Message: "The Docker Compose plugin is not available in the controller.",
+			Action:  "Use the supported RootGuard Core image or install the Docker Compose plugin.",
 		})
 	} else {
 		checks = append(checks, Check{
-			ID: "compose", OK: true,
+			ID: "compose", Code: "compose_available", OK: true,
 			Message: "Docker Compose is available.",
 		})
+	}
+
+	if dockerOK && validNetworkConfig(config) {
+		output, err := m.run(ctx, "ps", "--format", "{{.Names}}|{{.Ports}}")
+		if err != nil {
+			checks = append(checks, Check{
+				ID: "dns_port_available", Code: "port_check_failed", OK: false,
+				Message: "Docker port assignments could not be inspected.",
+				Action:  "Verify Docker access and run the preflight again.",
+			})
+		} else if owner := occupiedDockerPort(string(output), config.DNSBindAddress, config.DNSPort); owner != "" {
+			checks = append(checks, Check{
+				ID: "dns_port_available", Code: "dns_port_occupied", OK: false,
+				Message: fmt.Sprintf("DNS port %s:%d is already published.", config.DNSBindAddress, config.DNSPort),
+				Detail:  owner,
+				Action:  "Stop or reconfigure the conflicting DNS service, then run the preflight again.",
+			})
+		} else {
+			checks = append(checks, Check{
+				ID: "dns_port_available", Code: "dns_port_available", OK: true,
+				Message: "No conflicting Docker port publication was found.",
+			})
+		}
 	}
 
 	ready := true
@@ -196,7 +243,7 @@ func (m *Manager) Start(ctx context.Context, config Config) (Status, error) {
 	}
 	if err := m.persistLocked(); err != nil {
 		m.status.State = StateFailed
-		m.status.Error = fmt.Sprintf("persist installation state: %v", err)
+		m.setDiagnosticLocked(classifyDeploymentError("prepare", fmt.Errorf("persist installation state: %w", err)))
 		m.status.UpdatedAt = time.Now().UTC()
 		status := cloneStatus(m.status)
 		m.mu.Unlock()
@@ -214,26 +261,26 @@ func (m *Manager) deploy(config Config) {
 	defer cancel()
 
 	if err := m.setStep("prepare", "running", "Writing the versioned RootGuard stack definition"); err != nil {
-		m.fail(err)
+		m.fail("prepare", err)
 		return
 	}
 	composePath, err := m.writeCompose(config)
 	if err != nil {
-		m.fail(err)
+		m.fail("prepare", err)
 		return
 	}
 	_ = m.setStep("prepare", "done", "Managed stack definition is ready")
 
 	_ = m.setStep("pull", "running", "Downloading configured service images")
 	if _, err := m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "pull"); err != nil {
-		m.fail(fmt.Errorf("pull RootGuard service images: %w", err))
+		m.fail("pull", fmt.Errorf("pull RootGuard service images: %w", err))
 		return
 	}
 	_ = m.setStep("pull", "done", "Service images are available")
 
 	_ = m.setStep("start", "running", "Starting Unbound and AdGuard Home")
 	if _, err := m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
-		m.fail(fmt.Errorf("start RootGuard DNS stack: %w", err))
+		m.fail("start", fmt.Errorf("start RootGuard DNS stack: %w", err))
 		return
 	}
 	_ = m.setStep("start", "done", "DNS containers were created")
@@ -241,18 +288,18 @@ func (m *Manager) deploy(config Config) {
 	_ = m.setStep("connect", "running", "Connecting the controller to the private DNS network")
 	if output, err := m.run(ctx, "network", "connect", "rootguard-dns", m.coreContainer); err != nil &&
 		!strings.Contains(strings.ToLower(string(output)), "already exists") {
-		m.fail(fmt.Errorf("connect RootGuard controller to DNS network: %w: %s", err, strings.TrimSpace(string(output))))
+		m.fail("connect", fmt.Errorf("connect RootGuard controller to DNS network: %w: %s", err, strings.TrimSpace(string(output))))
 		return
 	}
 	_ = m.setStep("connect", "done", "Controller is connected to the private DNS network")
 
 	_ = m.setStep("bootstrap", "running", "Waiting for Unbound and securing AdGuard Home")
 	if err := m.waitForUnbound(ctx); err != nil {
-		m.fail(err)
+		m.fail("bootstrap", err)
 		return
 	}
 	if err := m.bootstrap(ctx); err != nil {
-		m.fail(fmt.Errorf("bootstrap AdGuard Home: %w", err))
+		m.fail("bootstrap", fmt.Errorf("bootstrap AdGuard Home: %w", err))
 		return
 	}
 	_ = m.setStep("bootstrap", "done", "AdGuard Home forwards exclusively to Unbound")
@@ -260,6 +307,7 @@ func (m *Manager) deploy(config Config) {
 	m.mu.Lock()
 	m.status.State = StateInstalled
 	m.status.Error = ""
+	m.status.Diagnostic = nil
 	m.status.UpdatedAt = time.Now().UTC()
 	_ = m.persistLocked()
 	m.mu.Unlock()
@@ -388,23 +436,25 @@ func validateConfig(config Config) []Check {
 	ip := net.ParseIP(config.DNSBindAddress)
 	if ip == nil || ip.To4() == nil {
 		checks = append(checks, Check{
-			ID: "dns_address", OK: false,
+			ID: "dns_address", Code: "invalid_dns_address", OK: false,
 			Message: "Enter an IPv4 address already assigned to the Docker host, or 0.0.0.0 for all addresses.",
+			Action:  "Enter a valid IPv4 address such as 192.168.1.10 or use 0.0.0.0.",
 		})
 	} else {
 		checks = append(checks, Check{
-			ID: "dns_address", OK: true,
+			ID: "dns_address", Code: "dns_address_valid", OK: true,
 			Message: "The DNS bind address has a valid IPv4 format.",
 		})
 	}
 	if config.DNSPort < 1 || config.DNSPort > 65535 {
 		checks = append(checks, Check{
-			ID: "dns_port", OK: false,
+			ID: "dns_port", Code: "invalid_dns_port", OK: false,
 			Message: "The DNS port must be between 1 and 65535.",
+			Action:  "Choose a port between 1 and 65535. Port 53 is recommended.",
 		})
 	} else {
 		checks = append(checks, Check{
-			ID: "dns_port", OK: true,
+			ID: "dns_port", Code: "dns_port_valid", OK: true,
 			Message: "The DNS port is valid. Docker performs the final host availability check during deployment.",
 		})
 	}
@@ -425,11 +475,11 @@ func (m *Manager) setStep(id, status, message string) error {
 	return fmt.Errorf("unknown installation step %q", id)
 }
 
-func (m *Manager) fail(err error) {
+func (m *Manager) fail(phase string, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.status.State = StateFailed
-	m.status.Error = err.Error()
+	m.setDiagnosticLocked(classifyDeploymentError(phase, err))
 	m.status.UpdatedAt = time.Now().UTC()
 	for index := range m.status.Steps {
 		if m.status.Steps[index].Status == "running" {
@@ -437,6 +487,75 @@ func (m *Manager) fail(err error) {
 		}
 	}
 	_ = m.persistLocked()
+}
+
+func (m *Manager) setDiagnosticLocked(diagnostic Diagnostic) {
+	m.status.Diagnostic = &diagnostic
+	m.status.Error = diagnostic.Message
+}
+
+func classifyDeploymentError(phase string, err error) Diagnostic {
+	detail := err.Error()
+	lower := strings.ToLower(detail)
+	diagnostic := Diagnostic{
+		Code: "deployment_failed", Phase: phase, Message: "The DNS stack could not be deployed.",
+		Detail: detail, Action: "Review the failed step and retry after correcting the cause.", Retryable: true,
+	}
+	switch {
+	case phase == "pull":
+		diagnostic.Code = "image_pull_failed"
+		diagnostic.Message = "A configured service image could not be downloaded."
+		diagnostic.Action = "Check registry access, the configured immutable image reference, and available disk space."
+	case strings.Contains(lower, "cannot assign requested address"):
+		diagnostic.Code = "host_address_unavailable"
+		diagnostic.Message = "The selected DNS address is not available on the Docker host."
+		diagnostic.Action = "Choose an IPv4 address assigned to this host or use 0.0.0.0, then retry."
+	case strings.Contains(lower, "port is already allocated") || strings.Contains(lower, "address already in use") ||
+		(strings.Contains(lower, "bind") && strings.Contains(lower, "port")):
+		diagnostic.Code = "dns_port_occupied"
+		diagnostic.Message = "The selected DNS port is already in use."
+		diagnostic.Action = "Stop or reconfigure the conflicting DNS service, then retry the deployment."
+	case phase == "prepare":
+		diagnostic.Code = "state_write_failed"
+		diagnostic.Message = "RootGuard could not persist the installation state."
+		diagnostic.Action = "Check permissions and free space of the rootguard-data volume before retrying."
+	case phase == "connect":
+		diagnostic.Code = "network_connect_failed"
+		diagnostic.Message = "Core could not connect to the private DNS network."
+		diagnostic.Action = "Inspect the Docker network state and retry the deployment."
+	case phase == "bootstrap":
+		diagnostic.Code = "dns_bootstrap_failed"
+		diagnostic.Message = "The protected AdGuard-to-Unbound DNS chain did not become healthy."
+		diagnostic.Action = "Review the AdGuard and Unbound diagnostics, then retry."
+	}
+	return diagnostic
+}
+
+func validNetworkConfig(config Config) bool {
+	ip := net.ParseIP(config.DNSBindAddress)
+	return ip != nil && ip.To4() != nil && config.DNSPort >= 1 && config.DNSPort <= 65535
+}
+
+var publishedPortPattern = regexp.MustCompile(`([0-9.]+|\[::\]):([0-9]+)->[0-9]+/(?:tcp|udp)`)
+
+func occupiedDockerPort(output, requestedAddress string, requestedPort int) string {
+	for _, line := range strings.Split(output, "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "|", 2)
+		if len(parts) != 2 || strings.HasPrefix(parts[0], "rootguard-") {
+			continue
+		}
+		for _, match := range publishedPortPattern.FindAllStringSubmatch(parts[1], -1) {
+			port, _ := strconv.Atoi(match[2])
+			if port != requestedPort {
+				continue
+			}
+			address := match[1]
+			if requestedAddress == "0.0.0.0" || address == "0.0.0.0" || address == "[::]" || address == requestedAddress {
+				return parts[0]
+			}
+		}
+	}
+	return ""
 }
 
 func (m *Manager) load() {
@@ -477,6 +596,10 @@ func cloneStatus(status Status) Status {
 	if status.Config != nil {
 		config := *status.Config
 		clone.Config = &config
+	}
+	if status.Diagnostic != nil {
+		diagnostic := *status.Diagnostic
+		clone.Diagnostic = &diagnostic
 	}
 	clone.Steps = make([]Step, len(status.Steps))
 	copy(clone.Steps, status.Steps)
