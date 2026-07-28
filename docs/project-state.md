@@ -211,6 +211,13 @@ Trustworthy Stack Center and production visibility:
   immutable release image digests, host port conflict diagnostics, and failed
   deployment recovery.
 
+The next storage slice must persist successful image history before deleting
+anything. Cleanup may retain the active and previous successful image and prune
+only older IDs recorded by RootGuard. Global `docker system prune`, `docker
+image prune`, and `docker volume prune` are prohibited. Configuration, AdGuard
+data, Unbound state, sessions, backups, and every unlabeled or foreign volume
+remain protected.
+
 ## Remaining production milestones
 
 1. Cohesive responsive UI shell and real dashboard metrics.
@@ -218,7 +225,9 @@ Trustworthy Stack Center and production visibility:
    signed/immutable Core/WebApp release metadata.
 3. Harden backup retention, export/restore, and immutable release digests.
 4. DNS security advisor and production preflight checks.
-5. AdGuard filter lists, exceptions, clients, and query statistics.
+5. Native AdGuard integration, contextual guidance, cross-service diagnostics,
+   and compatibility testing without duplicating filter, client, or query-log
+   management.
 6. Private domains, access networks, custom diagnostics, and cache tools.
 7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
 8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
