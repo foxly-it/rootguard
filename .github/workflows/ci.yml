@@ -86,13 +86,15 @@ jobs:
           presets="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/presets)"
           test "$(jq 'length' <<<"$presets")" = "4"
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
+          test "$(jq -r .resource_profile <<<"$active")" = "medium"
           risky="$(jq '.qname_minimisation = false | .prefetch = false | .serve_expired = false | .cache_min_ttl = 600 | .cache_max_ttl = 604800 | .threads = 16' <<<"$active")"
           advice="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$risky" http://127.0.0.1:18080/api/unbound/advice)"
           test "$(jq -r .status <<<"$advice")" = "review"
           test "$(jq '.recommendations | length' <<<"$advice")" -ge 4
-          proposal="$(jq '.qname_minimisation = true | .prefetch = true | .serve_expired = true | .cache_min_ttl = 120 | .cache_max_ttl = 86400 | .threads = 4' <<<"$active")"
+          proposal="$(jq '.qname_minimisation = true | .prefetch = true | .serve_expired = true | .cache_min_ttl = 120 | .cache_max_ttl = 86400 | .threads = 4 | .resource_profile = "large"' <<<"$active")"
           preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
           test "$(jq -r .changed <<<"$preview")" = "true"
+          test "$(jq -r '.rendered_config | contains("rrset-cache-size: 128m") and contains("msg-cache-size: 64m")' <<<"$preview")" = "true"
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
           versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
           test "$(jq 'length' <<<"$versions")" -ge 2
