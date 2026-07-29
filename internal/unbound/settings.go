@@ -53,6 +53,7 @@ type Settings struct {
 	PrefetchKey               bool                `json:"prefetch_key"`
 	AggressiveNSEC            bool                `json:"aggressive_nsec"`
 	EDNSBufferSize            int                 `json:"edns_buffer_size"`
+	LogVerbosity              int                 `json:"log_verbosity"`
 	ServeExpired              bool                `json:"serve_expired"`
 	ServeExpiredTTL           int                 `json:"serve_expired_ttl"`
 	ServeExpiredClientTimeout int                 `json:"serve_expired_client_timeout"`
@@ -80,6 +81,7 @@ func DefaultSettings() Settings {
 		PrefetchKey:               true,
 		AggressiveNSEC:            true,
 		EDNSBufferSize:            1232,
+		LogVerbosity:              1,
 		ServeExpired:              true,
 		ServeExpiredTTL:           86400,
 		ServeExpiredClientTimeout: 1800,
@@ -101,6 +103,9 @@ func DefaultSettings() Settings {
 func (s Settings) Validate() error {
 	if s.EDNSBufferSize < 512 || s.EDNSBufferSize > 4096 {
 		return fmt.Errorf("%w: edns_buffer_size must be between 512 and 4096 bytes", ErrInvalidSettings)
+	}
+	if s.LogVerbosity < 0 || s.LogVerbosity > 1 {
+		return fmt.Errorf("%w: log_verbosity must be 0 or 1 for privacy-safe persistent logging", ErrInvalidSettings)
 	}
 	if s.CacheMinTTL < 0 || s.CacheMinTTL > 3600 {
 		return fmt.Errorf("%w: cache_min_ttl must be between 0 and 3600", ErrInvalidSettings)
@@ -244,6 +249,7 @@ func settingsEqual(left, right Settings) bool {
 		left.PrefetchKey != right.PrefetchKey ||
 		left.AggressiveNSEC != right.AggressiveNSEC ||
 		left.EDNSBufferSize != right.EDNSBufferSize ||
+		left.LogVerbosity != right.LogVerbosity ||
 		left.ServeExpired != right.ServeExpired ||
 		left.ServeExpiredTTL != right.ServeExpiredTTL ||
 		left.ServeExpiredClientTimeout != right.ServeExpiredClientTimeout ||
@@ -303,6 +309,10 @@ func (s Settings) Render() ([]byte, error) {
 	fmt.Fprintf(&out, "    aggressive-nsec: %s\n", yesNo(s.AggressiveNSEC))
 	fmt.Fprintln(&out, "    # UDP resilience: advertise the DNS Flag Day 2020 payload size to avoid IP fragmentation.")
 	fmt.Fprintf(&out, "    edns-buffer-size: %d\n", s.EDNSBufferSize)
+	fmt.Fprintln(&out, "    # Privacy-safe logging: retain errors or operational events without persistent per-query logs.")
+	fmt.Fprintf(&out, "    verbosity: %d\n", s.LogVerbosity)
+	fmt.Fprintln(&out, "    log-queries: no")
+	fmt.Fprintln(&out, "    log-replies: no")
 	fmt.Fprintln(&out, "    # Availability: keep serving cached records during temporary upstream failures.")
 	fmt.Fprintf(&out, "    serve-expired: %s\n", yesNo(s.ServeExpired))
 	fmt.Fprintln(&out, "    # Maximum age in seconds for stale records eligible as an availability fallback.")
@@ -374,12 +384,16 @@ func yesNo(value bool) string {
 }
 
 type Manager struct {
-	hostConfigDir      string
-	containerConfigDir string
-	containerName      string
-	run                commandRunner
-	now                func() time.Time
-	applyMu            sync.Mutex
+	hostConfigDir       string
+	containerConfigDir  string
+	containerName       string
+	run                 commandRunner
+	now                 func() time.Time
+	applyMu             sync.Mutex
+	diagnosticMu        sync.Mutex
+	diagnosticTimer     *time.Timer
+	diagnosticExpiresAt *time.Time
+	diagnosticBaseLevel int
 }
 
 type commandRunner func(context.Context, string, ...string) ([]byte, error)
@@ -391,7 +405,8 @@ func NewManager(hostConfigDir, containerConfigDir, containerName string) *Manage
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return exec.CommandContext(ctx, name, args...).CombinedOutput()
 		},
-		now: time.Now,
+		now:                 time.Now,
+		diagnosticBaseLevel: 1,
 	}
 }
 
@@ -437,6 +452,9 @@ func (m *Manager) Load() (Settings, error) {
 	}
 	if !jsonFieldExists(data, "edns_buffer_size") {
 		settings.EDNSBufferSize = 1232
+	}
+	if !jsonFieldExists(data, "log_verbosity") {
+		settings.LogVerbosity = 1
 	}
 	return settings, settings.Validate()
 }
@@ -587,6 +605,7 @@ func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custo
 		}
 		return fmt.Errorf("restart unbound: %w: %s; previous configuration restored", err, output)
 	}
+	m.resetDiagnosticLoggingState(settings.LogVerbosity)
 	if err := m.recordSnapshot(settings, config, []byte(custom)); err != nil {
 		return fmt.Errorf("record active unbound version: %w", err)
 	}

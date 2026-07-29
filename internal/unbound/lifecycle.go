@@ -84,6 +84,7 @@ func settingsChanges(before, after Settings) []Change {
 	add("prefetch_key", before.PrefetchKey, after.PrefetchKey)
 	add("aggressive_nsec", before.AggressiveNSEC, after.AggressiveNSEC)
 	add("edns_buffer_size", before.EDNSBufferSize, after.EDNSBufferSize)
+	add("log_verbosity", before.LogVerbosity, after.LogVerbosity)
 	add("serve_expired", before.ServeExpired, after.ServeExpired)
 	add("serve_expired_ttl", before.ServeExpiredTTL, after.ServeExpiredTTL)
 	add("serve_expired_client_timeout", before.ServeExpiredClientTimeout, after.ServeExpiredClientTimeout)

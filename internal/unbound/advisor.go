@@ -70,6 +70,9 @@ func Advise(settings Settings) (Advice, error) {
 	if settings.EDNSBufferSize > 1232 {
 		add("lower-edns-buffer-size", "warning", "edns_buffer_size", "Große UDP-Antworten können fragmentieren", "Ein EDNS-Puffer über 1.232 Byte erhöht auf IPv6- und Tunnelpfaden das Risiko fragmentierter oder verworfener DNS-Antworten.", "EDNS-Puffer auf den sicheren Standardwert 1.232 Byte reduzieren.")
 	}
+	if settings.LogVerbosity == 0 {
+		add("enable-operational-logging", "recommendation", "log_verbosity", "Nur Fehler werden protokolliert", "Die datensparsame Stufe 0 blendet auch allgemeine Betriebsinformationen aus und kann die Ursachenanalyse erschweren.", "Stufe 1 für Betriebsereignisse ohne dauerhafte Query- oder Reply-Protokollierung verwenden.")
+	}
 	if !settings.ServeExpired {
 		add("enable-serve-expired", "warning", "serve_expired", "Weniger widerstandsfähig bei externen Störungen", "Bereits bekannte Domains können bei einer vorübergehenden Störung autoritativer Nameserver nicht weiter beantwortet werden.", "Serve Expired für Heim- und Unternehmensnetze aktivieren.")
 	}

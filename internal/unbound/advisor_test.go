@@ -120,6 +120,18 @@ func TestAdvisorExplainsEDNSBufferTradeoffs(t *testing.T) {
 	}
 }
 
+func TestAdvisorExplainsErrorsOnlyLogging(t *testing.T) {
+	settings := DefaultSettings()
+	settings.LogVerbosity = 0
+	advice, err := Advise(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(advice.Recommendations) != 1 || advice.Recommendations[0].ID != "enable-operational-logging" {
+		t.Fatalf("expected operational logging guidance, got %+v", advice)
+	}
+}
+
 func TestAdvisorRejectsInvalidSettings(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Threads = 0

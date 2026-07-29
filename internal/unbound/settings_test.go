@@ -22,6 +22,9 @@ func TestDefaultSettingsRender(t *testing.T) {
 		"prefetch-key: yes",
 		"aggressive-nsec: yes",
 		"edns-buffer-size: 1232",
+		"verbosity: 1",
+		"log-queries: no",
+		"log-replies: no",
 		"# Availability:",
 		"serve-expired: yes",
 		"serve-expired-ttl: 86400",
@@ -59,6 +62,28 @@ func TestLoadMigratesGuidedControls(t *testing.T) {
 	}
 	if settings.EDNSBufferSize != 1232 {
 		t.Fatalf("legacy EDNS buffer setting was not migrated: %#v", settings)
+	}
+	if settings.LogVerbosity != 1 {
+		t.Fatalf("legacy logging setting was not migrated: %#v", settings)
+	}
+}
+
+func TestPersistentLoggingStaysPrivacySafe(t *testing.T) {
+	settings := DefaultSettings()
+	settings.LogVerbosity = 0
+	config, err := settings.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := string(config)
+	if !strings.Contains(rendered, "verbosity: 0") ||
+		!strings.Contains(rendered, "log-queries: no") ||
+		!strings.Contains(rendered, "log-replies: no") {
+		t.Fatalf("privacy-safe logging directives missing:\n%s", rendered)
+	}
+	settings.LogVerbosity = 2
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected persistent diagnostic verbosity to be rejected, got %v", err)
 	}
 }
 

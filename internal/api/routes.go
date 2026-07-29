@@ -52,6 +52,9 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/unbound/history", unboundHistoryHandler(deps.Unbound))
 	apiMux.HandleFunc("POST /api/unbound/history/{id}/restore", restoreUnboundVersionHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/diagnostics", unboundDiagnosticsHandler(deps.Unbound))
+	apiMux.HandleFunc("GET /api/unbound/diagnostic-logging", unboundDiagnosticLoggingStatusHandler(deps.Unbound))
+	apiMux.HandleFunc("POST /api/unbound/diagnostic-logging", startUnboundDiagnosticLoggingHandler(deps.Unbound))
+	apiMux.HandleFunc("DELETE /api/unbound/diagnostic-logging", stopUnboundDiagnosticLoggingHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/presets", unboundPresetsHandler)
 	apiMux.HandleFunc("POST /api/unbound/advice", unboundAdviceHandler)
 	apiMux.HandleFunc("POST /api/unbound/forward-check", unboundForwardCheckHandler(deps.Unbound))
@@ -369,6 +372,34 @@ func serviceLogsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, logs)
+}
+
+func unboundDiagnosticLoggingStatusHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, manager.DiagnosticLoggingStatus())
+	}
+}
+
+func startUnboundDiagnosticLoggingHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status, err := manager.StartDiagnosticLogging(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	}
+}
+
+func stopUnboundDiagnosticLoggingHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status, err := manager.StopDiagnosticLogging(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	}
 }
 
 func getUnboundSettingsHandler(manager *unbound.Manager) http.HandlerFunc {
