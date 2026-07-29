@@ -213,6 +213,8 @@ Exit: backup export/import and failed-update recovery are automated and tested.
 Goal: the appliance has a documented, reviewable security posture suitable for
 a trusted network.
 
+- [x] Enforce a patched Unbound `1.25.2+` security floor before exposing
+      serve-expired client-timeout controls
 - [ ] Built-in HTTPS or a supported reverse-proxy deployment with secure defaults
 - [ ] Secure-cookie enforcement when HTTPS is active
 - [ ] Session inventory and session revocation
