@@ -100,6 +100,26 @@ func TestAdvisorExplainsDNSSECCacheCompatibility(t *testing.T) {
 	}
 }
 
+func TestAdvisorExplainsEDNSBufferTradeoffs(t *testing.T) {
+	settings := DefaultSettings()
+	settings.EDNSBufferSize = 512
+	advice, err := Advise(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(advice.Recommendations) != 1 || advice.Recommendations[0].ID != "raise-edns-buffer-size" {
+		t.Fatalf("expected small EDNS buffer guidance, got %+v", advice)
+	}
+	settings.EDNSBufferSize = 1400
+	advice, err = Advise(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if advice.Status != "review" || len(advice.Recommendations) != 1 || advice.Recommendations[0].ID != "lower-edns-buffer-size" {
+		t.Fatalf("expected large EDNS buffer warning, got %+v", advice)
+	}
+}
+
 func TestAdvisorRejectsInvalidSettings(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Threads = 0

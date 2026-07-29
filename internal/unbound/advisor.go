@@ -64,6 +64,12 @@ func Advise(settings Settings) (Advice, error) {
 	if !settings.AggressiveNSEC {
 		add("enable-aggressive-nsec", "recommendation", "aggressive_nsec", "Validierte Negativantworten werden nicht wiederverwendet", "Ohne aggressives NSEC-Caching fragt Unbound häufiger nach nicht vorhandenen Namen, obwohl deren Nichtexistenz bereits DNSSEC-validiert ableitbar ist.", "Aggressives NSEC aktivieren; nur zur gezielten Diagnose auffälliger DNSSEC-Zonen vorübergehend deaktivieren.")
 	}
+	if settings.EDNSBufferSize < 1232 {
+		add("raise-edns-buffer-size", "recommendation", "edns_buffer_size", "Kleiner EDNS-Puffer erzeugt mehr TCP-Rückfälle", "Ein EDNS-Puffer unter 1.232 Byte vermeidet Fragmentierung besonders streng, kann aber größere DNS- und DNSSEC-Antworten häufiger auf TCP verlagern.", "1.232 Byte als ausgewogenen DNS-Flag-Day-Standard verwenden, sofern der Netzwerkpfad keinen kleineren Wert erfordert.")
+	}
+	if settings.EDNSBufferSize > 1232 {
+		add("lower-edns-buffer-size", "warning", "edns_buffer_size", "Große UDP-Antworten können fragmentieren", "Ein EDNS-Puffer über 1.232 Byte erhöht auf IPv6- und Tunnelpfaden das Risiko fragmentierter oder verworfener DNS-Antworten.", "EDNS-Puffer auf den sicheren Standardwert 1.232 Byte reduzieren.")
+	}
 	if !settings.ServeExpired {
 		add("enable-serve-expired", "warning", "serve_expired", "Weniger widerstandsfähig bei externen Störungen", "Bereits bekannte Domains können bei einer vorübergehenden Störung autoritativer Nameserver nicht weiter beantwortet werden.", "Serve Expired für Heim- und Unternehmensnetze aktivieren.")
 	}

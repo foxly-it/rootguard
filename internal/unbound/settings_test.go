@@ -21,6 +21,7 @@ func TestDefaultSettingsRender(t *testing.T) {
 		"prefetch: yes",
 		"prefetch-key: yes",
 		"aggressive-nsec: yes",
+		"edns-buffer-size: 1232",
 		"# Availability:",
 		"serve-expired: yes",
 		"serve-expired-ttl: 86400",
@@ -55,6 +56,29 @@ func TestLoadMigratesGuidedControls(t *testing.T) {
 	}
 	if !settings.PrefetchKey || !settings.AggressiveNSEC {
 		t.Fatalf("legacy DNSSEC cache settings were not migrated: %#v", settings)
+	}
+	if settings.EDNSBufferSize != 1232 {
+		t.Fatalf("legacy EDNS buffer setting was not migrated: %#v", settings)
+	}
+}
+
+func TestEDNSBufferSizeValidateAndRender(t *testing.T) {
+	settings := DefaultSettings()
+	settings.EDNSBufferSize = 1400
+	config, err := settings.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(config), "edns-buffer-size: 1400") {
+		t.Fatalf("EDNS buffer size missing from config:\n%s", config)
+	}
+	settings.EDNSBufferSize = 511
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected undersized EDNS buffer to be rejected, got %v", err)
+	}
+	settings.EDNSBufferSize = 4097
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected oversized EDNS buffer to be rejected, got %v", err)
 	}
 }
 
