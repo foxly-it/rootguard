@@ -33,6 +33,12 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Secure AdGuard Home first-time setup through RootGuard.
 - Generated AdGuard credentials remain in Core's persistent data volume.
 - Unbound runs read-only, non-root, without additional capabilities.
+- Unbound keeps a stable non-root identity (`100:101`) across image rebuilds,
+  uses the system socket send buffer, and Core migrates the persistent resolver
+  state ownership with a network-isolated, capability-restricted helper before
+  image replacement. The WebApp update path from 1.22.0 to 1.25.2 was verified
+  with a writable DNSSEC trust anchor, clean startup logs, positive resolution,
+  and DNSSEC rejection.
 - Authenticated Unbound settings for QNAME minimisation, prefetch,
   serve-expired, cache TTLs, and resolver threads.
 - Side-effect-free change preview and generated configuration display.
