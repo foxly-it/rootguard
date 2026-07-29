@@ -87,6 +87,7 @@ type UnboundSettings struct {
 	CacheMinTTL       int                        `json:"cache_min_ttl"`
 	CacheMaxTTL       int                        `json:"cache_max_ttl"`
 	Threads           int                        `json:"threads"`
+	ResourceProfile   string                     `json:"resource_profile"`
 	NetworkMode       string                     `json:"network_mode"`
 	ForwardZones      []UnboundForwardZone       `json:"forward_zones"`
 	PrivateDomains    []string                   `json:"private_domains"`
