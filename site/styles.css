@@ -119,6 +119,7 @@ body{overflow-x:hidden}
 @media(max-width:640px){.wrap{width:calc(100% - 24px)}}
 
 .preview-resources i svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.preview-kpis>div>i svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 
 /* Hero dashboard motion shared with the Foxly product sites */
 @keyframes dashboard-settle{

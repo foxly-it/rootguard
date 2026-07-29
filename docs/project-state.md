@@ -203,8 +203,9 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   a Compose quick start, three user benefits, and a compact project status.
   Technical depth stays in the documentation, whose table of contents highlights the
   section currently in view. The dashboard header preview mirrors the live
-  WebApp's Lucide symbols for CPU, memory, query, blocked-query, and filter-rate
-  cards instead of substituting unrelated text glyphs.
+  WebApp's Lucide symbols for endpoint, services, DNSSEC, filter chain, CPU,
+  memory, query, blocked-query, and filter-rate cards instead of substituting
+  unrelated text glyphs.
 - Public alpha `v0.1.0-alpha.3` is published around a single
   `compose.alpha.yaml` that
   contains no local build contexts and pulls one named RootGuard version for
