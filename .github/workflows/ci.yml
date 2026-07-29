@@ -84,15 +84,23 @@ jobs:
       - name: Verify Unbound configuration lifecycle
         run: |
           presets="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/presets)"
-          test "$(jq 'length' <<<"$presets")" = "4"
+          preset_count="$(jq 'length' <<<"$presets")"
+          test "$preset_count" = "4" || { echo "Expected 4 presets, received $preset_count"; exit 1; }
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
+          active_profile="$(jq -r .resource_profile <<<"$active")"
+          test "$active_profile" = "medium" || { echo "Expected default resource profile medium, received $active_profile"; exit 1; }
           risky="$(jq '.qname_minimisation = false | .prefetch = false | .serve_expired = false | .cache_min_ttl = 600 | .cache_max_ttl = 604800 | .threads = 16' <<<"$active")"
           advice="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$risky" http://127.0.0.1:18080/api/unbound/advice)"
-          test "$(jq -r .status <<<"$advice")" = "review"
-          test "$(jq '.recommendations | length' <<<"$advice")" -ge 4
-          proposal="$(jq '.qname_minimisation = true | .prefetch = true | .serve_expired = true | .cache_min_ttl = 120 | .cache_max_ttl = 86400 | .threads = 4' <<<"$active")"
+          advice_status="$(jq -r .status <<<"$advice")"
+          recommendation_count="$(jq '.recommendations | length' <<<"$advice")"
+          test "$advice_status" = "review" || { echo "Expected advisor review status, received $advice_status"; exit 1; }
+          test "$recommendation_count" -ge 4 || { echo "Expected at least 4 recommendations, received $recommendation_count"; exit 1; }
+          proposal="$(jq '.qname_minimisation = true | .prefetch = true | .serve_expired = true | .cache_min_ttl = 120 | .cache_max_ttl = 86400 | .threads = 4 | .resource_profile = "large"' <<<"$active")"
           preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
-          test "$(jq -r .changed <<<"$preview")" = "true"
+          preview_changed="$(jq -r .changed <<<"$preview")"
+          cache_profile_rendered="$(jq -r '.rendered_config | contains("rrset-cache-size: 128m") and contains("msg-cache-size: 64m")' <<<"$preview")"
+          test "$preview_changed" = "true" || { echo "Expected changed preview, received $preview_changed"; exit 1; }
+          test "$cache_profile_rendered" = "true" || { echo "Expected large cache directives in preview, received $cache_profile_rendered"; exit 1; }
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
           versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
           test "$(jq 'length' <<<"$versions")" -ge 2

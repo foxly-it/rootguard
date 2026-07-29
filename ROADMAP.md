@@ -120,7 +120,7 @@ The detailed ownership and directive plan lives in
       end-client CIDR policy belongs to AdGuard Home by design
 - [x] IPv4/IPv6 operating mode with capability and connectivity checks
       ([#43](https://github.com/foxly-it/rootguard/issues/43))
-- [ ] Cache memory sizing derived from an explicit resource profile
+- [x] Cache memory sizing derived from an explicit resource profile
 - [ ] Serve-expired TTL and client timeout controls
 - [ ] Prefetch-key and aggressive NSEC controls with compatibility guidance
 - [ ] EDNS buffer size with safe default `1232` and validation
