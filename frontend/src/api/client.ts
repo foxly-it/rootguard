@@ -112,6 +112,8 @@ export async function serviceAction(
 export interface UnboundSettings {
   qname_minimisation: boolean;
   prefetch: boolean;
+  prefetch_key: boolean;
+  aggressive_nsec: boolean;
   serve_expired: boolean;
   serve_expired_ttl: number;
   serve_expired_client_timeout: number;

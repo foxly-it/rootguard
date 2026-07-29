@@ -83,6 +83,8 @@ type ServiceActionResponse struct {
 type UnboundSettings struct {
 	QnameMinimisation         bool                       `json:"qname_minimisation"`
 	Prefetch                  bool                       `json:"prefetch"`
+	PrefetchKey               bool                       `json:"prefetch_key"`
+	AggressiveNSEC            bool                       `json:"aggressive_nsec"`
 	ServeExpired              bool                       `json:"serve_expired"`
 	ServeExpiredTTL           int                        `json:"serve_expired_ttl"`
 	ServeExpiredClientTimeout int                        `json:"serve_expired_client_timeout"`
