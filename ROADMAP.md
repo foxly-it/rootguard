@@ -124,7 +124,7 @@ The detailed ownership and directive plan lives in
 - [x] Serve-expired TTL and client timeout controls
 - [x] Prefetch-key and aggressive NSEC controls with compatibility guidance
 - [x] EDNS buffer size with safe default `1232` and validation
-- [ ] Privacy-safe logging level and temporary diagnostic logging
+- [x] Privacy-safe logging level and temporary diagnostic logging
 
 ### Fixed secure base
 
