@@ -62,6 +62,7 @@ export default function Unbound() {
       private_domains: loadedSettings.private_domains ?? [],
       reverse_zones: loadedSettings.reverse_zones ?? [],
       network_mode: loadedSettings.network_mode ?? "ipv4",
+      resource_profile: loadedSettings.resource_profile ?? "medium",
     });
     setHistory(loadedHistory);
     setPresets(loadedPresets);
@@ -271,6 +272,14 @@ export default function Unbound() {
             </div>
             <details className="advanced-settings">
               <summary><span>{t("unbound.cachePerformance")}</span><small>{t("unbound.cachePerformanceHelp")}</small></summary>
+              <label className="resource-profile-field">
+                <strong>{t("unbound.resourceProfile")}</strong>
+                <select value={settings.resource_profile} onChange={(event) => setSettings({ ...settings, resource_profile: event.target.value as UnboundSettings["resource_profile"] })}>
+                  {(["small", "medium", "large"] as const).map((profile) => <option key={profile} value={profile}>{t(`unbound.resourceProfile.${profile}`)}</option>)}
+                </select>
+                <small>{t(`unbound.resourceProfile.${settings.resource_profile}Help`)}</small>
+                <code className="setting-directive">{resourceProfileDirectives(settings.resource_profile)}</code>
+              </label>
               <div className="number-grid">
                 <NumberField directive="cache-min-ttl" label="Minimum TTL" description={t("unbound.minTtlHelp")} recommended={t("unbound.recommended", { value: "0–300" })} value={settings.cache_min_ttl} min={0} max={3600} onChange={(value) => setSettings({ ...settings, cache_min_ttl: value })} />
                 <NumberField directive="cache-max-ttl" label="Maximum TTL" description={t("unbound.maxTtlHelp")} recommended={t("unbound.recommended", { value: "3.600–172.800" })} value={settings.cache_max_ttl} min={60} max={604800} onChange={(value) => setSettings({ ...settings, cache_max_ttl: value })} />
@@ -368,7 +377,7 @@ function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolea
 }
 
 function fieldLabel(field: string, t: (key: string) => string) {
-  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
+  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
   return labels[field] ?? field;
 }
 
@@ -378,7 +387,13 @@ function settingsEqual(left: UnboundSettings, right: UnboundSettings) {
     && left.serve_expired === right.serve_expired
     && left.cache_min_ttl === right.cache_min_ttl
     && left.cache_max_ttl === right.cache_max_ttl
-    && left.threads === right.threads;
+    && left.threads === right.threads
+    && left.resource_profile === right.resource_profile;
+}
+
+function resourceProfileDirectives(profile: UnboundSettings["resource_profile"]) {
+  const sizes = { small: ["32m", "16m"], medium: ["64m", "32m"], large: ["128m", "64m"] }[profile];
+  return `rrset-cache-size: ${sizes[0]} · msg-cache-size: ${sizes[1]}`;
 }
 
 function presetText(id: string, field: "name" | "description" | "bestFor", t: (key: string) => string, fallback: string) {

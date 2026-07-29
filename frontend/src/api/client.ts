@@ -116,6 +116,7 @@ export interface UnboundSettings {
   cache_min_ttl: number;
   cache_max_ttl: number;
   threads: number;
+  resource_profile: "small" | "medium" | "large";
   network_mode: "ipv4" | "dual" | "ipv6";
   forward_zones: UnboundForwardZone[];
   private_domains: string[];

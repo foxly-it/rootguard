@@ -196,6 +196,25 @@
   background: rgba(5, 17, 30, 0.36);
 }
 
+.resource-profile-field {
+  display: grid;
+  gap: 8px;
+  margin: 22px 0 8px;
+  color: var(--rg-text-secondary);
+  font-size: 13px;
+}
+
+.resource-profile-field strong { color: var(--rg-text-primary); }
+.resource-profile-field select {
+  width: 100%;
+  padding: 11px;
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 7px;
+  background: #111d2e;
+  color: var(--rg-text-primary);
+}
+.resource-profile-field small { line-height: 1.45; }
+
 .number-field input {
   min-height: 46px;
   box-sizing: border-box;
