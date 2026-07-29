@@ -20,6 +20,19 @@ to make the selected release understandable to an operator.
 | WebApp | `0.1.0-alpha.2` | `sha256:62242437eee6fcead12748080fc86205a45747fa0b479f6c4a901d603f74c169` |
 | Updater | `0.1.0-alpha.2` | `sha256:1e08cdcb4868e99389db586a43130e08d73045aeac67d7e724c9cf669ebbe45a` |
 | Unbound | `0.1.0-alpha.2` | `sha256:93b705586814042469547677b79648ff7bc09de45efea36553402d3c3fb9026d` |
+
+## Recorded 0.1.0-alpha.3 manifests
+
+| Component | Version tag | Multi-architecture manifest digest |
+| --- | --- | --- |
+| Core | `0.1.0-alpha.3` | `sha256:c22f918bb563740cb9b99cf09a438fc1801eabaf1df0dd3eb25295825d6ca321` |
+| WebApp | `0.1.0-alpha.3` | `sha256:5a9baa7c0819cdaa5db9da9248e03b50038b4875aa43c71f52081c123219fd8d` |
+| Updater | `0.1.0-alpha.3` | `sha256:1e08cdcb4868e99389db586a43130e08d73045aeac67d7e724c9cf669ebbe45a` |
+| Unbound | `0.1.0-alpha.3` | `sha256:f74fc78b223d8aa8492aed4562279d510e328aaf8133ee9ea6ac9fe4a40e49e3` |
+
+The Updater source did not change between alpha.2 and alpha.3. Its tested
+multi-architecture manifest is therefore intentionally reused under the new
+coordinated stack version.
 | AdGuard Home | `v0.107.78` | `sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5` |
 
 These are OCI index digests covering the supported platform manifests. They

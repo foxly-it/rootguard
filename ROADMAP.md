@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-07-28
+Last reviewed: 2026-07-29
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -76,6 +76,19 @@ reproducible problem without relying on local `dev` images.
 
 Published: Git tag and GitHub pre-release `v0.1.0-alpha.2`. The remaining
 unchecked items are alpha hardening work and stay ahead of beta readiness.
+
+### 0.1.0-alpha.3 — visibility and interface quality
+
+- [x] Add privacy-preserving live Stack and AdGuard Home dashboard metrics
+- [x] Refresh dashboard and Stack Center state automatically
+- [x] Move long logs, configurations, and directive details into large,
+      scrollable views
+- [x] Align guided Unbound actions and fix stale Advisor profile results
+- [x] Update the responsive public website and bilingual documentation
+
+Published: Git tag and GitHub pre-release `v0.1.0-alpha.3`. The clean
+GitHub-runner release smoke test passed login, guided AIO installation,
+recursive DNS resolution, and DNSSEC rejection.
 
 ### Current development slice — trustworthy Stack Center
 

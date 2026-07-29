@@ -197,7 +197,7 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   a Compose quick start, three user benefits, and a compact project status.
   Technical depth stays in the documentation, whose table of contents highlights the
   section currently in view.
-- Public alpha `v0.1.0-alpha.2` is published around a single
+- Public alpha `v0.1.0-alpha.3` is published around a single
   `compose.alpha.yaml` that
   contains no local build contexts and pulls one named RootGuard version for
   Core, WebApp, Updater, and Unbound. Component-owned tag workflows publish
@@ -269,17 +269,16 @@ visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
-1. Cohesive responsive UI shell and real dashboard metrics.
-2. Complete richer Stack Center health details and signed/immutable Core/WebApp
+1. Complete richer Stack Center health details and signed/immutable Core/WebApp
    release metadata.
-3. Harden backup retention, export/restore, and immutable release digests.
-4. DNS security advisor and production preflight checks.
-5. Native AdGuard integration, contextual guidance, cross-service diagnostics,
+2. Harden backup retention, export/restore, and immutable release digests.
+3. DNS security advisor and production preflight checks.
+4. Native AdGuard integration, contextual guidance, cross-service diagnostics,
    and compatibility testing without duplicating filter, client, or query-log
    management.
-6. Custom diagnostics and cache tools.
-7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
-8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
+5. Custom diagnostics and cache tools.
+6. Runtime-provider abstraction for Docker and future bare-metal/systemd.
+7. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
    hardening.
 
 ## Tracked editor follow-ups
@@ -293,9 +292,9 @@ visible no-op instead of widening its scope.
 
 ## Release status
 
-`v0.1.0-alpha.2` was published on 2026-07-26 as a GitHub pre-release with
+`v0.1.0-alpha.3` was published on 2026-07-29 as a GitHub pre-release with
 public `amd64`/`arm64` images for all four RootGuard components. Its clean
-GitHub-runner smoke test installed the released Compose and verified recursive
+GitHub-runner smoke test installed the released stack and verified recursive
 DNS plus DNSSEC rejection. RootGuard remains in active alpha development:
 update safety, backup/restore, broader authentication hardening and roles, and
 bare-metal support are not yet production complete.
