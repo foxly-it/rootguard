@@ -89,6 +89,33 @@ func HandleUnboundDiagnostics(w http.ResponseWriter, r *http.Request, core *core
 	writeJSON(w, http.StatusOK, report)
 }
 
+func HandleUnboundDiagnosticLoggingStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	status, err := core.UnboundDiagnosticLoggingStatus(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func HandleStartUnboundDiagnosticLogging(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	status, err := core.StartUnboundDiagnosticLogging(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func HandleStopUnboundDiagnosticLogging(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	status, err := core.StopUnboundDiagnosticLogging(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
 func HandleUnboundPresets(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	presets, err := core.UnboundPresets(r.Context())
 	if err != nil {

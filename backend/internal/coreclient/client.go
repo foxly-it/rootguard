@@ -86,6 +86,7 @@ type UnboundSettings struct {
 	PrefetchKey               bool                       `json:"prefetch_key"`
 	AggressiveNSEC            bool                       `json:"aggressive_nsec"`
 	EDNSBufferSize            int                        `json:"edns_buffer_size"`
+	LogVerbosity              int                        `json:"log_verbosity"`
 	ServeExpired              bool                       `json:"serve_expired"`
 	ServeExpiredTTL           int                        `json:"serve_expired_ttl"`
 	ServeExpiredClientTimeout int                        `json:"serve_expired_client_timeout"`
@@ -105,6 +106,12 @@ type UnboundForwardZone struct {
 	ForwardFirst          bool     `json:"forward_first"`
 	AllowUnsigned         bool     `json:"allow_unsigned"`
 	AllowPrivateAddresses bool     `json:"allow_private_addresses"`
+}
+
+type UnboundDiagnosticLoggingStatus struct {
+	Active    bool       `json:"active"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	Level     int        `json:"level"`
 }
 
 type UnboundReverseZonePolicy struct {
@@ -388,6 +395,24 @@ func (c *Client) RestoreUnboundVersion(ctx context.Context, id string) (UnboundS
 func (c *Client) UnboundDiagnostics(ctx context.Context) (UnboundDiagnosticReport, error) {
 	var result UnboundDiagnosticReport
 	err := c.do(ctx, http.MethodGet, "/api/unbound/diagnostics", nil, &result)
+	return result, err
+}
+
+func (c *Client) UnboundDiagnosticLoggingStatus(ctx context.Context) (UnboundDiagnosticLoggingStatus, error) {
+	var result UnboundDiagnosticLoggingStatus
+	err := c.do(ctx, http.MethodGet, "/api/unbound/diagnostic-logging", nil, &result)
+	return result, err
+}
+
+func (c *Client) StartUnboundDiagnosticLogging(ctx context.Context) (UnboundDiagnosticLoggingStatus, error) {
+	var result UnboundDiagnosticLoggingStatus
+	err := c.do(ctx, http.MethodPost, "/api/unbound/diagnostic-logging", nil, &result)
+	return result, err
+}
+
+func (c *Client) StopUnboundDiagnosticLogging(ctx context.Context) (UnboundDiagnosticLoggingStatus, error) {
+	var result UnboundDiagnosticLoggingStatus
+	err := c.do(ctx, http.MethodDelete, "/api/unbound/diagnostic-logging", nil, &result)
 	return result, err
 }
 

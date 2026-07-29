@@ -115,6 +115,7 @@ export interface UnboundSettings {
   prefetch_key: boolean;
   aggressive_nsec: boolean;
   edns_buffer_size: number;
+  log_verbosity: number;
   serve_expired: boolean;
   serve_expired_ttl: number;
   serve_expired_client_timeout: number;
@@ -253,6 +254,24 @@ export async function restoreUnboundVersion(id: string): Promise<UnboundSettings
 
 export async function fetchUnboundDiagnostics(): Promise<UnboundDiagnosticReport> {
   return request<UnboundDiagnosticReport>("/api/unbound/diagnostics");
+}
+
+export interface UnboundDiagnosticLoggingStatus {
+  active: boolean;
+  expires_at?: string;
+  level: number;
+}
+
+export async function fetchUnboundDiagnosticLoggingStatus(): Promise<UnboundDiagnosticLoggingStatus> {
+  return request<UnboundDiagnosticLoggingStatus>("/api/unbound/diagnostic-logging");
+}
+
+export async function startUnboundDiagnosticLogging(): Promise<UnboundDiagnosticLoggingStatus> {
+  return request<UnboundDiagnosticLoggingStatus>("/api/unbound/diagnostic-logging", { method: "POST" });
+}
+
+export async function stopUnboundDiagnosticLogging(): Promise<UnboundDiagnosticLoggingStatus> {
+  return request<UnboundDiagnosticLoggingStatus>("/api/unbound/diagnostic-logging", { method: "DELETE" });
 }
 
 export async function fetchUnboundPresets(): Promise<UnboundPreset[]> {

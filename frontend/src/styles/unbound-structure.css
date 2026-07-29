@@ -163,6 +163,26 @@
   margin: 0;
 }
 
+.diagnostic-logging-control {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(9, 17, 29, 0.42);
+}
+
+.diagnostic-logging-control small {
+  display: block;
+  max-width: 720px;
+  margin-top: 5px;
+  color: var(--rg-text-secondary);
+  line-height: 1.45;
+}
+
 .diagnostic-results {
   grid-column: 1 / -1;
 }
@@ -310,6 +330,12 @@
 
   .diagnostic-results {
     grid-column: auto;
+  }
+
+  .diagnostic-logging-control {
+    grid-column: auto;
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 

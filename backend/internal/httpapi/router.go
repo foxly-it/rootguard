@@ -227,6 +227,15 @@ func NewRouter(core *coreclient.Client) http.Handler {
 	mux.HandleFunc("GET /api/unbound/diagnostics", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundDiagnostics(w, r, core)
 	})
+	mux.HandleFunc("GET /api/unbound/diagnostic-logging", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleUnboundDiagnosticLoggingStatus(w, r, core)
+	})
+	mux.HandleFunc("POST /api/unbound/diagnostic-logging", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleStartUnboundDiagnosticLogging(w, r, core)
+	})
+	mux.HandleFunc("DELETE /api/unbound/diagnostic-logging", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleStopUnboundDiagnosticLogging(w, r, core)
+	})
 
 	mux.HandleFunc("GET /api/unbound/presets", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundPresets(w, r, core)

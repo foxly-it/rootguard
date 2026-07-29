@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } 
 import { Activity, Code2, Expand, MapPinned, SlidersHorizontal } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
+  fetchUnboundDiagnosticLoggingStatus,
   fetchUnboundHistory,
   fetchUnboundAdvice,
   fetchUnboundActiveConfiguration,
@@ -9,9 +10,12 @@ import {
   fetchUnboundSettings,
   fetchUnboundNetworkCapabilities,
   previewUnboundSettings,
+  startUnboundDiagnosticLogging,
+  stopUnboundDiagnosticLogging,
   restoreUnboundVersion,
   updateUnboundSettings,
   type UnboundDiagnosticReport,
+  type UnboundDiagnosticLoggingStatus,
   type UnboundAdvice,
   type UnboundActiveConfiguration,
   type UnboundHistoryEntry,
@@ -38,6 +42,7 @@ export default function Unbound() {
   const [history, setHistory] = useState<UnboundHistoryEntry[]>([]);
   const [preview, setPreview] = useState<UnboundPreview | null>(null);
   const [diagnostics, setDiagnostics] = useState<UnboundDiagnosticReport | null>(null);
+  const [diagnosticLogging, setDiagnosticLogging] = useState<UnboundDiagnosticLoggingStatus | null>(null);
   const [presets, setPresets] = useState<UnboundPreset[]>([]);
   const [advice, setAdvice] = useState<UnboundAdvice | null>(null);
   const [liveConfig, setLiveConfig] = useState<UnboundActiveConfiguration | null>(null);
@@ -50,11 +55,12 @@ export default function Unbound() {
   const [configModal, setConfigModal] = useState<"base" | "custom" | null>(null);
 
   const reload = useCallback(async () => {
-    const [loadedSettings, loadedHistory, loadedPresets, loadedConfig] = await Promise.all([
+    const [loadedSettings, loadedHistory, loadedPresets, loadedConfig, loadedDiagnosticLogging] = await Promise.all([
       fetchUnboundSettings(),
       fetchUnboundHistory(),
       fetchUnboundPresets(),
       fetchUnboundActiveConfiguration(),
+      fetchUnboundDiagnosticLoggingStatus(),
     ]);
     setSettings({
       ...loadedSettings,
@@ -66,12 +72,14 @@ export default function Unbound() {
       prefetch_key: loadedSettings.prefetch_key ?? true,
       aggressive_nsec: loadedSettings.aggressive_nsec ?? true,
       edns_buffer_size: loadedSettings.edns_buffer_size ?? 1232,
+      log_verbosity: loadedSettings.log_verbosity ?? 1,
       serve_expired_ttl: loadedSettings.serve_expired_ttl ?? 86400,
       serve_expired_client_timeout: loadedSettings.serve_expired_client_timeout ?? 1800,
     });
     setHistory(loadedHistory);
     setPresets(loadedPresets);
     setLiveConfig(loadedConfig);
+    setDiagnosticLogging(loadedDiagnosticLogging);
   }, []);
 
   async function checkNetworkCapabilities() {
@@ -107,6 +115,16 @@ export default function Unbound() {
       window.clearTimeout(request);
     };
   }, [settings]);
+
+  useEffect(() => {
+    if (!diagnosticLogging?.active) return;
+    const refresh = window.setInterval(() => {
+      fetchUnboundDiagnosticLoggingStatus()
+        .then(setDiagnosticLogging)
+        .catch(() => undefined);
+    }, 10_000);
+    return () => window.clearInterval(refresh);
+  }, [diagnosticLogging?.active]);
 
   async function selectPreset(preset: UnboundPreset) {
     if (busy || !settings) return;
@@ -190,6 +208,23 @@ export default function Unbound() {
     }
   }
 
+  async function toggleDiagnosticLogging() {
+    if (busy) return;
+    setBusy(true);
+    clearFeedback();
+    try {
+      const status = diagnosticLogging?.active
+        ? await stopUnboundDiagnosticLogging()
+        : await startUnboundDiagnosticLogging();
+      setDiagnosticLogging(status);
+      setMessage(t(status.active ? "unbound.diagnosticLoggingStarted" : "unbound.diagnosticLoggingStopped"));
+    } catch (err) {
+      setError(errorMessage(err, t("unbound.diagnosticLoggingError")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function clearFeedback() {
     setMessage("");
     setError("");
@@ -236,6 +271,17 @@ export default function Unbound() {
           <button className="secondary-action" type="button" disabled={busy} onClick={runDiagnostics}>
             {busy ? t("unbound.wait") : t("unbound.diagnose")}
           </button>
+          <div className="diagnostic-logging-control">
+            <div>
+              <strong>{t("unbound.diagnosticLogging")}</strong>
+              <small>{diagnosticLogging?.active && diagnosticLogging.expires_at
+                ? t("unbound.diagnosticLoggingActive", { date: formatDate(diagnosticLogging.expires_at) })
+                : t("unbound.diagnosticLoggingHelp")}</small>
+            </div>
+            <button className="secondary-action" type="button" disabled={busy} onClick={toggleDiagnosticLogging}>
+              {t(diagnosticLogging?.active ? "unbound.diagnosticLoggingStop" : "unbound.diagnosticLoggingStart")}
+            </button>
+          </div>
           {diagnostics && <div className="diagnostic-results"><div className={`overall-status ${diagnostics.healthy ? "healthy" : "failed"}`}>{diagnostics.healthy ? t("unbound.allPassed") : t("unbound.someFailed")}</div>{diagnostics.checks.map((check) => <DiagnosticRow key={check.name} {...check} label={fieldLabel(check.name, t)} />)}<small className="timestamp">{t("unbound.checked", { date: formatDate(diagnostics.checked_at) })}</small></div>}
         </section>
       </section>
@@ -287,6 +333,7 @@ export default function Unbound() {
               </label>
               <Toggle directive="prefetch-key" label={t("unbound.prefetchKey")} badge={t("unbound.prefetchKeyBadge")} description={t("unbound.prefetchKeyHelp")} checked={settings.prefetch_key} onChange={(value) => setSettings({ ...settings, prefetch_key: value })} />
               <Toggle directive="aggressive-nsec" label={t("unbound.aggressiveNsec")} badge={t("unbound.aggressiveNsecBadge")} description={t("unbound.aggressiveNsecHelp")} checked={settings.aggressive_nsec} onChange={(value) => setSettings({ ...settings, aggressive_nsec: value })} />
+              <Toggle directive="verbosity" label={t("unbound.operationalLogging")} badge={t("unbound.operationalLoggingBadge")} description={t("unbound.operationalLoggingHelp")} checked={settings.log_verbosity === 1} onChange={(value) => setSettings({ ...settings, log_verbosity: value ? 1 : 0 })} />
               <div className="number-grid">
                 <NumberField directive="edns-buffer-size" label={t("unbound.ednsBufferSize")} description={t("unbound.ednsBufferSizeHelp")} recommended={t("unbound.recommended", { value: "1.232 Byte" })} value={settings.edns_buffer_size} min={512} max={4096} onChange={(value) => setSettings({ ...settings, edns_buffer_size: value })} />
                 <NumberField directive="serve-expired-ttl" label={t("unbound.expiredTtl")} description={t("unbound.expiredTtlHelp")} recommended={t("unbound.recommended", { value: "86.400" })} value={settings.serve_expired_ttl} min={3600} max={604800} onChange={(value) => setSettings({ ...settings, serve_expired_ttl: value })} />
@@ -387,7 +434,7 @@ function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolea
 }
 
 function fieldLabel(field: string, t: (key: string) => string) {
-  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", prefetch_key: t("unbound.prefetchKey"), aggressive_nsec: t("unbound.aggressiveNsec"), edns_buffer_size: t("unbound.ednsBufferSize"), serve_expired: "Serve Expired", serve_expired_ttl: t("unbound.expiredTtl"), serve_expired_client_timeout: t("unbound.expiredTimeout"), cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
+  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", prefetch_key: t("unbound.prefetchKey"), aggressive_nsec: t("unbound.aggressiveNsec"), edns_buffer_size: t("unbound.ednsBufferSize"), log_verbosity: t("unbound.operationalLogging"), serve_expired: "Serve Expired", serve_expired_ttl: t("unbound.expiredTtl"), serve_expired_client_timeout: t("unbound.expiredTimeout"), cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
   return labels[field] ?? field;
 }
 
@@ -397,6 +444,7 @@ function settingsEqual(left: UnboundSettings, right: UnboundSettings) {
     && left.prefetch_key === right.prefetch_key
     && left.aggressive_nsec === right.aggressive_nsec
     && left.edns_buffer_size === right.edns_buffer_size
+    && left.log_verbosity === right.log_verbosity
     && left.serve_expired === right.serve_expired
     && left.serve_expired_ttl === right.serve_expired_ttl
     && left.serve_expired_client_timeout === right.serve_expired_client_timeout
