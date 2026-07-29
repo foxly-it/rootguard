@@ -181,13 +181,13 @@ export default function UnboundForwardZones({
           <h2>{t("forward.title")}</h2>
           <p className="muted-copy">{t("forward.intro")}</p>
         </div>
-        <button className="secondary-action" type="button" disabled={busy || (!open && zones.length >= maxZones)} onClick={() => {
+        <button className="secondary-action unbound-action" type="button" disabled={busy || (!open && zones.length >= maxZones)} onClick={() => {
           setDraft(emptyZone());
           setEditing(null);
           setOpen(!open);
           setError("");
         }}>
-          <Plus size={15} /> {open ? t("common.close") : t("forward.add")}
+          <Plus size={15} /> <span>{open ? t("common.close") : t("forward.add")}</span>
         </button>
       </div>
 
@@ -206,7 +206,7 @@ export default function UnboundForwardZones({
           </label>
           <div className="forward-server-heading">
             <div><strong>{t("forward.servers")}</strong><small>{t("forward.serversHelp")}</small></div>
-            <button className="text-action" type="button" disabled={draft.servers.length >= maxServersPerZone} onClick={() => setDraft({ ...draft, servers: [...draft.servers, ""] })}><CirclePlus size={14} /> {t("forward.addServer")}</button>
+            <button className="secondary-action unbound-action" type="button" disabled={draft.servers.length >= maxServersPerZone} onClick={() => setDraft({ ...draft, servers: [...draft.servers, ""] })}><CirclePlus size={15} /> <span>{t("forward.addServer")}</span></button>
           </div>
           <div className="forward-servers">
             {draft.servers.map((server, index) => (
@@ -234,7 +234,7 @@ export default function UnboundForwardZones({
             </label>
           </div>
           <div className="wizard-actions">
-            <button type="button" onClick={saveDraft}>{editing === null ? t("forward.addDraft") : t("forward.applyEdit")}</button>
+            <button className="unbound-action primary" type="button" onClick={saveDraft}><Check size={15} /><span>{editing === null ? t("forward.addDraft") : t("forward.applyEdit")}</span></button>
           </div>
         </div>
       )}

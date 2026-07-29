@@ -38,10 +38,11 @@ func New(baseURL, token string) *Client {
 
 type Dashboard struct {
 	Docker struct {
-		CPU        float64 `json:"cpu"`
-		Memory     float64 `json:"memory"`
-		Containers int     `json:"containers"`
-		Status     string  `json:"status"`
+		CPU              float64 `json:"cpu"`
+		Memory           uint64  `json:"memory"`
+		MetricsAvailable bool    `json:"metrics_available"`
+		Containers       int     `json:"containers"`
+		Status           string  `json:"status"`
 	} `json:"docker"`
 	DNS struct {
 		Status   string `json:"status"`
@@ -211,10 +212,14 @@ type UnboundDirectiveReference struct {
 }
 
 type AdGuardStatus struct {
-	Configured    bool   `json:"configured"`
-	Healthy       bool   `json:"healthy"`
-	Upstream      string `json:"upstream"`
-	UpstreamReady bool   `json:"upstream_ready"`
+	Configured      bool    `json:"configured"`
+	Healthy         bool    `json:"healthy"`
+	Upstream        string  `json:"upstream"`
+	UpstreamReady   bool    `json:"upstream_ready"`
+	StatsAvailable  bool    `json:"stats_available"`
+	Queries         uint64  `json:"queries"`
+	Blocked         uint64  `json:"blocked"`
+	AverageResponse float64 `json:"average_response_seconds"`
 }
 
 type InstallationConfig struct {

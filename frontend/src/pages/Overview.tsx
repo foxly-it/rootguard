@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
+  Activity,
   ArrowRight,
+  Ban,
   Check,
+  Cpu,
   Filter,
   Globe2,
+  MemoryStick,
   Network,
   RefreshCw,
   Server,
@@ -130,6 +134,44 @@ export default function Overview() {
         <KpiCard icon={<Filter />} label={t("overview.filterChain")} value={adGuard?.upstream_ready ? t("overview.connected") : t("overview.checkRequired")} note={t("overview.noFallback")} good={adGuard?.upstream_ready === true} />
       </section>
 
+      <section className="overview-resources" aria-label={t("overview.resources")}>
+        <ResourceCard
+          icon={<Cpu />}
+          label={t("overview.cpu")}
+          value={dashboard?.docker.metrics_available ? formatCPU(dashboard.docker.cpu) : t("overview.metricUnavailable")}
+          detail={t("overview.cpuHelp")}
+          available={dashboard?.docker.metrics_available === true}
+        />
+        <ResourceCard
+          icon={<MemoryStick />}
+          label={t("overview.memory")}
+          value={dashboard?.docker.metrics_available ? formatBytes(dashboard.docker.memory) : t("overview.metricUnavailable")}
+          detail={t("overview.memoryHelp")}
+          available={dashboard?.docker.metrics_available === true}
+        />
+        <ResourceCard
+          icon={<Activity />}
+          label={t("overview.queries")}
+          value={adGuard?.stats_available ? formatInteger(adGuard.queries) : t("overview.metricUnavailable")}
+          detail={t("overview.statisticsPeriod")}
+          available={adGuard?.stats_available === true}
+        />
+        <ResourceCard
+          icon={<Ban />}
+          label={t("overview.blocked")}
+          value={adGuard?.stats_available ? formatInteger(adGuard.blocked) : t("overview.metricUnavailable")}
+          detail={t("overview.statisticsPeriod")}
+          available={adGuard?.stats_available === true}
+        />
+        <ResourceCard
+          icon={<Filter />}
+          label={t("overview.blockRate")}
+          value={adGuard?.stats_available ? formatBlockRate(adGuard.blocked, adGuard.queries) : t("overview.metricUnavailable")}
+          detail={t("overview.statisticsPeriod")}
+          available={adGuard?.stats_available === true}
+        />
+      </section>
+
       <div className="overview-content-grid">
         <section className="overview-panel dns-flow-panel">
           <PanelHeading eyebrow={t("overview.dataFlow")} title={t("overview.flowTitle")} link="/adguard" linkLabel={t("overview.details")} />
@@ -194,6 +236,21 @@ function KpiCard({ icon, label, value, note, good }: {
   );
 }
 
+function ResourceCard({ icon, label, value, detail, available }: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  detail: string;
+  available: boolean;
+}) {
+  return (
+    <article className={`overview-resource ${available ? "available" : ""}`}>
+      <span>{icon}</span>
+      <div><small>{label}</small><strong>{value}</strong><p>{detail}</p></div>
+    </article>
+  );
+}
+
 function PanelHeading({ eyebrow, title, link, linkLabel }: { eyebrow: string; title: string; link?: string; linkLabel?: string }) {
   return (
     <div className="overview-panel-heading">
@@ -218,4 +275,28 @@ function FlowArrow() {
 
 function serviceState(services: ServiceInfo[], name: ServiceInfo["name"]) {
   return services.find((service) => service.name === name)?.status ?? "stopped";
+}
+
+function formatCPU(value: number) {
+  return `${value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
+}
+
+function formatBytes(value: number) {
+  const units = ["B", "KiB", "MiB", "GiB"];
+  let amount = value;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit += 1;
+  }
+  return `${amount.toLocaleString(undefined, { minimumFractionDigits: unit > 1 ? 1 : 0, maximumFractionDigits: 1 })} ${units[unit]}`;
+}
+
+function formatInteger(value: number) {
+  return value.toLocaleString();
+}
+
+function formatBlockRate(blocked: number, queries: number) {
+  const rate = queries === 0 ? 0 : (blocked / queries) * 100;
+  return `${rate.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
 }

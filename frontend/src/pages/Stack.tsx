@@ -31,6 +31,7 @@ import {
 } from "../api/client";
 import "../styles/stack.css";
 import { useI18n } from "../i18n";
+import ContentModal from "../components/ContentModal";
 
 export default function Stack() {
   const { t, formatDate } = useI18n();
@@ -39,6 +40,7 @@ export default function Stack() {
   const [services, setServices] = useState<ServiceInfo[]>([]);
   const [serviceLogs, setServiceLogs] = useState<Partial<Record<ServiceInfo["name"], ServiceLogs>>>({});
   const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
+  const [openLogs, setOpenLogs] = useState<ServiceInfo["name"] | "">("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -65,8 +67,7 @@ export default function Stack() {
   const busy = updates?.state === "checking" || updates?.state === "updating"
     || controlPlane?.state === "checking" || controlPlane?.state === "updating";
   useEffect(() => {
-    if (!busy) return;
-    const timer = window.setInterval(load, 1500);
+    const timer = window.setInterval(load, busy ? 1500 : 10_000);
     return () => window.clearInterval(timer);
   }, [busy, load]);
 
@@ -132,11 +133,7 @@ export default function Stack() {
 
   async function toggleLogs(name: ServiceInfo["name"]) {
     if (serviceLogs[name]) {
-      setServiceLogs((current) => {
-        const next = { ...current };
-        delete next[name];
-        return next;
-      });
+      setOpenLogs(name);
       return;
     }
     setLoadingLogs(name);
@@ -144,6 +141,7 @@ export default function Stack() {
     try {
       const logs = await fetchServiceLogs(name);
       setServiceLogs((current) => ({ ...current, [name]: logs }));
+      setOpenLogs(name);
     } catch (cause) {
       setError(errorMessage(cause, t("stack.logsError")));
     } finally {
@@ -273,27 +271,20 @@ export default function Stack() {
                 </button>
                 <button type="button" className="quiet" disabled={loadingLogs === service.name} onClick={() => toggleLogs(service.name)}>
                   {loadingLogs === service.name ? <LoaderCircle className="spin" size={15} /> : <FileText size={15} />}
-                  {serviceLogs[service.name] ? t("stack.hideLogs") : t("stack.showLogs")}
+                  {t("stack.showLogs")}
                 </button>
               </div>
-
-              {serviceLogs[service.name] && (
-                <section className="stack-log-view" aria-label={t("stack.logsFor", { service: service.display_name })}>
-                  <div>
-                    <strong>{t("stack.logsTitle")}</strong>
-                    <span>{t("stack.logsWindow")}</span>
-                  </div>
-                  <p>{t("stack.logsPrivacy")}</p>
-                  <pre>{serviceLogs[service.name]?.lines.length
-                    ? serviceLogs[service.name]?.lines.join("\n")
-                    : t("stack.logsEmpty")}</pre>
-                  {serviceLogs[service.name]?.truncated && <small>{t("stack.logsTruncated")}</small>}
-                </section>
-              )}
             </article>
           );
         })}
       </section>
+      <ContentModal open={openLogs !== ""} eyebrow={t("stack.logsWindow")} title={t("stack.logsTitle")} closeLabel={t("common.close")} onClose={() => setOpenLogs("")}>
+        <div className="stack-log-modal">
+          <p>{t("stack.logsPrivacy")}</p>
+          <pre>{openLogs && serviceLogs[openLogs]?.lines.length ? serviceLogs[openLogs]?.lines.join("\n") : t("stack.logsEmpty")}</pre>
+          {openLogs && serviceLogs[openLogs]?.truncated && <small>{t("stack.logsTruncated")}</small>}
+        </div>
+      </ContentModal>
 
       <section className="stack-history">
         <div className="stack-history-heading">

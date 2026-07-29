@@ -9,6 +9,7 @@ import {
 } from "../api/client";
 import "../styles/unbound-expert.css";
 import { useI18n } from "../i18n";
+import ContentModal from "./ContentModal";
 
 const templates = [
   { label: "expert.template.local", content: 'server:\n    local-zone: "home.arpa." static\n    local-data: "router.home.arpa. 300 IN A 192.168.1.1"\n' },
@@ -29,6 +30,7 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [catalogOpen, setCatalogOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const highlightRef = useRef<HTMLPreElement>(null);
 
@@ -160,9 +162,12 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
           <aside className="directive-help">
             <p className="unbound-eyebrow">{t("expert.context")}</p>
             {selectedDirective ? <><div className="directive-title"><code>{selectedDirective.name}</code><span className={`risk-${selectedDirective.risk}`}>{t(`expert.risk.${selectedDirective.risk}`)}</span></div><p>{selectedDirective.description}</p><pre>{selectedDirective.example}</pre></> : <p className="muted-copy">{t("expert.contextHelp")}</p>}
-            <details><summary>{t("expert.catalog")}</summary><div className="directive-catalog">{directives.map((item) => <button type="button" key={`${item.section}-${item.name}`} onClick={() => insertSuggestion(item)}><code>{item.name}</code><small>{item.description}</small></button>)}</div></details>
+            <button className="secondary-action catalog-action" type="button" onClick={() => setCatalogOpen(true)}>{t("expert.catalog")}</button>
           </aside>
         </div>
+        <ContentModal open={catalogOpen} eyebrow={t("expert.context")} title={t("expert.catalog")} closeLabel={t("common.close")} onClose={() => setCatalogOpen(false)}>
+          <div className="directive-catalog modal-catalog">{directives.map((item) => <button type="button" key={`${item.section}-${item.name}`} onClick={() => { insertSuggestion(item); setCatalogOpen(false); }}><code>{item.name}</code><small>{item.description}</small><em>{item.section}</em></button>)}</div>
+        </ContentModal>
         {preview && <div className="custom-preview">
           <div className="validation-ok"><strong>{t("expert.valid")}</strong><span>{preview.validation}</span></div>
           <div className="custom-advice">{preview.advice.map((item) => <article className={`advice-item ${item.severity}`} key={item.id}><strong>{item.title}{item.line ? ` · ${t("expert.line", { line: item.line })}` : ""}</strong><p>{item.description}</p><small>{item.suggestion}</small></article>)}</div>

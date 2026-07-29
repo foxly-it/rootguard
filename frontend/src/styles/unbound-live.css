@@ -77,17 +77,23 @@
   margin-top: 18px;
 }
 
-.live-config-details details {
-  margin: 0;
-  padding: 13px 15px;
+.live-config-details > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 15px;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9px;
+  border-radius: 11px;
   background: rgba(255, 255, 255, 0.025);
+  color: var(--rg-text-primary);
+  text-align: left;
 }
 
-.live-config-details pre {
-  max-height: 300px;
-  margin-bottom: 0;
+.live-config-details > button:hover {
+  border-color: rgba(103, 232, 249, 0.45);
+  background: rgba(103, 232, 249, 0.055);
 }
 
 @media (max-width: 720px) {

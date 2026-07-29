@@ -37,6 +37,7 @@ export interface DashboardResponse {
   docker: {
     cpu: number;
     memory: number;
+    metrics_available: boolean;
     containers: number;
     status: "healthy" | "degraded" | "down";
   };
@@ -326,6 +327,10 @@ export interface AdGuardStatus {
   healthy: boolean;
   upstream: string;
   upstream_ready: boolean;
+  stats_available: boolean;
+  queries: number;
+  blocked: number;
+  average_response_seconds: number;
 }
 
 export async function fetchAdGuardStatus(): Promise<AdGuardStatus> {

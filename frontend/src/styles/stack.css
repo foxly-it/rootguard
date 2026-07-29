@@ -478,6 +478,9 @@
   color: #7890a8;
   font-size: 0.66rem;
 }
+.stack-log-modal{display:grid;grid-template-rows:auto minmax(0,1fr) auto;min-height:100%;gap:12px}
+.stack-log-modal p,.stack-log-modal small{margin:0;color:var(--text-muted);line-height:1.5}
+.stack-log-modal pre{min-height:0;margin:0;padding:18px;overflow:auto;border:1px solid rgba(136,172,216,.12);border-radius:13px;background:#030a13;color:#c8d8ec;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 
 .stack-log-view p {
   margin: 7px 0 12px;

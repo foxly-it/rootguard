@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import { Activity, Code2, MapPinned, SlidersHorizontal } from "lucide-react";
+import { Activity, Code2, Expand, MapPinned, SlidersHorizontal } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
   fetchUnboundHistory,
@@ -24,10 +24,12 @@ import "../styles/unbound.css";
 import "../styles/unbound-live.css";
 import "../styles/unbound-polish.css";
 import "../styles/unbound-structure.css";
+import "../styles/unbound-actions.css";
 import UnboundExpertEditor from "../components/UnboundExpertEditor";
 import UnboundForwardZones from "../components/UnboundForwardZones";
 import UnboundGuidedZones from "../components/UnboundGuidedZones";
 import UnboundPrivateDomains from "../components/UnboundPrivateDomains";
+import ContentModal from "../components/ContentModal";
 import { useI18n } from "../i18n";
 
 export default function Unbound() {
@@ -45,6 +47,7 @@ export default function Unbound() {
   const [error, setError] = useState("");
   const [activeSection, setActiveSection] = useState<UnboundSection>("overview");
   const [networkCapabilities, setNetworkCapabilities] = useState<UnboundNetworkCapabilities | null>(null);
+  const [configModal, setConfigModal] = useState<"base" | "custom" | null>(null);
 
   const reload = useCallback(async () => {
     const [loadedSettings, loadedHistory, loadedPresets, loadedConfig] = await Promise.all([
@@ -87,10 +90,16 @@ export default function Unbound() {
 
   useEffect(() => {
     if (!settings) return;
+    let current = true;
     const request = window.setTimeout(() => {
-      fetchUnboundAdvice(settings).then(setAdvice).catch(() => setAdvice(null));
+      fetchUnboundAdvice(settings)
+        .then((nextAdvice) => { if (current) setAdvice(nextAdvice); })
+        .catch(() => { if (current) setAdvice(null); });
     }, 250);
-    return () => window.clearTimeout(request);
+    return () => {
+      current = false;
+      window.clearTimeout(request);
+    };
   }, [settings]);
 
   async function selectPreset(preset: UnboundPreset) {
@@ -298,7 +307,13 @@ export default function Unbound() {
             <div className="panel-heading"><div><p className="unbound-eyebrow">LIVE · READ ONLY</p><h2>{t("unbound.liveTitle")}</h2><p className="muted-copy">{t("unbound.liveHelp")}</p></div><span className="live-config-state"><i /> {t("common.active")} · {formatDate(liveConfig.checked_at)}</span></div>
             <div className="config-file-label"><span>50-rootguard.conf</span><code>/etc/unbound/unbound.d/50-rootguard.conf</code></div>
             <details className="live-config-disclosure"><summary>{t("unbound.managedConfig")}</summary><pre>{liveConfig.managed_config}</pre></details>
-            <div className="live-config-details"><details><summary>{t("unbound.baseConfig")}</summary><pre>{liveConfig.base_config}</pre></details><details><summary>{t("unbound.customConfig")}</summary><pre>{liveConfig.custom_config || t("unbound.noCustom")}</pre></details></div>
+            <div className="live-config-details">
+              <button type="button" onClick={() => setConfigModal("base")}><span>{t("unbound.baseConfig")}</span><Expand size={16} /></button>
+              <button type="button" onClick={() => setConfigModal("custom")}><span>{t("unbound.customConfig")}</span><Expand size={16} /></button>
+            </div>
+            <ContentModal open={configModal !== null} eyebrow="LIVE · READ ONLY" title={configModal === "base" ? t("unbound.baseConfig") : t("unbound.customConfig")} closeLabel={t("common.close")} onClose={() => setConfigModal(null)}>
+              <pre>{configModal === "base" ? liveConfig.base_config : liveConfig.custom_config || t("unbound.noCustom")}</pre>
+            </ContentModal>
           </section>
         )}
         <UnboundExpertEditor version={history[0]?.id} onActivated={reload} />

@@ -156,7 +156,7 @@ export default function UnboundPrivateDomains({
             }
           }} />
         </label>
-        <button type="button" disabled={!draft.trim() || domains.length >= maxPrivateDomains} onClick={addDomain}><Plus size={15} /> {t("private.add")}</button>
+        <button className="secondary-action unbound-action" type="button" disabled={!draft.trim() || domains.length >= maxPrivateDomains} onClick={addDomain}><Plus size={15} /> <span>{t("private.add")}</span></button>
       </div>
 
       <div className="private-domain-list">
@@ -172,7 +172,7 @@ export default function UnboundPrivateDomains({
 
       <div className="reverse-heading">
         <div><strong>{t("private.reverseTitle")}</strong><small>{t("private.reverseHelp")}</small></div>
-        <RotateCcw size={18} />
+        <button className="icon-action" type="button" disabled={busy} onClick={() => load().catch((cause: unknown) => setError(errorMessage(cause, t("private.loadError"))))} aria-label={t("common.refresh")} title={t("common.refresh")}><RotateCcw size={17} /></button>
       </div>
       <div className="reverse-policy-list">
         {reverseZones.map((policy) => (
@@ -199,7 +199,7 @@ export default function UnboundPrivateDomains({
       {dirty && (
         <div className="guided-review">
           <div><strong>{t("private.draftReady")}</strong><small>{t("private.notActive")}</small></div>
-          <button type="button" disabled={busy} onClick={createPreview}>{busy ? t("private.validating") : t("private.review")}</button>
+          <button className="unbound-action primary" type="button" disabled={busy} onClick={createPreview}><Check size={15} /><span>{busy ? t("private.validating") : t("private.review")}</span></button>
         </div>
       )}
 
