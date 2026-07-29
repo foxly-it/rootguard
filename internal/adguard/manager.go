@@ -22,10 +22,14 @@ type Credentials struct {
 }
 
 type Status struct {
-	Configured    bool   `json:"configured"`
-	Healthy       bool   `json:"healthy"`
-	Upstream      string `json:"upstream"`
-	UpstreamReady bool   `json:"upstream_ready"`
+	Configured      bool    `json:"configured"`
+	Healthy         bool    `json:"healthy"`
+	Upstream        string  `json:"upstream"`
+	UpstreamReady   bool    `json:"upstream_ready"`
+	StatsAvailable  bool    `json:"stats_available"`
+	Queries         uint64  `json:"queries"`
+	Blocked         uint64  `json:"blocked"`
+	AverageResponse float64 `json:"average_response_seconds"`
 }
 
 type Manager struct {
@@ -72,13 +76,25 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		return Status{}, fmt.Errorf("adguard dns info: %w", err)
 	}
 
-	return Status{
+	status := Status{
 		Configured: true,
 		Healthy:    true,
 		Upstream:   m.upstream,
 		UpstreamReady: len(dnsInfo.UpstreamDNS) == 1 &&
 			dnsInfo.UpstreamDNS[0] == m.upstream && len(dnsInfo.FallbackDNS) == 0,
-	}, nil
+	}
+	var stats struct {
+		Queries         uint64  `json:"num_dns_queries"`
+		Blocked         uint64  `json:"num_blocked_filtering"`
+		AverageResponse float64 `json:"avg_processing_time"`
+	}
+	if err := m.request(ctx, http.MethodGet, m.apiURL+"/control/stats", nil, &stats, &credentials); err == nil {
+		status.StatsAvailable = true
+		status.Queries = stats.Queries
+		status.Blocked = stats.Blocked
+		status.AverageResponse = stats.AverageResponse
+	}
+	return status, nil
 }
 
 func (m *Manager) Bootstrap(ctx context.Context) (Status, error) {

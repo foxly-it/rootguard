@@ -250,10 +250,11 @@ type dashboardResponse struct {
 }
 
 type dashboardDocker struct {
-	CPU        float64 `json:"cpu"`
-	Memory     float64 `json:"memory"`
-	Containers int     `json:"containers"`
-	Status     string  `json:"status"`
+	CPU              float64 `json:"cpu"`
+	Memory           uint64  `json:"memory"`
+	MetricsAvailable bool    `json:"metrics_available"`
+	Containers       int     `json:"containers"`
+	Status           string  `json:"status"`
 }
 
 type dashboardDNS struct {
@@ -262,8 +263,9 @@ type dashboardDNS struct {
 	DNSSEC   bool   `json:"dnssec"`
 }
 
-func dashboardHandler(w http.ResponseWriter, _ *http.Request) {
+func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 	status := stack.CheckStackStatus()
+	metrics := stack.CollectMetrics(r.Context())
 	running := 0
 	if status.AdGuard.Running {
 		running++
@@ -287,8 +289,11 @@ func dashboardHandler(w http.ResponseWriter, _ *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, dashboardResponse{
-		Docker: dashboardDocker{Containers: running, Status: dockerHealth},
-		DNS:    dashboardDNS{Status: dnsHealth, Resolver: "Unbound", DNSSEC: status.Unbound.Running},
+		Docker: dashboardDocker{
+			CPU: metrics.CPUPercent, Memory: metrics.MemoryBytes,
+			MetricsAvailable: metrics.Available, Containers: running, Status: dockerHealth,
+		},
+		DNS: dashboardDNS{Status: dnsHealth, Resolver: "Unbound", DNSSEC: status.Unbound.Running},
 	})
 }
 

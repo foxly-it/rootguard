@@ -52,6 +52,12 @@ func TestBootstrapInstallsAndConfiguresUnbound(t *testing.T) {
 				"upstream_dns": []string{"rootguard-unbound:5335"},
 				"fallback_dns": []string{},
 			})
+		case "/control/stats":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"num_dns_queries":       125,
+				"num_blocked_filtering": 25,
+				"avg_processing_time":   0.012,
+			})
 		default:
 			http.NotFound(w, r)
 		}
@@ -64,6 +70,9 @@ func TestBootstrapInstallsAndConfiguresUnbound(t *testing.T) {
 	}
 	if !status.Configured || !status.Healthy || !status.UpstreamReady {
 		t.Fatalf("unexpected status: %+v", status)
+	}
+	if !status.StatsAvailable || status.Queries != 125 || status.Blocked != 25 {
+		t.Fatalf("unexpected statistics: %+v", status)
 	}
 
 	status, err = manager.Bootstrap(context.Background())
