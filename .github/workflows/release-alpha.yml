@@ -9,7 +9,7 @@ on:
       version:
         description: Version without the leading v
         required: true
-        default: 0.1.0-alpha.2
+        default: 0.1.0-alpha.3
 
 permissions:
   contents: read
@@ -85,7 +85,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check for an immutable existing release image
+        id: existing
+        env:
+          RELEASE_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.value }}
+        run: |
+          if docker buildx imagetools inspect "$RELEASE_IMAGE" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: docker/build-push-action@v6
+        if: steps.existing.outputs.exists != 'true'
         with:
           context: ${{ matrix.context }}
           platforms: linux/amd64,linux/arm64

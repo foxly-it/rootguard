@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-07-27T00:00:00Z",
-  "current_version": "v0.1.0-alpha.2",
+  "generated_at": "2026-07-29T00:00:00Z",
+  "current_version": "v0.1.0-alpha.3",
   "pull_requests": [],
   "commits": [
     {
@@ -35,6 +35,19 @@
     }
   ],
   "releases": [
+    {
+      "tag": "v0.1.0-alpha.3",
+      "name": "RootGuard v0.1.0-alpha.3",
+      "published_at": "2026-07-29T00:00:00Z",
+      "html_url": "https://github.com/foxly-it/rootguard/releases/tag/v0.1.0-alpha.3",
+      "prerelease": true,
+      "summary": "Live metrics and interface-quality update for the public RootGuard alpha.",
+      "highlights": [
+        "Privacy-preserving live Stack and AdGuard Home dashboard metrics",
+        "Large readable views for protected logs and Unbound configuration",
+        "Consistent guided actions, automatic refresh, and responsive public documentation"
+      ]
+    },
     {
       "tag": "v0.1.0-alpha.2",
       "name": "RootGuard v0.1.0-alpha.2",
