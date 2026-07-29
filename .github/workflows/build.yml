@@ -47,25 +47,50 @@ jobs:
           docker run --rm
           rootguard-unbound:test unbound-checkconf /etc/unbound/unbound.conf
 
-      # 🔖 Extract Debian Unbound version
-      - name: Extract Debian Unbound version
+      - name: Start resolver smoke-test container
+        run: docker run --rm --detach --name rootguard-unbound-ci rootguard-unbound:test
+
+      - name: Verify recursive DNS and DNSSEC
+        run: |
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound-ci)" = "healthy"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-ci)" = "healthy"
+          valid="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 example.com A +dnssec +time=3 +tries=1)"
+          grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
+          broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=3 +tries=1)"
+          grep -q 'status: SERVFAIL' <<<"$broken"
+
+      - name: Stop resolver smoke-test container
+        if: always()
+        run: docker stop rootguard-unbound-ci || true
+
+      - name: Verify secure Unbound version
+        run: |
+          VERSION="$(docker run --rm --entrypoint dpkg-query rootguard-unbound:test -W -f='${Version}' unbound)"
+          dpkg --compare-versions "$VERSION" ge "1.25.2-1"
+          echo "Validated Unbound package: $VERSION"
+
+      - name: Extract installed Unbound version
         id: version
         run: |
-          VERSION=$(docker run --rm debian:stable-slim sh -c \
-            "apt-get update -qq >/dev/null && apt-cache policy unbound | awk '/Candidate:/ {print \$2}'")
+          VERSION="$(docker run --rm --entrypoint dpkg-query rootguard-unbound:test -W -f='${Version}' unbound)"
 
           # Sanitize version for Docker tag (replace + with -)
           SAFE_VERSION=$(echo "$VERSION" | sed 's/+/-/g')
 
           echo "Detected Debian version: $SAFE_VERSION"
 
-          echo "full=$SAFE_VERSION" >> $GITHUB_OUTPUT
+          echo "full=$SAFE_VERSION" >> "$GITHUB_OUTPUT"
 
           SHORT=$(echo "$SAFE_VERSION" | cut -d'-' -f1)
           MAJORMINOR=$(echo "$SHORT" | cut -d'.' -f1,2)
 
-          echo "short=$SHORT" >> $GITHUB_OUTPUT
-          echo "majorminor=$MAJORMINOR" >> $GITHUB_OUTPUT
+          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          echo "majorminor=$MAJORMINOR" >> "$GITHUB_OUTPUT"
 
       # 🏗 Build & Push Multi-Arch Image
       - name: Build and push image

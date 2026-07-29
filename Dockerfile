@@ -1,8 +1,8 @@
 ############################################################
-# RootGuard Unbound - Production Base (Debian 13 stable-slim)
+# RootGuard Unbound - Production Base (Debian Forky)
 ############################################################
 
-FROM debian:stable-slim
+FROM debian:forky-slim
 
 ############################################################
 # Install packages
@@ -18,6 +18,7 @@ RUN apt-get update && \
         dns-root-data \
         ca-certificates \
         dnsutils && \
+    dpkg --compare-versions "$(dpkg-query -W -f='${Version}' unbound)" ge "1.25.2-1" && \
     rm -rf /var/lib/apt/lists/*
 
 ############################################################

@@ -4,7 +4,7 @@
 
 **RootGuard Unbound is a hardened, multi-architecture recursive DNS resolver
 container with DNSSEC validation.** It tracks the official Debian Unbound
-package, rebuilds daily for security updates, and provides an immutable base
+package from Debian Forky, rebuilds daily for security updates, and provides an immutable base
 configuration plus an update-safe modular configuration layer.
 
 [![Build](https://github.com/foxly-it/rootguard-unbound/actions/workflows/build.yml/badge.svg)](https://github.com/foxly-it/rootguard-unbound/actions/workflows/build.yml)
@@ -44,7 +44,8 @@ workflow.
 
 ## Features
 
-- Official Debian `unbound` package on `stable-slim`.
+- Official Debian `unbound` package on `forky-slim`, with a build-enforced
+  security floor of `1.25.2-1`.
 - Multi-architecture images for `amd64` and `arm64`.
 - Daily rebuilds for Debian security updates.
 - DNSSEC validation with a writable RFC 5011 trust-anchor state.
