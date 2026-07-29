@@ -27,6 +27,9 @@ const (
 	networkModeIPv4        = "ipv4"
 	networkModeDual        = "dual"
 	networkModeIPv6        = "ipv6"
+	resourceProfileSmall   = "small"
+	resourceProfileMedium  = "medium"
+	resourceProfileLarge   = "large"
 )
 
 var rootGuardDNSNetwork = netip.MustParsePrefix("172.29.53.0/24")
@@ -51,6 +54,7 @@ type Settings struct {
 	CacheMinTTL       int                 `json:"cache_min_ttl"`
 	CacheMaxTTL       int                 `json:"cache_max_ttl"`
 	Threads           int                 `json:"threads"`
+	ResourceProfile   string              `json:"resource_profile"`
 	NetworkMode       string              `json:"network_mode"`
 	ForwardZones      []ForwardZone       `json:"forward_zones"`
 	PrivateDomains    []string            `json:"private_domains"`
@@ -72,6 +76,7 @@ func DefaultSettings() Settings {
 		CacheMinTTL:       0,
 		CacheMaxTTL:       86400,
 		Threads:           2,
+		ResourceProfile:   resourceProfileMedium,
 		NetworkMode:       networkModeIPv4,
 		ForwardZones:      []ForwardZone{},
 		PrivateDomains:    []string{},
@@ -95,6 +100,9 @@ func (s Settings) Validate() error {
 	}
 	if s.Threads < 1 || s.Threads > 32 {
 		return fmt.Errorf("%w: threads must be between 1 and 32", ErrInvalidSettings)
+	}
+	if _, ok := resourceProfileCacheSizes[s.ResourceProfile]; !ok {
+		return fmt.Errorf("%w: resource_profile must be small, medium, or large", ErrInvalidSettings)
 	}
 	if s.NetworkMode != networkModeIPv4 && s.NetworkMode != networkModeDual && s.NetworkMode != networkModeIPv6 {
 		return fmt.Errorf("%w: network_mode must be ipv4, dual, or ipv6", ErrInvalidSettings)
@@ -218,6 +226,7 @@ func settingsEqual(left, right Settings) bool {
 		left.CacheMinTTL != right.CacheMinTTL ||
 		left.CacheMaxTTL != right.CacheMaxTTL ||
 		left.Threads != right.Threads ||
+		left.ResourceProfile != right.ResourceProfile ||
 		left.NetworkMode != right.NetworkMode ||
 		len(left.ForwardZones) != len(right.ForwardZones) ||
 		len(left.PrivateDomains) != len(right.PrivateDomains) ||
@@ -272,6 +281,10 @@ func (s Settings) Render() ([]byte, error) {
 	fmt.Fprintf(&out, "    cache-max-ttl: %d\n", s.CacheMaxTTL)
 	fmt.Fprintln(&out, "    # Parallel resolver workers; match this to the available CPU resources.")
 	fmt.Fprintf(&out, "    num-threads: %d\n", s.Threads)
+	cacheSizes := resourceProfileCacheSizes[s.ResourceProfile]
+	fmt.Fprintln(&out, "    # Bounded cache memory derived from the selected RootGuard resource profile.")
+	fmt.Fprintf(&out, "    rrset-cache-size: %s\n", cacheSizes.RRSet)
+	fmt.Fprintf(&out, "    msg-cache-size: %s\n", cacheSizes.Message)
 	fmt.Fprintln(&out, "    # Network mode: enable only protocol families confirmed by the RootGuard connectivity check.")
 	fmt.Fprintf(&out, "    do-ip4: %s\n", yesNo(s.NetworkMode != networkModeIPv6))
 	fmt.Fprintf(&out, "    do-ip6: %s\n", yesNo(s.NetworkMode != networkModeIPv4))
@@ -373,7 +386,21 @@ func (m *Manager) Load() (Settings, error) {
 	if settings.NetworkMode == "" {
 		settings.NetworkMode = networkModeIPv4
 	}
+	if settings.ResourceProfile == "" {
+		settings.ResourceProfile = resourceProfileMedium
+	}
 	return settings, settings.Validate()
+}
+
+type cacheSizes struct {
+	RRSet   string
+	Message string
+}
+
+var resourceProfileCacheSizes = map[string]cacheSizes{
+	resourceProfileSmall:  {RRSet: "32m", Message: "16m"},
+	resourceProfileMedium: {RRSet: "64m", Message: "32m"},
+	resourceProfileLarge:  {RRSet: "128m", Message: "64m"},
 }
 
 func (m *Manager) ActiveConfiguration(ctx context.Context) (ActiveConfiguration, error) {

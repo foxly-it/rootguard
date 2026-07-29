@@ -85,6 +85,7 @@ func settingsChanges(before, after Settings) []Change {
 	add("cache_min_ttl", before.CacheMinTTL, after.CacheMinTTL)
 	add("cache_max_ttl", before.CacheMaxTTL, after.CacheMaxTTL)
 	add("threads", before.Threads, after.Threads)
+	add("resource_profile", before.ResourceProfile, after.ResourceProfile)
 	add("network_mode", before.NetworkMode, after.NetworkMode)
 	if !forwardZonesEqual(before.ForwardZones, after.ForwardZones) {
 		changes = append(changes, Change{

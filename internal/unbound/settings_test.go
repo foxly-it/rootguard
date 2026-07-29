@@ -22,6 +22,8 @@ func TestDefaultSettingsRender(t *testing.T) {
 		"serve-expired: yes",
 		"cache-max-ttl: 86400",
 		"num-threads: 2",
+		"rrset-cache-size: 64m",
+		"msg-cache-size: 32m",
 		"do-ip4: yes",
 		"do-ip6: no",
 		"prefer-ip6: no",
@@ -29,6 +31,37 @@ func TestDefaultSettingsRender(t *testing.T) {
 		if !strings.Contains(string(config), expected) {
 			t.Errorf("rendered config does not contain %q", expected)
 		}
+	}
+}
+
+func TestResourceProfilesRenderBoundedCacheSizes(t *testing.T) {
+	tests := []struct {
+		profile string
+		rrset   string
+		message string
+	}{
+		{resourceProfileSmall, "32m", "16m"},
+		{resourceProfileMedium, "64m", "32m"},
+		{resourceProfileLarge, "128m", "64m"},
+	}
+	for _, test := range tests {
+		settings := DefaultSettings()
+		settings.ResourceProfile = test.profile
+		config, err := settings.Render()
+		if err != nil {
+			t.Fatal(err)
+		}
+		rendered := string(config)
+		if !strings.Contains(rendered, "rrset-cache-size: "+test.rrset) ||
+			!strings.Contains(rendered, "msg-cache-size: "+test.message) {
+			t.Fatalf("%s rendered unexpected cache sizes:\n%s", test.profile, rendered)
+		}
+	}
+
+	settings := DefaultSettings()
+	settings.ResourceProfile = "unbounded"
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected invalid resource profile, got %v", err)
 	}
 }
 

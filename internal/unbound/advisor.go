@@ -33,6 +33,7 @@ func Presets() []Preset {
 	performance.CacheMinTTL = 300
 	performance.CacheMaxTTL = 172800
 	performance.Threads = 4
+	performance.ResourceProfile = resourceProfileLarge
 
 	return []Preset{
 		{ID: "balanced", Name: "Ausgewogen", Description: "Sichere Standardwerte mit guter Aktualität und Cache-Effizienz.", BestFor: "Die meisten Heim- und kleinen Firmennetze", Settings: balanced},
