@@ -68,8 +68,9 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Core handles SIGTERM with a bounded HTTP shutdown so planned container stops
   and replacements exit cleanly instead of appearing as crashes.
 - Dashboard rebuilt around real installation, service, DNSSEC, bind, and
-  protected-upstream state; placeholder resource metrics and synthetic trend
-  data were removed.
+  protected-upstream state. It now adds live aggregate CPU and memory usage for
+  the five allowlisted RootGuard containers plus aggregate AdGuard Home query,
+  blocked-query, and filter-rate values without exposing query names or clients.
 - AdGuard page documents and visualises the RootGuard-managed official installer
   flow instead of suggesting that the native administration wizard must remain
   public.
@@ -213,7 +214,8 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   with release gates for public alpha, useful Unbound administration, DNS
   policy, recovery, security, beta engineering, release candidate, and stable
   Docker appliance. Website status and dashboard mock now describe delivered
-  capabilities instead of unavailable query statistics.
+  capabilities, including the delivered privacy-preserving live stack and
+  AdGuard Home metrics.
 - Consistent public-site header navigation keeps Docs and quick start directly
   reachable, groups Wiki, project status, and roadmap under
   Project, and groups the Foxly tool overview, MOTD, and AdGuard Home updater
