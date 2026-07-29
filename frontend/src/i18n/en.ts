@@ -10,6 +10,8 @@ export const en: LocaleDefinition = {
     "nav.stack": "Stack & Updates",
     "nav.unbound": "Unbound settings",
     "nav.adguard": "AdGuard Home",
+    "nav.collapseSidebar": "Collapse sidebar",
+    "nav.expandSidebar": "Expand sidebar",
     "header.github": "GitHub repository",
     "header.docs": "Documentation",
     "accessibility.skipToContent": "Skip to main content",
