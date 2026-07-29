@@ -30,11 +30,25 @@ type CommandRunner func(context.Context, ...string) ([]byte, error)
 type VerifyFunc func(context.Context, string) error
 
 type ServiceSpec struct {
-	Name        string
-	DisplayName string
-	Container   string
-	TargetImage string
-	BackupPaths []string
+	Name                string
+	DisplayName         string
+	Container           string
+	TargetImage         string
+	BackupPaths         []string
+	OwnershipMigrations []VolumeOwnershipMigration
+}
+
+type VolumeOwnershipMigration struct {
+	Volume string
+	Path   string
+	UID    int
+	GID    int
+}
+
+type previousVolumeOwnership struct {
+	migration VolumeOwnershipMigration
+	owner     string
+	changed   bool
 }
 
 type ServiceStatus struct {
@@ -261,8 +275,18 @@ func (m *Manager) update(service string) {
 		return
 	}
 
+	m.setProgress(service, "Migriere persistente Volume-Berechtigungen für das Ziel-Image.")
+	previousOwnership, err := m.migrateVolumeOwnership(ctx, spec, oldID, candidateID)
+	if err != nil {
+		m.fail(service, fmt.Errorf("migrate persistent volume ownership: %w", err))
+		return
+	}
+
 	m.setProgress(service, "Ersetze den Container kontrolliert.")
 	if err := m.selectImage(service, spec.TargetImage); err != nil {
+		if restoreErr := m.restoreVolumeOwnership(ctx, previousOwnership, oldID); restoreErr != nil {
+			err = fmt.Errorf("%v; restore volume ownership: %w", err, restoreErr)
+		}
 		m.fail(service, err)
 		return
 	}
@@ -273,7 +297,7 @@ func (m *Manager) update(service string) {
 	if err != nil {
 		updateErr := err
 		m.setProgress(service, "Gesundheitsprüfung fehlgeschlagen – vorheriges Image wird wiederhergestellt.")
-		rollbackErr := m.rollback(ctx, spec, oldID, backupDir)
+		rollbackErr := m.rollback(ctx, spec, oldID, backupDir, previousOwnership)
 		if rollbackErr != nil {
 			m.recordHistory(HistoryEntry{
 				Service: service, Outcome: "failed", FromID: oldID, ToID: candidateID,
@@ -379,7 +403,15 @@ func (m *Manager) cleanupAfterSuccess(ctx context.Context, service string) Clean
 	return result
 }
 
-func (m *Manager) rollback(ctx context.Context, spec ServiceSpec, oldID, backupDir string) error {
+func (m *Manager) rollback(
+	ctx context.Context,
+	spec ServiceSpec,
+	oldID, backupDir string,
+	previousOwnership []previousVolumeOwnership,
+) error {
+	if err := m.restoreVolumeOwnership(ctx, previousOwnership, oldID); err != nil {
+		return fmt.Errorf("restore volume ownership: %w", err)
+	}
 	if err := m.selectImage(spec.Name, oldID); err != nil {
 		return err
 	}
@@ -396,6 +428,113 @@ func (m *Manager) rollback(ctx context.Context, spec ServiceSpec, oldID, backupD
 		return err
 	}
 	return m.verifyWithRetry(ctx, spec.Name)
+}
+
+func (m *Manager) migrateVolumeOwnership(
+	ctx context.Context,
+	spec ServiceSpec,
+	currentImage, candidateImage string,
+) ([]previousVolumeOwnership, error) {
+	previous := make([]previousVolumeOwnership, 0, len(spec.OwnershipMigrations))
+	for _, migration := range spec.OwnershipMigrations {
+		if migration.Volume == "" || migration.Path == "" || migration.UID < 0 || migration.GID < 0 {
+			_ = m.restoreVolumeOwnership(ctx, previous, currentImage)
+			return nil, fmt.Errorf("invalid ownership migration for %s", spec.Name)
+		}
+		owner, err := m.inspectVolumeOwnership(ctx, currentImage, migration)
+		if err != nil {
+			_ = m.restoreVolumeOwnership(ctx, previous, currentImage)
+			return nil, err
+		}
+		target := strconv.Itoa(migration.UID) + ":" + strconv.Itoa(migration.GID)
+		record := previousVolumeOwnership{migration: migration, owner: owner, changed: owner != target}
+		previous = append(previous, record)
+		if !record.changed {
+			continue
+		}
+		if err := m.changeVolumeOwnership(ctx, candidateImage, migration, target); err != nil {
+			_ = m.restoreVolumeOwnership(ctx, previous, currentImage)
+			return nil, err
+		}
+	}
+	return previous, nil
+}
+
+func (m *Manager) restoreVolumeOwnership(
+	ctx context.Context,
+	previous []previousVolumeOwnership,
+	image string,
+) error {
+	for index := len(previous) - 1; index >= 0; index-- {
+		record := previous[index]
+		if !record.changed {
+			continue
+		}
+		if err := m.changeVolumeOwnership(ctx, image, record.migration, record.owner); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Manager) inspectVolumeOwnership(
+	ctx context.Context,
+	image string,
+	migration VolumeOwnershipMigration,
+) (string, error) {
+	output, err := m.run(ctx,
+		"run", "--rm",
+		"--network", "none",
+		"--user", "0:0",
+		"--read-only",
+		"--cap-drop", "ALL",
+		"--volume", migration.Volume+":"+migration.Path+":ro",
+		"--entrypoint", "/usr/bin/stat",
+		image,
+		"--format=%u:%g",
+		migration.Path,
+	)
+	if err != nil {
+		return "", fmt.Errorf("inspect %s ownership: %w", migration.Volume, err)
+	}
+	owner := strings.TrimSpace(string(output))
+	parts := strings.Split(owner, ":")
+	if len(parts) != 2 {
+		return "", fmt.Errorf("invalid ownership %q for %s", owner, migration.Volume)
+	}
+	if _, err := strconv.ParseUint(parts[0], 10, 32); err != nil {
+		return "", fmt.Errorf("invalid owner UID %q for %s", parts[0], migration.Volume)
+	}
+	if _, err := strconv.ParseUint(parts[1], 10, 32); err != nil {
+		return "", fmt.Errorf("invalid owner GID %q for %s", parts[1], migration.Volume)
+	}
+	return owner, nil
+}
+
+func (m *Manager) changeVolumeOwnership(
+	ctx context.Context,
+	image string,
+	migration VolumeOwnershipMigration,
+	owner string,
+) error {
+	if _, err := m.run(ctx,
+		"run", "--rm",
+		"--network", "none",
+		"--user", "0:0",
+		"--read-only",
+		"--cap-drop", "ALL",
+		"--cap-add", "CHOWN",
+		"--security-opt", "no-new-privileges:true",
+		"--volume", migration.Volume+":"+migration.Path,
+		"--entrypoint", "/usr/bin/chown",
+		image,
+		"--recursive",
+		owner,
+		migration.Path,
+	); err != nil {
+		return fmt.Errorf("change %s ownership to %s: %w", migration.Volume, owner, err)
+	}
+	return nil
 }
 
 func (m *Manager) backup(ctx context.Context, spec ServiceSpec) (string, error) {

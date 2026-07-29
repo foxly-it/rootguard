@@ -95,6 +95,119 @@ func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 	}
 }
 
+func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T) {
+	dataDir := t.TempDir()
+	composeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var commands []string
+	manager := NewManager(Options{
+		DataDir: dataDir, ComposeDir: composeDir,
+		Services: []ServiceSpec{{
+			Name: "unbound", DisplayName: "Unbound", Container: "rootguard-unbound",
+			TargetImage: "rootguard-unbound:latest",
+			OwnershipMigrations: []VolumeOwnershipMigration{{
+				Volume: "rootguard-unbound-state", Path: "/var/lib/unbound", UID: 100, GID: 101,
+			}},
+		}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			command := strings.Join(arguments, " ")
+			commands = append(commands, command)
+			switch arguments[0] {
+			case "inspect":
+				return []byte("rootguard-unbound:v1|sha256:old"), nil
+			case "image":
+				return []byte("sha256:new"), nil
+			case "run":
+				if strings.Contains(command, "--entrypoint /usr/bin/stat") {
+					return []byte("996:996\n"), nil
+				}
+				return []byte("changed"), nil
+			default:
+				return []byte("ok"), nil
+			}
+		},
+	})
+
+	if _, err := manager.StartUpdate("unbound"); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	if manager.Status().State != StateIdle {
+		t.Fatalf("expected successful update, got %#v", manager.Status())
+	}
+	all := strings.Join(commands, "\n")
+	for _, expected := range []string{
+		"run --rm --network none --user 0:0 --read-only --cap-drop ALL --volume rootguard-unbound-state:/var/lib/unbound:ro --entrypoint /usr/bin/stat sha256:old --format=%u:%g /var/lib/unbound",
+		"run --rm --network none --user 0:0 --read-only --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges:true --volume rootguard-unbound-state:/var/lib/unbound --entrypoint /usr/bin/chown sha256:new --recursive 100:101 /var/lib/unbound",
+	} {
+		if !strings.Contains(all, expected) {
+			t.Fatalf("missing restricted ownership command %q in:\n%s", expected, all)
+		}
+	}
+}
+
+func TestFailedUpdateRestoresPreviousVolumeOwnershipBeforeRollback(t *testing.T) {
+	dataDir := t.TempDir()
+	composeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var commands []string
+	verifyCalls := 0
+	manager := NewManager(Options{
+		DataDir: dataDir, ComposeDir: composeDir,
+		VerifyAttempts: 1, RetryDelay: time.Millisecond,
+		Services: []ServiceSpec{{
+			Name: "unbound", DisplayName: "Unbound", Container: "rootguard-unbound",
+			TargetImage: "rootguard-unbound:latest",
+			OwnershipMigrations: []VolumeOwnershipMigration{{
+				Volume: "rootguard-unbound-state", Path: "/var/lib/unbound", UID: 100, GID: 101,
+			}},
+		}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			command := strings.Join(arguments, " ")
+			commands = append(commands, command)
+			switch arguments[0] {
+			case "inspect":
+				return []byte("rootguard-unbound:v1|sha256:old"), nil
+			case "image":
+				return []byte("sha256:new"), nil
+			case "run":
+				if strings.Contains(command, "--entrypoint /usr/bin/stat") {
+					return []byte("996:996\n"), nil
+				}
+				return []byte("changed"), nil
+			default:
+				return []byte("ok"), nil
+			}
+		},
+		Verify: func(context.Context, string) error {
+			verifyCalls++
+			if verifyCalls == 1 {
+				return errors.New("candidate unhealthy")
+			}
+			return nil
+		},
+	})
+
+	if _, err := manager.StartUpdate("unbound"); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	if manager.Status().State != StateFailed {
+		t.Fatalf("expected safe rollback, got %#v", manager.Status())
+	}
+	all := strings.Join(commands, "\n")
+	targetChange := strings.Index(all, "--entrypoint /usr/bin/chown sha256:new --recursive 100:101")
+	rollbackChange := strings.Index(all, "--entrypoint /usr/bin/chown sha256:old --recursive 996:996")
+	rollbackCompose := strings.LastIndex(all, "compose --project-name rootguard-dns")
+	if targetChange < 0 || rollbackChange <= targetChange || rollbackCompose <= rollbackChange {
+		t.Fatalf("expected ownership rollback before old image compose-up:\n%s", all)
+	}
+}
+
 func TestUnknownServiceIsRejected(t *testing.T) {
 	manager := NewManager(Options{DataDir: t.TempDir()})
 	if _, err := manager.StartUpdate("webapp"); !errors.Is(err, ErrUnknownService) {

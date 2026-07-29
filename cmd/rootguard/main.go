@@ -69,6 +69,12 @@ func main() {
 				Container:   "rootguard-unbound",
 				TargetImage: envOrDefault("ROOTGUARD_UNBOUND_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
 				BackupPaths: []string{"/etc/unbound/unbound.d", "/var/lib/unbound"},
+				OwnershipMigrations: []updater.VolumeOwnershipMigration{{
+					Volume: "rootguard-unbound-state",
+					Path:   "/var/lib/unbound",
+					UID:    100,
+					GID:    101,
+				}},
 			},
 		},
 		Verify: func(ctx context.Context, service string) error {
