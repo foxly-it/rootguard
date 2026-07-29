@@ -50,6 +50,8 @@ type ReverseZonePolicy struct {
 type Settings struct {
 	QnameMinimisation         bool                `json:"qname_minimisation"`
 	Prefetch                  bool                `json:"prefetch"`
+	PrefetchKey               bool                `json:"prefetch_key"`
+	AggressiveNSEC            bool                `json:"aggressive_nsec"`
 	ServeExpired              bool                `json:"serve_expired"`
 	ServeExpiredTTL           int                 `json:"serve_expired_ttl"`
 	ServeExpiredClientTimeout int                 `json:"serve_expired_client_timeout"`
@@ -74,6 +76,8 @@ func DefaultSettings() Settings {
 	return Settings{
 		QnameMinimisation:         true,
 		Prefetch:                  true,
+		PrefetchKey:               true,
+		AggressiveNSEC:            true,
 		ServeExpired:              true,
 		ServeExpiredTTL:           86400,
 		ServeExpiredClientTimeout: 1800,
@@ -232,6 +236,8 @@ func isASCIILetterOrDigit(value byte) bool {
 func settingsEqual(left, right Settings) bool {
 	if left.QnameMinimisation != right.QnameMinimisation ||
 		left.Prefetch != right.Prefetch ||
+		left.PrefetchKey != right.PrefetchKey ||
+		left.AggressiveNSEC != right.AggressiveNSEC ||
 		left.ServeExpired != right.ServeExpired ||
 		left.ServeExpiredTTL != right.ServeExpiredTTL ||
 		left.ServeExpiredClientTimeout != right.ServeExpiredClientTimeout ||
@@ -285,6 +291,10 @@ func (s Settings) Render() ([]byte, error) {
 	fmt.Fprintf(&out, "    qname-minimisation: %s\n", yesNo(s.QnameMinimisation))
 	fmt.Fprintln(&out, "    # Performance: refresh frequently used records shortly before their TTL expires.")
 	fmt.Fprintf(&out, "    prefetch: %s\n", yesNo(s.Prefetch))
+	fmt.Fprintln(&out, "    # DNSSEC performance: fetch validation keys as soon as their DS record is encountered.")
+	fmt.Fprintf(&out, "    prefetch-key: %s\n", yesNo(s.PrefetchKey))
+	fmt.Fprintln(&out, "    # DNSSEC efficiency: synthesize proven negative answers from validated NSEC cache data.")
+	fmt.Fprintf(&out, "    aggressive-nsec: %s\n", yesNo(s.AggressiveNSEC))
 	fmt.Fprintln(&out, "    # Availability: keep serving cached records during temporary upstream failures.")
 	fmt.Fprintf(&out, "    serve-expired: %s\n", yesNo(s.ServeExpired))
 	fmt.Fprintln(&out, "    # Maximum age in seconds for stale records eligible as an availability fallback.")
@@ -410,6 +420,12 @@ func (m *Manager) Load() (Settings, error) {
 	}
 	if !jsonFieldExists(data, "serve_expired_client_timeout") {
 		settings.ServeExpiredClientTimeout = 1800
+	}
+	if !jsonFieldExists(data, "prefetch_key") {
+		settings.PrefetchKey = true
+	}
+	if !jsonFieldExists(data, "aggressive_nsec") {
+		settings.AggressiveNSEC = true
 	}
 	return settings, settings.Validate()
 }

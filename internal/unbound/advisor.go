@@ -58,6 +58,12 @@ func Advise(settings Settings) (Advice, error) {
 	if !settings.Prefetch {
 		add("enable-prefetch", "recommendation", "prefetch", "Häufige Antworten können aus dem Cache fallen", "Prefetch erneuert häufig verwendete Einträge kurz vor ihrem Ablauf und reduziert wahrnehmbare Latenz.", "Prefetch aktivieren, sofern minimale zusätzliche Hintergrundabfragen akzeptabel sind.")
 	}
+	if !settings.PrefetchKey {
+		add("enable-prefetch-key", "recommendation", "prefetch_key", "DNSSEC-Schlüssel werden erst bei Bedarf geladen", "Ohne Prefetch Key beginnt das Laden eines DNSKEY erst später im Validierungsablauf und kann die erste Antwort einer signierten Zone verzögern.", "Prefetch Key aktivieren; bei knappen CPU-Ressourcen lässt es sich gezielt deaktivieren.")
+	}
+	if !settings.AggressiveNSEC {
+		add("enable-aggressive-nsec", "recommendation", "aggressive_nsec", "Validierte Negativantworten werden nicht wiederverwendet", "Ohne aggressives NSEC-Caching fragt Unbound häufiger nach nicht vorhandenen Namen, obwohl deren Nichtexistenz bereits DNSSEC-validiert ableitbar ist.", "Aggressives NSEC aktivieren; nur zur gezielten Diagnose auffälliger DNSSEC-Zonen vorübergehend deaktivieren.")
+	}
 	if !settings.ServeExpired {
 		add("enable-serve-expired", "warning", "serve_expired", "Weniger widerstandsfähig bei externen Störungen", "Bereits bekannte Domains können bei einer vorübergehenden Störung autoritativer Nameserver nicht weiter beantwortet werden.", "Serve Expired für Heim- und Unternehmensnetze aktivieren.")
 	}

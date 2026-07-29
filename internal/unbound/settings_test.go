@@ -19,6 +19,8 @@ func TestDefaultSettingsRender(t *testing.T) {
 		"qname-minimisation: yes",
 		"# Performance:",
 		"prefetch: yes",
+		"prefetch-key: yes",
+		"aggressive-nsec: yes",
 		"# Availability:",
 		"serve-expired: yes",
 		"serve-expired-ttl: 86400",
@@ -37,7 +39,7 @@ func TestDefaultSettingsRender(t *testing.T) {
 	}
 }
 
-func TestLoadMigratesServeExpiredControls(t *testing.T) {
+func TestLoadMigratesGuidedControls(t *testing.T) {
 	directory := t.TempDir()
 	data := []byte(`{"qname_minimisation":true,"prefetch":true,"serve_expired":true,"cache_min_ttl":0,"cache_max_ttl":86400,"threads":2,"resource_profile":"medium","network_mode":"ipv4","forward_zones":[],"private_domains":[],"reverse_zones":[]}`)
 	if err := os.WriteFile(directory+"/settings.json", data, 0o600); err != nil {
@@ -50,6 +52,23 @@ func TestLoadMigratesServeExpiredControls(t *testing.T) {
 	}
 	if settings.ServeExpiredTTL != 86400 || settings.ServeExpiredClientTimeout != 1800 {
 		t.Fatalf("legacy settings were not migrated: %#v", settings)
+	}
+	if !settings.PrefetchKey || !settings.AggressiveNSEC {
+		t.Fatalf("legacy DNSSEC cache settings were not migrated: %#v", settings)
+	}
+}
+
+func TestDNSSECCacheControlsRender(t *testing.T) {
+	settings := DefaultSettings()
+	settings.PrefetchKey = false
+	settings.AggressiveNSEC = false
+	config, err := settings.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := string(config)
+	if !strings.Contains(rendered, "prefetch-key: no") || !strings.Contains(rendered, "aggressive-nsec: no") {
+		t.Fatalf("DNSSEC cache controls missing from config:\n%s", rendered)
 	}
 }
 

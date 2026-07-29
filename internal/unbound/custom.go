@@ -228,6 +228,8 @@ var blockedDirectives = map[string]string{
 	"tls-port":                     "resolver listener ports are managed by RootGuard",
 	"qname-minimisation":           "use the guided RootGuard setting instead",
 	"prefetch":                     "use the guided RootGuard setting instead",
+	"prefetch-key":                 "use the guided RootGuard setting instead",
+	"aggressive-nsec":              "use the guided RootGuard setting instead",
 	"serve-expired":                "use the guided RootGuard setting instead",
 	"serve-expired-ttl":            "use the guided RootGuard setting instead",
 	"serve-expired-client-timeout": "use the guided RootGuard setting instead",

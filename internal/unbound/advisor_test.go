@@ -79,6 +79,27 @@ func TestAdvisorExplainsServeExpiredTimeoutModes(t *testing.T) {
 	}
 }
 
+func TestAdvisorExplainsDNSSECCacheCompatibility(t *testing.T) {
+	settings := DefaultSettings()
+	settings.PrefetchKey = false
+	settings.AggressiveNSEC = false
+	advice, err := Advise(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wanted := map[string]bool{"enable-prefetch-key": false, "enable-aggressive-nsec": false}
+	for _, recommendation := range advice.Recommendations {
+		if _, ok := wanted[recommendation.ID]; ok {
+			wanted[recommendation.ID] = true
+		}
+	}
+	for id, found := range wanted {
+		if !found {
+			t.Errorf("missing compatibility guidance %s", id)
+		}
+	}
+}
+
 func TestAdvisorRejectsInvalidSettings(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Threads = 0
