@@ -122,7 +122,7 @@ The detailed ownership and directive plan lives in
       ([#43](https://github.com/foxly-it/rootguard/issues/43))
 - [x] Cache memory sizing derived from an explicit resource profile
 - [x] Serve-expired TTL and client timeout controls
-- [ ] Prefetch-key and aggressive NSEC controls with compatibility guidance
+- [x] Prefetch-key and aggressive NSEC controls with compatibility guidance
 - [ ] EDNS buffer size with safe default `1232` and validation
 - [ ] Privacy-safe logging level and temporary diagnostic logging
 
