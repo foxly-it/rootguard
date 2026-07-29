@@ -65,6 +65,7 @@ export default function Unbound() {
       resource_profile: loadedSettings.resource_profile ?? "medium",
       prefetch_key: loadedSettings.prefetch_key ?? true,
       aggressive_nsec: loadedSettings.aggressive_nsec ?? true,
+      edns_buffer_size: loadedSettings.edns_buffer_size ?? 1232,
       serve_expired_ttl: loadedSettings.serve_expired_ttl ?? 86400,
       serve_expired_client_timeout: loadedSettings.serve_expired_client_timeout ?? 1800,
     });
@@ -287,6 +288,7 @@ export default function Unbound() {
               <Toggle directive="prefetch-key" label={t("unbound.prefetchKey")} badge={t("unbound.prefetchKeyBadge")} description={t("unbound.prefetchKeyHelp")} checked={settings.prefetch_key} onChange={(value) => setSettings({ ...settings, prefetch_key: value })} />
               <Toggle directive="aggressive-nsec" label={t("unbound.aggressiveNsec")} badge={t("unbound.aggressiveNsecBadge")} description={t("unbound.aggressiveNsecHelp")} checked={settings.aggressive_nsec} onChange={(value) => setSettings({ ...settings, aggressive_nsec: value })} />
               <div className="number-grid">
+                <NumberField directive="edns-buffer-size" label={t("unbound.ednsBufferSize")} description={t("unbound.ednsBufferSizeHelp")} recommended={t("unbound.recommended", { value: "1.232 Byte" })} value={settings.edns_buffer_size} min={512} max={4096} onChange={(value) => setSettings({ ...settings, edns_buffer_size: value })} />
                 <NumberField directive="serve-expired-ttl" label={t("unbound.expiredTtl")} description={t("unbound.expiredTtlHelp")} recommended={t("unbound.recommended", { value: "86.400" })} value={settings.serve_expired_ttl} min={3600} max={604800} onChange={(value) => setSettings({ ...settings, serve_expired_ttl: value })} />
                 <NumberField directive="serve-expired-client-timeout" label={t("unbound.expiredTimeout")} description={t("unbound.expiredTimeoutHelp")} recommended={t("unbound.recommended", { value: "1.800 ms" })} value={settings.serve_expired_client_timeout} min={0} max={5000} onChange={(value) => setSettings({ ...settings, serve_expired_client_timeout: value })} />
                 <NumberField directive="cache-min-ttl" label="Minimum TTL" description={t("unbound.minTtlHelp")} recommended={t("unbound.recommended", { value: "0–300" })} value={settings.cache_min_ttl} min={0} max={3600} onChange={(value) => setSettings({ ...settings, cache_min_ttl: value })} />
@@ -385,7 +387,7 @@ function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolea
 }
 
 function fieldLabel(field: string, t: (key: string) => string) {
-  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", prefetch_key: t("unbound.prefetchKey"), aggressive_nsec: t("unbound.aggressiveNsec"), serve_expired: "Serve Expired", serve_expired_ttl: t("unbound.expiredTtl"), serve_expired_client_timeout: t("unbound.expiredTimeout"), cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
+  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", prefetch_key: t("unbound.prefetchKey"), aggressive_nsec: t("unbound.aggressiveNsec"), edns_buffer_size: t("unbound.ednsBufferSize"), serve_expired: "Serve Expired", serve_expired_ttl: t("unbound.expiredTtl"), serve_expired_client_timeout: t("unbound.expiredTimeout"), cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
   return labels[field] ?? field;
 }
 
@@ -394,6 +396,7 @@ function settingsEqual(left: UnboundSettings, right: UnboundSettings) {
     && left.prefetch === right.prefetch
     && left.prefetch_key === right.prefetch_key
     && left.aggressive_nsec === right.aggressive_nsec
+    && left.edns_buffer_size === right.edns_buffer_size
     && left.serve_expired === right.serve_expired
     && left.serve_expired_ttl === right.serve_expired_ttl
     && left.serve_expired_client_timeout === right.serve_expired_client_timeout

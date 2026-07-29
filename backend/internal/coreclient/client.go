@@ -85,6 +85,7 @@ type UnboundSettings struct {
 	Prefetch                  bool                       `json:"prefetch"`
 	PrefetchKey               bool                       `json:"prefetch_key"`
 	AggressiveNSEC            bool                       `json:"aggressive_nsec"`
+	EDNSBufferSize            int                        `json:"edns_buffer_size"`
 	ServeExpired              bool                       `json:"serve_expired"`
 	ServeExpiredTTL           int                        `json:"serve_expired_ttl"`
 	ServeExpiredClientTimeout int                        `json:"serve_expired_client_timeout"`

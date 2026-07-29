@@ -362,6 +362,8 @@ export const de: LocaleDefinition = {
     "unbound.aggressiveNsec": "Validierte Negativantworten wiederverwenden",
     "unbound.aggressiveNsecBadge": "Empfohlen · DNSSEC-Cache",
     "unbound.aggressiveNsecHelp": "Beantwortet nicht vorhandene Namen aus validierten NSEC-Daten. Nur zur Diagnose auffälliger DNSSEC-Zonen vorübergehend deaktivieren.",
+    "unbound.ednsBufferSize": "EDNS-Puffergröße",
+    "unbound.ednsBufferSizeHelp": "Beworbene UDP-Nutzlast in Byte. 1.232 vermeidet Fragmentierung auf typischen IPv6- und Tunnelpfaden; kleinere Werte erzeugen mehr TCP-Rückfälle.",
     "unbound.expired": "Abgelaufene Einträge bereitstellen",
     "unbound.expiredBadge": "Empfohlen · Verfügbarkeit",
     "unbound.expiredHelp": "Hält bekannte Domains bei vorübergehenden externen DNS-Störungen verfügbar.",

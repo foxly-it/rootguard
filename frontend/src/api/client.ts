@@ -114,6 +114,7 @@ export interface UnboundSettings {
   prefetch: boolean;
   prefetch_key: boolean;
   aggressive_nsec: boolean;
+  edns_buffer_size: number;
   serve_expired: boolean;
   serve_expired_ttl: number;
   serve_expired_client_timeout: number;
