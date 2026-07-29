@@ -3,6 +3,7 @@ package unbound
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,8 @@ func TestDefaultSettingsRender(t *testing.T) {
 		"prefetch: yes",
 		"# Availability:",
 		"serve-expired: yes",
+		"serve-expired-ttl: 86400",
+		"serve-expired-client-timeout: 1800",
 		"cache-max-ttl: 86400",
 		"num-threads: 2",
 		"rrset-cache-size: 64m",
@@ -31,6 +34,47 @@ func TestDefaultSettingsRender(t *testing.T) {
 		if !strings.Contains(string(config), expected) {
 			t.Errorf("rendered config does not contain %q", expected)
 		}
+	}
+}
+
+func TestLoadMigratesServeExpiredControls(t *testing.T) {
+	directory := t.TempDir()
+	data := []byte(`{"qname_minimisation":true,"prefetch":true,"serve_expired":true,"cache_min_ttl":0,"cache_max_ttl":86400,"threads":2,"resource_profile":"medium","network_mode":"ipv4","forward_zones":[],"private_domains":[],"reverse_zones":[]}`)
+	if err := os.WriteFile(directory+"/settings.json", data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(directory, "/etc/unbound/unbound.d", "rootguard-unbound")
+	settings, err := manager.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if settings.ServeExpiredTTL != 86400 || settings.ServeExpiredClientTimeout != 1800 {
+		t.Fatalf("legacy settings were not migrated: %#v", settings)
+	}
+}
+
+func TestServeExpiredControlsValidateAndRender(t *testing.T) {
+	settings := DefaultSettings()
+	settings.ServeExpiredTTL = 172800
+	settings.ServeExpiredClientTimeout = 1200
+	config, err := settings.Render()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered := string(config)
+	if !strings.Contains(rendered, "serve-expired-ttl: 172800") ||
+		!strings.Contains(rendered, "serve-expired-client-timeout: 1200") {
+		t.Fatalf("serve-expired controls missing from config:\n%s", rendered)
+	}
+
+	settings.ServeExpiredTTL = 3599
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected invalid stale TTL, got %v", err)
+	}
+	settings = DefaultSettings()
+	settings.ServeExpiredClientTimeout = 5001
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected invalid client timeout, got %v", err)
 	}
 }
 

@@ -48,17 +48,19 @@ type ReverseZonePolicy struct {
 }
 
 type Settings struct {
-	QnameMinimisation bool                `json:"qname_minimisation"`
-	Prefetch          bool                `json:"prefetch"`
-	ServeExpired      bool                `json:"serve_expired"`
-	CacheMinTTL       int                 `json:"cache_min_ttl"`
-	CacheMaxTTL       int                 `json:"cache_max_ttl"`
-	Threads           int                 `json:"threads"`
-	ResourceProfile   string              `json:"resource_profile"`
-	NetworkMode       string              `json:"network_mode"`
-	ForwardZones      []ForwardZone       `json:"forward_zones"`
-	PrivateDomains    []string            `json:"private_domains"`
-	ReverseZones      []ReverseZonePolicy `json:"reverse_zones"`
+	QnameMinimisation         bool                `json:"qname_minimisation"`
+	Prefetch                  bool                `json:"prefetch"`
+	ServeExpired              bool                `json:"serve_expired"`
+	ServeExpiredTTL           int                 `json:"serve_expired_ttl"`
+	ServeExpiredClientTimeout int                 `json:"serve_expired_client_timeout"`
+	CacheMinTTL               int                 `json:"cache_min_ttl"`
+	CacheMaxTTL               int                 `json:"cache_max_ttl"`
+	Threads                   int                 `json:"threads"`
+	ResourceProfile           string              `json:"resource_profile"`
+	NetworkMode               string              `json:"network_mode"`
+	ForwardZones              []ForwardZone       `json:"forward_zones"`
+	PrivateDomains            []string            `json:"private_domains"`
+	ReverseZones              []ReverseZonePolicy `json:"reverse_zones"`
 }
 
 type ActiveConfiguration struct {
@@ -70,16 +72,18 @@ type ActiveConfiguration struct {
 
 func DefaultSettings() Settings {
 	return Settings{
-		QnameMinimisation: true,
-		Prefetch:          true,
-		ServeExpired:      true,
-		CacheMinTTL:       0,
-		CacheMaxTTL:       86400,
-		Threads:           2,
-		ResourceProfile:   resourceProfileMedium,
-		NetworkMode:       networkModeIPv4,
-		ForwardZones:      []ForwardZone{},
-		PrivateDomains:    []string{},
+		QnameMinimisation:         true,
+		Prefetch:                  true,
+		ServeExpired:              true,
+		ServeExpiredTTL:           86400,
+		ServeExpiredClientTimeout: 1800,
+		CacheMinTTL:               0,
+		CacheMaxTTL:               86400,
+		Threads:                   2,
+		ResourceProfile:           resourceProfileMedium,
+		NetworkMode:               networkModeIPv4,
+		ForwardZones:              []ForwardZone{},
+		PrivateDomains:            []string{},
 		ReverseZones: []ReverseZonePolicy{
 			{Network: "10.0.0.0/8", Mode: reverseModeNXDOMAIN},
 			{Network: "172.16.0.0/12", Mode: reverseModeNXDOMAIN},
@@ -91,6 +95,12 @@ func DefaultSettings() Settings {
 func (s Settings) Validate() error {
 	if s.CacheMinTTL < 0 || s.CacheMinTTL > 3600 {
 		return fmt.Errorf("%w: cache_min_ttl must be between 0 and 3600", ErrInvalidSettings)
+	}
+	if s.ServeExpiredTTL < 3600 || s.ServeExpiredTTL > 604800 {
+		return fmt.Errorf("%w: serve_expired_ttl must be between 3600 and 604800 seconds", ErrInvalidSettings)
+	}
+	if s.ServeExpiredClientTimeout < 0 || s.ServeExpiredClientTimeout > 5000 {
+		return fmt.Errorf("%w: serve_expired_client_timeout must be between 0 and 5000 milliseconds", ErrInvalidSettings)
 	}
 	if s.CacheMaxTTL < 60 || s.CacheMaxTTL > 604800 {
 		return fmt.Errorf("%w: cache_max_ttl must be between 60 and 604800", ErrInvalidSettings)
@@ -223,6 +233,8 @@ func settingsEqual(left, right Settings) bool {
 	if left.QnameMinimisation != right.QnameMinimisation ||
 		left.Prefetch != right.Prefetch ||
 		left.ServeExpired != right.ServeExpired ||
+		left.ServeExpiredTTL != right.ServeExpiredTTL ||
+		left.ServeExpiredClientTimeout != right.ServeExpiredClientTimeout ||
 		left.CacheMinTTL != right.CacheMinTTL ||
 		left.CacheMaxTTL != right.CacheMaxTTL ||
 		left.Threads != right.Threads ||
@@ -275,6 +287,10 @@ func (s Settings) Render() ([]byte, error) {
 	fmt.Fprintf(&out, "    prefetch: %s\n", yesNo(s.Prefetch))
 	fmt.Fprintln(&out, "    # Availability: keep serving cached records during temporary upstream failures.")
 	fmt.Fprintf(&out, "    serve-expired: %s\n", yesNo(s.ServeExpired))
+	fmt.Fprintln(&out, "    # Maximum age in seconds for stale records eligible as an availability fallback.")
+	fmt.Fprintf(&out, "    serve-expired-ttl: %d\n", s.ServeExpiredTTL)
+	fmt.Fprintln(&out, "    # Wait in milliseconds for fresh resolution before using an eligible stale answer.")
+	fmt.Fprintf(&out, "    serve-expired-client-timeout: %d\n", s.ServeExpiredClientTimeout)
 	fmt.Fprintln(&out, "    # Cache floor in seconds; higher values delay authoritative DNS changes.")
 	fmt.Fprintf(&out, "    cache-min-ttl: %d\n", s.CacheMinTTL)
 	fmt.Fprintln(&out, "    # Cache ceiling in seconds; records are never retained longer than this value.")
@@ -389,7 +405,22 @@ func (m *Manager) Load() (Settings, error) {
 	if settings.ResourceProfile == "" {
 		settings.ResourceProfile = resourceProfileMedium
 	}
+	if settings.ServeExpiredTTL == 0 {
+		settings.ServeExpiredTTL = 86400
+	}
+	if !jsonFieldExists(data, "serve_expired_client_timeout") {
+		settings.ServeExpiredClientTimeout = 1800
+	}
 	return settings, settings.Validate()
+}
+
+func jsonFieldExists(data []byte, field string) bool {
+	var document map[string]json.RawMessage
+	if json.Unmarshal(data, &document) != nil {
+		return false
+	}
+	_, exists := document[field]
+	return exists
 }
 
 type cacheSizes struct {

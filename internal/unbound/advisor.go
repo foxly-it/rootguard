@@ -61,6 +61,12 @@ func Advise(settings Settings) (Advice, error) {
 	if !settings.ServeExpired {
 		add("enable-serve-expired", "warning", "serve_expired", "Weniger widerstandsfähig bei externen Störungen", "Bereits bekannte Domains können bei einer vorübergehenden Störung autoritativer Nameserver nicht weiter beantwortet werden.", "Serve Expired für Heim- und Unternehmensnetze aktivieren.")
 	}
+	if settings.ServeExpired && settings.ServeExpiredClientTimeout == 0 {
+		add("delay-stale-answer", "recommendation", "serve_expired_client_timeout", "Abgelaufene Antworten werden sofort bevorzugt", "Bei 0 Millisekunden antwortet Unbound direkt aus dem abgelaufenen Cache, ohne zuerst eine frische Auflösung zu versuchen.", "Für RFC-8767-Fallbackverhalten 1.800 Millisekunden verwenden.")
+	}
+	if settings.ServeExpired && settings.ServeExpiredClientTimeout > 2500 {
+		add("lower-stale-timeout", "warning", "serve_expired_client_timeout", "Lange Wartezeit vor der Notfallantwort", "Clients können ihre Anfrage abbrechen, bevor Unbound auf eine zulässige abgelaufene Antwort zurückfällt.", "Die Wartezeit auf höchstens 2.500 Millisekunden begrenzen.")
+	}
 	if settings.CacheMinTTL > 300 {
 		add("lower-cache-min-ttl", "warning", "cache_min_ttl", "Minimum TTL erzwingt lange veraltete Einträge", "Ein hoher Mindestwert überschreibt kürzere TTL-Vorgaben der Domainbetreiber und kann Änderungen verzögern.", "Minimum TTL auf höchstens 300 Sekunden reduzieren.")
 	}

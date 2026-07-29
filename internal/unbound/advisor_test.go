@@ -58,6 +58,27 @@ func TestAdvisorAcceptsBalancedDefaults(t *testing.T) {
 	}
 }
 
+func TestAdvisorExplainsServeExpiredTimeoutModes(t *testing.T) {
+	settings := DefaultSettings()
+	settings.ServeExpiredClientTimeout = 0
+	advice, err := Advise(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(advice.Recommendations) != 1 || advice.Recommendations[0].ID != "delay-stale-answer" {
+		t.Fatalf("expected immediate stale-answer guidance, got %+v", advice)
+	}
+
+	settings.ServeExpiredClientTimeout = 3000
+	advice, err = Advise(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if advice.Status != "review" || len(advice.Recommendations) != 1 || advice.Recommendations[0].ID != "lower-stale-timeout" {
+		t.Fatalf("expected long-timeout warning, got %+v", advice)
+	}
+}
+
 func TestAdvisorRejectsInvalidSettings(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Threads = 0
