@@ -89,6 +89,10 @@ volumes:
 | `/etc/unbound/unbound.d/` | Modular, update-safe managed configuration |
 | `/var/lib/unbound/root.key` | Writable DNSSEC trust-anchor state |
 
+The container always runs Unbound as the fixed numeric identity `100:101`.
+Keeping this identity stable prevents Debian base-image user allocation changes
+from invalidating ownership on persistent trust-anchor volumes.
+
 The base configuration listens on port `5335`, permits localhost and private
 container ranges, validates DNSSEC, and protects private addresses. RootGuard
 generates only modular includes and validates the complete result with

@@ -22,6 +22,19 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ############################################################
+# Stable runtime identity
+#
+# Debian system-user allocation changed from 100:101 to
+# 996:996 between base-image releases. Persistent Docker
+# volumes retain numeric ownership, so an image update would
+# otherwise make the writable RFC5011 trust anchor inaccessible.
+############################################################
+RUN groupmod --gid 101 unbound \
+    && usermod --uid 100 --gid 101 unbound \
+    && test "$(id -u unbound)" = "100" \
+    && test "$(id -g unbound)" = "101"
+
+############################################################
 # Create required directories
 #
 # /var/lib/unbound       -> writable trust anchor location

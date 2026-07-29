@@ -47,6 +47,28 @@ jobs:
           docker run --rm
           rootguard-unbound:test unbound-checkconf /etc/unbound/unbound.conf
 
+      - name: Verify stable non-root identity
+        run: |
+          test "$(docker run --rm --entrypoint id rootguard-unbound:test -u unbound)" = "100"
+          test "$(docker run --rm --entrypoint id rootguard-unbound:test -g unbound)" = "101"
+          test "$(docker image inspect rootguard-unbound:test --format '{{.Config.User}}')" = "unbound"
+
+      - name: Verify existing trust-anchor volume compatibility
+        run: |
+          docker volume create rootguard-unbound-upgrade-test
+          docker run --rm \
+            --user 0:0 \
+            --volume rootguard-unbound-upgrade-test:/var/lib/unbound \
+            --entrypoint /bin/sh \
+            rootguard-unbound:test \
+            -c 'cp /usr/share/dns/root.key /var/lib/unbound/root.key && chown -R 100:101 /var/lib/unbound'
+          docker run --rm \
+            --user unbound \
+            --volume rootguard-unbound-upgrade-test:/var/lib/unbound \
+            --entrypoint /bin/sh \
+            rootguard-unbound:test \
+            -c 'test -w /var/lib/unbound/root.key && touch /var/lib/unbound/root.key.compat'
+
       - name: Start resolver smoke-test container
         run: docker run --rm --detach --name rootguard-unbound-ci rootguard-unbound:test
 
@@ -72,7 +94,9 @@ jobs:
 
       - name: Stop resolver smoke-test container
         if: always()
-        run: docker stop rootguard-unbound-ci || true
+        run: |
+          docker stop rootguard-unbound-ci || true
+          docker volume rm rootguard-unbound-upgrade-test || true
 
       - name: Verify secure Unbound version
         run: |
