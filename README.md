@@ -51,6 +51,8 @@ workflow.
 - DNSSEC validation with a writable RFC 5011 trust-anchor state.
 - Non-root runtime, read-only compatible filesystem, and no added capabilities.
 - Private-network access control and private-address protection.
+- Loopback-only runtime control for bounded RootGuard diagnostics; the control
+  port is not exposed or published.
 - Immutable base configuration with modular includes under
   `/etc/unbound/unbound.d/`.
 - Version tags derived from the installed Debian package.

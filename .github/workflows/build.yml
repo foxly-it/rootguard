@@ -63,6 +63,12 @@ jobs:
           grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
           broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=3 +tries=1)"
           grep -q 'status: SERVFAIL' <<<"$broken"
+          docker exec rootguard-unbound-ci unbound-control status
+          docker exec rootguard-unbound-ci unbound-control verbosity 2
+          test "$(docker exec rootguard-unbound-ci unbound-control status | awk '/^verbosity:/ {print $2}')" = "2"
+          docker exec rootguard-unbound-ci unbound-control verbosity 0
+          test "$(docker exec rootguard-unbound-ci unbound-control status | awk '/^verbosity:/ {print $2}')" = "0"
+          test -z "$(docker image inspect rootguard-unbound:test --format '{{json .Config.ExposedPorts}}' | grep 8953 || true)"
 
       - name: Stop resolver smoke-test container
         if: always()
