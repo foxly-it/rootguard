@@ -95,12 +95,16 @@ jobs:
           recommendation_count="$(jq '.recommendations | length' <<<"$advice")"
           test "$advice_status" = "review" || { echo "Expected advisor review status, received $advice_status"; exit 1; }
           test "$recommendation_count" -ge 4 || { echo "Expected at least 4 recommendations, received $recommendation_count"; exit 1; }
-          proposal="$(jq '.qname_minimisation = true | .prefetch = true | .serve_expired = true | .cache_min_ttl = 120 | .cache_max_ttl = 86400 | .threads = 4 | .resource_profile = "large"' <<<"$active")"
+          test "$(jq -r '.serve_expired_ttl' <<<"$active")" = "86400" || { echo "Expected default serve-expired TTL of 86400 seconds"; exit 1; }
+          test "$(jq -r '.serve_expired_client_timeout' <<<"$active")" = "1800" || { echo "Expected default serve-expired client timeout of 1800 milliseconds"; exit 1; }
+          proposal="$(jq '.qname_minimisation = true | .prefetch = true | .serve_expired = true | .serve_expired_ttl = 172800 | .serve_expired_client_timeout = 1200 | .cache_min_ttl = 120 | .cache_max_ttl = 86400 | .threads = 4 | .resource_profile = "large"' <<<"$active")"
           preview="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/preview)"
           preview_changed="$(jq -r .changed <<<"$preview")"
           cache_profile_rendered="$(jq -r '.rendered_config | contains("rrset-cache-size: 128m") and contains("msg-cache-size: 64m")' <<<"$preview")"
+          serve_expired_rendered="$(jq -r '.rendered_config | contains("serve-expired-ttl: 172800") and contains("serve-expired-client-timeout: 1200")' <<<"$preview")"
           test "$preview_changed" = "true" || { echo "Expected changed preview, received $preview_changed"; exit 1; }
           test "$cache_profile_rendered" = "true" || { echo "Expected large cache directives in preview, received $cache_profile_rendered"; exit 1; }
+          test "$serve_expired_rendered" = "true" || { echo "Expected serve-expired timing directives in preview, received $serve_expired_rendered"; exit 1; }
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
           versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
           test "$(jq 'length' <<<"$versions")" -ge 2
