@@ -113,6 +113,8 @@ export interface UnboundSettings {
   qname_minimisation: boolean;
   prefetch: boolean;
   serve_expired: boolean;
+  serve_expired_ttl: number;
+  serve_expired_client_timeout: number;
   cache_min_ttl: number;
   cache_max_ttl: number;
   threads: number;

@@ -81,17 +81,19 @@ type ServiceActionResponse struct {
 }
 
 type UnboundSettings struct {
-	QnameMinimisation bool                       `json:"qname_minimisation"`
-	Prefetch          bool                       `json:"prefetch"`
-	ServeExpired      bool                       `json:"serve_expired"`
-	CacheMinTTL       int                        `json:"cache_min_ttl"`
-	CacheMaxTTL       int                        `json:"cache_max_ttl"`
-	Threads           int                        `json:"threads"`
-	ResourceProfile   string                     `json:"resource_profile"`
-	NetworkMode       string                     `json:"network_mode"`
-	ForwardZones      []UnboundForwardZone       `json:"forward_zones"`
-	PrivateDomains    []string                   `json:"private_domains"`
-	ReverseZones      []UnboundReverseZonePolicy `json:"reverse_zones"`
+	QnameMinimisation         bool                       `json:"qname_minimisation"`
+	Prefetch                  bool                       `json:"prefetch"`
+	ServeExpired              bool                       `json:"serve_expired"`
+	ServeExpiredTTL           int                        `json:"serve_expired_ttl"`
+	ServeExpiredClientTimeout int                        `json:"serve_expired_client_timeout"`
+	CacheMinTTL               int                        `json:"cache_min_ttl"`
+	CacheMaxTTL               int                        `json:"cache_max_ttl"`
+	Threads                   int                        `json:"threads"`
+	ResourceProfile           string                     `json:"resource_profile"`
+	NetworkMode               string                     `json:"network_mode"`
+	ForwardZones              []UnboundForwardZone       `json:"forward_zones"`
+	PrivateDomains            []string                   `json:"private_domains"`
+	ReverseZones              []UnboundReverseZonePolicy `json:"reverse_zones"`
 }
 
 type UnboundForwardZone struct {

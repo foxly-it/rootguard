@@ -63,6 +63,8 @@ export default function Unbound() {
       reverse_zones: loadedSettings.reverse_zones ?? [],
       network_mode: loadedSettings.network_mode ?? "ipv4",
       resource_profile: loadedSettings.resource_profile ?? "medium",
+      serve_expired_ttl: loadedSettings.serve_expired_ttl ?? 86400,
+      serve_expired_client_timeout: loadedSettings.serve_expired_client_timeout ?? 1800,
     });
     setHistory(loadedHistory);
     setPresets(loadedPresets);
@@ -281,6 +283,8 @@ export default function Unbound() {
                 <code className="setting-directive">{resourceProfileDirectives(settings.resource_profile)}</code>
               </label>
               <div className="number-grid">
+                <NumberField directive="serve-expired-ttl" label={t("unbound.expiredTtl")} description={t("unbound.expiredTtlHelp")} recommended={t("unbound.recommended", { value: "86.400" })} value={settings.serve_expired_ttl} min={3600} max={604800} onChange={(value) => setSettings({ ...settings, serve_expired_ttl: value })} />
+                <NumberField directive="serve-expired-client-timeout" label={t("unbound.expiredTimeout")} description={t("unbound.expiredTimeoutHelp")} recommended={t("unbound.recommended", { value: "1.800 ms" })} value={settings.serve_expired_client_timeout} min={0} max={5000} onChange={(value) => setSettings({ ...settings, serve_expired_client_timeout: value })} />
                 <NumberField directive="cache-min-ttl" label="Minimum TTL" description={t("unbound.minTtlHelp")} recommended={t("unbound.recommended", { value: "0–300" })} value={settings.cache_min_ttl} min={0} max={3600} onChange={(value) => setSettings({ ...settings, cache_min_ttl: value })} />
                 <NumberField directive="cache-max-ttl" label="Maximum TTL" description={t("unbound.maxTtlHelp")} recommended={t("unbound.recommended", { value: "3.600–172.800" })} value={settings.cache_max_ttl} min={60} max={604800} onChange={(value) => setSettings({ ...settings, cache_max_ttl: value })} />
                 <NumberField directive="num-threads" label={t("unbound.threads")} description={t("unbound.threadsHelp")} recommended={t("unbound.recommended", { value: "2–4" })} value={settings.threads} min={1} max={32} onChange={(value) => setSettings({ ...settings, threads: value })} />
@@ -377,7 +381,7 @@ function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolea
 }
 
 function fieldLabel(field: string, t: (key: string) => string) {
-  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
+  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", serve_expired: "Serve Expired", serve_expired_ttl: t("unbound.expiredTtl"), serve_expired_client_timeout: t("unbound.expiredTimeout"), cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
   return labels[field] ?? field;
 }
 
@@ -385,6 +389,8 @@ function settingsEqual(left: UnboundSettings, right: UnboundSettings) {
   return left.qname_minimisation === right.qname_minimisation
     && left.prefetch === right.prefetch
     && left.serve_expired === right.serve_expired
+    && left.serve_expired_ttl === right.serve_expired_ttl
+    && left.serve_expired_client_timeout === right.serve_expired_client_timeout
     && left.cache_min_ttl === right.cache_min_ttl
     && left.cache_max_ttl === right.cache_max_ttl
     && left.threads === right.threads
