@@ -118,6 +118,8 @@ body{overflow-x:hidden}
 .quickstart-command pre,.code-block pre{overflow-x:hidden;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
 @media(max-width:640px){.wrap{width:calc(100% - 24px)}}
 
+.preview-resources i svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
 /* Hero dashboard motion shared with the Foxly product sites */
 @keyframes dashboard-settle{
   from{transform:perspective(900px) rotateZ(1deg) rotateY(-8deg) translateX(16px)}

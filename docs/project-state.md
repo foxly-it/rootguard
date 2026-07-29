@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -154,7 +154,10 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Lightweight vector RootGuard shield replaces the former embedded bitmap
   asset. The global header now identifies the current page next to the brand;
   the application shell adds a keyboard skip link, labelled main navigation,
-  focusable content target, and responsive page-name treatment.
+  focusable content target, and responsive page-name treatment. On desktop the
+  primary sidebar can now collapse to its Lucide symbols, retains accessible
+  labels and hover/focus tooltips, and remembers the local preference; mobile
+  navigation remains fully labelled.
 - Stack & Updates page for allowlisted AdGuard Home and Unbound lifecycle
   control. Update checks compare pulled and running image IDs; installation is
   asynchronous and persistent, creates protected data backups, replaces one
@@ -182,7 +185,10 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Updater source and history live in the independently versioned
   `foxly-it/rootguard-updater` component repository. Its own CI runs tests,
   vetting, and `amd64`/`arm64` image builds; the main repository pins the exact
-  reviewed component commit as a Git submodule.
+  reviewed component commit as a Git submodule. The GHCR package explicitly
+  grants the updater repository write access for Actions; its `latest` and
+  commit tags were republished successfully as a multi-architecture manifest
+  on 2026-07-29.
 - The Updater CI also runs two real Docker scenarios with old and new
   Core/WebApp fixture images. It verifies both running image IDs after a paired
   update, then introduces an HTTP-503 WebApp candidate and proves that both
@@ -196,7 +202,9 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Reduced public landing page focused on a plain-language product explanation,
   a Compose quick start, three user benefits, and a compact project status.
   Technical depth stays in the documentation, whose table of contents highlights the
-  section currently in view.
+  section currently in view. The dashboard header preview mirrors the live
+  WebApp's Lucide symbols for CPU, memory, query, blocked-query, and filter-rate
+  cards instead of substituting unrelated text glyphs.
 - Public alpha `v0.1.0-alpha.3` is published around a single
   `compose.alpha.yaml` that
   contains no local build contexts and pulls one named RootGuard version for
