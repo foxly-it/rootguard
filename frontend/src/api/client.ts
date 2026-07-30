@@ -356,6 +356,7 @@ export interface AdGuardStatus {
   queries: number;
   blocked: number;
   average_response_seconds: number;
+  best_practices_ready: boolean;
 }
 
 export async function fetchAdGuardStatus(): Promise<AdGuardStatus> {
@@ -364,6 +365,27 @@ export async function fetchAdGuardStatus(): Promise<AdGuardStatus> {
 
 export async function bootstrapAdGuard(): Promise<AdGuardStatus> {
   return request<AdGuardStatus>("/api/adguard/bootstrap", { method: "POST" });
+}
+
+export interface AdGuardFilterCheck {
+  host: string;
+  category: "advertising" | "tracking" | "service" | "telemetry" | "security-test";
+  expected_blocked: boolean;
+  blocked: boolean;
+  reason: string;
+  matched_rule?: string;
+}
+
+export interface AdGuardFilterReport {
+  checks: AdGuardFilterCheck[];
+  blocked: number;
+  expected: number;
+  passed: number;
+  checked_at: string;
+}
+
+export async function fetchAdGuardFilterReport(): Promise<AdGuardFilterReport> {
+  return request<AdGuardFilterReport>("/api/adguard/filter-report");
 }
 
 // =====================================================

@@ -267,6 +267,106 @@
   background: rgba(239, 68, 68, 0.08);
 }
 
+.adguard-filter-test {
+  margin-top: 18px;
+}
+
+.adguard-filter-test .adguard-panel-heading {
+  align-items: center;
+}
+
+.adguard-filter-test .adguard-panel-heading p {
+  max-width: 720px;
+  margin: 8px 0 0;
+  color: #8fa6c2;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.adguard-filter-test .adguard-primary-action {
+  margin-top: 0;
+  flex: 0 0 auto;
+}
+
+.adguard-filter-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 22px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.adguard-filter-summary.healthy {
+  color: #5eead4;
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.adguard-filter-summary span {
+  color: #8fa6c2;
+  font-size: 0.76rem;
+}
+
+.adguard-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.adguard-filter-grid article {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 11px;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(5, 15, 26, 0.3);
+}
+
+.adguard-filter-grid article > span {
+  color: #5eead4;
+}
+
+.adguard-filter-grid article.missed > span {
+  color: #fbbf24;
+}
+
+.adguard-filter-grid strong,
+.adguard-filter-grid small {
+  display: block;
+}
+
+.adguard-filter-grid small {
+  margin-top: 3px;
+  color: #60a5fa;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.adguard-filter-grid p {
+  margin: 7px 0 0;
+  color: #8fa6c2;
+  font-size: 0.74rem;
+}
+
+.adguard-filter-grid code {
+  display: block;
+  margin-top: 7px;
+  overflow-wrap: anywhere;
+  color: #93c5fd;
+  font-size: 0.68rem;
+}
+
+.adguard-filter-note {
+  display: block;
+  margin-top: 14px;
+  color: #8298b5;
+  line-height: 1.5;
+}
+
 @media (max-width: 820px) {
   .adguard-hero,
   .adguard-grid {
@@ -275,5 +375,15 @@
 
   .adguard-hero {
     padding: 32px 25px;
+  }
+
+  .adguard-filter-test .adguard-panel-heading,
+  .adguard-filter-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .adguard-filter-grid {
+    grid-template-columns: 1fr;
   }
 }

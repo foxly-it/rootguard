@@ -23,3 +23,12 @@ func HandleBootstrapAdGuard(w http.ResponseWriter, r *http.Request, core *corecl
 	}
 	writeJSON(w, http.StatusOK, status)
 }
+
+func HandleGetAdGuardFilterReport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	report, err := core.AdGuardFilterReport(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}

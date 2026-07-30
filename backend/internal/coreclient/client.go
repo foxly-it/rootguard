@@ -225,14 +225,32 @@ type UnboundDirectiveReference struct {
 }
 
 type AdGuardStatus struct {
-	Configured      bool    `json:"configured"`
-	Healthy         bool    `json:"healthy"`
-	Upstream        string  `json:"upstream"`
-	UpstreamReady   bool    `json:"upstream_ready"`
-	StatsAvailable  bool    `json:"stats_available"`
-	Queries         uint64  `json:"queries"`
-	Blocked         uint64  `json:"blocked"`
-	AverageResponse float64 `json:"average_response_seconds"`
+	Configured         bool    `json:"configured"`
+	Healthy            bool    `json:"healthy"`
+	Upstream           string  `json:"upstream"`
+	UpstreamReady      bool    `json:"upstream_ready"`
+	StatsAvailable     bool    `json:"stats_available"`
+	Queries            uint64  `json:"queries"`
+	Blocked            uint64  `json:"blocked"`
+	AverageResponse    float64 `json:"average_response_seconds"`
+	BestPracticesReady bool    `json:"best_practices_ready"`
+}
+
+type AdGuardFilterCheck struct {
+	Host            string `json:"host"`
+	Category        string `json:"category"`
+	ExpectedBlocked bool   `json:"expected_blocked"`
+	Blocked         bool   `json:"blocked"`
+	Reason          string `json:"reason"`
+	MatchedRule     string `json:"matched_rule,omitempty"`
+}
+
+type AdGuardFilterReport struct {
+	Checks    []AdGuardFilterCheck `json:"checks"`
+	Blocked   int                  `json:"blocked"`
+	Expected  int                  `json:"expected"`
+	Passed    int                  `json:"passed"`
+	CheckedAt time.Time            `json:"checked_at"`
 }
 
 type InstallationConfig struct {
@@ -473,6 +491,12 @@ func (c *Client) AdGuardStatus(ctx context.Context) (AdGuardStatus, error) {
 func (c *Client) BootstrapAdGuard(ctx context.Context) (AdGuardStatus, error) {
 	var result AdGuardStatus
 	err := c.do(ctx, http.MethodPost, "/api/adguard/bootstrap", nil, &result)
+	return result, err
+}
+
+func (c *Client) AdGuardFilterReport(ctx context.Context) (AdGuardFilterReport, error) {
+	var result AdGuardFilterReport
+	err := c.do(ctx, http.MethodGet, "/api/adguard/filter-report", nil, &result)
 	return result, err
 }
 

@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ArrowRight, Check, ExternalLink, Filter, KeyRound, LockKeyhole, Network, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, CircleAlert, ExternalLink, Filter, KeyRound, LockKeyhole, Network, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   bootstrapAdGuard,
+  fetchAdGuardFilterReport,
   fetchAdGuardStatus,
   fetchInstallationStatus,
+  type AdGuardFilterCheck,
+  type AdGuardFilterReport,
   type AdGuardStatus,
   type InstallationStatus,
 } from "../api/client";
@@ -19,6 +22,8 @@ export default function AdGuard() {
   const [bootstrapping, setBootstrapping] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [filterReport, setFilterReport] = useState<AdGuardFilterReport | null>(null);
+  const [testingFilters, setTestingFilters] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -50,11 +55,24 @@ export default function AdGuard() {
     try {
       const updated = await bootstrapAdGuard();
       setStatus(updated);
-      setMessage("AdGuard Home wurde sicher eingerichtet und exklusiv mit Unbound verbunden.");
+      setMessage(t("adguard.bootstrapComplete"));
     } catch (cause) {
       setError(errorMessage(cause, "AdGuard Home konnte nicht eingerichtet werden."));
     } finally {
       setBootstrapping(false);
+    }
+  }
+
+  async function testFilters() {
+    if (testingFilters) return;
+    setTestingFilters(true);
+    setError("");
+    try {
+      setFilterReport(await fetchAdGuardFilterReport());
+    } catch (cause) {
+      setError(errorMessage(cause, t("adguard.filterTestError")));
+    } finally {
+      setTestingFilters(false);
     }
   }
 
@@ -98,14 +116,19 @@ export default function AdGuard() {
             <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} />
             <StatusRow label={t("adguard.service")} active={Boolean(status?.healthy)} activeText={t("adguard.reachable")} inactiveText={t("adguard.unreachable")} />
             <StatusRow label={t("adguard.upstream")} active={Boolean(status?.upstream_ready)} activeText={t("adguard.validated")} inactiveText={t("adguard.pending")} />
+            <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} />
           </div>
           <div className="adguard-upstream">
             <span>{t("adguard.activeUpstream")}</span>
             <code>{status?.upstream || "172.29.53.2:5335"}</code>
           </div>
-          {!loading && installation?.state === "installed" && !status?.configured && (
+          {!loading && installation?.state === "installed" && (!status?.configured || !status?.best_practices_ready) && (
             <button className="adguard-primary-action" type="button" disabled={bootstrapping} onClick={initialize}>
-              {bootstrapping ? t("adguard.settingUp") : t("adguard.finish")}
+              {bootstrapping
+                ? t("adguard.settingUp")
+                : status?.configured
+                  ? t("adguard.applyBestPractices")
+                  : t("adguard.finish")}
             </button>
           )}
         </section>
@@ -122,6 +145,34 @@ export default function AdGuard() {
         </section>
       </div>
 
+      {ready && (
+        <section className="adguard-panel adguard-filter-test">
+          <div className="adguard-panel-heading">
+            <div>
+              <span className="adguard-eyebrow">{t("adguard.filterTestEyebrow")}</span>
+              <h2>{t("adguard.filterTestTitle")}</h2>
+              <p>{t("adguard.filterTestHelp")}</p>
+            </div>
+            <button className="adguard-primary-action" type="button" disabled={testingFilters} onClick={testFilters}>
+              <RefreshCw size={16} className={testingFilters ? "spin" : ""} />
+              {testingFilters ? t("adguard.filterTesting") : t("adguard.filterTestRun")}
+            </button>
+          </div>
+          {filterReport && (
+            <>
+              <div className={`adguard-filter-summary ${filterReport.passed === filterReport.expected ? "healthy" : "warning"}`}>
+                <strong>{t("adguard.filterSummary", { passed: filterReport.passed, expected: filterReport.expected })}</strong>
+                <span>{t("adguard.filterSummaryHelp", { blocked: filterReport.blocked })}</span>
+              </div>
+              <div className="adguard-filter-grid">
+                {filterReport.checks.map((check) => <FilterCheck key={check.host} check={check} />)}
+              </div>
+              <small className="adguard-filter-note">{t("adguard.filterTestNote")}</small>
+            </>
+          )}
+        </section>
+      )}
+
       <section className="adguard-security-note">
         <LockKeyhole size={20} />
         <div>
@@ -131,6 +182,39 @@ export default function AdGuard() {
       </section>
     </div>
   );
+}
+
+function FilterCheck({ check }: { check: AdGuardFilterCheck }) {
+  const { t } = useI18n();
+  const passed = !check.expected_blocked || check.blocked;
+  return (
+    <article className={passed ? "passed" : "missed"}>
+      <span>{passed ? <CheckCircle2 size={18} /> : <CircleAlert size={18} />}</span>
+      <div>
+        <strong>{check.host}</strong>
+        <small>{categoryLabel(t, check.category)}</small>
+        <p>
+          {check.blocked
+            ? t("adguard.filterBlocked")
+            : check.expected_blocked
+              ? t("adguard.filterNotBlocked")
+              : t("adguard.filterInformational")}
+        </p>
+        {check.matched_rule && <code>{check.matched_rule}</code>}
+      </div>
+    </article>
+  );
+}
+
+function categoryLabel(t: (key: string) => string, category: AdGuardFilterCheck["category"]) {
+  const keys = {
+    advertising: "adguard.categoryAdvertising",
+    tracking: "adguard.categoryTracking",
+    service: "adguard.categoryService",
+    telemetry: "adguard.categoryTelemetry",
+    "security-test": "adguard.categorySecurityTest",
+  };
+  return t(keys[category]);
 }
 
 function StatusRow({ label, active, activeText, inactiveText }: {
