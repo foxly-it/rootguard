@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,14 +23,52 @@ type Credentials struct {
 }
 
 type Status struct {
-	Configured      bool    `json:"configured"`
-	Healthy         bool    `json:"healthy"`
-	Upstream        string  `json:"upstream"`
-	UpstreamReady   bool    `json:"upstream_ready"`
-	StatsAvailable  bool    `json:"stats_available"`
-	Queries         uint64  `json:"queries"`
-	Blocked         uint64  `json:"blocked"`
-	AverageResponse float64 `json:"average_response_seconds"`
+	Configured         bool    `json:"configured"`
+	Healthy            bool    `json:"healthy"`
+	Upstream           string  `json:"upstream"`
+	UpstreamReady      bool    `json:"upstream_ready"`
+	StatsAvailable     bool    `json:"stats_available"`
+	Queries            uint64  `json:"queries"`
+	Blocked            uint64  `json:"blocked"`
+	AverageResponse    float64 `json:"average_response_seconds"`
+	BestPracticesReady bool    `json:"best_practices_ready"`
+}
+
+type FilterCheck struct {
+	Host            string `json:"host"`
+	Category        string `json:"category"`
+	ExpectedBlocked bool   `json:"expected_blocked"`
+	Blocked         bool   `json:"blocked"`
+	Reason          string `json:"reason"`
+	MatchedRule     string `json:"matched_rule,omitempty"`
+}
+
+type FilterReport struct {
+	Checks    []FilterCheck `json:"checks"`
+	Blocked   int           `json:"blocked"`
+	Expected  int           `json:"expected"`
+	Passed    int           `json:"passed"`
+	CheckedAt time.Time     `json:"checked_at"`
+}
+
+type filterProbe struct {
+	host            string
+	category        string
+	expectedBlocked bool
+}
+
+var filterProbes = []filterProbe{
+	{host: "googlesyndication.com", category: "advertising", expectedBlocked: true},
+	{host: "doubleverify.com", category: "tracking", expectedBlocked: true},
+	{host: "bid.g.doubleclick.net", category: "advertising", expectedBlocked: true},
+	{host: "amazon-adsystem.com", category: "advertising", expectedBlocked: true},
+	{host: "tiktok.com", category: "service", expectedBlocked: false},
+	{host: "connect.facebook.net", category: "tracking", expectedBlocked: true},
+	{host: "mc.yandex.ru", category: "tracking", expectedBlocked: true},
+	{host: "samsungcloudplatform.com", category: "telemetry", expectedBlocked: false},
+	{host: "microsoft.com", category: "service", expectedBlocked: false},
+	{host: "amtso.org", category: "security-test", expectedBlocked: false},
+	{host: "wicar.org", category: "security-test", expectedBlocked: false},
 }
 
 type Manager struct {
@@ -69,8 +108,18 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 	}
 
 	var dnsInfo struct {
-		UpstreamDNS []string `json:"upstream_dns"`
-		FallbackDNS []string `json:"fallback_dns"`
+		UpstreamDNS        []string `json:"upstream_dns"`
+		FallbackDNS        []string `json:"fallback_dns"`
+		ProtectionEnabled  bool     `json:"protection_enabled"`
+		RateLimit          int      `json:"ratelimit"`
+		RefuseAny          bool     `json:"refuse_any"`
+		EnableDNSSEC       bool     `json:"enable_dnssec"`
+		EDNSCSEnabled      bool     `json:"edns_cs_enabled"`
+		CacheEnabled       bool     `json:"cache_enabled"`
+		CacheSize          int      `json:"cache_size"`
+		CacheOptimistic    bool     `json:"cache_optimistic"`
+		BlockedResponseTTL int      `json:"blocked_response_ttl"`
+		UpstreamTimeout    int      `json:"upstream_timeout"`
 	}
 	if err := m.request(ctx, http.MethodGet, m.apiURL+"/control/dns_info", nil, &dnsInfo, &credentials); err != nil {
 		return Status{}, fmt.Errorf("adguard dns info: %w", err)
@@ -82,6 +131,16 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		Upstream:   m.upstream,
 		UpstreamReady: len(dnsInfo.UpstreamDNS) == 1 &&
 			dnsInfo.UpstreamDNS[0] == m.upstream && len(dnsInfo.FallbackDNS) == 0,
+		BestPracticesReady: dnsInfo.ProtectionEnabled &&
+			dnsInfo.RateLimit == 20 &&
+			dnsInfo.RefuseAny &&
+			dnsInfo.EnableDNSSEC &&
+			!dnsInfo.EDNSCSEnabled &&
+			dnsInfo.CacheEnabled &&
+			dnsInfo.CacheSize >= 4*1024*1024 &&
+			!dnsInfo.CacheOptimistic &&
+			dnsInfo.BlockedResponseTTL == 10 &&
+			dnsInfo.UpstreamTimeout == 10,
 	}
 	var stats struct {
 		Queries         uint64  `json:"num_dns_queries"`
@@ -216,14 +275,85 @@ func (m *Manager) configureUpstream(ctx context.Context, credentials Credentials
 	}
 
 	dnsConfig := map[string]any{
-		"upstream_dns":  []string{m.upstream},
-		"fallback_dns":  []string{},
-		"upstream_mode": "load_balance",
+		"upstream_dns":         []string{m.upstream},
+		"fallback_dns":         []string{},
+		"upstream_mode":        "load_balance",
+		"protection_enabled":   true,
+		"ratelimit":            20,
+		"refuse_any":           true,
+		"enable_dnssec":        true,
+		"edns_cs_enabled":      false,
+		"cache_enabled":        true,
+		"cache_size":           4 * 1024 * 1024,
+		"cache_ttl_min":        0,
+		"cache_ttl_max":        0,
+		"cache_optimistic":     false,
+		"blocked_response_ttl": 10,
+		"upstream_timeout":     10,
 	}
 	if err := m.request(ctx, http.MethodPost, m.apiURL+"/control/dns_config", dnsConfig, nil, &credentials); err != nil {
 		return fmt.Errorf("configure unbound upstream: %w", err)
 	}
+	filteringConfig := map[string]any{"enabled": true, "interval": 24}
+	if err := m.request(ctx, http.MethodPost, m.apiURL+"/control/filtering/config", filteringConfig, nil, &credentials); err != nil {
+		return fmt.Errorf("enable adguard filtering: %w", err)
+	}
 	return nil
+}
+
+func (m *Manager) FilterReport(ctx context.Context) (FilterReport, error) {
+	credentials, err := m.loadCredentials()
+	if err != nil {
+		return FilterReport{}, err
+	}
+
+	report := FilterReport{
+		Checks:    make([]FilterCheck, 0, len(filterProbes)),
+		CheckedAt: time.Now().UTC(),
+	}
+	for _, probe := range filterProbes {
+		var result struct {
+			Reason string `json:"reason"`
+			Rules  []struct {
+				Text string `json:"text"`
+			} `json:"rules"`
+		}
+		endpoint := m.apiURL + "/control/filtering/check_host?name=" + url.QueryEscape(probe.host)
+		if err := m.request(ctx, http.MethodGet, endpoint, nil, &result, &credentials); err != nil {
+			return FilterReport{}, fmt.Errorf("check adguard filter for %s: %w", probe.host, err)
+		}
+		blocked := filterReasonBlocks(result.Reason)
+		check := FilterCheck{
+			Host:            probe.host,
+			Category:        probe.category,
+			ExpectedBlocked: probe.expectedBlocked,
+			Blocked:         blocked,
+			Reason:          result.Reason,
+		}
+		if len(result.Rules) > 0 {
+			check.MatchedRule = result.Rules[0].Text
+		}
+		report.Checks = append(report.Checks, check)
+		if blocked {
+			report.Blocked++
+		}
+		if probe.expectedBlocked {
+			report.Expected++
+			if blocked {
+				report.Passed++
+			}
+		}
+	}
+	return report, nil
+}
+
+func filterReasonBlocks(reason string) bool {
+	switch reason {
+	case "FilteredBlackList", "FilteredBlockedService", "SafeBrowsing", "Parental":
+		return true
+	default:
+		return false
+	}
 }
 
 func (m *Manager) request(ctx context.Context, method, url string, body, result any, credentials *Credentials) error {

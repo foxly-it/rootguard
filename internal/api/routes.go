@@ -64,6 +64,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("PUT /api/unbound/custom", putUnboundCustomHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/directives", unboundDirectivesHandler)
 	apiMux.HandleFunc("GET /api/adguard/status", getAdGuardStatusHandler(deps.AdGuard))
+	apiMux.HandleFunc("GET /api/adguard/filter-report", getAdGuardFilterReportHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/bootstrap", bootstrapAdGuardHandler(deps.AdGuard))
 	apiMux.Handle("/api/adguard/ui/", deps.AdGuard.UIHandler())
 
@@ -219,6 +220,17 @@ func getAdGuardStatusHandler(manager *adguard.Manager) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, status)
+	}
+}
+
+func getAdGuardFilterReportHandler(manager *adguard.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		report, err := manager.FilterReport(r.Context())
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, report)
 	}
 }
 
