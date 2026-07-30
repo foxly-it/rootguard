@@ -112,8 +112,7 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		FallbackDNS        []string `json:"fallback_dns"`
 		ProtectionEnabled  bool     `json:"protection_enabled"`
 		RateLimit          int      `json:"ratelimit"`
-		RefuseAny          bool     `json:"refuse_any"`
-		EnableDNSSEC       bool     `json:"enable_dnssec"`
+		DNSSECEnabled      bool     `json:"dnssec_enabled"`
 		EDNSCSEnabled      bool     `json:"edns_cs_enabled"`
 		CacheEnabled       bool     `json:"cache_enabled"`
 		CacheSize          int      `json:"cache_size"`
@@ -133,8 +132,7 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 			dnsInfo.UpstreamDNS[0] == m.upstream && len(dnsInfo.FallbackDNS) == 0,
 		BestPracticesReady: dnsInfo.ProtectionEnabled &&
 			dnsInfo.RateLimit == 20 &&
-			dnsInfo.RefuseAny &&
-			dnsInfo.EnableDNSSEC &&
+			dnsInfo.DNSSECEnabled &&
 			!dnsInfo.EDNSCSEnabled &&
 			dnsInfo.CacheEnabled &&
 			dnsInfo.CacheSize >= 4*1024*1024 &&
