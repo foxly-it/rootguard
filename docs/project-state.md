@@ -284,16 +284,20 @@ visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
-1. Complete richer Stack Center health details and signed/immutable Core/WebApp
+1. Replace the Debian Forky/Sid Unbound package image with a reproducible,
+   checksum-pinned Unbound `1.25.2+` source build on Debian 13 Slim; preserve
+   the stable non-root identity and verify SBOM/provenance, DNSSEC,
+   trust-anchor updates, and update/rollback on `amd64` and `arm64`.
+2. Complete richer Stack Center health details and signed/immutable Core/WebApp
    release metadata.
-2. Harden backup retention, export/restore, and immutable release digests.
-3. DNS security advisor and production preflight checks.
-4. Native AdGuard integration, contextual guidance, cross-service diagnostics,
+3. Harden backup retention, export/restore, and immutable release digests.
+4. DNS security advisor and production preflight checks.
+5. Native AdGuard integration, contextual guidance, cross-service diagnostics,
    and compatibility testing without duplicating filter, client, or query-log
    management.
-5. Custom diagnostics and cache tools.
-6. Runtime-provider abstraction for Docker and future bare-metal/systemd.
-7. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
+6. Custom diagnostics and cache tools.
+7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
+8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
    hardening.
 
 ## Tracked editor follow-ups
