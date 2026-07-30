@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-07-29
+Last updated: 2026-07-30
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -80,6 +80,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - AdGuard page documents and visualises the RootGuard-managed official installer
   flow instead of suggesting that the native administration wizard must remain
   public.
+- On-demand AdGuard filtering diagnostics use the local authenticated
+  `check_host` API for advertising and tracking probes without opening test
+  websites. Legitimate services and AMTSO/Wicar portals remain explicitly
+  informational. RootGuard also reconciles a conservative DNS baseline through
+  AdGuard's validated API: exclusive Unbound upstream, no fallback, filtering,
+  DNSSEC signalling, disabled ECS, refused ANY requests, bounded cache and
+  response TTLs, and daily filter refreshes.
 - Authenticated native AdGuard Home UI gateway at `/adguard-ui/`; AdGuard still
   has no public administration port, Core injects its private credentials, and
   mutating browser requests are restricted to the same origin.
