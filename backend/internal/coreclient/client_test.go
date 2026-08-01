@@ -67,6 +67,26 @@ func TestUnboundSettingsPreserveResourceProfile(t *testing.T) {
 	}
 }
 
+func TestServicesPreserveReleaseProvenance(t *testing.T) {
+	client := New("http://rootguard-core.test", "test-token")
+	client.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if r.URL.Path != "/api/services" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		body := `[{"name":"core","displayName":"RootGuard Core","status":"running","health":"healthy","image":"rootguard-core:dev","version":"dev","revision":"abc123","created":"2026-08-01T00:00:00Z","source":"https://github.com/foxly-it/rootguard-core","immutable":false,"metadata":"complete","attestation":"not_applicable","attestedAt":"2026-08-01T12:00:00Z"}]`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})
+
+	services, err := client.Services(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(services) != 1 || services[0].Attestation != "not_applicable" || services[0].Metadata != "complete" ||
+		services[0].Version != "dev" || services[0].Revision != "abc123" || services[0].Source == "" || services[0].Immutable {
+		t.Fatalf("release provenance was lost while decoding: %#v", services)
+	}
+}
+
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {

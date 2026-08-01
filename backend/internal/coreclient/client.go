@@ -62,6 +62,14 @@ type Service struct {
 	StartedAt    string   `json:"startedAt,omitempty"`
 	RestartCount int      `json:"restartCount"`
 	Ports        []string `json:"ports,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	Revision     string   `json:"revision,omitempty"`
+	Created      string   `json:"created,omitempty"`
+	Source       string   `json:"source,omitempty"`
+	Immutable    bool     `json:"immutable"`
+	Metadata     string   `json:"metadata"`
+	Attestation  string   `json:"attestation"`
+	AttestedAt   string   `json:"attestedAt,omitempty"`
 }
 
 type ServiceLogs struct {
