@@ -78,7 +78,9 @@ Bootstrap Compose
 
 Core speichert Konfiguration, Einzelschritte und Fehler atomar unter
 `/var/lib/rootguard/installation`. Die WebApp sendet nur typisierte
-Netzwerkangaben. Image-Namen, Containerprivilegien, Volumes, Netzwerke und
+Netzwerkangaben und den erlaubten AdGuard-Release-Kanal `stable` oder `beta`.
+Fehlende Kanalangaben älterer Installationen werden als `stable` behandelt;
+andere Werte weist Core zurück. Image-Namen, Containerprivilegien, Volumes, Netzwerke und
 Kommandos stammen aus der kontrollierten Core-Spezifikation und sind nicht
 über die Browser-API frei wählbar.
 
