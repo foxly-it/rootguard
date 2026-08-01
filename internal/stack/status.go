@@ -2,10 +2,12 @@ package stack
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type ContainerInfo struct {
@@ -24,6 +26,28 @@ type ContainerInfo struct {
 	Source       string   `json:"source,omitempty"`
 	Immutable    bool     `json:"immutable"`
 	Metadata     string   `json:"metadata"`
+	Attestation  string   `json:"attestation"`
+	AttestedAt   string   `json:"attested_at,omitempty"`
+}
+
+func CheckStackAttestations(ctx context.Context, status *StackStatus) {
+	type target struct {
+		name string
+		info *ContainerInfo
+	}
+	targets := []target{{"core", &status.Core}, {"webapp", &status.WebApp}}
+	var wait sync.WaitGroup
+	for _, item := range targets {
+		wait.Add(1)
+		go func(item target) {
+			defer wait.Done()
+			item.info.Attestation, item.info.AttestedAt = verifyReleaseAttestation(ctx, item.name, item.info.Image)
+		}(item)
+	}
+	wait.Wait()
+	status.Updater.Attestation = "not_applicable"
+	status.AdGuard.Attestation = "not_applicable"
+	status.Unbound.Attestation = "not_applicable"
 }
 
 type StackStatus struct {

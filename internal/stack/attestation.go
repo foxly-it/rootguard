@@ -1,0 +1,101 @@
+package stack
+
+import (
+	"context"
+	"errors"
+	"os/exec"
+	"strings"
+	"sync"
+	"time"
+)
+
+const attestationCacheTTL = 10 * time.Minute
+
+type attestationPolicy struct {
+	imagePrefix string
+	repository  string
+	identity    string
+}
+
+var attestationPolicies = map[string]attestationPolicy{
+	"core": {
+		imagePrefix: "ghcr.io/foxly-it/rootguard-core",
+		repository:  "foxly-it/rootguard",
+		identity:    `^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$`,
+	},
+	"webapp": {
+		imagePrefix: "ghcr.io/foxly-it/rootguard-webapp",
+		repository:  "foxly-it/rootguard-webapp",
+		identity:    `^https://github\.com/foxly-it/rootguard-webapp/\.github/workflows/build\.yml@refs/(tags/v[^/]+|heads/main)$`,
+	},
+}
+
+type attestationResult struct {
+	status    string
+	checkedAt string
+	expires   time.Time
+}
+
+var attestationCache = struct {
+	sync.Mutex
+	items map[string]attestationResult
+}{items: make(map[string]attestationResult)}
+
+type attestationRunner func(context.Context, string, ...string) ([]byte, error)
+
+func verifyReleaseAttestation(ctx context.Context, service, image string) (string, string) {
+	return verifyReleaseAttestationWith(ctx, service, image, runAttestationCommand, time.Now)
+}
+
+func verifyReleaseAttestationWith(ctx context.Context, service, image string, run attestationRunner, now func() time.Time) (string, string) {
+	policy, supported := attestationPolicies[service]
+	if !supported || !strings.HasPrefix(image, policy.imagePrefix) || !strings.Contains(image, "@sha256:") {
+		return "not_applicable", ""
+	}
+
+	attestationCache.Lock()
+	if cached, ok := attestationCache.items[image]; ok && now().Before(cached.expires) {
+		attestationCache.Unlock()
+		return cached.status, cached.checkedAt
+	}
+	attestationCache.Unlock()
+
+	checkCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	output, err := run(checkCtx, "cosign", "verify-attestation",
+		"--type", "slsaprovenance",
+		"--certificate-identity-regexp", policy.identity,
+		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
+		"--certificate-github-workflow-repository", policy.repository,
+		image,
+	)
+	status := classifyAttestationResult(output, err)
+	checkedAt := now().UTC().Format(time.RFC3339)
+	attestationCache.Lock()
+	attestationCache.items[image] = attestationResult{status: status, checkedAt: checkedAt, expires: now().Add(attestationCacheTTL)}
+	attestationCache.Unlock()
+	return status, checkedAt
+}
+
+func classifyAttestationResult(output []byte, err error) string {
+	if err == nil {
+		return "verified"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return "unavailable"
+	}
+	lower := strings.ToLower(string(output) + " " + err.Error())
+	if strings.Contains(lower, "no attestations") || strings.Contains(lower, "no signatures") ||
+		strings.Contains(lower, "manifest unknown") || strings.Contains(lower, "not found") {
+		return "missing"
+	}
+	if strings.Contains(lower, "connection") || strings.Contains(lower, "timeout") ||
+		strings.Contains(lower, "temporary") || strings.Contains(lower, "tls handshake") {
+		return "unavailable"
+	}
+	return "failed"
+}
+
+func runAttestationCommand(ctx context.Context, name string, arguments ...string) ([]byte, error) {
+	return exec.CommandContext(ctx, name, arguments...).CombinedOutput()
+}

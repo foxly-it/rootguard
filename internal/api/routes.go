@@ -255,8 +255,10 @@ func dockerStatusHandler(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, docker.CheckDockerStatus())
 }
 
-func stackStatusHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, stack.CheckStackStatus())
+func stackStatusHandler(w http.ResponseWriter, r *http.Request) {
+	status := stack.CheckStackStatus()
+	stack.CheckStackAttestations(r.Context(), &status)
+	writeJSON(w, http.StatusOK, status)
 }
 
 type dashboardResponse struct {
@@ -329,10 +331,13 @@ type serviceResponse struct {
 	Source       string   `json:"source,omitempty"`
 	Immutable    bool     `json:"immutable"`
 	Metadata     string   `json:"metadata"`
+	Attestation  string   `json:"attestation"`
+	AttestedAt   string   `json:"attestedAt,omitempty"`
 }
 
-func servicesHandler(w http.ResponseWriter, _ *http.Request) {
+func servicesHandler(w http.ResponseWriter, r *http.Request) {
 	status := stack.CheckStackStatus()
+	stack.CheckStackAttestations(r.Context(), &status)
 	writeJSON(w, http.StatusOK, []serviceResponse{
 		serviceRuntimeResponse("core", "RootGuard Core", "Privileged orchestration and configuration", status.Core),
 		serviceRuntimeResponse("webapp", "RootGuard WebApp", "Authenticated operator interface", status.WebApp),
@@ -350,6 +355,7 @@ func serviceRuntimeResponse(name, displayName, description string, info stack.Co
 		RestartCount: info.RestartCount, Ports: info.Ports, Version: info.Version,
 		Revision: info.Revision, Created: info.Created, Source: info.Source,
 		Immutable: info.Immutable, Metadata: info.Metadata,
+		Attestation: info.Attestation, AttestedAt: info.AttestedAt,
 	}
 }
 
