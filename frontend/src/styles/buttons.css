@@ -34,3 +34,71 @@
 .button-restart {
   border-color: rgba(59,130,246,0.4);
 }
+
+/* Shared action buttons. Tabs, selectable cards and icon-only controls keep
+   their dedicated component styling. */
+.rg-button {
+  display: inline-flex;
+  min-height: 42px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgba(136, 172, 216, 0.24);
+  border-radius: 10px;
+  cursor: pointer;
+  color: #e8f3ff;
+  background: rgba(255, 255, 255, 0.045);
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.rg-button:hover:not(:disabled) {
+  border-color: rgba(103, 232, 249, 0.5);
+  background: rgba(103, 232, 249, 0.09);
+  color: #fff;
+}
+
+.rg-button-primary {
+  border-color: rgba(103, 232, 249, 0.78);
+  color: #06151f;
+  background: #7dd3fc;
+}
+
+.rg-button-primary:hover:not(:disabled) {
+  border-color: #a5f3fc;
+  color: #031018;
+  background: #a5f3fc;
+}
+
+.rg-button-secondary {
+  border-color: rgba(125, 211, 252, 0.28);
+  color: #bcecff;
+  background: rgba(56, 189, 248, 0.07);
+}
+
+.rg-button-danger {
+  border-color: rgba(248, 113, 113, 0.3);
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.rg-button:focus-visible {
+  outline: 3px solid #67e8f9;
+  outline-offset: 2px;
+}
+
+.rg-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rg-button svg {
+  flex: 0 0 auto;
+}

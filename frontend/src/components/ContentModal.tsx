@@ -3,11 +3,12 @@ import { createPortal } from "react-dom";
 import { Maximize2, X } from "lucide-react";
 import "../styles/content-modal.css";
 
-export default function ContentModal({ open, title, eyebrow, closeLabel, onClose, children }: {
+export default function ContentModal({ open, title, eyebrow, closeLabel, size = "large", onClose, children }: {
   open: boolean;
   title: string;
   eyebrow?: string;
   closeLabel: string;
+  size?: "large" | "medium";
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -29,7 +30,7 @@ export default function ContentModal({ open, title, eyebrow, closeLabel, onClose
     <div className="content-modal-backdrop" role="presentation" onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
-      <section className="content-modal" role="dialog" aria-modal="true" aria-labelledby="content-modal-title">
+      <section className={`content-modal ${size === "medium" ? "content-modal-medium" : ""}`} role="dialog" aria-modal="true" aria-labelledby="content-modal-title">
         <header>
           <div>
             {eyebrow && <span>{eyebrow}</span>}

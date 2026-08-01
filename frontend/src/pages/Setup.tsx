@@ -164,7 +164,7 @@ export default function Setup() {
         </div>
 
         <div className="setup-actions">
-          <button className="setup-button secondary" disabled={busy || deploying} onClick={runPreflight}>
+          <button className="rg-button rg-button-secondary setup-button secondary" disabled={busy || deploying} onClick={runPreflight}>
             {busy ? t("setup.checking") : t("setup.runPreflight")}
           </button>
         </div>
@@ -194,7 +194,7 @@ export default function Setup() {
           </div>
           <div className="setup-actions">
             <button
-              className="setup-button primary"
+              className="rg-button rg-button-primary setup-button primary"
               disabled={!preflight.ready || busy}
               onClick={deploy}
             >
