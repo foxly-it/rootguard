@@ -116,7 +116,7 @@ test verifies guided installation, recursive DNS, and DNSSEC rejection.
 - [x] Persist bounded update, rollback, and cleanup history across restarts
 - [x] Pin release images by recorded digest and document retention policy
 
-### Current development slice — reproducible Unbound on Debian Stable
+### Completed development slice — reproducible Unbound on Debian Stable
 
 Goal: keep the patched Unbound security floor without using Debian
 Forky/Sid as the production runtime base.
@@ -134,7 +134,7 @@ Forky/Sid as the production runtime base.
       provenance for `amd64` and `arm64`
 - [x] Verify configuration compatibility, recursive DNS, DNSSEC validation,
       trust-anchor writes, and health checks on `amd64` and `arm64`
-- [ ] Verify Core-managed update and rollback with the source-built image on
+- [x] Verify Core-managed update and rollback with the source-built image on
       native `amd64` and `arm64` installations
 - [x] Document the rebuild and security-update procedure so a newer supported
       Unbound release can be adopted without silently changing the base system
