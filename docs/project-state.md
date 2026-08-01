@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-07-30
+Last updated: 2026-08-01
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -219,7 +219,7 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   WebApp's Lucide symbols for endpoint, services, DNSSEC, filter chain, CPU,
   memory, query, blocked-query, and filter-rate cards instead of substituting
   unrelated text glyphs.
-- Public alpha `v0.1.0-alpha.3` is published around a single
+- Public alpha `v0.1.0-alpha.4` is published around a single
   `compose.alpha.yaml` that
   contains no local build contexts and pulls one named RootGuard version for
   Core, WebApp, Updater, and Unbound. Component-owned tag workflows publish
@@ -318,7 +318,7 @@ visible no-op instead of widening its scope.
 
 ## Release status
 
-`v0.1.0-alpha.3` was published on 2026-07-29 as a GitHub pre-release with
+`v0.1.0-alpha.4` was published on 2026-08-01 as a GitHub pre-release with
 public `amd64`/`arm64` images for all four RootGuard components. Its clean
 GitHub-runner smoke test installed the released stack and verified recursive
 DNS plus DNSSEC rejection. RootGuard remains in active alpha development:

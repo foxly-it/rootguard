@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-07-30
+Last reviewed: 2026-08-01
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -89,6 +89,22 @@ unchecked items are alpha hardening work and stay ahead of beta readiness.
 Published: Git tag and GitHub pre-release `v0.1.0-alpha.3`. The clean
 GitHub-runner release smoke test passed login, guided AIO installation,
 recursive DNS resolution, and DNSSEC rejection.
+
+### 0.1.0-alpha.4 — resolver safety and transparent filtering
+
+- [x] Upgrade Unbound to 1.25.2 and preserve writable state across updates with
+      a stable non-root volume identity
+- [x] Add guided serve-expired, DNSSEC cache, EDNS buffer, resource-profile,
+      and temporary diagnostic-log controls
+- [x] Apply privacy-oriented AdGuard Home DNS defaults during guided setup
+- [x] Show local AdGuard filter diagnostics without visiting test websites or
+      exposing client/query details
+- [x] Add a collapsible symbol-only navigation sidebar and align public preview
+      icons with the live dashboard
+- [x] Publish and smoke-test digest-pinned `amd64` and `arm64` component images
+
+Published: Git tag and GitHub pre-release `v0.1.0-alpha.4`. The release smoke
+test verifies guided installation, recursive DNS, and DNSSEC rejection.
 
 ### Current development slice — trustworthy Stack Center
 
