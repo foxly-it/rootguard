@@ -116,24 +116,27 @@ test verifies guided installation, recursive DNS, and DNSSEC rejection.
 - [x] Persist bounded update, rollback, and cleanup history across restarts
 - [x] Pin release images by recorded digest and document retention policy
 
-### Next development slice — reproducible Unbound on Debian Stable
+### Current development slice — reproducible Unbound on Debian Stable
 
 Goal: keep the patched Unbound security floor without using Debian
 Forky/Sid as the production runtime base.
 
-- [ ] Build a pinned Unbound `1.25.2+` release reproducibly from its upstream
+- [x] Build a pinned Unbound `1.25.2+` release reproducibly from its upstream
       source on Debian 13 Slim instead of installing the Forky/Sid package
-- [ ] Pin and verify the upstream source archive and every build dependency by
-      version and cryptographic checksum
-- [ ] Separate the build stage from a minimal Debian 13 runtime stage while
+- [x] Verify the upstream archive by SHA-256, pin the multi-architecture base by
+      digest and direct dependencies by exact version, verify Debian packages
+      through signed repository metadata, and publish the resolved graph in the
+      SBOM
+- [x] Separate the build stage from a minimal Debian 13 runtime stage while
       preserving the stable non-root `100:101` identity and writable RFC5011
       trust anchor
-- [ ] Publish complete SBOM, source version, build revision, checksums, and
+- [x] Publish complete SBOM, source version, build revision, checksums, and
       provenance for `amd64` and `arm64`
-- [ ] Verify configuration compatibility, recursive DNS, DNSSEC validation,
-      trust-anchor updates, health checks, and Core-managed update/rollback on
-      both architectures
-- [ ] Document the rebuild and security-update procedure so a newer supported
+- [x] Verify configuration compatibility, recursive DNS, DNSSEC validation,
+      trust-anchor writes, and health checks on `amd64` and `arm64`
+- [ ] Verify Core-managed update and rollback with the source-built image on
+      native `amd64` and `arm64` installations
+- [x] Document the rebuild and security-update procedure so a newer supported
       Unbound release can be adopted without silently changing the base system
 
 Exit: RootGuard runs a current, traceable Unbound build on Debian Stable and no
