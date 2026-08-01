@@ -305,6 +305,11 @@ Trustworthy Stack Center and production visibility:
 - typed, bilingual AIO installation diagnostics for invalid host addresses,
   missing Compose, occupied DNS ports, failed image pulls, and interrupted
   deployment recovery; raw technical details remain available on demand.
+- guided AdGuard Home release-channel selection with Stable as the
+  backward-compatible default and an explicit bilingual Beta warning. Core
+  accepts only the `stable`/`beta` enum and resolves both to administrator-set,
+  allowlisted image references; the public alpha Beta reference is pinned to
+  its verified multi-architecture manifest.
 - guarded public-alpha clean-install verifier shared by Docker Desktop and
   native GitHub-hosted Linux `amd64`/`arm64` jobs; it refuses existing
   RootGuard resources, validates login, AIO deployment, recursive DNS and

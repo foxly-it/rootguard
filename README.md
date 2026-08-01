@@ -82,6 +82,10 @@ docker compose -f compose.alpha.yaml up -d
 ```
 
 Öffne `http://<IP-des-Docker-Hosts>:8080/login` und folge dem geführten Setup.
+Dabei kannst du zwischen dem empfohlenen Stable-Kanal und einer ausdrücklich
+als experimentell gekennzeichneten AdGuard-Home-Beta wählen. Beta kann Fehler
+enthalten; DNS-Auflösung und Blocking dürfen deshalb nicht als ausfallsicher
+betrachtet werden.
 Die vollständigen Voraussetzungen, Router-Einrichtung und Fehlerbehebung stehen
 im [Handbuch](https://rootguard.foxly.de/docs.html#quickstart).
 
@@ -219,7 +223,10 @@ the stack:
 docker compose -f compose.alpha.yaml up -d
 ```
 
-Open `http://<docker-host-ip>:8080/login` and follow the guided setup. See the
+Open `http://<docker-host-ip>:8080/login` and follow the guided setup. The setup
+offers the recommended Stable channel and an explicitly experimental
+AdGuard Home Beta channel. Beta may contain bugs; DNS resolution and blocking
+must not be treated as fail-safe when it is selected. See the
 [installation guide](https://rootguard.foxly.de/docs.html#quickstart) for
 requirements, router configuration, upgrades, and troubleshooting.
 

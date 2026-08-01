@@ -44,6 +44,7 @@ coordinated stack version.
 | Updater | `0.1.0-alpha.4` | `sha256:849ff328b83032a405ce42bb19ee811d1552bd3502c81ca8194b7fefc28f0723` |
 | Unbound | `0.1.0-alpha.4` | `sha256:82ab9ff2356188e9ede37d6931039e726fb566fb3b6c5053e2d2fd3f48dcddf9` |
 | AdGuard Home | `v0.107.78` | `sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5` |
+| AdGuard Home Beta | `beta` (verified 2026-08-01) | `sha256:2b77703b27730d5c0c7045fcd6c98834169cd5c69af5f86a43947425f2d367fd` |
 
 The Updater release includes dependency-workflow maintenance. The Unbound
 release keeps the stable non-root `100:101` identity so existing named volumes
