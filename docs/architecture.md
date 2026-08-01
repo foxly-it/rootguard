@@ -91,6 +91,16 @@ weiterhin ausschließlich TCP/UDP 53; seine native Administration bleibt privat.
 Der Bootstrap wartet begrenzt auf die tatsächliche AdGuard-Installer-API; ein
 laufender Container allein gilt noch nicht als betriebsbereit.
 
+Für unveränderlich per Digest referenzierte Core- und WebApp-Releases prüft
+Core zusätzlich die signierte SLSA-Provenienz. Der eingebettete, selbst per
+Digest gepinnte Cosign-Verifier erzwingt den erwarteten GitHub-Repository- und
+Workflow-Unterzeichner sowie den GitHub-Actions-OIDC-Aussteller und prüft die
+Sigstore-Transparenzdaten. Die Ergebnisse werden zehn Minuten gecacht. Ein
+fehlender Nachweis, eine kryptografisch ungültige Attestierung und eine
+vorübergehend nicht erreichbare Registry werden absichtlich getrennt
+ausgewiesen. Lokale Builds, veränderliche Tags und Fremdimages erhalten keine
+RootGuard-Vertrauensfreigabe.
+
 ## AdGuard-Ersteinrichtung
 
 Die Webapp bietet ausschließlich Status und den expliziten Bootstrap-Vorgang

@@ -14,6 +14,8 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
+  attestations: write
 
 jobs:
   version:
@@ -96,6 +98,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
       - uses: docker/build-push-action@v6
+        id: push
         if: steps.existing.outputs.exists != 'true'
         with:
           context: ${{ matrix.context }}
@@ -110,6 +113,13 @@ jobs:
           build-args: |
             VERSION=${{ needs.version.outputs.value }}
             COMMIT=${{ github.sha }}
+      - name: Attest published Core image provenance
+        if: steps.existing.outputs.exists != 'true'
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
   smoke-test:
     needs: [version, publish]
