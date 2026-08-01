@@ -27,9 +27,50 @@ func TestPreflightRejectsInvalidNetworkValues(t *testing.T) {
 	if report.Ready {
 		t.Fatal("expected preflight to reject invalid settings")
 	}
-	if len(report.Checks) != 4 {
-		t.Fatalf("expected four checks, got %d", len(report.Checks))
+	if len(report.Checks) != 5 {
+		t.Fatalf("expected five checks, got %d", len(report.Checks))
 	}
+}
+
+func TestPreflightDefaultsAdGuardChannelToStable(t *testing.T) {
+	manager := NewManager(Options{DataDir: t.TempDir(), Run: successfulDockerRun})
+	report := manager.Preflight(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53})
+	if !report.Ready || report.Config.AdGuardChannel != "stable" {
+		t.Fatalf("expected stable default, got %#v", report)
+	}
+}
+
+func TestPreflightRejectsUnknownAdGuardChannel(t *testing.T) {
+	manager := NewManager(Options{DataDir: t.TempDir(), Run: successfulDockerRun})
+	report := manager.Preflight(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53, AdGuardChannel: "edge"})
+	if report.Ready || report.Checks[0].Code != "invalid_adguard_channel" {
+		t.Fatalf("expected rejected channel, got %#v", report)
+	}
+}
+
+func TestWriteComposeSelectsBetaImage(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(), UnboundImage: "unbound:test", AdGuardImage: "adguard:stable",
+		AdGuardBetaImage: "adguard:beta", DNSNetworkCIDR: "172.29.53.0/24",
+	})
+	path, err := manager.writeCompose(Config{DNSBindAddress: "0.0.0.0", DNSPort: 53, AdGuardChannel: "beta"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "image: adguard:beta") || strings.Contains(string(content), "image: adguard:stable") {
+		t.Fatalf("expected beta image, got:\n%s", content)
+	}
+}
+
+func successfulDockerRun(_ context.Context, arguments ...string) ([]byte, error) {
+	if arguments[0] == "ps" {
+		return []byte(""), nil
+	}
+	return []byte("ok"), nil
 }
 
 func TestInitialStatusUsesEmptyStepsArray(t *testing.T) {

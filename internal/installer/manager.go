@@ -31,6 +31,7 @@ var (
 type Config struct {
 	DNSBindAddress string `json:"dns_bind_address"`
 	DNSPort        int    `json:"dns_port"`
+	AdGuardChannel string `json:"adguard_channel"`
 }
 
 type Check struct {
@@ -76,25 +77,27 @@ type CommandRunner func(context.Context, ...string) ([]byte, error)
 type BootstrapFunc func(context.Context) error
 
 type Options struct {
-	DataDir        string
-	CoreContainer  string
-	UnboundImage   string
-	AdGuardImage   string
-	DNSNetworkCIDR string
-	Run            CommandRunner
-	Bootstrap      BootstrapFunc
+	DataDir          string
+	CoreContainer    string
+	UnboundImage     string
+	AdGuardImage     string
+	AdGuardBetaImage string
+	DNSNetworkCIDR   string
+	Run              CommandRunner
+	Bootstrap        BootstrapFunc
 }
 
 type Manager struct {
-	mu             sync.RWMutex
-	status         Status
-	dataDir        string
-	coreContainer  string
-	unboundImage   string
-	adGuardImage   string
-	dnsNetworkCIDR string
-	run            CommandRunner
-	bootstrap      BootstrapFunc
+	mu               sync.RWMutex
+	status           Status
+	dataDir          string
+	coreContainer    string
+	unboundImage     string
+	adGuardImage     string
+	adGuardBetaImage string
+	dnsNetworkCIDR   string
+	run              CommandRunner
+	bootstrap        BootstrapFunc
 }
 
 func NewManager(options Options) *Manager {
@@ -105,13 +108,14 @@ func NewManager(options Options) *Manager {
 		options.Bootstrap = func(context.Context) error { return nil }
 	}
 	manager := &Manager{
-		dataDir:        options.DataDir,
-		coreContainer:  options.CoreContainer,
-		unboundImage:   options.UnboundImage,
-		adGuardImage:   options.AdGuardImage,
-		dnsNetworkCIDR: options.DNSNetworkCIDR,
-		run:            options.Run,
-		bootstrap:      options.Bootstrap,
+		dataDir:          options.DataDir,
+		coreContainer:    options.CoreContainer,
+		unboundImage:     options.UnboundImage,
+		adGuardImage:     options.AdGuardImage,
+		adGuardBetaImage: options.AdGuardBetaImage,
+		dnsNetworkCIDR:   options.DNSNetworkCIDR,
+		run:              options.Run,
+		bootstrap:        options.Bootstrap,
 		status: Status{
 			State:     StateNotInstalled,
 			Steps:     []Step{},
@@ -333,7 +337,11 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return "", fmt.Errorf("create installation data directory: %w", err)
 	}
-	content, err := renderCompose(config, m.unboundImage, m.adGuardImage, m.dnsNetworkCIDR)
+	adGuardImage := m.adGuardImage
+	if config.AdGuardChannel == "beta" {
+		adGuardImage = m.adGuardBetaImage
+	}
+	content, err := renderCompose(config, m.unboundImage, adGuardImage, m.dnsNetworkCIDR)
 	if err != nil {
 		return "", err
 	}
@@ -428,11 +436,27 @@ func resolverAddress(networkCIDR string) (string, error) {
 
 func normalizeConfig(config Config) Config {
 	config.DNSBindAddress = strings.TrimSpace(config.DNSBindAddress)
+	config.AdGuardChannel = strings.ToLower(strings.TrimSpace(config.AdGuardChannel))
+	if config.AdGuardChannel == "" {
+		config.AdGuardChannel = "stable"
+	}
 	return config
 }
 
 func validateConfig(config Config) []Check {
 	var checks []Check
+	if config.AdGuardChannel != "stable" && config.AdGuardChannel != "beta" {
+		checks = append(checks, Check{
+			ID: "adguard_channel", Code: "invalid_adguard_channel", OK: false,
+			Message: "Choose the Stable or Beta AdGuard Home release channel.",
+			Action:  "Select Stable for normal operation or Beta only for intentional testing.",
+		})
+	} else {
+		checks = append(checks, Check{
+			ID: "adguard_channel", Code: "adguard_channel_valid", OK: true,
+			Message: fmt.Sprintf("AdGuard Home release channel %s is selected.", config.AdGuardChannel),
+		})
+	}
 	ip := net.ParseIP(config.DNSBindAddress)
 	if ip == nil || ip.To4() == nil {
 		checks = append(checks, Check{
