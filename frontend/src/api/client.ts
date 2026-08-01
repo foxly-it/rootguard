@@ -53,7 +53,7 @@ export async function fetchDashboard() {
 }
 
 export interface ServiceInfo {
-  name: "adguard" | "unbound";
+  name: "core" | "webapp" | "updater" | "adguard" | "unbound";
   displayName: string;
   description: string;
   status: "running" | "stopped";
@@ -63,6 +63,12 @@ export interface ServiceInfo {
   startedAt?: string;
   restartCount: number;
   ports?: string[];
+  version?: string;
+  revision?: string;
+  created?: string;
+  source?: string;
+  immutable: boolean;
+  metadata: "complete" | "partial" | "unavailable";
 }
 
 export async function fetchServices(): Promise<ServiceInfo[]> {
@@ -70,7 +76,7 @@ export async function fetchServices(): Promise<ServiceInfo[]> {
 }
 
 export interface ServiceLogs {
-  service: "adguard" | "unbound";
+  service: ServiceInfo["name"];
   lines: string[];
   tail: number;
   since: string;

@@ -83,6 +83,7 @@ export default function Stack() {
     ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)).slice(0, 12),
     [updates, controlPlane],
   );
+  const updaterRuntime = services.find((service) => service.name === "updater");
 
   async function startCheck() {
     setError("");
@@ -205,17 +206,26 @@ export default function Stack() {
           </div>
           <div className="control-plane-services">
             {controlPlane.services.map((service) => (
-              <article key={service.name}>
-                <span>{service.name === "core" ? <Cpu /> : <PanelsTopLeft />}</span>
-                <div>
-                  <strong>{service.display_name}</strong>
-                  <small>{service.current_image || t("stack.notInspected")}</small>
-                </div>
-                <em className={service.update_available ? "available" : ""}>
-                  {service.update_available ? t("stack.update") : service.checked_at ? t("stack.current") : t("stack.unchecked")}
-                </em>
-              </article>
+              <ControlPlaneService
+                key={service.name}
+                icon={service.name === "core" ? <Cpu /> : <PanelsTopLeft />}
+                name={service.display_name}
+                updateLabel={service.update_available ? t("stack.update") : service.checked_at ? t("stack.current") : t("stack.unchecked")}
+                updateAvailable={service.update_available}
+                runtime={services.find((runtime) => runtime.name === service.name)}
+                fallbackImage={service.current_image}
+                t={t}
+              />
             ))}
+            {updaterRuntime && (
+              <ControlPlaneService
+                icon={<ServerCog />}
+                name={updaterRuntime.displayName}
+                updateLabel={t("stack.helper")}
+                runtime={updaterRuntime}
+                t={t}
+              />
+            )}
           </div>
           <p className="control-plane-note"><RotateCcw size={15} /> {t("stack.controlPlaneRollback")}</p>
         </section>
@@ -245,7 +255,7 @@ export default function Stack() {
               </div>
 
               <dl className="stack-runtime-data">
-                <div><dt>{t("stack.version")}</dt><dd>{imageVersion(runtime?.image)}</dd></div>
+                <div><dt>{t("stack.version")}</dt><dd>{runtime?.version || imageVersion(runtime?.image)}</dd></div>
                 <div><dt>{t("stack.health")}</dt><dd>{healthLabel(runtime, t)}</dd></div>
                 <div><dt>{t("stack.started")}</dt><dd>{runtime?.startedAt ? formatDate(runtime.startedAt) : "–"}</dd></div>
                 <div><dt>{t("stack.restarts")}</dt><dd>{runtime?.restartCount ?? 0}</dd></div>
@@ -256,6 +266,9 @@ export default function Stack() {
                 <div><dt>{t("stack.runningImage")}</dt><dd>{runtime?.image || service.current_image || "–"}</dd></div>
                 <div><dt>{t("stack.target")}</dt><dd>{service.target_image}</dd></div>
                 <div><dt>{t("stack.imageId")}</dt><dd>{shortID(runtime?.imageId || service.current_id)}</dd></div>
+                <div><dt>{t("stack.revision")}</dt><dd>{shortID(runtime?.revision)}</dd></div>
+                <div><dt>{t("stack.imageMode")}</dt><dd>{runtime?.immutable ? t("stack.immutable") : t("stack.mutable")}</dd></div>
+                <div><dt>{t("stack.releaseMetadata")}</dt><dd>{t(`stack.metadata.${runtime?.metadata || "unavailable"}`)}</dd></div>
                 <div><dt>{t("stack.lastCheck")}</dt><dd>{service.checked_at && !service.checked_at.startsWith("0001-") ? formatDate(service.checked_at) : t("stack.neverChecked")}</dd></div>
               </dl>
 
@@ -348,6 +361,44 @@ function HistoryRow({
 
 function Summary({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return <article><span>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></article>;
+}
+
+function ControlPlaneService({
+  icon,
+  name,
+  updateLabel,
+  updateAvailable = false,
+  runtime,
+  fallbackImage,
+  t,
+}: {
+  icon: React.ReactNode;
+  name: string;
+  updateLabel: string;
+  updateAvailable?: boolean;
+  runtime?: ServiceInfo;
+  fallbackImage?: string;
+  t: Translate;
+}) {
+  return (
+    <article>
+      <span>{icon}</span>
+      <div>
+        <strong>{name}</strong>
+        <small>{runtime?.image || fallbackImage || t("stack.notInspected")}</small>
+        <div className="control-plane-metadata">
+          <span>{runtime?.version || imageVersion(runtime?.image)}</span>
+          <span className={runtime?.immutable ? "trusted" : "attention"}>
+            {runtime?.immutable ? t("stack.immutableShort") : t("stack.mutableShort")}
+          </span>
+          <span className={runtime?.metadata === "complete" ? "trusted" : "attention"}>
+            {t(`stack.metadata.${runtime?.metadata || "unavailable"}`)}
+          </span>
+        </div>
+      </div>
+      <em className={updateAvailable ? "available" : ""}>{updateLabel}</em>
+    </article>
+  );
 }
 
 function shortID(value?: string) {
