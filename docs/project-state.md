@@ -80,6 +80,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - AdGuard page documents and visualises the RootGuard-managed official installer
   flow instead of suggesting that the native administration wizard must remain
   public.
+- WebApp text actions now share explicit primary, secondary, and destructive
+  button variants across Dashboard, Setup, Stack, Unbound, and AdGuard while
+  tabs, selectable cards, completion entries, and icon-only controls retain
+  their interaction-specific styling. The AdGuard overview prioritises the
+  persistent RootGuard AIO operating context; its on-demand local filter check
+  opens immediately in a focused, scroll-safe dialog with progress, retry,
+  error, summary, and per-host results.
 - On-demand AdGuard filtering diagnostics use the local authenticated
   `check_host` API for advertising and tracking probes without opening test
   websites. Legitimate services and AMTSO/Wicar portals remain explicitly
