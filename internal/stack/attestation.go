@@ -63,7 +63,7 @@ func verifyReleaseAttestationWith(ctx context.Context, service, image string, ru
 	checkCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	output, err := run(checkCtx, "cosign", "verify-attestation",
-		"--type", "slsaprovenance",
+		"--type", "https://slsa.dev/provenance/v1",
 		"--certificate-identity-regexp", policy.identity,
 		"--certificate-oidc-issuer", "https://token.actions.githubusercontent.com",
 		"--certificate-github-workflow-repository", policy.repository,

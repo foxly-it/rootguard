@@ -37,7 +37,7 @@ func TestReleaseAttestationPinsSignerPolicy(t *testing.T) {
 	if status != "verified" || checked == "" {
 		t.Fatalf("unexpected verification result: %s %s", status, checked)
 	}
-	for _, expected := range []string{"--type slsaprovenance", "foxly-it/rootguard", "release-alpha", "https://token.actions.githubusercontent.com"} {
+	for _, expected := range []string{"--type https://slsa.dev/provenance/v1", "foxly-it/rootguard", "release-alpha", "https://token.actions.githubusercontent.com"} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("missing policy %q in %s", expected, joined)
 		}
