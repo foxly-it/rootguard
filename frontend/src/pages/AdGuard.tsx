@@ -11,6 +11,7 @@ import {
   type AdGuardStatus,
   type InstallationStatus,
 } from "../api/client";
+import ContentModal from "../components/ContentModal";
 import "../styles/adguard.css";
 import { useI18n } from "../i18n";
 
@@ -24,6 +25,8 @@ export default function AdGuard() {
   const [error, setError] = useState("");
   const [filterReport, setFilterReport] = useState<AdGuardFilterReport | null>(null);
   const [testingFilters, setTestingFilters] = useState(false);
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+  const [filterError, setFilterError] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -66,14 +69,19 @@ export default function AdGuard() {
   async function testFilters() {
     if (testingFilters) return;
     setTestingFilters(true);
-    setError("");
+    setFilterError("");
     try {
       setFilterReport(await fetchAdGuardFilterReport());
     } catch (cause) {
-      setError(errorMessage(cause, t("adguard.filterTestError")));
+      setFilterError(errorMessage(cause, t("adguard.filterTestError")));
     } finally {
       setTestingFilters(false);
     }
+  }
+
+  function openFilterTest() {
+    setFilterModalOpen(true);
+    void testFilters();
   }
 
   const ready = status?.configured && status.healthy && status.upstream_ready;
@@ -86,12 +94,12 @@ export default function AdGuard() {
           <h1>AdGuard Home</h1>
           <p>{t("adguard.intro")}</p>
           {installation?.state !== "installed" && (
-            <Link className="adguard-primary-action" to="/setup">
+            <Link className="rg-button rg-button-primary adguard-primary-action" to="/setup">
               {t("adguard.setup")} <ArrowRight size={16} />
             </Link>
           )}
           {ready && (
-            <a className="adguard-primary-action" href="/adguard-ui/" target="_blank" rel="noreferrer">
+            <a className="rg-button rg-button-primary adguard-primary-action" href="/adguard-ui/" target="_blank" rel="noreferrer">
               {t("adguard.open")} <ExternalLink size={16} />
             </a>
           )}
@@ -123,7 +131,7 @@ export default function AdGuard() {
             <code>{status?.upstream || "172.29.53.2:5335"}</code>
           </div>
           {!loading && installation?.state === "installed" && (!status?.configured || !status?.best_practices_ready) && (
-            <button className="adguard-primary-action" type="button" disabled={bootstrapping} onClick={initialize}>
+            <button className="rg-button rg-button-primary adguard-primary-action" type="button" disabled={bootstrapping} onClick={initialize}>
               {bootstrapping
                 ? t("adguard.settingUp")
                 : status?.configured
@@ -133,7 +141,31 @@ export default function AdGuard() {
           )}
         </section>
 
-        <section className="adguard-panel">
+        {ready ? (
+          <section className="adguard-panel adguard-filter-launcher">
+            <div className="adguard-filter-launcher-icon"><Filter size={22} /></div>
+            <div>
+              <span className="adguard-eyebrow">{t("adguard.filterTestEyebrow")}</span>
+              <h2>{t("adguard.filterTestTitle")}</h2>
+              <p>{t("adguard.filterTestHelp")}</p>
+            </div>
+            <button className="rg-button rg-button-primary" type="button" disabled={testingFilters} onClick={openFilterTest}>
+              <RefreshCw size={16} /> {t("adguard.filterTestRun")}
+            </button>
+          </section>
+        ) : (
+          <section className="adguard-panel adguard-filter-launcher unavailable">
+            <div className="adguard-filter-launcher-icon"><Filter size={22} /></div>
+            <div>
+              <span className="adguard-eyebrow">{t("adguard.filterTestEyebrow")}</span>
+              <h2>{t("adguard.filterTestTitle")}</h2>
+              <p>{t("adguard.filterTestHelp")}</p>
+            </div>
+          </section>
+        )}
+      </div>
+
+      <section className="adguard-panel adguard-aio-panel">
           <div className="adguard-panel-heading">
             <div><span className="adguard-eyebrow">ROOTGUARD AIO</span><h2>{t("adguard.automatic")}</h2></div>
           </div>
@@ -142,22 +174,19 @@ export default function AdGuard() {
             <ManagedStep icon={<KeyRound />} number="02" title={t("adguard.credentials")} text={t("adguard.credentialsText")} />
             <ManagedStep icon={<Filter />} number="03" title={t("adguard.secureUpstream")} text={t("adguard.secureUpstreamText")} />
           </div>
-        </section>
-      </div>
+      </section>
 
-      {ready && (
-        <section className="adguard-panel adguard-filter-test">
-          <div className="adguard-panel-heading">
-            <div>
-              <span className="adguard-eyebrow">{t("adguard.filterTestEyebrow")}</span>
-              <h2>{t("adguard.filterTestTitle")}</h2>
-              <p>{t("adguard.filterTestHelp")}</p>
-            </div>
-            <button className="adguard-primary-action" type="button" disabled={testingFilters} onClick={testFilters}>
+      <ContentModal open={filterModalOpen} size="medium" title={t("adguard.filterTestTitle")} eyebrow={t("adguard.filterTestEyebrow")} closeLabel={t("common.close")} onClose={() => setFilterModalOpen(false)}>
+        <div className="adguard-filter-modal">
+          <div className="adguard-filter-modal-intro">
+            <p>{t("adguard.filterTestHelp")}</p>
+            <button className="rg-button rg-button-secondary" type="button" disabled={testingFilters} onClick={() => void testFilters()}>
               <RefreshCw size={16} className={testingFilters ? "spin" : ""} />
               {testingFilters ? t("adguard.filterTesting") : t("adguard.filterTestRun")}
             </button>
           </div>
+          {filterError && <div className="adguard-feedback error">{filterError}</div>}
+          {testingFilters && !filterReport && <div className="adguard-filter-loading"><RefreshCw size={22} className="spin" /><span>{t("adguard.filterTesting")}</span></div>}
           {filterReport && (
             <>
               <div className={`adguard-filter-summary ${filterReport.passed === filterReport.expected ? "healthy" : "warning"}`}>
@@ -170,8 +199,8 @@ export default function AdGuard() {
               <small className="adguard-filter-note">{t("adguard.filterTestNote")}</small>
             </>
           )}
-        </section>
-      )}
+        </div>
+      </ContentModal>
 
       <section className="adguard-security-note">
         <LockKeyhole size={20} />

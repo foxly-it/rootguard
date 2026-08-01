@@ -268,7 +268,7 @@ export default function Unbound() {
             <h2>{t("unbound.liveDiagnostics")}</h2>
             <p className="muted-copy">{t("unbound.diagnosticsHelp")}</p>
           </div>
-          <button className="secondary-action" type="button" disabled={busy} onClick={runDiagnostics}>
+          <button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy} onClick={runDiagnostics}>
             {busy ? t("unbound.wait") : t("unbound.diagnose")}
           </button>
           <div className="diagnostic-logging-control">
@@ -278,7 +278,7 @@ export default function Unbound() {
                 ? t("unbound.diagnosticLoggingActive", { date: formatDate(diagnosticLogging.expires_at) })
                 : t("unbound.diagnosticLoggingHelp")}</small>
             </div>
-            <button className="secondary-action" type="button" disabled={busy} onClick={toggleDiagnosticLogging}>
+            <button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy} onClick={toggleDiagnosticLogging}>
               {t(diagnosticLogging?.active ? "unbound.diagnosticLoggingStop" : "unbound.diagnosticLoggingStart")}
             </button>
           </div>
@@ -306,7 +306,7 @@ export default function Unbound() {
             <Toggle directive="prefetch" label={t("unbound.prefetch")} badge={t("unbound.prefetchBadge")} description={t("unbound.prefetchHelp")} checked={settings.prefetch} onChange={(value) => setSettings({ ...settings, prefetch: value })} />
             <Toggle directive="serve-expired" label={t("unbound.expired")} badge={t("unbound.expiredBadge")} description={t("unbound.expiredHelp")} checked={settings.serve_expired} onChange={(value) => setSettings({ ...settings, serve_expired: value })} />
             <div className="network-mode-setting">
-              <div className="network-mode-heading"><div><strong>{t("network.title")}</strong><small>{t("network.help")}</small></div><button className="secondary-action" type="button" disabled={busy} onClick={checkNetworkCapabilities}>{t("network.check")}</button></div>
+              <div className="network-mode-heading"><div><strong>{t("network.title")}</strong><small>{t("network.help")}</small></div><button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy} onClick={checkNetworkCapabilities}>{t("network.check")}</button></div>
               {networkCapabilities && <div className="network-capabilities">
                 <span className={networkCapabilities.ipv4_available ? "available" : "unavailable"}><b>IPv4</b><small>{networkCapabilities.ipv4_available ? t("network.available") : networkCapabilities.ipv4_detail}</small></span>
                 <span className={networkCapabilities.ipv6_available ? "available" : "unavailable"}><b>IPv6</b><small>{networkCapabilities.ipv6_available ? t("network.available") : networkCapabilities.ipv6_detail}</small></span>
@@ -343,7 +343,7 @@ export default function Unbound() {
                 <NumberField directive="num-threads" label={t("unbound.threads")} description={t("unbound.threadsHelp")} recommended={t("unbound.recommended", { value: "2–4" })} value={settings.threads} min={1} max={32} onChange={(value) => setSettings({ ...settings, threads: value })} />
               </div>
             </details>
-            <button type="submit" disabled={busy}>{t("unbound.review")}</button>
+            <button className="rg-button rg-button-primary" type="submit" disabled={busy}>{t("unbound.review")}</button>
           </form>
           <section className="glass-card compact side-panel advisor-panel">
             <div className="advisor-heading"><h2>RootGuard Advisor</h2>{advice && <span className={`advice-state ${advice.status}`}>{t(`unbound.advice.${advice.status}`)}</span>}</div>
@@ -354,7 +354,7 @@ export default function Unbound() {
         {preview && (
           <section className="glass-card preview-panel" aria-live="polite">
             <div className="panel-heading"><div><p className="unbound-eyebrow">{t("unbound.preview")}</p><h2>{t("unbound.changes")}</h2></div><button className="text-action" type="button" onClick={() => setPreview(null)}>{t("common.close")}</button></div>
-            {!preview.changed ? <p>{t("unbound.noChanges")}</p> : <><div className="change-list">{preview.changes.map((change) => <div key={change.field}><code>{fieldLabel(change.field, t)}</code><span>{change.before}</span><b aria-hidden="true">→</b><span>{change.after}</span></div>)}</div><details><summary>{t("unbound.showGenerated")}</summary><pre>{preview.rendered_config}</pre></details><button type="button" disabled={busy} onClick={applyPreview}>{busy ? t("unbound.activating") : t("unbound.validateActivate")}</button></>}
+            {!preview.changed ? <p>{t("unbound.noChanges")}</p> : <><div className="change-list">{preview.changes.map((change) => <div key={change.field}><code>{fieldLabel(change.field, t)}</code><span>{change.before}</span><b aria-hidden="true">→</b><span>{change.after}</span></div>)}</div><details><summary>{t("unbound.showGenerated")}</summary><pre>{preview.rendered_config}</pre></details><button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={applyPreview}>{busy ? t("unbound.activating") : t("unbound.validateActivate")}</button></>}
           </section>
         )}
       </section>
@@ -386,7 +386,7 @@ export default function Unbound() {
         <section className="glass-card history-panel">
           <details className="history-disclosure">
             <summary><span><span className="unbound-eyebrow">ROLLBACK</span><strong>{t("unbound.history")}</strong></span><em>{t("unbound.versions", { count: history.length })}</em></summary>
-            {history.length === 0 ? <p className="muted-copy">{t("unbound.noHistory")}</p> : <div className="history-list">{history.map((entry, index) => <article key={entry.id}><div><strong>{index === 0 ? t("unbound.latest") : t("unbound.saved")}</strong><span>{formatDate(entry.created_at)}</span><small>Threads {entry.settings.threads} · TTL {entry.settings.cache_min_ttl}–{entry.settings.cache_max_ttl} · {t("forward.historyCount", { count: entry.settings.forward_zones?.length ?? 0 })}{entry.custom_config ? " · Custom Config" : ""}</small></div><button className="secondary-action" type="button" disabled={busy || index === 0} onClick={() => restore(entry)}>{index === 0 ? t("common.active") : t("unbound.restore")}</button></article>)}</div>}
+            {history.length === 0 ? <p className="muted-copy">{t("unbound.noHistory")}</p> : <div className="history-list">{history.map((entry, index) => <article key={entry.id}><div><strong>{index === 0 ? t("unbound.latest") : t("unbound.saved")}</strong><span>{formatDate(entry.created_at)}</span><small>Threads {entry.settings.threads} · TTL {entry.settings.cache_min_ttl}–{entry.settings.cache_max_ttl} · {t("forward.historyCount", { count: entry.settings.forward_zones?.length ?? 0 })}{entry.custom_config ? " · Custom Config" : ""}</small></div><button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy || index === 0} onClick={() => restore(entry)}>{index === 0 ? t("common.active") : t("unbound.restore")}</button></article>)}</div>}
           </details>
         </section>
       </section>

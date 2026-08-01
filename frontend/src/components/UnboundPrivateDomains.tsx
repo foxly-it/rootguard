@@ -156,7 +156,7 @@ export default function UnboundPrivateDomains({
             }
           }} />
         </label>
-        <button className="secondary-action unbound-action" type="button" disabled={!draft.trim() || domains.length >= maxPrivateDomains} onClick={addDomain}><Plus size={15} /> <span>{t("private.add")}</span></button>
+        <button className="rg-button rg-button-secondary secondary-action unbound-action" type="button" disabled={!draft.trim() || domains.length >= maxPrivateDomains} onClick={addDomain}><Plus size={15} /> <span>{t("private.add")}</span></button>
       </div>
 
       <div className="private-domain-list">
@@ -199,7 +199,7 @@ export default function UnboundPrivateDomains({
       {dirty && (
         <div className="guided-review">
           <div><strong>{t("private.draftReady")}</strong><small>{t("private.notActive")}</small></div>
-          <button className="unbound-action primary" type="button" disabled={busy} onClick={createPreview}><Check size={15} /><span>{busy ? t("private.validating") : t("private.review")}</span></button>
+          <button className="rg-button rg-button-primary unbound-action primary" type="button" disabled={busy} onClick={createPreview}><Check size={15} /><span>{busy ? t("private.validating") : t("private.review")}</span></button>
         </div>
       )}
 
@@ -207,7 +207,7 @@ export default function UnboundPrivateDomains({
         <div className="private-preview" aria-live="polite">
           <div><Check size={16} /><strong>{t("private.valid")}</strong></div>
           <details open><summary>{t("private.showGenerated")}</summary><pre>{privateSection(preview.rendered_config)}</pre></details>
-          <button type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("private.activating") : t("private.activate")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("private.activating") : t("private.activate")}</button>
         </div>
       )}
     </section>

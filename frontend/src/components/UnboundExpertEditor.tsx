@@ -137,7 +137,7 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
     <section className="glass-card expert-panel">
       <div className="panel-heading expert-heading">
         <div><p className="unbound-eyebrow">{t("expert.eyebrow")}</p><h2>{t("expert.title")}</h2></div>
-        <button className="secondary-action" type="button" onClick={() => setOpen(!open)}>{open ? t("expert.close") : t("expert.open")}</button>
+        <button className="rg-button rg-button-secondary secondary-action" type="button" onClick={() => setOpen(!open)}>{open ? t("expert.close") : t("expert.open")}</button>
       </div>
       <p className="muted-copy">{t("expert.intro")}</p>
       {!open && <div className="expert-summary"><span>{active ? t("expert.bytes", { count: new TextEncoder().encode(active).length }) : t("expert.none")}</span><span>{t("expert.safety")}</span></div>}
@@ -155,14 +155,14 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
             </div>
             {suggestions.length > 0 && <div className="completion-list"><span>{t("expert.complete")}</span>{suggestions.map((item) => <button type="button" key={`${item.section}-${item.name}`} onClick={() => insertSuggestion(item)}><code>{item.name}</code><small>{item.section}</small></button>)}</div>}
             <div className="editor-actions">
-              <button type="button" disabled={busy || bytes > maxBytes} onClick={createPreview}>{busy ? t("expert.checking") : t("expert.check")}</button>
-              <button className="secondary-action" type="button" disabled={busy || draft === active} onClick={() => { setDraft(active); setPreview(null); }}>{t("expert.loadActive")}</button>
+              <button className="rg-button rg-button-primary" type="button" disabled={busy || bytes > maxBytes} onClick={createPreview}>{busy ? t("expert.checking") : t("expert.check")}</button>
+              <button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy || draft === active} onClick={() => { setDraft(active); setPreview(null); }}>{t("expert.loadActive")}</button>
             </div>
           </div>
           <aside className="directive-help">
             <p className="unbound-eyebrow">{t("expert.context")}</p>
             {selectedDirective ? <><div className="directive-title"><code>{selectedDirective.name}</code><span className={`risk-${selectedDirective.risk}`}>{t(`expert.risk.${selectedDirective.risk}`)}</span></div><p>{selectedDirective.description}</p><pre>{selectedDirective.example}</pre></> : <p className="muted-copy">{t("expert.contextHelp")}</p>}
-            <button className="secondary-action catalog-action" type="button" onClick={() => setCatalogOpen(true)}>{t("expert.catalog")}</button>
+            <button className="rg-button rg-button-secondary secondary-action catalog-action" type="button" onClick={() => setCatalogOpen(true)}>{t("expert.catalog")}</button>
           </aside>
         </div>
         <ContentModal open={catalogOpen} eyebrow={t("expert.context")} title={t("expert.catalog")} closeLabel={t("common.close")} onClose={() => setCatalogOpen(false)}>
@@ -171,7 +171,7 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
         {preview && <div className="custom-preview">
           <div className="validation-ok"><strong>{t("expert.valid")}</strong><span>{preview.validation}</span></div>
           <div className="custom-advice">{preview.advice.map((item) => <article className={`advice-item ${item.severity}`} key={item.id}><strong>{item.title}{item.line ? ` · ${t("expert.line", { line: item.line })}` : ""}</strong><p>{item.description}</p><small>{item.suggestion}</small></article>)}</div>
-          {!preview.changed ? <p>{t("expert.same")}</p> : <button type="button" disabled={busy} onClick={activate}>{t("expert.activate")}</button>}
+          {!preview.changed ? <p>{t("expert.same")}</p> : <button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={activate}>{t("expert.activate")}</button>}
         </div>}
       </>}
     </section>

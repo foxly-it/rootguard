@@ -159,7 +159,7 @@ export default function UnboundGuidedZones({
           <h2>{t("zones.title")}</h2>
           <p className="muted-copy">{t("zones.intro")}</p>
         </div>
-        <button className="secondary-action" type="button" disabled={busy} onClick={() => {
+        <button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy} onClick={() => {
           setDraft(emptyZone());
           setEditing(null);
           setOpen(!open);
@@ -210,7 +210,7 @@ export default function UnboundGuidedZones({
           </div>
           <div className="wizard-actions">
             <button className="text-action" type="button" onClick={() => setDraft({ ...draft, records: [...draft.records, emptyRecord()] })}><CirclePlus size={15} /> {t("zones.addRecord")}</button>
-            <button type="button" onClick={saveDraft}>{editing === null ? t("zones.addDraft") : t("zones.applyEdit")}</button>
+            <button className="rg-button rg-button-primary" type="button" onClick={saveDraft}>{editing === null ? t("zones.addDraft") : t("zones.applyEdit")}</button>
           </div>
         </div>
       )}
@@ -221,7 +221,7 @@ export default function UnboundGuidedZones({
           <article key={zone.zone}>
             <div className="zone-name"><span><MapPin size={15} /></span><div><strong>{zone.zone}</strong><small>{zone.records.length === 1 ? t("zones.oneRecord") : t("zones.manyRecords", { count: zone.records.length })}</small></div></div>
             <div className="zone-record-summary">{zone.records.map((record) => <code key={`${record.name}-${record.type}`}>{record.name} · {record.type} · {record.value}{record.create_ptr ? " · PTR" : ""}</code>)}</div>
-            <div className="zone-actions"><button type="button" onClick={() => editZone(index)}><Pencil size={14} /> {t("common.edit")}</button><button type="button" onClick={() => removeZone(index)}><Trash2 size={14} /> {t("common.remove")}</button></div>
+            <div className="zone-actions"><button className="rg-button rg-button-secondary" type="button" onClick={() => editZone(index)}><Pencil size={14} /> {t("common.edit")}</button><button className="rg-button rg-button-danger" type="button" onClick={() => removeZone(index)}><Trash2 size={14} /> {t("common.remove")}</button></div>
           </article>
         ))}
       </div>
@@ -229,7 +229,7 @@ export default function UnboundGuidedZones({
       {candidate !== source && !open && (
         <div className="guided-review">
           <div><strong>{t("zones.draftReady")}</strong><small>{t("zones.notActive")}</small></div>
-          <button type="button" disabled={busy} onClick={createPreview}>{busy ? t("zones.validating") : t("zones.validate")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={createPreview}>{busy ? t("zones.validating") : t("zones.validate")}</button>
         </div>
       )}
 
@@ -237,7 +237,7 @@ export default function UnboundGuidedZones({
         <div className="guided-preview">
           <div className="guided-preview-state"><Check size={16} /><strong>{t("zones.valid")}</strong></div>
           <pre>{guidedSection(preview.content) || "# Alle geführten lokalen Zonen werden entfernt."}</pre>
-          <button type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("zones.activating") : preview.changed ? t("zones.activate") : t("zones.alreadyActive")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("zones.activating") : preview.changed ? t("zones.activate") : t("zones.alreadyActive")}</button>
         </div>
       )}
     </section>

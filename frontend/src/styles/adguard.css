@@ -168,19 +168,7 @@
 }
 
 .adguard-primary-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   margin-top: 22px;
-  padding: 11px 16px;
-  border: 1px solid #60a5fa;
-  border-radius: 9px;
-  color: #071521;
-  background: #93c5fd;
-  font: inherit;
-  font-size: 0.82rem;
-  font-weight: 800;
-  text-decoration: none;
 }
 
 .managed-steps {
@@ -267,25 +255,86 @@
   background: rgba(239, 68, 68, 0.08);
 }
 
-.adguard-filter-test {
+.adguard-aio-panel {
   margin-top: 18px;
 }
 
-.adguard-filter-test .adguard-panel-heading {
-  align-items: center;
+.adguard-aio-panel .managed-steps {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
-.adguard-filter-test .adguard-panel-heading p {
-  max-width: 720px;
-  margin: 8px 0 0;
+.adguard-aio-panel .managed-steps article {
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 13px;
+  background: rgba(5, 15, 26, 0.26);
+}
+
+.adguard-filter-launcher {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: 14px;
+}
+
+.adguard-filter-launcher-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  grid-row: 1 / 3;
+  place-items: center;
+  border-radius: 12px;
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.adguard-filter-launcher h2 {
+  margin: 6px 0 0;
+  font-size: 1.08rem;
+}
+
+.adguard-filter-launcher p,
+.adguard-filter-modal-intro p {
+  margin: 9px 0 0;
   color: #8fa6c2;
   font-size: 0.8rem;
   line-height: 1.55;
 }
 
-.adguard-filter-test .adguard-primary-action {
+.adguard-filter-launcher .rg-button {
+  grid-column: 1 / -1;
+  justify-self: start;
+  margin-top: auto;
+}
+
+.adguard-filter-launcher.unavailable {
+  opacity: 0.72;
+}
+
+.adguard-filter-modal {
+  padding: 4px;
+}
+
+.adguard-filter-modal-intro {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px;
+}
+
+.adguard-filter-modal-intro p {
+  max-width: 630px;
   margin-top: 0;
-  flex: 0 0 auto;
+}
+
+.adguard-filter-loading {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #93c5fd;
 }
 
 .adguard-filter-summary {
@@ -377,13 +426,17 @@
     padding: 32px 25px;
   }
 
-  .adguard-filter-test .adguard-panel-heading,
+  .adguard-filter-modal-intro,
   .adguard-filter-summary {
     align-items: flex-start;
     flex-direction: column;
   }
 
   .adguard-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .adguard-aio-panel .managed-steps {
     grid-template-columns: 1fr;
   }
 }

@@ -181,7 +181,7 @@ export default function UnboundForwardZones({
           <h2>{t("forward.title")}</h2>
           <p className="muted-copy">{t("forward.intro")}</p>
         </div>
-        <button className="secondary-action unbound-action" type="button" disabled={busy || (!open && zones.length >= maxZones)} onClick={() => {
+        <button className="rg-button rg-button-secondary secondary-action unbound-action" type="button" disabled={busy || (!open && zones.length >= maxZones)} onClick={() => {
           setDraft(emptyZone());
           setEditing(null);
           setOpen(!open);
@@ -206,7 +206,7 @@ export default function UnboundForwardZones({
           </label>
           <div className="forward-server-heading">
             <div><strong>{t("forward.servers")}</strong><small>{t("forward.serversHelp")}</small></div>
-            <button className="secondary-action unbound-action" type="button" disabled={draft.servers.length >= maxServersPerZone} onClick={() => setDraft({ ...draft, servers: [...draft.servers, ""] })}><CirclePlus size={15} /> <span>{t("forward.addServer")}</span></button>
+            <button className="rg-button rg-button-secondary secondary-action unbound-action" type="button" disabled={draft.servers.length >= maxServersPerZone} onClick={() => setDraft({ ...draft, servers: [...draft.servers, ""] })}><CirclePlus size={15} /> <span>{t("forward.addServer")}</span></button>
           </div>
           <div className="forward-servers">
             {draft.servers.map((server, index) => (
@@ -234,7 +234,7 @@ export default function UnboundForwardZones({
             </label>
           </div>
           <div className="wizard-actions">
-            <button className="unbound-action primary" type="button" onClick={saveDraft}><Check size={15} /><span>{editing === null ? t("forward.addDraft") : t("forward.applyEdit")}</span></button>
+            <button className="rg-button rg-button-primary unbound-action primary" type="button" onClick={saveDraft}><Check size={15} /><span>{editing === null ? t("forward.addDraft") : t("forward.applyEdit")}</span></button>
           </div>
         </div>
       )}
@@ -250,7 +250,7 @@ export default function UnboundForwardZones({
               <div className={`forward-policy ${zone.allow_unsigned ? "unsigned" : "validated"}`}>{zone.allow_unsigned ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}{zone.allow_unsigned ? t("forward.policyUnsigned") : t("forward.policyDNSSEC")}</div>
               <div className={`forward-policy ${zone.allow_private_addresses ? "private" : "validated"}`}>{zone.allow_private_addresses ? <ShieldAlert size={14} /> : <ShieldCheck size={14} />}{zone.allow_private_addresses ? t("forward.policyPrivate") : t("forward.policyRebinding")}</div>
             </div>
-            <div className="zone-actions"><button type="button" onClick={() => editZone(index)}><Pencil size={14} /> {t("common.edit")}</button><button type="button" onClick={() => removeZone(index)}><Trash2 size={14} /> {t("common.remove")}</button></div>
+            <div className="zone-actions"><button className="rg-button rg-button-secondary" type="button" onClick={() => editZone(index)}><Pencil size={14} /> {t("common.edit")}</button><button className="rg-button rg-button-danger" type="button" onClick={() => removeZone(index)}><Trash2 size={14} /> {t("common.remove")}</button></div>
           </article>
         ))}
       </div>
@@ -258,7 +258,7 @@ export default function UnboundForwardZones({
       {dirty && !open && (
         <div className="guided-review">
           <div><strong>{t("forward.draftReady")}</strong><small>{t("forward.notActive")}</small></div>
-          <button type="button" disabled={busy} onClick={createPreview}>{busy ? t("forward.checking") : t("forward.review")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={createPreview}>{busy ? t("forward.checking") : t("forward.review")}</button>
         </div>
       )}
 
@@ -273,7 +273,7 @@ export default function UnboundForwardZones({
             ))}
           </div>
           <details><summary>{t("forward.showGenerated")}</summary><pre>{forwardingSection(preview.rendered_config) || t("forward.removalPreview")}</pre></details>
-          <button type="button" disabled={busy || !preview.changed || !allReachable} onClick={activate}>{busy ? t("forward.activating") : allReachable ? t("forward.activate") : t("forward.fixTargets")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed || !allReachable} onClick={activate}>{busy ? t("forward.activating") : allReachable ? t("forward.activate") : t("forward.fixTargets")}</button>
         </div>
       )}
     </section>

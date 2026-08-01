@@ -157,7 +157,7 @@ export default function Stack() {
           <h1>{t("stack.title")}</h1>
           <p>{t("stack.intro")}</p>
         </div>
-        <button type="button" className="stack-check-button" disabled={busy} onClick={startCheck}>
+        <button type="button" className="rg-button rg-button-primary stack-check-button" disabled={busy} onClick={startCheck}>
           {updates?.state === "checking" ? <LoaderCircle className="spin" size={17} /> : <RefreshCw size={17} />}
           {updates?.state === "checking" ? t("stack.checking") : t("stack.check")}
         </button>
@@ -189,7 +189,7 @@ export default function Stack() {
             </div>
             <button
               type="button"
-              className="stack-check-button"
+              className="rg-button rg-button-primary stack-check-button"
               disabled={busy || !controlPlane.services.some((service) => service.update_available)}
               onClick={startControlPlaneUpdate}
             >
@@ -262,14 +262,14 @@ export default function Stack() {
               {service.error && <p className="stack-service-error">{service.error}</p>}
 
               <div className="stack-card-actions">
-                <button type="button" disabled={busy || !service.update_available} onClick={() => startUpdate(service)}>
+                <button className="rg-button rg-button-primary" type="button" disabled={busy || !service.update_available} onClick={() => startUpdate(service)}>
                   <Download size={15} /> {t("stack.install")}
                 </button>
-                <button type="button" disabled={busy} onClick={() => control(service.name, "restart")}>{t("common.restart")}</button>
-                <button type="button" className="quiet" disabled={busy} onClick={() => control(service.name, runtime?.status === "running" ? "stop" : "start")}>
+                <button className="rg-button rg-button-secondary" type="button" disabled={busy} onClick={() => control(service.name, "restart")}>{t("common.restart")}</button>
+                <button type="button" className="rg-button rg-button-secondary quiet" disabled={busy} onClick={() => control(service.name, runtime?.status === "running" ? "stop" : "start")}>
                   {runtime?.status === "running" ? t("common.stop") : t("common.start")}
                 </button>
-                <button type="button" className="quiet" disabled={loadingLogs === service.name} onClick={() => toggleLogs(service.name)}>
+                <button type="button" className="rg-button rg-button-secondary quiet" disabled={loadingLogs === service.name} onClick={() => toggleLogs(service.name)}>
                   {loadingLogs === service.name ? <LoaderCircle className="spin" size={15} /> : <FileText size={15} />}
                   {t("stack.showLogs")}
                 </button>

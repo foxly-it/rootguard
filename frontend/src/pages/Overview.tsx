@@ -106,11 +106,11 @@ export default function Overview() {
               : t("overview.waitingText")}
           </p>
           <div className="hero-actions">
-            <Link className="overview-button primary" to={installation?.state === "installed" ? "/unbound" : "/setup"}>
+            <Link className="rg-button rg-button-primary overview-button primary" to={installation?.state === "installed" ? "/unbound" : "/setup"}>
               {installation?.state === "installed" ? t("overview.configure") : t("overview.openSetup")}
               <ArrowRight size={16} />
             </Link>
-            <button className="overview-button ghost" type="button" onClick={loadDashboard}>
+            <button className="rg-button rg-button-secondary overview-button ghost" type="button" onClick={loadDashboard}>
               <RefreshCw size={15} />
               {t("overview.refresh")}
             </button>
@@ -201,6 +201,7 @@ export default function Overview() {
                   <p>{service.description}</p>
                 </div>
                 <button
+                  className="rg-button rg-button-secondary"
                   type="button"
                   disabled={service.status !== "running" || busyService === service.name}
                   onClick={() => restart(service.name)}
