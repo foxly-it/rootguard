@@ -50,6 +50,22 @@ The Updater release includes dependency-workflow maintenance. The Unbound
 release keeps the stable non-root `100:101` identity so existing named volumes
 remain writable after upgrading.
 
+## Recorded 0.1.0-alpha.5 manifests
+
+| Component | Version tag | Multi-architecture manifest digest |
+| --- | --- | --- |
+| Core | `0.1.0-alpha.5` | `sha256:1f78eade2093c9a89e97aeaeb360b4da03b56edf63e8b4f925453d44b8ab8e00` |
+| WebApp | `0.1.0-alpha.5` | `sha256:90c76e40d42b1b01811a94f1ef5cde11b85e3ad1946104b9cce80c27577a80f0` |
+| Updater | `0.1.0-alpha.5` | `sha256:80e1965674efe2812f5c65173080d4e871964f7953dc7044aac4e234d64b2d7c` |
+| Unbound | `0.1.0-alpha.5` | `sha256:7c7fa1404fb1c0f42c9c9151e9254635434032e259c44eb2acd01fcf3fada789` |
+| AdGuard Home | `v0.107.78` | `sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5` |
+| AdGuard Home Beta | `beta` (verified 2026-08-01) | `sha256:2b77703b27730d5c0c7045fcd6c98834169cd5c69af5f86a43947425f2d367fd` |
+
+The Core and WebApp release manifests have GitHub-issued SLSA provenance
+attestations. The Unbound image is built reproducibly from the checksum-pinned
+Unbound 1.25.2 source on Debian 13 Slim. The Updater passed its paired real
+update and rollback integration scenarios before publication.
+
 These are OCI index digests covering the supported platform manifests. They
 were verified directly against GHCR and Docker Hub before being recorded.
 

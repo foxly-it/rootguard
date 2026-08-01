@@ -62,8 +62,8 @@ notwendig.
 
 ```sh
 mkdir rootguard-alpha && cd rootguard-alpha
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.4/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.4/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.5/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.5/.env.alpha.example
 ```
 
 Erzeuge zwei voneinander unabhängige Sicherheitsschlüssel:
@@ -107,7 +107,7 @@ diesem Einstieg ausgelagert:
 - [Architektur](docs/architecture.md)
 - [Aktueller Projektstand](docs/project-state.md)
 - [Roadmap bis 1.0](ROADMAP.md)
-- [Release Notes v0.1.0-alpha.4](RELEASE_NOTES_0.1.0-alpha.4.md)
+- [Release Notes v0.1.0-alpha.5](RELEASE_NOTES_0.1.0-alpha.5.md)
 - [Image-Digests und Aufbewahrungsregeln](docs/image-retention-policy.md)
 - [Geprüfte Installationsplattformen](docs/platform-support.md)
 
@@ -204,8 +204,8 @@ RootGuard requires Docker Compose v2. The public alpha provides ready-made
 
 ```sh
 mkdir rootguard-alpha && cd rootguard-alpha
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.4/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.4/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.5/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.5/.env.alpha.example
 ```
 
 Generate two independent random security tokens:
@@ -245,7 +245,7 @@ Further technical information:
 - [Architecture and trust boundaries](docs/architecture.md)
 - [Current project state](docs/project-state.md)
 - [Roadmap to 1.0](ROADMAP.md)
-- [Release notes for v0.1.0-alpha.4](RELEASE_NOTES_0.1.0-alpha.4.md)
+- [Release notes for v0.1.0-alpha.5](RELEASE_NOTES_0.1.0-alpha.5.md)
 - [Image digests and retention policy](docs/image-retention-policy.md)
 - [Verified installation platforms](docs/platform-support.md)
 
