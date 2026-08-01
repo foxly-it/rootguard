@@ -33,6 +33,18 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - Secure AdGuard Home first-time setup through RootGuard.
 - Generated AdGuard credentials remain in Core's persistent data volume.
 - Unbound runs read-only, non-root, without additional capabilities.
+- Unbound 1.25.2 is compiled from the SHA-256-verified official NLnet Labs
+  source on a digest-pinned Debian 13 Slim multi-stage base. Direct packages are
+  version-pinned and verified through Debian's signed repository metadata; the
+  `amd64`/`arm64` publication includes SBOM and provenance attestations. The
+  component image passed configuration, recursive DNS, DNSSEC, trust-anchor,
+  health, read-only, capability-free, and multi-architecture build checks.
+  The Core-managed update from the prior image to the published source build
+  also passed on Docker Desktop/arm64: update history recorded success, the
+  container stayed healthy as `100:101`, AdGuard resolved through it, signed
+  answers carried the `ad` flag, the broken DNSSEC test returned `SERVFAIL`,
+  and startup logs were clean. Native Linux/amd64 update and rollback evidence
+  remains the final acceptance item for this slice.
 - Unbound keeps a stable non-root identity (`100:101`) across image rebuilds,
   uses the system socket send buffer, and Core migrates the persistent resolver
   state ownership with a network-isolated, capability-restricted helper before
@@ -298,10 +310,10 @@ visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
-1. Replace the Debian Forky/Sid Unbound package image with a reproducible,
-   checksum-pinned Unbound `1.25.2+` source build on Debian 13 Slim; preserve
-   the stable non-root identity and verify SBOM/provenance, DNSSEC,
-   trust-anchor updates, and update/rollback on `amd64` and `arm64`.
+1. Complete native Core-managed update and rollback verification for the new
+   source-built Unbound image on both `amd64` and `arm64`; the verified build,
+   Debian 13 runtime, stable identity, SBOM/provenance, DNSSEC, and writable
+   trust-anchor work are delivered.
 2. Complete richer Stack Center health details and signed/immutable Core/WebApp
    release metadata.
 3. Harden backup retention, export/restore, and immutable release digests.
