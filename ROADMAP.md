@@ -115,6 +115,12 @@ test verifies guided installation, recursive DNS, and DNSSEC rejection.
 - [x] Add bounded, redacted service logs with explicit retention
 - [x] Persist bounded update, rollback, and cleanup history across restarts
 - [x] Pin release images by recorded digest and document retention policy
+- [x] Inspect all five allowlisted services and expose OCI version, build
+      revision, creation time, source, and manifest-digest pinning
+- [x] Distinguish immutable releases, mutable tags, local builds, and incomplete
+      release metadata in the bilingual Stack Center
+- [ ] Verify signed Core/WebApp release attestations before presenting an image
+      as cryptographically trusted
 
 ### Completed development slice — reproducible Unbound on Debian Stable
 
