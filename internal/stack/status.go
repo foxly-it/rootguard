@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"sort"
+	"strings"
 )
 
 type ContainerInfo struct {
@@ -17,9 +18,18 @@ type ContainerInfo struct {
 	StartedAt    string   `json:"started_at,omitempty"`
 	RestartCount int      `json:"restart_count"`
 	Ports        []string `json:"ports,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	Revision     string   `json:"revision,omitempty"`
+	Created      string   `json:"created,omitempty"`
+	Source       string   `json:"source,omitempty"`
+	Immutable    bool     `json:"immutable"`
+	Metadata     string   `json:"metadata"`
 }
 
 type StackStatus struct {
+	Core    ContainerInfo `json:"core"`
+	WebApp  ContainerInfo `json:"webapp"`
+	Updater ContainerInfo `json:"updater"`
 	AdGuard ContainerInfo `json:"adguard"`
 	Unbound ContainerInfo `json:"unbound"`
 }
@@ -27,6 +37,9 @@ type StackStatus struct {
 func CheckStackStatus() StackStatus {
 
 	return StackStatus{
+		Core:    inspectContainer("rootguard-core"),
+		WebApp:  inspectContainer("rootguard-webapp"),
+		Updater: inspectContainer("rootguard-updater"),
 		AdGuard: inspectContainer("rootguard-adguard"),
 		Unbound: inspectContainer("rootguard-unbound"),
 	}
@@ -68,7 +81,8 @@ func decodeContainerInspect(payload []byte) (ContainerInfo, error) {
 			} `json:"Health"`
 		} `json:"State"`
 		Config struct {
-			Image string `json:"Image"`
+			Image  string            `json:"Image"`
+			Labels map[string]string `json:"Labels"`
 		} `json:"Config"`
 		Image           string `json:"Image"`
 		RestartCount    int    `json:"RestartCount"`
@@ -96,10 +110,30 @@ func decodeContainerInspect(payload []byte) (ContainerInfo, error) {
 		health = data[0].State.Health.Status
 	}
 
+	labels := data[0].Config.Labels
+	version := labels["org.opencontainers.image.version"]
+	revision := labels["org.opencontainers.image.revision"]
+	created := labels["org.opencontainers.image.created"]
+	source := labels["org.opencontainers.image.source"]
+	metadata := "unavailable"
+	available := 0
+	for _, value := range []string{version, revision, created, source} {
+		if value != "" {
+			available++
+		}
+	}
+	if available == 4 {
+		metadata = "complete"
+	} else if available > 0 {
+		metadata = "partial"
+	}
+
 	return ContainerInfo{
 		Exists: true, Running: data[0].State.Running, Status: data[0].State.Status,
 		Health: health, Image: data[0].Config.Image, ImageID: data[0].Image,
 		StartedAt: data[0].State.StartedAt, RestartCount: data[0].RestartCount,
-		Ports: ports,
+		Ports: ports, Version: version, Revision: revision, Created: created,
+		Source: source, Immutable: strings.Contains(data[0].Config.Image, "@sha256:"),
+		Metadata: metadata,
 	}, nil
 }

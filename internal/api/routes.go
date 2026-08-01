@@ -323,28 +323,34 @@ type serviceResponse struct {
 	StartedAt    string   `json:"startedAt,omitempty"`
 	RestartCount int      `json:"restartCount"`
 	Ports        []string `json:"ports,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	Revision     string   `json:"revision,omitempty"`
+	Created      string   `json:"created,omitempty"`
+	Source       string   `json:"source,omitempty"`
+	Immutable    bool     `json:"immutable"`
+	Metadata     string   `json:"metadata"`
 }
 
 func servicesHandler(w http.ResponseWriter, _ *http.Request) {
 	status := stack.CheckStackStatus()
 	writeJSON(w, http.StatusOK, []serviceResponse{
-		{
-			Name: "adguard", DisplayName: "AdGuard Home",
-			Description: "DNS filtering, blocklists and client policies",
-			Status:      runningStatus(status.AdGuard.Running), Health: status.AdGuard.Health,
-			Image: status.AdGuard.Image, ImageID: status.AdGuard.ImageID,
-			StartedAt: status.AdGuard.StartedAt, RestartCount: status.AdGuard.RestartCount,
-			Ports: status.AdGuard.Ports,
-		},
-		{
-			Name: "unbound", DisplayName: "Unbound DNS",
-			Description: "Recursive resolver with DNSSEC validation",
-			Status:      runningStatus(status.Unbound.Running), Health: status.Unbound.Health,
-			Image: status.Unbound.Image, ImageID: status.Unbound.ImageID,
-			StartedAt: status.Unbound.StartedAt, RestartCount: status.Unbound.RestartCount,
-			Ports: status.Unbound.Ports,
-		},
+		serviceRuntimeResponse("core", "RootGuard Core", "Privileged orchestration and configuration", status.Core),
+		serviceRuntimeResponse("webapp", "RootGuard WebApp", "Authenticated operator interface", status.WebApp),
+		serviceRuntimeResponse("updater", "RootGuard Updater", "Independent control-plane update helper", status.Updater),
+		serviceRuntimeResponse("adguard", "AdGuard Home", "DNS filtering, blocklists and client policies", status.AdGuard),
+		serviceRuntimeResponse("unbound", "Unbound DNS", "Recursive resolver with DNSSEC validation", status.Unbound),
 	})
+}
+
+func serviceRuntimeResponse(name, displayName, description string, info stack.ContainerInfo) serviceResponse {
+	return serviceResponse{
+		Name: name, DisplayName: displayName, Description: description,
+		Status: runningStatus(info.Running), Health: info.Health,
+		Image: info.Image, ImageID: info.ImageID, StartedAt: info.StartedAt,
+		RestartCount: info.RestartCount, Ports: info.Ports, Version: info.Version,
+		Revision: info.Revision, Created: info.Created, Source: info.Source,
+		Immutable: info.Immutable, Metadata: info.Metadata,
+	}
 }
 
 func runningStatus(running bool) string {
