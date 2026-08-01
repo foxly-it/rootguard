@@ -256,6 +256,7 @@ type AdGuardFilterReport struct {
 type InstallationConfig struct {
 	DNSBindAddress string `json:"dns_bind_address"`
 	DNSPort        int    `json:"dns_port"`
+	AdGuardChannel string `json:"adguard_channel"`
 }
 
 type InstallationCheck struct {

@@ -15,6 +15,7 @@ import { AlertTriangle, ArrowRight, Check, Filter, Network, RotateCcw, ServerCog
 const defaultConfig: InstallationConfig = {
   dns_bind_address: "0.0.0.0",
   dns_port: 53,
+  adguard_channel: "stable",
 };
 
 export default function Setup() {
@@ -30,7 +31,7 @@ export default function Setup() {
       const current = await fetchInstallationStatus();
       setStatus(current);
       if (current.config && current.state !== "deploying") {
-        setConfig(current.config);
+        setConfig({ ...current.config, adguard_channel: current.config.adguard_channel ?? "stable" });
       }
     } catch (cause) {
       setError(messageFrom(cause, t("setup.unexpected")));
@@ -97,7 +98,7 @@ export default function Setup() {
           <div className="blueprint-chain">
             <BlueprintNode icon={<Network />} label={t("setup.host")} detail={`${config.dns_bind_address}:${config.dns_port}`} />
             <span className="blueprint-link"><i /><ArrowRight size={15} /></span>
-            <BlueprintNode icon={<Filter />} label="AdGuard Home" detail={t("setup.filter")} />
+            <BlueprintNode icon={<Filter />} label="AdGuard Home" detail={t(`setup.channel.${config.adguard_channel}`)} />
             <span className="blueprint-link"><i /><ArrowRight size={15} /></span>
             <BlueprintNode icon={<ShieldCheck />} label="Unbound" detail={t("setup.resolver")} />
           </div>
@@ -162,6 +163,39 @@ export default function Setup() {
             <div><ShieldCheck size={14} /><span><b>{t("setup.privateAdmin")}</b>{t("setup.privateAdminHelp")}</span></div>
           </aside>
         </div>
+
+        <fieldset className="release-channel" disabled={deploying}>
+          <legend>{t("setup.channel.title")}</legend>
+          <p>{t("setup.channel.help")}</p>
+          <div className="release-channel-options">
+            {(["stable", "beta"] as const).map((channel) => (
+              <label className={config.adguard_channel === channel ? "selected" : ""} key={channel}>
+                <input
+                  type="radio"
+                  name="adguard-channel"
+                  value={channel}
+                  checked={config.adguard_channel === channel}
+                  onChange={() => {
+                    setConfig({ ...config, adguard_channel: channel });
+                    setPreflight(null);
+                  }}
+                />
+                <span>
+                  <strong>{t(`setup.channel.${channel}`)}</strong>
+                  <small>{t(`setup.channel.${channel}Help`)}</small>
+                </span>
+                {channel === "stable" && <i>{t("setup.channel.recommended")}</i>}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+
+        {config.adguard_channel === "beta" && (
+          <div className="beta-warning" role="alert">
+            <AlertTriangle size={20} />
+            <div><strong>{t("setup.channel.betaWarningTitle")}</strong><p>{t("setup.channel.betaWarning")}</p></div>
+          </div>
+        )}
 
         <div className="setup-actions">
           <button className="rg-button rg-button-secondary setup-button secondary" disabled={busy || deploying} onClick={runPreflight}>

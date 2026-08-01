@@ -401,6 +401,7 @@ export async function fetchAdGuardFilterReport(): Promise<AdGuardFilterReport> {
 export interface InstallationConfig {
   dns_bind_address: string;
   dns_port: number;
+  adguard_channel: "stable" | "beta";
 }
 
 export interface InstallationCheck {

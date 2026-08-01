@@ -384,6 +384,80 @@
   line-height: 1.45;
 }
 
+.release-channel {
+  margin: 24px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.release-channel legend {
+  color: #cdd9e7;
+  font-size: 0.78rem;
+  font-weight: 760;
+}
+
+.release-channel > p {
+  margin: 5px 0 12px;
+  color: #748aa3;
+  font-size: 0.72rem;
+}
+
+.release-channel-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.release-channel-options label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 11px;
+  align-items: center;
+  padding: 15px;
+  border: 1px solid rgba(159, 180, 212, 0.16);
+  border-radius: 12px;
+  background: rgba(3, 13, 24, 0.46);
+  cursor: pointer;
+}
+
+.release-channel-options label.selected {
+  border-color: rgba(103, 232, 249, 0.58);
+  background: rgba(34, 211, 238, 0.08);
+  box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.06);
+}
+
+.release-channel-options input { accent-color: #67e8f9; }
+.release-channel-options span,
+.release-channel-options strong,
+.release-channel-options small { display: block; }
+.release-channel-options strong { color: #e5f3ff; font-size: 0.8rem; }
+.release-channel-options small { margin-top: 3px; color: #8297ac; font-size: 0.68rem; line-height: 1.4; }
+.release-channel-options i {
+  padding: 4px 7px;
+  border-radius: 999px;
+  color: #99f6e4;
+  background: rgba(20, 184, 166, 0.13);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.beta-warning {
+  display: flex;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  border-radius: 12px;
+  color: #fbbf24;
+  background: rgba(120, 53, 15, 0.18);
+}
+
+.beta-warning svg { flex: 0 0 auto; margin-top: 1px; }
+.beta-warning strong { color: #fde68a; font-size: 0.78rem; }
+.beta-warning p { margin: 4px 0 0; color: #d4b979; font-size: 0.7rem; line-height: 1.5; }
+
 .endpoint-preview {
   position: relative;
   padding: 20px;
@@ -744,7 +818,8 @@
     font-size: 2.4rem;
   }
   .network-card-grid,
-  .setup-fields {
+  .setup-fields,
+  .release-channel-options {
     grid-template-columns: 1fr;
   }
   .setup-progress {
