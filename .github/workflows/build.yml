@@ -11,7 +11,7 @@ on:
         required: false
         type: string
   schedule:
-    - cron: "0 3 * * *"   # Daily rebuild for security updates
+    - cron: "0 3 * * *"   # Daily reproducibility and upstream-input check
 
 permissions:
   contents: read
@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup QEMU
         uses: docker/setup-qemu-action@v3
@@ -100,26 +100,19 @@ jobs:
 
       - name: Verify secure Unbound version
         run: |
-          VERSION="$(docker run --rm --entrypoint dpkg-query rootguard-unbound:test -W -f='${Version}' unbound)"
-          dpkg --compare-versions "$VERSION" ge "1.25.2-1"
-          echo "Validated Unbound package: $VERSION"
+          VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:test -V 2>&1 | awk '/^Version / {print $2; exit}')"
+          test "$VERSION" = "1.25.2"
+          test "$(docker image inspect rootguard-unbound:test --format '{{index .Config.Labels "io.rootguard.unbound.source.sha256"}}')" = "0d92275c703d5f5f8baba3dab22117dd8c29b495588a5c229768ed6581566600"
+          test "$(docker image inspect rootguard-unbound:test --format '{{index .Config.Labels "io.rootguard.base.digest"}}')" = "sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd"
+          echo "Validated upstream Unbound: $VERSION"
 
       - name: Extract installed Unbound version
         id: version
         run: |
-          VERSION="$(docker run --rm --entrypoint dpkg-query rootguard-unbound:test -W -f='${Version}' unbound)"
-
-          # Sanitize version for Docker tag (replace + with -)
-          SAFE_VERSION=$(echo "$VERSION" | sed 's/+/-/g')
-
-          echo "Detected Debian version: $SAFE_VERSION"
-
-          echo "full=$SAFE_VERSION" >> "$GITHUB_OUTPUT"
-
-          SHORT=$(echo "$SAFE_VERSION" | cut -d'-' -f1)
-          MAJORMINOR=$(echo "$SHORT" | cut -d'.' -f1,2)
-
-          echo "short=$SHORT" >> "$GITHUB_OUTPUT"
+          VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:test -V 2>&1 | awk '/^Version / {print $2; exit}')"
+          MAJORMINOR="$(echo "$VERSION" | cut -d'.' -f1,2)"
+          echo "Detected upstream version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "majorminor=$MAJORMINOR" >> "$GITHUB_OUTPUT"
 
       # 🏗 Build & Push Multi-Arch Image
@@ -129,9 +122,10 @@ jobs:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64,linux/arm64
+          provenance: mode=max
+          sbom: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/rootguard-unbound:latest
-            ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.full }}
-            ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.short }}
+            ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.version }}
             ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.majorminor }}
             ${{ inputs.release_tag != '' && format('ghcr.io/{0}/rootguard-unbound:{1}', github.repository_owner, inputs.release_tag) || '' }}

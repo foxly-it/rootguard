@@ -3,9 +3,9 @@
 ![RootGuard Unbound – Recursive DNS with DNSSEC](assets/rootguard-unbound-social-preview.png)
 
 **RootGuard Unbound is a hardened, multi-architecture recursive DNS resolver
-container with DNSSEC validation.** It tracks the official Debian Unbound
-package from Debian Forky, rebuilds daily for security updates, and provides an immutable base
-configuration plus an update-safe modular configuration layer.
+container with DNSSEC validation.** Unbound 1.25.2 is compiled from its verified
+official source archive on a digest-pinned Debian 13 base. The image provides an
+immutable base configuration plus an update-safe modular configuration layer.
 
 [![Build](https://github.com/foxly-it/rootguard-unbound/actions/workflows/build.yml/badge.svg)](https://github.com/foxly-it/rootguard-unbound/actions/workflows/build.yml)
 [![Architectures](https://img.shields.io/badge/arch-amd64%20%7C%20arm64-a98bea)](https://github.com/foxly-it/rootguard-unbound/pkgs/container/rootguard-unbound)
@@ -44,10 +44,12 @@ workflow.
 
 ## Features
 
-- Official Debian `unbound` package on `forky-slim`, with a build-enforced
-  security floor of `1.25.2-1`.
+- Unbound `1.25.2`, compiled from the checksum-verified NLnet Labs source.
+- Digest-pinned Debian 13 build and runtime base with version-pinned direct
+  dependencies.
 - Multi-architecture images for `amd64` and `arm64`.
-- Daily rebuilds for Debian security updates.
+- Published SBOM and SLSA provenance attestations.
+- Daily reproducibility checks; dependency upgrades remain reviewed changes.
 - DNSSEC validation with a writable RFC 5011 trust-anchor state.
 - Non-root runtime, read-only compatible filesystem, and no added capabilities.
 - Private-network access control and private-address protection.
@@ -55,7 +57,7 @@ workflow.
   port is not exposed or published.
 - Immutable base configuration with modular includes under
   `/etc/unbound/unbound.d/`.
-- Version tags derived from the installed Debian package.
+- Version tags derived from the compiled upstream binary.
 
 ## Docker Compose
 
@@ -110,18 +112,21 @@ domain `dnssec-failed.org` must return `SERVFAIL`.
 
 ## Image tags and builds
 
-The GitHub Actions pipeline validates the configuration, publishes both
-architectures, and tags images using the Debian package version:
+The GitHub Actions pipeline validates the configuration and pinned source
+metadata, publishes both architectures with SBOM and provenance attestations,
+and tags images using the compiled upstream version:
 
 - `latest`
-- full Debian package version
 - upstream Unbound version
 - major/minor Unbound version
 - optional RootGuard release tag
 
+The exact source URL, SHA-256 checksum, base-image digest, dependency pins, and
+the update procedure are documented in [BUILDING.md](BUILDING.md).
+
 ## Security model
 
-- Runs as the Debian-packaged non-root `unbound` user.
+- Runs as the fixed non-root `unbound` identity `100:101`.
 - Supports a read-only root filesystem and drops all Linux capabilities.
 - Is not configured as a public open resolver.
 - Hides resolver identity and minimizes responses.
