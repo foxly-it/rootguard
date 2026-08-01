@@ -295,6 +295,13 @@ Trustworthy Stack Center and production visibility:
   carrying the explicit `io.rootguard.cleanup=true` label;
 - safe start, stop, and restart controls with clear impact;
 - bounded, redacted on-demand service logs and actionable failure states;
+- Stack Center runtime inspection now covers Core, WebApp, the independent
+  Updater helper, AdGuard Home, and Unbound through Core's fixed allowlist. It
+  exposes OCI version, revision, creation time, source, and manifest-digest
+  pinning, while the bilingual UI visibly distinguishes immutable references,
+  mutable tags, local builds, and complete, partial, or unavailable metadata.
+  OCI labels are treated as provenance hints, not as cryptographic proof;
+  signed Core/WebApp release-attestation verification remains outstanding.
 - typed, bilingual AIO installation diagnostics for invalid host addresses,
   missing Compose, occupied DNS ports, failed image pulls, and interrupted
   deployment recovery; raw technical details remain available on demand.
@@ -315,8 +322,9 @@ visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
-1. Complete richer Stack Center health details and signed/immutable Core/WebApp
-   release metadata.
+1. Add signed Core/WebApp release-attestation verification and richer
+   cross-service health details to the Stack Center; five-service runtime and
+   immutable/metadata visibility are delivered.
 2. Harden backup retention, export/restore, and immutable release digests.
 3. DNS security advisor and production preflight checks.
 4. Native AdGuard integration, contextual guidance, cross-service diagnostics,
