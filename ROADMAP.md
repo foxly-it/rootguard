@@ -119,7 +119,7 @@ test verifies guided installation, recursive DNS, and DNSSEC rejection.
       revision, creation time, source, and manifest-digest pinning
 - [x] Distinguish immutable releases, mutable tags, local builds, and incomplete
       release metadata in the bilingual Stack Center
-- [ ] Verify signed Core/WebApp release attestations before presenting an image
+- [x] Verify signed Core/WebApp release attestations before presenting an image
       as cryptographically trusted
 
 ### Completed development slice — reproducible Unbound on Debian Stable
