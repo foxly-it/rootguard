@@ -43,8 +43,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   also passed on Docker Desktop/arm64: update history recorded success, the
   container stayed healthy as `100:101`, AdGuard resolved through it, signed
   answers carried the `ad` flag, the broken DNSSEC test returned `SERVFAIL`,
-  and startup logs were clean. Native Linux/amd64 update and rollback evidence
-  remains the final acceptance item for this slice.
+  and startup logs were clean. A Debian 13 `amd64` LXC then passed the immutable
+  alpha clean install, Core-managed update from the alpha image to the published
+  source build, and an injected failure rollback. The rollback restored the
+  exact prior image ID, kept the resolver healthy, retained recursive DNS, and
+  recorded `rolled_back`; the restored image also passed source-checksum,
+  DNSSEC, and clean-log checks. The host was returned to zero test containers,
+  volumes, and RootGuard networks afterward.
 - Unbound keeps a stable non-root identity (`100:101`) across image rebuilds,
   uses the system socket send buffer, and Core migrates the persistent resolver
   state ownership with a network-isolated, capability-restricted helper before
@@ -310,20 +315,16 @@ visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
-1. Complete native Core-managed update and rollback verification for the new
-   source-built Unbound image on both `amd64` and `arm64`; the verified build,
-   Debian 13 runtime, stable identity, SBOM/provenance, DNSSEC, and writable
-   trust-anchor work are delivered.
-2. Complete richer Stack Center health details and signed/immutable Core/WebApp
+1. Complete richer Stack Center health details and signed/immutable Core/WebApp
    release metadata.
-3. Harden backup retention, export/restore, and immutable release digests.
-4. DNS security advisor and production preflight checks.
-5. Native AdGuard integration, contextual guidance, cross-service diagnostics,
+2. Harden backup retention, export/restore, and immutable release digests.
+3. DNS security advisor and production preflight checks.
+4. Native AdGuard integration, contextual guidance, cross-service diagnostics,
    and compatibility testing without duplicating filter, client, or query-log
    management.
-6. Custom diagnostics and cache tools.
-7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
-8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
+5. Custom diagnostics and cache tools.
+6. Runtime-provider abstraction for Docker and future bare-metal/systemd.
+7. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
    hardening.
 
 ## Tracked editor follow-ups
