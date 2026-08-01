@@ -300,6 +300,27 @@
   background: rgba(245, 158, 11, 0.1);
 }
 
+.attestation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #fde68a;
+}
+
+.attestation-badge.trusted { color: #99f6e4; }
+.attestation-badge.danger { color: #fda4af; }
+.attestation-badge.neutral { color: #94a3b8; }
+
+.control-plane-services .control-plane-metadata .attestation-badge.danger {
+  color: #fda4af;
+  background: rgba(244, 63, 94, 0.1);
+}
+
+.control-plane-services .control-plane-metadata .attestation-badge.neutral {
+  color: #94a3b8;
+  background: rgba(148, 163, 184, 0.08);
+}
+
 .control-plane-services strong {
   font-size: 0.82rem;
 }

@@ -69,6 +69,8 @@ export interface ServiceInfo {
   source?: string;
   immutable: boolean;
   metadata: "complete" | "partial" | "unavailable";
+  attestation: "verified" | "missing" | "failed" | "unavailable" | "not_applicable";
+  attestedAt?: string;
 }
 
 export async function fetchServices(): Promise<ServiceInfo[]> {

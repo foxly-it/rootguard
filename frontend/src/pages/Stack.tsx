@@ -269,6 +269,8 @@ export default function Stack() {
                 <div><dt>{t("stack.revision")}</dt><dd>{shortID(runtime?.revision)}</dd></div>
                 <div><dt>{t("stack.imageMode")}</dt><dd>{runtime?.immutable ? t("stack.immutable") : t("stack.mutable")}</dd></div>
                 <div><dt>{t("stack.releaseMetadata")}</dt><dd>{t(`stack.metadata.${runtime?.metadata || "unavailable"}`)}</dd></div>
+                <div><dt>{t("stack.attestation")}</dt><dd><AttestationBadge service={runtime} t={t} /></dd></div>
+                {runtime?.attestedAt && <div><dt>{t("stack.attestationChecked")}</dt><dd>{formatDate(runtime.attestedAt)}</dd></div>}
                 <div><dt>{t("stack.lastCheck")}</dt><dd>{service.checked_at && !service.checked_at.startsWith("0001-") ? formatDate(service.checked_at) : t("stack.neverChecked")}</dd></div>
               </dl>
 
@@ -394,10 +396,21 @@ function ControlPlaneService({
           <span className={runtime?.metadata === "complete" ? "trusted" : "attention"}>
             {t(`stack.metadata.${runtime?.metadata || "unavailable"}`)}
           </span>
+          <AttestationBadge service={runtime} t={t} compact />
         </div>
       </div>
       <em className={updateAvailable ? "available" : ""}>{updateLabel}</em>
     </article>
+  );
+}
+
+function AttestationBadge({ service, t, compact = false }: { service?: ServiceInfo; t: Translate; compact?: boolean }) {
+  const status = service?.attestation || "unavailable";
+  const tone = status === "verified" ? "trusted" : status === "failed" ? "danger" : status === "not_applicable" ? "neutral" : "attention";
+  return (
+    <span className={`attestation-badge ${tone}`} title={t(`stack.attestationHelp.${status}`)}>
+      <ShieldCheck size={compact ? 11 : 13} /> {t(`stack.attestation.${status}`)}
+    </span>
   );
 }
 
