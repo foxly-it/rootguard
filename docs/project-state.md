@@ -203,6 +203,11 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   internal API route. It identifies `/api/health` as the sole unauthenticated
   endpoint, documents the bearer-token boundary and route groups, and uses only
   representative sanitized request and response shapes.
+- The standalone Unbound image now documents a rootless Podman quick start with
+  loopback-only TCP/UDP publication and persistent configuration and trust-anchor
+  volumes. The instructions were verified on macOS/arm64 with rootless Podman
+  6.0.2: signed recursion carried the `ad` flag, broken DNSSEC returned
+  `SERVFAIL`, and the same volumes remained valid across container recreation.
 - Stack & Updates page for allowlisted AdGuard Home and Unbound lifecycle
   control. Update checks compare pulled and running image IDs; installation is
   asynchronous and persistent, creates protected data backups, replaces one
