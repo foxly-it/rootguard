@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-02
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -147,6 +147,47 @@ Forky/Sid as the production runtime base.
 
 Exit: RootGuard runs a current, traceable Unbound build on Debian Stable and no
 production image depends on Forky/Sid packages.
+
+### Next development slice — accessible WebGUI navigation and appearance
+
+Goal: make every RootGuard area and setting quickly reachable while keeping the
+application shell consistent, readable, responsive, and fully keyboard
+operable.
+
+- [ ] Rework the header as a coherent utility bar whose search, documentation,
+      GitHub, language, theme, user, and sign-out controls share consistent
+      sizing, borders, spacing, icons, hover states, and visible focus states
+- [ ] Move language, appearance, and sign-out into an accessible user menu;
+      retain direct Docs and GitHub actions on desktop and consolidate utility
+      actions into the menu on narrow viewports
+- [ ] Add a global, local-only search covering pages, Unbound tabs, all guided
+      settings, configuration views, diagnostics, history, and important
+      actions in both supported languages, including technical directive names
+- [ ] Open and focus search from its visible header control, the `S` key, and
+      `Ctrl`/`Cmd` + `K`; ignore shortcuts while typing and support complete
+      keyboard navigation, `Escape`, focus restoration, and reduced motion
+- [ ] Navigate search results to the correct page and tab, reveal the relevant
+      section, and place focus at the destination without changing a setting
+      directly from the result list
+- [ ] Replace hard-coded theme colours with semantic design tokens and offer
+      persistent System, Light, and Dark modes, with the system preference as
+      the default for users who have not made a selection
+- [ ] Move the sidebar collapse control to its bottom edge, default new desktop
+      sessions to the collapsed icon view, and preserve an existing explicit
+      local preference
+- [ ] Keep sidebar navigation and its collapse control visible while long
+      settings pages scroll; allow the navigation region itself to scroll when
+      viewport height is insufficient and keep mobile navigation fully labelled
+- [ ] Add sticky in-page navigation for long settings sections where it
+      materially improves orientation and connect its destinations to global
+      search results
+- [ ] Verify responsive behaviour, 200% browser zoom, WCAG 2.2 AA contrast,
+      screen-reader names, focus order, tooltips, menus, shortcuts, and both
+      colour themes in German and English
+
+Exit: all pages and settings are discoverable without navigating the complete
+sidebar manually, and the application shell remains readable and operable with
+keyboard, screen reader, zoom, mobile viewport, and light or dark appearance.
 
 ---
 
