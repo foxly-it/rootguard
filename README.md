@@ -4,6 +4,16 @@
 
 ![RootGuard – Self-hosted DNS protection](assets/rootguard-social-preview.png)
 
+## Product preview
+
+These screenshots show a verified local development stack with the documented
+default account and loopback-only DNS endpoint. No real network or access data
+is included.
+
+![RootGuard dashboard showing protected DNS status, stack metrics, and running services](assets/screenshots/rootguard-dashboard.webp)
+
+![RootGuard guided setup showing the protected DNS chain and completed deployment steps](assets/screenshots/rootguard-guided-setup.webp)
+
 <a id="deutsch"></a>
 
 ## Deutsch
