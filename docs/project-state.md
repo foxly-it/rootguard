@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-01
+Last updated: 2026-08-02
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -195,6 +195,14 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   primary sidebar can now collapse to its Lucide symbols, retains accessible
   labels and hover/focus tooltips, and remembers the local preference; mobile
   navigation remains fully labelled.
+- The next WebGUI development slice is specified with verifiable acceptance
+  criteria for a consistent utility header, local bilingual settings search,
+  System/Light/Dark appearance, a bottom-anchored sticky sidebar control, and
+  keyboard, screen-reader, zoom, responsive, and WCAG 2.2 AA validation.
+- RootGuard Core now publishes a contributor-facing reference for every current
+  internal API route. It identifies `/api/health` as the sole unauthenticated
+  endpoint, documents the bearer-token boundary and route groups, and uses only
+  representative sanitized request and response shapes.
 - Stack & Updates page for allowlisted AdGuard Home and Unbound lifecycle
   control. Update checks compare pulled and running image IDs; installation is
   asynchronous and persistent, creates protected data backups, replaces one
