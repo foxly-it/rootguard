@@ -241,6 +241,11 @@ The detailed ownership and directive plan lives in
       the same allowlisted five-service inventory; a healthy full stack must
       show `5 / 5`, while absent, starting, stopped, and unhealthy services
       retain distinct states instead of producing values such as `5 / 2`
+- [ ] Separate container runtime, Docker healthcheck, and functional DNS-chain
+      health in Stack Center. For images such as official AdGuard Home that do
+      not define a Docker `HEALTHCHECK`, show a neutral "not provided by image"
+      state and explain RootGuard's independent DNS-path checks instead of the
+      ambiguous warning-like "not configured" wording
 - [ ] Shared guided workflow: draft → explanation → preview → validate → activate
 - [ ] Conflict detection across zones, forwarding, access rules, and expert text
 - [ ] Import/export of the complete logical resolver configuration

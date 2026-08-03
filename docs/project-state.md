@@ -348,8 +348,11 @@ visible no-op instead of widening its scope.
 
 1. Correct the Dashboard service KPI to derive both counts from the five-service
    allowlist, then add richer cross-service health details to the Stack Center;
-   five-service runtime, immutable metadata, and signed Core/WebApp
-   release-attestation verification are delivered.
+   clearly separate container runtime, Docker healthcheck availability, and
+   functional DNS-chain health so an official image without a healthcheck is
+   neutral rather than apparently misconfigured. Five-service runtime,
+   immutable metadata, and signed Core/WebApp release-attestation verification
+   are delivered.
 2. Harden backup retention, export/restore, and immutable release digests.
 3. DNS security advisor and production preflight checks.
 4. Native AdGuard integration, contextual guidance, cross-service diagnostics,
