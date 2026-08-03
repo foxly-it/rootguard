@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-03
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -214,6 +214,17 @@ The detailed ownership and directive plan lives in
 - [x] Prefetch-key and aggressive NSEC controls with compatibility guidance
 - [x] EDNS buffer size with safe default `1232` and validation
 - [x] Privacy-safe logging level and temporary diagnostic logging
+- [ ] Expand Local DNS into a zone-centred host inventory: create a zone once,
+      then add, rename, remove, and bulk-edit devices and servers by hostname
+      plus IPv4/IPv6 address, with optional forward-confirmed PTR generation
+- [ ] Import local hosts through bounded `in-addr.arpa`/`ip6.arpa` discovery and
+      optional router adapters, beginning with the documented FRITZ!Box TR-064
+      host list; keep router credentials server-side and never persist them in
+      browser storage or generated Unbound configuration
+- [ ] Make every host import preview-only until the operator selects entries;
+      canonicalise names and addresses, detect duplicates and conflicts with
+      guided and expert records, and use the existing preview, validation,
+      versioning, activation-health, and rollback lifecycle
 
 ### Fixed secure base
 
@@ -226,6 +237,10 @@ The detailed ownership and directive plan lives in
 
 ### User experience and safety
 
+- [ ] Fix the Dashboard service KPI so its active and total counts come from
+      the same allowlisted five-service inventory; a healthy full stack must
+      show `5 / 5`, while absent, starting, stopped, and unhealthy services
+      retain distinct states instead of producing values such as `5 / 2`
 - [ ] Shared guided workflow: draft → explanation → preview → validate → activate
 - [ ] Conflict detection across zones, forwarding, access rules, and expert text
 - [ ] Import/export of the complete logical resolver configuration

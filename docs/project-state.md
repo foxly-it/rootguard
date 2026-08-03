@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-02
+Last updated: 2026-08-03
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -346,17 +346,21 @@ visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
-1. Add richer cross-service health details to the Stack Center; five-service
-   runtime, immutable metadata, and signed Core/WebApp release-attestation
-   verification are delivered.
+1. Correct the Dashboard service KPI to derive both counts from the five-service
+   allowlist, then add richer cross-service health details to the Stack Center;
+   five-service runtime, immutable metadata, and signed Core/WebApp
+   release-attestation verification are delivered.
 2. Harden backup retention, export/restore, and immutable release digests.
 3. DNS security advisor and production preflight checks.
 4. Native AdGuard integration, contextual guidance, cross-service diagnostics,
    and compatibility testing without duplicating filter, client, or query-log
    management.
-5. Custom diagnostics and cache tools.
-6. Runtime-provider abstraction for Docker and future bare-metal/systemd.
-7. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
+5. Zone-centred local host inventory and preview-only reverse-DNS/router import,
+   beginning with standards-based ARPA discovery and an optional FRITZ!Box
+   TR-064 host-list adapter.
+6. Custom diagnostics and cache tools.
+7. Runtime-provider abstraction for Docker and future bare-metal/systemd.
+8. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
    hardening.
 
 ## Tracked editor follow-ups
