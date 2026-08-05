@@ -154,9 +154,12 @@ Goal: make every RootGuard area and setting quickly reachable while keeping the
 application shell consistent, readable, responsive, and fully keyboard
 operable.
 
-- [ ] Rework the header as a coherent utility bar whose search, documentation,
+- [x] Rework the header as a coherent utility bar whose search, documentation,
       GitHub, language, theme, user, and sign-out controls share consistent
-      sizing, borders, spacing, icons, hover states, and visible focus states
+      sizing, borders, spacing, icons, hover states, and visible focus states.
+      Search itself is added by the global-search items below and will
+      inherit the same control style
+      ([rootguard-webapp#60](https://github.com/foxly-it/rootguard-webapp/pull/60))
 - [ ] Move language, appearance, and sign-out into an accessible user menu;
       retain direct Docs and GitHub actions on desktop and consolidate utility
       actions into the menu on narrow viewports
