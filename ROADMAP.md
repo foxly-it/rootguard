@@ -179,10 +179,14 @@ operable.
       the default for users who have not made a selection. Covers the app
       shell, login, Dashboard, Setup, Stack Center, AdGuard, and Unbound
       settings; code/config viewers (expert editor, live-config, logs) stay
-      dark by design, like a code block
+      dark by design, like a code block. Box-shadow color and intensity are
+      themed the same way (theme-aware `--shadow-ink`/`--shadow-scale`
+      tokens) so light mode reads as a crisp lift instead of a dark-tuned
+      grey halo
       ([rootguard-webapp#54](https://github.com/foxly-it/rootguard-webapp/pull/54),
       [#56](https://github.com/foxly-it/rootguard-webapp/pull/56),
-      [#58](https://github.com/foxly-it/rootguard-webapp/pull/58))
+      [#58](https://github.com/foxly-it/rootguard-webapp/pull/58),
+      [#72](https://github.com/foxly-it/rootguard-webapp/pull/72))
 - [x] Move the sidebar collapse control to its bottom edge, default new desktop
       sessions to the collapsed icon view, and preserve an existing explicit
       local preference

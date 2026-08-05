@@ -394,6 +394,15 @@ Trustworthy Stack Center and production visibility:
   scrollbar); tooltips now render via a `document.body` portal instead of
   a clipped CSS `::after`
   ([rootguard-webapp#70](https://github.com/foxly-it/rootguard-webapp/pull/70)).
+- fixed washed-out light mode (user-reported): every `box-shadow` was a
+  literal near-black `rgba(0, 0, 0, X)` hand-tuned against the dark
+  theme, which read as a muddy grey halo instead of a crisp lift once
+  reused unchanged against light mode's near-white surfaces. Added
+  theme-aware `--shadow-ink`/`--shadow-scale` tokens (dark: unchanged;
+  light: cooler ink at ~40% intensity) and rewrote the 15 affected
+  declarations across 11 stylesheets to reference them, keeping each
+  component's hand-tuned offset/blur/spread exactly
+  ([rootguard-webapp#72](https://github.com/foxly-it/rootguard-webapp/pull/72)).
 - roadmap audit: four already-shipped items were unchecked because they
   predate this file's current level of detail. Re-verified directly
   against code/config rather than trusting the earlier prose: bounded/
