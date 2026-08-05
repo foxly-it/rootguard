@@ -339,6 +339,15 @@ Trustworthy Stack Center and production visibility:
   live five-service allowlist response instead of a hardcoded value, so a
   fully healthy stack shows `5 / 5` rather than a stale `X / 2`
   ([rootguard-webapp#50](https://github.com/foxly-it/rootguard-webapp/pull/50)).
+- semantic design tokens and a System/Light/Dark theme system
+  (`localStorage`-persisted, zero-FOUC) for the app shell and first screen -
+  header, sidebar, buttons, cards, status indicators, and login. Fixed 8
+  previously-referenced-but-undefined CSS custom properties and a dead
+  duplicate `.sidebar` rule along the way. Every light-theme text/background
+  pair is WCAG AA contrast-verified. Page-specific stylesheets (Setup, Stack
+  Center, Dashboard, AdGuard, Unbound settings) are not yet migrated and
+  intentionally keep their dark-only appearance under both themes until a
+  follow-up pass ([rootguard-webapp#54](https://github.com/foxly-it/rootguard-webapp/pull/54)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

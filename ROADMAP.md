@@ -169,9 +169,15 @@ operable.
 - [ ] Navigate search results to the correct page and tab, reveal the relevant
       section, and place focus at the destination without changing a setting
       directly from the result list
-- [ ] Replace hard-coded theme colours with semantic design tokens and offer
+- [x] Replace hard-coded theme colours with semantic design tokens and offer
       persistent System, Light, and Dark modes, with the system preference as
-      the default for users who have not made a selection
+      the default for users who have not made a selection, for the app shell
+      and first screen (header, sidebar, buttons, cards, status, login)
+      ([rootguard-webapp#54](https://github.com/foxly-it/rootguard-webapp/pull/54))
+- [ ] Extend the same token migration to the remaining page-specific
+      stylesheets (Setup, Stack Center, Dashboard, AdGuard, Unbound settings);
+      these currently keep their previous dark-only appearance under both
+      themes
 - [ ] Move the sidebar collapse control to its bottom edge, default new desktop
       sessions to the collapsed icon view, and preserve an existing explicit
       local preference
