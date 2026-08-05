@@ -1,0 +1,131 @@
+name: Build & Publish rootguard-unbound
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional RootGuard release tag for this image
+        required: false
+        type: string
+  schedule:
+    - cron: "0 3 * * *"   # Daily reproducibility and upstream-input check
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build validation image
+        run: docker build -t rootguard-unbound:test .
+
+      - name: Validate Unbound configuration
+        run: >-
+          docker run --rm
+          rootguard-unbound:test unbound-checkconf /etc/unbound/unbound.conf
+
+      - name: Verify stable non-root identity
+        run: |
+          test "$(docker run --rm --entrypoint id rootguard-unbound:test -u unbound)" = "100"
+          test "$(docker run --rm --entrypoint id rootguard-unbound:test -g unbound)" = "101"
+          test "$(docker image inspect rootguard-unbound:test --format '{{.Config.User}}')" = "unbound"
+
+      - name: Verify existing trust-anchor volume compatibility
+        run: |
+          docker volume create rootguard-unbound-upgrade-test
+          docker run --rm \
+            --user 0:0 \
+            --volume rootguard-unbound-upgrade-test:/var/lib/unbound \
+            --entrypoint /bin/sh \
+            rootguard-unbound:test \
+            -c 'cp /usr/share/dns/root.key /var/lib/unbound/root.key && chown -R 100:101 /var/lib/unbound'
+          docker run --rm \
+            --user unbound \
+            --volume rootguard-unbound-upgrade-test:/var/lib/unbound \
+            --entrypoint /bin/sh \
+            rootguard-unbound:test \
+            -c 'test -w /var/lib/unbound/root.key && touch /var/lib/unbound/root.key.compat'
+
+      - name: Start resolver smoke-test container
+        run: docker run --rm --detach --name rootguard-unbound-ci rootguard-unbound:test
+
+      - name: Verify recursive DNS and DNSSEC
+        run: |
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound-ci)" = "healthy"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-ci)" = "healthy"
+          valid="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 example.com A +dnssec +time=3 +tries=1)"
+          grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
+          broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=3 +tries=1)"
+          grep -q 'status: SERVFAIL' <<<"$broken"
+          docker exec rootguard-unbound-ci unbound-control status
+          docker exec rootguard-unbound-ci unbound-control verbosity 2
+          test "$(docker exec rootguard-unbound-ci unbound-control status | awk '/^verbosity:/ {print $2}')" = "2"
+          docker exec rootguard-unbound-ci unbound-control verbosity 0
+          test "$(docker exec rootguard-unbound-ci unbound-control status | awk '/^verbosity:/ {print $2}')" = "0"
+          test -z "$(docker image inspect rootguard-unbound:test --format '{{json .Config.ExposedPorts}}' | grep 8953 || true)"
+
+      - name: Stop resolver smoke-test container
+        if: always()
+        run: |
+          docker stop rootguard-unbound-ci || true
+          docker volume rm rootguard-unbound-upgrade-test || true
+
+      - name: Verify secure Unbound version
+        run: |
+          VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:test -V 2>&1 | awk '/^Version / {print $2; exit}')"
+          test "$VERSION" = "1.25.2"
+          test "$(docker image inspect rootguard-unbound:test --format '{{index .Config.Labels "io.rootguard.unbound.source.sha256"}}')" = "0d92275c703d5f5f8baba3dab22117dd8c29b495588a5c229768ed6581566600"
+          test "$(docker image inspect rootguard-unbound:test --format '{{index .Config.Labels "io.rootguard.base.digest"}}')" = "sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd"
+          echo "Validated upstream Unbound: $VERSION"
+
+      - name: Extract installed Unbound version
+        id: version
+        run: |
+          VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:test -V 2>&1 | awk '/^Version / {print $2; exit}')"
+          MAJORMINOR="$(echo "$VERSION" | cut -d'.' -f1,2)"
+          echo "Detected upstream version: $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "majorminor=$MAJORMINOR" >> "$GITHUB_OUTPUT"
+
+      # 🏗 Build & Push Multi-Arch Image
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64,linux/arm64
+          provenance: mode=max
+          sbom: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/rootguard-unbound:latest
+            ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ steps.version.outputs.majorminor }}
+            ${{ inputs.release_tag != '' && format('ghcr.io/{0}/rootguard-unbound:{1}', github.repository_owner, inputs.release_tag) || '' }}
