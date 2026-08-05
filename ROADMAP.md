@@ -164,12 +164,13 @@ operable.
       retain direct Docs and GitHub actions on desktop and consolidate utility
       actions into the menu on narrow viewports
       ([rootguard-webapp#62](https://github.com/foxly-it/rootguard-webapp/pull/62))
-- [ ] Add a global, local-only search covering pages, Unbound tabs, all guided
+- [x] Add a global, local-only search covering pages, Unbound tabs, all guided
       settings, configuration views, diagnostics, history, and important
-      actions in both supported languages, including technical directive names
-- [ ] Open and focus search from its visible header control, the `S` key, and
-      `Ctrl`/`Cmd` + `K`; ignore shortcuts while typing and support complete
+      actions in both supported languages, including technical directive names.
+      Opens and focuses from its visible header control, the `S` key, and
+      `Ctrl`/`Cmd` + `K`; ignores shortcuts while typing and supports complete
       keyboard navigation, `Escape`, focus restoration, and reduced motion
+      ([rootguard-webapp#64](https://github.com/foxly-it/rootguard-webapp/pull/64))
 - [ ] Navigate search results to the correct page and tab, reveal the relevant
       section, and place focus at the destination without changing a setting
       directly from the result list
