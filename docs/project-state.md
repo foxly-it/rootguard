@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-02
+Last updated: 2026-08-05
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -335,6 +335,10 @@ Trustworthy Stack Center and production visibility:
   DNSSEC rejection, then removes only resources created by the test. Docker
   Desktop `arm64` and both native Linux jobs passed on 2026-07-28; the Linux
   evidence is Actions run `30353823582`.
+- fixed Dashboard service KPI: the active/total count now derives from the
+  live five-service allowlist response instead of a hardcoded value, so a
+  fully healthy stack shows `5 / 5` rather than a stale `X / 2`
+  ([rootguard-webapp#50](https://github.com/foxly-it/rootguard-webapp/pull/50)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
