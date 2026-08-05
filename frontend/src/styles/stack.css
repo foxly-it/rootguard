@@ -19,18 +19,6 @@
   overflow: hidden;
 }
 
-.stack-hero::after {
-  position: absolute;
-  top: -145px;
-  right: -90px;
-  width: 350px;
-  height: 350px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  content: "";
-  animation: rg-soft-glow 5s ease-in-out infinite;
-}
-
 .stack-hero > * {
   position: relative;
   z-index: 1;

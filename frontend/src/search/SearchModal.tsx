@@ -128,6 +128,7 @@ export default function SearchModal() {
       >
         <Search aria-hidden="true" />
         <span>{t("search.trigger")}</span>
+        <kbd className="rg-search-kbd" aria-hidden="true">S</kbd>
       </button>
 
       {open && createPortal((

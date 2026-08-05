@@ -14,17 +14,6 @@
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.22);
 }
 
-.unbound-heading::after {
-  position: absolute;
-  top: -125px;
-  right: -72px;
-  width: 330px;
-  height: 330px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  content: "";
-}
-
 .unbound-heading > * {
   position: relative;
   z-index: 1;

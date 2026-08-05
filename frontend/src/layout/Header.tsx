@@ -83,13 +83,13 @@ export default function Header() {
          ===================================================== */}
       <div className="rg-header-right">
 
-        <SearchModal />
-
         {version && (
           <span className="rg-version">
             {formatVersion(version)}
           </span>
         )}
+
+        <SearchModal />
 
         <a
           href="https://github.com/foxly-it/rootguard-webapp"

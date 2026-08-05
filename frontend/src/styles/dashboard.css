@@ -20,17 +20,6 @@
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.24);
 }
 
-.overview-hero::after {
-  position: absolute;
-  right: -80px;
-  bottom: -140px;
-  width: 400px;
-  height: 400px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  content: "";
-}
-
 .overview-eyebrow,
 .overview-panel-heading span {
   color: var(--focus-ring);

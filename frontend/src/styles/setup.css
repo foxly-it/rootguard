@@ -22,17 +22,6 @@
   animation: rg-page-enter 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-.setup-hero::before {
-  position: absolute;
-  top: -150px;
-  right: -110px;
-  width: 420px;
-  height: 420px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  content: "";
-}
-
 .setup-heading {
   position: relative;
   z-index: 1;
