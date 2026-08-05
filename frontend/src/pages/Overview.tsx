@@ -129,7 +129,7 @@ export default function Overview() {
 
       <section className="overview-kpis">
         <KpiCard icon={<Network />} label={t("overview.endpoint")} value={bindAddress} note={t("overview.endpointNote")} />
-        <KpiCard icon={<Server />} label={t("overview.services")} value={t("overview.servicesValue", { count: runningServices })} note={t("overview.servicesNote")} good={runningServices === 2} />
+        <KpiCard icon={<Server />} label={t("overview.services")} value={t("overview.servicesValue", { count: runningServices, total: services.length })} note={t("overview.servicesNote")} good={services.length > 0 && runningServices === services.length} />
         <KpiCard icon={<ShieldCheck />} label="DNSSEC" value={dashboard?.dns.dnssec ? t("overview.validationActive") : t("overview.unavailable")} note={t("overview.dnssecNote")} good={dashboard?.dns.dnssec === true} />
         <KpiCard icon={<Filter />} label={t("overview.filterChain")} value={adGuard?.upstream_ready ? t("overview.connected") : t("overview.checkRequired")} note={t("overview.noFallback")} good={adGuard?.upstream_ready === true} />
       </section>
