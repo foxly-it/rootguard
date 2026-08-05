@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-08-02
+Last reviewed: 2026-08-05
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -226,6 +226,10 @@ The detailed ownership and directive plan lives in
 
 ### User experience and safety
 
+- [x] Fix the Dashboard service KPI so its active and total counts come from
+      the same allowlisted five-service inventory; a healthy full stack now
+      shows `5 / 5` instead of a stale `5 / 2`
+      ([rootguard-webapp#50](https://github.com/foxly-it/rootguard-webapp/pull/50))
 - [ ] Shared guided workflow: draft → explanation → preview → validate → activate
 - [ ] Conflict detection across zones, forwarding, access rules, and expert text
 - [ ] Import/export of the complete logical resolver configuration
