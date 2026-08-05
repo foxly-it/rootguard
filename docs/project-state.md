@@ -344,13 +344,14 @@ Trustworthy Stack Center and production visibility:
   header, sidebar, buttons, cards, status indicators, and login. Fixed 8
   previously-referenced-but-undefined CSS custom properties and a dead
   duplicate `.sidebar` rule along the way. Every light-theme text/background
-  pair is WCAG AA contrast-verified
-  ([rootguard-webapp#54](https://github.com/foxly-it/rootguard-webapp/pull/54)).
-  The Dashboard page is also migrated
-  ([rootguard-webapp#56](https://github.com/foxly-it/rootguard-webapp/pull/56)).
-  Setup, Stack Center, AdGuard, and Unbound settings are not yet migrated and
-  intentionally keep their dark-only appearance under both themes until a
-  follow-up pass.
+  pair is WCAG AA contrast-verified. Dashboard, Setup, Stack Center,
+  AdGuard, and the Unbound settings pages are also migrated
+  ([rootguard-webapp#54](https://github.com/foxly-it/rootguard-webapp/pull/54),
+  [#56](https://github.com/foxly-it/rootguard-webapp/pull/56),
+  [#58](https://github.com/foxly-it/rootguard-webapp/pull/58)). Code/config
+  viewers (the Unbound expert editor, live-config viewer, log and
+  diagnostic panels) intentionally stay dark under both themes, like a
+  code block. The theme-tokens roadmap item is now fully delivered.
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
