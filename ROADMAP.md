@@ -308,8 +308,8 @@ coherent appliance lifecycle around it.
 Goal: an operator can understand failures and recover the appliance without
 manual Docker forensics.
 
-- [ ] Bounded and redacted logs for every managed component
-- [ ] Real component versions, image digests, uptime, and health reasons
+- [x] Bounded and redacted logs for every managed component
+- [x] Real component versions, image digests, uptime, and health reasons
 - [x] Persistent, bounded update and rollback history for data and control plane
 - [ ] Configurable backup retention with storage-usage visibility
 - [x] Safe automatic post-update cleanup:
@@ -341,14 +341,14 @@ a trusted network.
 - [ ] Built-in HTTPS or a supported reverse-proxy deployment with secure defaults
 - [ ] Secure-cookie enforcement when HTTPS is active
 - [ ] Session inventory and session revocation
-- [ ] Recovery path for lost administrator credentials
+- [x] Recovery path for lost administrator credentials
 - [ ] Rate limits and audit events for authentication and destructive actions
 - [ ] Threat model covering Docker socket holders, browser, internal networks,
       update supply chain, backups, and the AdGuard gateway
 - [ ] Dependency, container, secret, and static-analysis scans in CI
 - [ ] Keyboard and screen-reader audit of every WebGUI workflow
 - [ ] WCAG 2.2 AA contrast, focus, labels, errors, and reduced-motion review
-- [ ] Security policy and private vulnerability-reporting instructions
+- [x] Security policy and private vulnerability-reporting instructions
 
 Later: multiple roles and external identity providers unless real 1.0 demand
 requires them.

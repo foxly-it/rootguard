@@ -394,6 +394,24 @@ Trustworthy Stack Center and production visibility:
   scrollbar); tooltips now render via a `document.body` portal instead of
   a clipped CSS `::after`
   ([rootguard-webapp#70](https://github.com/foxly-it/rootguard-webapp/pull/70)).
+- roadmap audit: four already-shipped items were unchecked because they
+  predate this file's current level of detail. Re-verified directly
+  against code/config rather than trusting the earlier prose: bounded/
+  redacted logs (`rootguard-core/internal/stack/logs.go` - 100 lines/30
+  minutes/64 KiB, common-credential redaction, all five allowlisted
+  services); real component versions/digests/uptime/health (Stack Center
+  runtime cards - version, image ID, build revision, start time, restart
+  count, provenance, per service); admin credential recovery
+  (`rootguard-webapp` `/api/auth/recovery`, PBKDF2-hashed token compare);
+  and the security policy (`SECURITY.md` - GitHub Private Vulnerability
+  Reporting link, report contents, supported-versions policy). Left
+  unchecked as ambiguous rather than guessing: "shared guided workflow"
+  (the pattern repeats per guided area, not confirmed as one reusable
+  component), "show AdGuard state together" (the information exists but
+  spread across Dashboard/AdGuard page/Stack Center, not one place), and
+  "cross-service diagnostics Client→AdGuard→Unbound→DNSSEC" (Dashboard's
+  Data Flow card shows this exact chain, but as status display rather
+  than diagnostics).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
