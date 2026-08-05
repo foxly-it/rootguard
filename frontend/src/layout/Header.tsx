@@ -23,6 +23,7 @@ import GithubIcon from "../components/icons/GithubIcon";
 import DocsIcon from "../components/icons/DocsIcon";
 import { useI18n } from "../i18n";
 import UserMenu from "./UserMenu";
+import SearchModal from "../search/SearchModal";
 
 interface VersionData {
   version: string;
@@ -81,6 +82,8 @@ export default function Header() {
           Right: Version + Utility Links
          ===================================================== */}
       <div className="rg-header-right">
+
+        <SearchModal />
 
         {version && (
           <span className="rg-version">
