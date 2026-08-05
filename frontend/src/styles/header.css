@@ -64,9 +64,12 @@
    Utility bar (right side)
    One shared visual language for every control: search
    (once added by the global-search work), documentation,
-   GitHub, language, theme, and sign-out. Same height,
+   GitHub, and the account menu trigger. Same height,
    border, radius, spacing, icon size, hover and focus
    treatment, so none of them reads as a stray element.
+   Language, appearance, and sign-out live inside the
+   account menu; GitHub/Docs stay direct on desktop and
+   fold into the menu on narrow viewports.
 ----------------------------------------------------- */
 
 .rg-header-right {
@@ -83,10 +86,8 @@
   font-variant-numeric: tabular-nums;
 }
 
-.rg-language,
 .rg-link,
-.rg-logout,
-.rg-theme-toggle {
+.rg-user-trigger {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -106,77 +107,184 @@
   transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
-.rg-language svg,
 .rg-link svg,
-.rg-logout svg,
-.rg-theme-toggle svg {
+.rg-user-trigger svg {
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
 }
 
-.rg-language:hover,
 .rg-link:hover,
-.rg-theme-toggle:hover {
+.rg-user-trigger:hover {
   border-color: var(--accent-border);
   background: var(--accent-soft);
   color: var(--text);
 }
 
-.rg-logout:hover {
-  color: var(--danger);
-  border-color: var(--danger-soft);
-  background: var(--danger-soft);
-}
-
 .rg-brand:focus-visible,
 .rg-link:focus-visible,
-.rg-logout:focus-visible,
-.rg-theme-toggle:focus-visible,
-.rg-language select:focus-visible {
+.rg-user-trigger:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
-.rg-theme-toggle {
-  width: 36px;
-  padding: 0;
-  justify-content: center;
-}
+/* -----------------------------------------------------
+   Account menu
+----------------------------------------------------- */
 
-.rg-language {
+.rg-user-menu {
   position: relative;
-  padding-right: 30px;
 }
 
-.rg-language > span {
-  white-space: nowrap;
+.rg-user-trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
-.rg-language select {
+.rg-user-chevron {
+  transition: transform 0.15s ease;
+}
+
+.rg-user-trigger[aria-expanded="true"] .rg-user-chevron {
+  transform: rotate(180deg);
+}
+
+.rg-user-panel {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  border: 0;
-  border-radius: inherit;
-  outline: none;
-  color: transparent;
-  background: transparent;
-  appearance: none;
+  z-index: 60;
+  top: calc(100% + 8px);
+  right: 0;
+  display: grid;
+  width: 240px;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+}
+
+.rg-user-panel-section {
+  display: grid;
+  gap: 7px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.rg-user-panel-label {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.rg-user-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.rg-user-theme-option {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 6px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.68rem;
   cursor: pointer;
 }
 
-.rg-language::after {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  width: 6px;
-  height: 6px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  content: "";
-  pointer-events: none;
-  transform: translateY(-70%) rotate(45deg);
+.rg-user-theme-option svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rg-user-theme-option:hover {
+  border-color: var(--accent-border);
+  color: var(--text);
+}
+
+.rg-user-theme-option[aria-pressed="true"] {
+  border-color: var(--focus-ring);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.rg-user-theme-option:focus-visible,
+.rg-user-panel-link:focus-visible,
+.rg-user-panel-signout:focus-visible,
+.rg-user-language select:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.rg-user-language select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-soft);
+  font: inherit;
+  cursor: pointer;
+}
+
+.rg-user-panel-mobile-links {
+  display: none;
+}
+
+.rg-user-panel-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 6px;
+  border-radius: 7px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.78rem;
+}
+
+.rg-user-panel-link:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.rg-user-panel-link svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rg-user-panel-signout {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 6px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--danger);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rg-user-panel-signout:hover {
+  background: var(--danger-soft);
+}
+
+.rg-user-panel-signout svg {
+  width: 16px;
+  height: 16px;
 }
 
 @media (max-width: 760px) {
@@ -214,23 +322,31 @@
   }
 
   .rg-version,
-  .rg-link span,
-  .rg-language span,
-  .rg-logout span {
+  .rg-link-desktop-only {
     display: none;
   }
 
-  .rg-link,
-  .rg-logout {
+  .rg-user-trigger span:not(.rg-user-chevron) {
+    display: none;
+  }
+
+  .rg-user-trigger {
     width: 36px;
     padding: 0;
     justify-content: center;
   }
 
-  .rg-language {
-    width: 36px;
-    padding: 0;
-    justify-content: center;
+  .rg-user-chevron {
+    display: none;
+  }
+
+  .rg-user-panel {
+    width: 220px;
+  }
+
+  .rg-user-panel-mobile-links {
+    display: grid;
+    gap: 2px;
   }
 }
 

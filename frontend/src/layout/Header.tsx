@@ -22,12 +22,7 @@ import logo from "../assets/rootguard-icon.svg";
 import GithubIcon from "../components/icons/GithubIcon";
 import DocsIcon from "../components/icons/DocsIcon";
 import { useI18n } from "../i18n";
-import { LogOut, Monitor, Sun, Moon, Languages } from "lucide-react";
-import { useAuth } from "../auth";
-import { useTheme, type ThemeMode } from "../theme";
-
-const themeOrder: ThemeMode[] = ["system", "light", "dark"];
-const themeIcon: Record<ThemeMode, typeof Monitor> = { system: Monitor, light: Sun, dark: Moon };
+import UserMenu from "./UserMenu";
 
 interface VersionData {
   version: string;
@@ -36,9 +31,7 @@ interface VersionData {
 
 export default function Header() {
   const [version, setVersion] = useState<VersionData | null>(null);
-  const { locale, locales, setLocale, t } = useI18n();
-  const { mode, setMode } = useTheme();
-  const { username, logout } = useAuth();
+  const { t } = useI18n();
   const location = useLocation();
   const pageName = pageTitle(location.pathname, t);
 
@@ -95,36 +88,11 @@ export default function Header() {
           </span>
         )}
 
-        <label className="rg-language">
-          <Languages aria-hidden="true" />
-          <span>{t("language.label")}</span>
-          <select value={locale} onChange={(event) => setLocale(event.target.value)} aria-label={t("language.label")}>
-            {locales.map((item) => <option value={item.code} key={item.code}>{item.label}</option>)}
-          </select>
-        </label>
-
-        {/* Temporary header placement; the WebGUI navigation/appearance
-            slice moves this into a consolidated user menu. */}
-        <button
-          className="rg-theme-toggle"
-          type="button"
-          onClick={() => setMode(themeOrder[(themeOrder.indexOf(mode) + 1) % themeOrder.length])}
-          title={t("theme.toggle", { mode: t(`theme.${mode}`) })}
-          aria-label={t("theme.toggle", { mode: t(`theme.${mode}`) })}
-        >
-          {(() => { const Icon = themeIcon[mode]; return <Icon />; })()}
-        </button>
-
-        <button className="rg-logout" type="button" onClick={() => void logout()} title={t("login.signOut")}>
-          <LogOut />
-          <span>{username}</span>
-        </button>
-
         <a
           href="https://github.com/foxly-it/rootguard-webapp"
           target="_blank"
           rel="noreferrer"
-          className="rg-link"
+          className="rg-link rg-link-desktop-only"
           aria-label={t("header.github")}
         >
           <GithubIcon />
@@ -135,13 +103,14 @@ export default function Header() {
           href="https://rootguard.foxly.de/docs.html"
           target="_blank"
           rel="noreferrer"
-          className="rg-link"
+          className="rg-link rg-link-desktop-only"
           aria-label={t("header.docs")}
         >
           <DocsIcon />
           <span>Docs</span>
         </a>
 
+        <UserMenu />
       </div>
     </header>
   );
