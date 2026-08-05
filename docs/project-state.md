@@ -352,6 +352,13 @@ Trustworthy Stack Center and production visibility:
   viewers (the Unbound expert editor, live-config viewer, log and
   diagnostic panels) intentionally stay dark under both themes, like a
   code block. The theme-tokens roadmap item is now fully delivered.
+- header reworked as a coherent utility bar: language, theme, sign-out,
+  GitHub, and Docs now share one visual language (height, border, radius,
+  icon size, hover, focus-visible), including a fix for GithubIcon/DocsIcon
+  rendering unconstrained at their raw 22px SVG size
+  ([rootguard-webapp#60](https://github.com/foxly-it/rootguard-webapp/pull/60)).
+  Global search (not yet built) will adopt the same control style; the user
+  menu consolidation is the next WebGUI navigation slice item.
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
