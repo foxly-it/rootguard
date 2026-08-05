@@ -242,6 +242,11 @@ The detailed ownership and directive plan lives in
       shows `5 / 5` instead of a stale `5 / 2`
       ([rootguard-webapp#50](https://github.com/foxly-it/rootguard-webapp/pull/50))
 - [ ] Shared guided workflow: draft → explanation → preview → validate → activate
+- [ ] Add a fullscreen mode to the expert configuration editor, and show the
+      immutable base configuration's already-active directives inline
+      (greyed out, read-only) instead of only in a separate popup, so expert
+      users get a complete picture of the effective configuration without
+      leaving the editor
 - [ ] Conflict detection across zones, forwarding, access rules, and expert text
 - [ ] Import/export of the complete logical resolver configuration
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
