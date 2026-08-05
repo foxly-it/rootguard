@@ -22,7 +22,7 @@ import logo from "../assets/rootguard-icon.svg";
 import GithubIcon from "../components/icons/GithubIcon";
 import DocsIcon from "../components/icons/DocsIcon";
 import { useI18n } from "../i18n";
-import { LogOut, Monitor, Sun, Moon } from "lucide-react";
+import { LogOut, Monitor, Sun, Moon, Languages } from "lucide-react";
 import { useAuth } from "../auth";
 import { useTheme, type ThemeMode } from "../theme";
 
@@ -96,6 +96,7 @@ export default function Header() {
         )}
 
         <label className="rg-language">
+          <Languages aria-hidden="true" />
           <span>{t("language.label")}</span>
           <select value={locale} onChange={(event) => setLocale(event.target.value)} aria-label={t("language.label")}>
             {locales.map((item) => <option value={item.code} key={item.code}>{item.label}</option>)}
