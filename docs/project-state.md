@@ -421,6 +421,17 @@ Trustworthy Stack Center and production visibility:
   "cross-service diagnostics Client→AdGuard→Unbound→DNSSEC" (Dashboard's
   Data Flow card shows this exact chain, but as status display rather
   than diagnostics).
+- Unbound expert editor: added a fullscreen mode and an inline,
+  collapsed-by-default disclosure showing the immutable base
+  configuration's already-active directives, so experts no longer need a
+  separate popup to cross-reference them while writing overrides.
+  Fullscreen renders through a `document.body` portal rather than a plain
+  CSS toggle - the parent `.unbound-page` carries a permanent
+  `animation: ... both` that leaves a non-`none` transform applied after
+  the entrance animation ends, which turns it into a containing block
+  that would otherwise trap a `position:fixed` panel inside the page
+  instead of the viewport
+  ([rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
