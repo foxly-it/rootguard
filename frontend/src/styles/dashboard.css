@@ -17,7 +17,7 @@
   background:
     radial-gradient(circle at 87% 24%, var(--success-soft), transparent 34%),
     var(--surface);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 28px 80px rgb(var(--shadow-ink) / calc(0.24 * var(--shadow-scale)));
 }
 
 .overview-eyebrow,

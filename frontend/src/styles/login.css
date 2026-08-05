@@ -226,7 +226,7 @@
   border: 1px solid var(--border);
   border-radius: 23px;
   background: var(--surface);
-  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 34px 90px rgb(var(--shadow-ink) / calc(0.34 * var(--shadow-scale)));
   animation: login-enter-card 0.65s 0.08s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 

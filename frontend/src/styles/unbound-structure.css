@@ -79,7 +79,7 @@
   border-color: var(--success-soft);
   color: var(--text);
   background: var(--success-soft);
-  box-shadow: 0 7px 24px rgba(0, 0, 0, 0.13);
+  box-shadow: 0 7px 24px rgb(var(--shadow-ink) / calc(0.13 * var(--shadow-scale)));
 }
 
 .unbound-tabs button:focus-visible,

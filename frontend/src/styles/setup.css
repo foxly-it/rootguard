@@ -18,7 +18,7 @@
     radial-gradient(circle at 86% 18%, var(--accent-soft), transparent 32%),
     radial-gradient(circle at 67% 100%, var(--success-soft), transparent 35%),
     var(--surface);
-  box-shadow: 0 30px 85px rgba(0, 0, 0, 0.23);
+  box-shadow: 0 30px 85px rgb(var(--shadow-ink) / calc(0.23 * var(--shadow-scale)));
   animation: rg-page-enter 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
@@ -286,7 +286,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 19px;
   background: var(--surface);
-  box-shadow: 0 20px 58px rgba(0, 0, 0, 0.16);
+  box-shadow: 0 20px 58px rgb(var(--shadow-ink) / calc(0.16 * var(--shadow-scale)));
   animation: rg-card-enter 0.48s 0.08s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 

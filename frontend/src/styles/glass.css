@@ -21,7 +21,7 @@
   border: 1px solid var(--border);
 
   box-shadow:
-    0 40px 120px rgba(0,0,0,0.6),
+    0 40px 120px rgb(var(--shadow-ink) / calc(0.6 * var(--shadow-scale))),
     inset 0 1px 0 var(--border);
 
   overflow: hidden;

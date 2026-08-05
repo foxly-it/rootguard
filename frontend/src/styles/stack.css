@@ -15,7 +15,7 @@
   background:
     radial-gradient(circle at 86% 20%, var(--info-soft), transparent 31%),
     var(--surface);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 28px 80px rgb(var(--shadow-ink) / calc(0.22 * var(--shadow-scale)));
   overflow: hidden;
 }
 
@@ -175,7 +175,7 @@
   background:
     radial-gradient(circle at 100% 0, var(--accent-soft), transparent 33%),
     var(--surface);
-  box-shadow: 0 20px 55px rgba(0, 0, 0, 0.17);
+  box-shadow: 0 20px 55px rgb(var(--shadow-ink) / calc(0.17 * var(--shadow-scale)));
   animation: rg-card-enter 0.42s 0.08s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
@@ -365,7 +365,7 @@
 .stack-service-card:hover {
   transform: translateY(-3px);
   border-color: var(--accent-border);
-  box-shadow: 0 22px 55px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 22px 55px rgb(var(--shadow-ink) / calc(0.18 * var(--shadow-scale)));
 }
 
 .stack-card-heading {

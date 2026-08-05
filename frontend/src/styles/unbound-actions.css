@@ -1,6 +1,6 @@
 .unbound-action{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px;min-height:46px;box-sizing:border-box;padding:0 16px!important;border-radius:10px!important;font:inherit;font-size:.82rem;font-weight:750;line-height:1!important;white-space:nowrap}
 .unbound-action svg{display:block;flex:0 0 auto}
-.unbound-action.primary{border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--text);box-shadow:0 8px 24px rgba(0,0,0,.16)}
+.unbound-action.primary{border:1px solid var(--accent-border);background:var(--accent-soft);color:var(--text);box-shadow:0 8px 24px rgb(var(--shadow-ink) / calc(.16 * var(--shadow-scale)))}
 .unbound-action.primary:hover:not(:disabled){border-color:var(--focus-ring);background:var(--accent-soft)}
 .icon-action{display:grid!important;place-items:center!important;width:38px;height:38px;padding:0!important;border:1px solid var(--border);border-radius:10px;background:var(--surface-soft);color:var(--text-muted)}
 .icon-action:hover:not(:disabled){border-color:var(--accent-border);color:var(--text)}

@@ -36,6 +36,14 @@
   --info: #93c5fd;
   --info-soft: rgba(147, 197, 253, 0.12);
 
+  /* Elevation shadow ink. Component stylesheets build their box-shadow
+     as `rgb(var(--shadow-ink) / calc(<alpha> * var(--shadow-scale)))` so
+     each keeps its own hand-tuned offset/blur/alpha while the color and
+     intensity stay theme-aware. Pure black reads as a soft glow against
+     these dark surfaces, so dark mode keeps full strength. */
+  --shadow-ink: 0 0 0;
+  --shadow-scale: 1;
+
   /* Layout */
   --rg-content-max: 1100px;
 
@@ -116,6 +124,12 @@
   --category-violet: #6d4fd1;
   --category-violet-soft: rgba(109, 79, 209, 0.1);
   --category-violet-border: rgba(109, 79, 209, 0.3);
+
+  /* Same alpha values now read as a heavy grey smear on a light surface
+     instead of a soft glow, so light mode swaps to a cooler ink (matches
+     --border's tint) at roughly 40% of the dark-mode intensity. */
+  --shadow-ink: 15 23 42;
+  --shadow-scale: 0.4;
 }
 
 /* -----------------------------------------------------
@@ -445,7 +459,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--bg-header);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 12px 30px rgb(var(--shadow-ink) / calc(0.32 * var(--shadow-scale)));
   color: var(--text);
   font-size: 0.78rem;
   font-weight: 650;

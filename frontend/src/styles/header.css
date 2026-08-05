@@ -162,7 +162,7 @@
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
-  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 20px 45px rgb(var(--shadow-ink) / calc(0.22 * var(--shadow-scale)));
 }
 
 .rg-user-panel-section {

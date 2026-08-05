@@ -46,7 +46,7 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 30px 80px rgb(var(--shadow-ink) / calc(0.35 * var(--shadow-scale)));
   animation: rg-search-enter 0.15s ease both;
 }
 
