@@ -1,0 +1,469 @@
+/* =====================================================
+   RootGuard Design System v1
+   Dark-first Enterprise DNS UI
+   ===================================================== */
+
+/* -----------------------------------------------------
+   Color Tokens
+----------------------------------------------------- */
+
+:root {
+
+  /* Semantic tokens - dark (default). Every value here has a matching
+     override in the [data-theme="light"] block below; keep both in sync
+     when adding a token. Values were previously scattered as hardcoded
+     literals across the component stylesheets - see docs in the PR that
+     introduced this block for the consolidation mapping. */
+  --bg: #0b1628;
+  --bg-sidebar: #142338;
+  --bg-header: #0f1c2f;
+  --surface: #1e2c42;
+  --surface-soft: rgba(255, 255, 255, 0.03);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --text: #f3f6fb;
+  --text-muted: #9fb4d4;
+  --accent: #00bcd4;
+  --accent-soft: rgba(0, 188, 212, 0.12);
+  --accent-border: rgba(0, 188, 212, 0.35);
+  --focus-ring: #67e8f9;
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.12);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --info: #93c5fd;
+  --info-soft: rgba(147, 197, 253, 0.12);
+
+  /* Elevation shadow ink. Component stylesheets build their box-shadow
+     as `rgb(var(--shadow-ink) / calc(<alpha> * var(--shadow-scale)))` so
+     each keeps its own hand-tuned offset/blur/alpha while the color and
+     intensity stay theme-aware. Pure black reads as a soft glow against
+     these dark surfaces, so dark mode keeps full strength. */
+  --shadow-ink: 0 0 0;
+  --shadow-scale: 1;
+
+  /* Layout */
+  --rg-content-max: 1100px;
+
+  /* Legacy rg-prefixed aliases: kept so existing var(--rg-*) references
+     stay theme-aware without touching every call site in one pass. */
+  --rg-bg-main: var(--bg);
+  --rg-bg-sidebar: var(--bg-sidebar);
+  --rg-bg-header: var(--bg-header);
+  --rg-card-bg: var(--surface);
+  --rg-card-border: var(--border-subtle);
+  --rg-text-primary: var(--text);
+  --rg-text-secondary: var(--text-muted);
+  --rg-accent: var(--accent);
+  --rg-success: var(--success);
+
+  /* Brand wordmark accent ("Guard" in "RootGuard"); independent of the
+     --success status color even though the dark value happens to match. */
+  --brand-accent: #74d98d;
+
+  /* Solid-fill primary button (inverted: dark text on a bright fill). */
+  --primary-fill: #7dd3fc;
+  --primary-fill-hover: #a5f3fc;
+  --primary-fill-text: #06151f;
+
+  --focus-glow: rgba(103, 232, 249, 0.35);
+
+  /* Sunken input-field background, distinct from --surface-soft (which is
+     a lighter overlay used for raised chrome like toolbars). */
+  --field-bg: rgba(2, 12, 23, 0.57);
+
+  /* Category accent for forwarding/private-DNS panels, distinct from the
+     primary teal --accent. */
+  --category-violet: #a99cff;
+  --category-violet-soft: rgba(145, 119, 255, 0.12);
+  --category-violet-border: rgba(145, 119, 255, 0.28);
+}
+
+/* -----------------------------------------------------
+   Light theme
+   Applied via `document.documentElement.dataset.theme`
+   (see src/theme/). System default resolves to dark; an
+   explicit or system-detected light preference sets
+   [data-theme="light"]. All values verified >=4.5:1 (text)
+   or >=3:1 (large text/UI) against their paired surface.
+----------------------------------------------------- */
+
+:root[data-theme="light"] {
+  --bg: #f4f7fb;
+  --bg-sidebar: #eef2f8;
+  --bg-header: #ffffff;
+  --surface: #ffffff;
+  --surface-soft: rgba(15, 23, 42, 0.03);
+  --border: rgba(15, 23, 42, 0.1);
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --text: #101b2d;
+  --text-muted: #4b5d78;
+  --accent: #0e7490;
+  --accent-soft: rgba(14, 116, 144, 0.12);
+  --accent-border: rgba(14, 116, 144, 0.35);
+  --focus-ring: #0e7490;
+  --success: #15803d;
+  --success-soft: rgba(21, 128, 61, 0.1);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --info: #2563eb;
+  --info-soft: rgba(37, 99, 235, 0.1);
+  --brand-accent: #15803d;
+
+  --primary-fill: #0e7490;
+  --primary-fill-hover: #0c6e86;
+  --primary-fill-text: #ffffff;
+
+  --focus-glow: rgba(14, 116, 144, 0.3);
+  --field-bg: rgba(15, 23, 42, 0.04);
+
+  --category-violet: #6d4fd1;
+  --category-violet-soft: rgba(109, 79, 209, 0.1);
+  --category-violet-border: rgba(109, 79, 209, 0.3);
+
+  /* Same alpha values now read as a heavy grey smear on a light surface
+     instead of a soft glow, so light mode swaps to a cooler ink (matches
+     --border's tint) at roughly 40% of the dark-mode intensity. */
+  --shadow-ink: 15 23 42;
+  --shadow-scale: 0.4;
+}
+
+/* -----------------------------------------------------
+   Base Layout
+----------------------------------------------------- */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--rg-bg-main);
+  color: var(--rg-text-primary);
+  font-family: Inter, system-ui, sans-serif;
+}
+
+/* Header stays put and only .main scrolls, so the sidebar (and its
+   collapse control) never leaves the viewport on long pages. */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.rg-skip-link {
+  /* Fixed bright-on-dark pair, not themed: it must stay maximally
+     conspicuous on first Tab press regardless of the active theme. */
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 1000;
+  transform: translateY(-160%);
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #06131d;
+  background: #67e8f9;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.rg-skip-link:focus {
+  transform: translateY(0);
+}
+
+.nav-item:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.auth-loading {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
+  min-height: 100vh;
+  color: var(--text);
+  background: var(--bg);
+  letter-spacing: -0.02em;
+}
+
+.auth-loading span {
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--border);
+  border-top-color: var(--focus-ring);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+/* -----------------------------------------------------
+   Layout Grid
+----------------------------------------------------- */
+
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.sidebar a {
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.sidebar a:hover {
+  background: var(--border-subtle);
+  color: var(--text);
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 50px 40px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Content wrapper */
+.content-container {
+  width: 100%;
+  max-width: var(--rg-content-max);
+}
+
+/* =====================================================
+   Sidebar Navigation
+   ===================================================== */
+
+.sidebar {
+  width: 240px;
+  flex: 0 0 240px;
+  background: var(--bg-sidebar);
+  padding: 40px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-sizing: border-box;
+  transition: width 0.22s ease, flex-basis 0.22s ease, padding 0.22s ease;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-collapsed .sidebar {
+  width: 76px;
+  flex-basis: 76px;
+  padding-inline: 12px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 42px;
+  box-sizing: border-box;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  padding: 10px 14px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.nav-item-icon {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+}
+
+.nav-item-icon svg,
+.sidebar-toggle svg {
+  width: 19px;
+  height: 19px;
+}
+
+.nav-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  margin-top: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  padding: 9px 13px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.sidebar-toggle:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.sidebar-collapsed .sidebar-toggle {
+  justify-content: center;
+  padding-inline: 10px;
+}
+
+.sidebar-collapsed .sidebar-toggle span,
+.sidebar-collapsed .nav-item-label {
+  display: none;
+}
+
+.sidebar-collapsed .nav-item {
+  justify-content: center;
+  padding-inline: 10px;
+}
+
+.nav-item:hover {
+  background: var(--border-subtle);
+  color: var(--text);
+}
+
+.nav-item.active {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.nav-item.active::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  background: var(--rg-accent);
+  border-radius: 4px;
+}
+
+@media (max-width: 760px) {
+  .layout {
+    width: 100%;
+    flex-direction: column;
+    overflow-x: hidden;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-basis: auto;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    flex-direction: row;
+    gap: 5px;
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    flex: 1;
+    gap: 5px;
+    overflow-x: auto;
+    overflow-y: visible;
+    scrollbar-width: none;
+  }
+
+  .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sidebar-collapsed .sidebar {
+    width: 100%;
+    flex-basis: auto;
+    padding: 9px 12px;
+  }
+
+  .sidebar-toggle {
+    display: none;
+  }
+
+  .sidebar-collapsed .nav-item-label {
+    display: inline;
+  }
+
+  .sidebar-collapsed .nav-item {
+    justify-content: flex-start;
+  }
+
+  .sidebar a,
+  .nav-item {
+    flex: 0 0 auto;
+    padding: 9px 11px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+
+  .nav-item.active::before {
+    top: auto;
+    right: 10px;
+    bottom: -9px;
+    left: 10px;
+    width: auto;
+    height: 2px;
+  }
+
+  .main {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 22px 16px 46px;
+  }
+}
+
+/* Nav item tooltip (collapsed desktop sidebar only). Rendered via a
+   document.body portal and positioned in JS so it is never clipped by
+   .sidebar-nav's overflow (needed for its own internal scroll). */
+.rg-nav-tooltip {
+  position: fixed;
+  z-index: 1000;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-header);
+  box-shadow: 0 12px 30px rgb(var(--shadow-ink) / calc(0.32 * var(--shadow-scale)));
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 650;
+  pointer-events: none;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}

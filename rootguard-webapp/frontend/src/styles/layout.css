@@ -1,0 +1,16 @@
+/* =====================================================
+   File: frontend/src/styles/layout.css
+   Purpose: Premium background + glass base
+   ===================================================== */
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+
+  background:
+    radial-gradient(circle at 20% 20%, var(--success-soft), transparent 40%),
+    radial-gradient(circle at 80% 70%, var(--info-soft), transparent 40%),
+    var(--bg);
+
+  color: var(--text);
+}

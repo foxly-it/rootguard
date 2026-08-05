@@ -1,0 +1,110 @@
+.setting-directive {
+  display: block;
+  width: fit-content;
+  margin-top: 7px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  color: var(--info);
+  background: var(--info-soft);
+  font-size: 11px;
+}
+
+.live-config-panel {
+  margin-top: 22px;
+}
+
+.live-config-panel .panel-heading {
+  align-items: flex-start;
+}
+
+.live-config-panel h2 {
+  margin-bottom: 7px;
+}
+
+.live-config-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  color: var(--success);
+  font-size: 12px;
+}
+
+.live-config-state i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 5px var(--success-soft);
+}
+
+/* Config viewer (label + <pre>) is intentionally always dark, like a code
+   block, independent of the active theme - see content-modal.css. */
+.config-file-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 0;
+  border-radius: 9px 9px 0 0;
+  color: #9fb4d4;
+  background: rgba(7, 15, 26, 0.72);
+  font-size: 12px;
+}
+
+.config-file-label span {
+  color: #f3f6fb;
+  font-weight: 700;
+}
+
+.live-config-panel > pre {
+  min-height: 250px;
+  max-height: 460px;
+  margin: 0;
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 0 0 9px 9px;
+  color: #cbd5e1;
+  background: #07111d;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.live-config-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.live-config-details > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 0 15px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+}
+
+.live-config-details > button:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+@media (max-width: 720px) {
+  .live-config-details {
+    grid-template-columns: 1fr;
+  }
+
+  .config-file-label {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

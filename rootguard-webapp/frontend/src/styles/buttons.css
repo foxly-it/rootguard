@@ -1,0 +1,67 @@
+/* Shared action buttons. Tabs, selectable cards and icon-only controls keep
+   their dedicated component styling. */
+.rg-button {
+  display: inline-flex;
+  min-height: 42px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--surface-soft);
+  box-shadow: none;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.rg-button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.rg-button-primary {
+  border-color: var(--primary-fill);
+  color: var(--primary-fill-text);
+  background: var(--primary-fill);
+}
+
+.rg-button-primary:hover:not(:disabled) {
+  border-color: var(--primary-fill-hover);
+  color: var(--primary-fill-text);
+  background: var(--primary-fill-hover);
+}
+
+.rg-button-secondary {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.rg-button-danger {
+  border-color: var(--danger-soft);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+.rg-button:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.rg-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rg-button svg {
+  flex: 0 0 auto;
+}

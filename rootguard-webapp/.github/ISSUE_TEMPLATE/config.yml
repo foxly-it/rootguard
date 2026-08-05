@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: RootGuard manual
+    url: https://rootguard.foxly.de/docs.html
+    about: Installation, operation, and troubleshooting
+  - name: Report a vulnerability privately
+    url: https://github.com/foxly-it/rootguard-webapp/security/advisories/new
+    about: Do not publish security vulnerabilities as issues

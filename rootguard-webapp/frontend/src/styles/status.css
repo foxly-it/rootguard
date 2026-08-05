@@ -1,0 +1,61 @@
+/* =====================================================
+   Enterprise Status Indicator
+   ===================================================== */
+
+.rg-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+/* ================= Dot ================= */
+
+.rg-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: relative;
+}
+
+/* ================= OK ================= */
+
+.rg-status.ok .rg-status-dot {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success-soft);
+}
+
+.rg-status.ok .rg-status-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--success);
+  opacity: 0.6;
+  animation: pulse 2s infinite;
+}
+
+/* ================= WARNING ================= */
+
+.rg-status.warning .rg-status-dot {
+  background: var(--warning);
+  box-shadow: 0 0 8px var(--warning-soft);
+}
+
+/* ================= ERROR ================= */
+
+.rg-status.error .rg-status-dot {
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger-soft);
+}
+
+/* ================= Pulse Animation ================= */
+
+@keyframes pulse {
+  0%   { transform: scale(1); opacity: 0.6; }
+  70%  { transform: scale(2.5); opacity: 0; }
+  100% { transform: scale(2.5); opacity: 0; }
+}

@@ -1,0 +1,62 @@
+/* =====================================================
+   File: frontend/src/styles/card.css
+   Purpose: Structured Enterprise Cards
+   ===================================================== */
+
+.card {
+  background: var(--surface);
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Subtle top accent */
+.card-accent-healthy {
+  border-top: 3px solid var(--success);
+}
+
+.card-accent-degraded {
+  border-top: 3px solid var(--warning);
+}
+
+.card-accent-down {
+  border-top: 3px solid var(--danger);
+}
+
+/* ================= HEADER ================= */
+
+.card-header {
+  padding: 20px 24px 14px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+/* Divider between header and content */
+.card-divider {
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+/* ================= BODY ================= */
+
+.card-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* ================= FOOTER ================= */
+
+.card-footer {
+  padding: 16px 24px 22px 24px;
+}
