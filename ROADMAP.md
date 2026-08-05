@@ -160,9 +160,10 @@ operable.
       Search itself is added by the global-search items below and will
       inherit the same control style
       ([rootguard-webapp#60](https://github.com/foxly-it/rootguard-webapp/pull/60))
-- [ ] Move language, appearance, and sign-out into an accessible user menu;
+- [x] Move language, appearance, and sign-out into an accessible user menu;
       retain direct Docs and GitHub actions on desktop and consolidate utility
       actions into the menu on narrow viewports
+      ([rootguard-webapp#62](https://github.com/foxly-it/rootguard-webapp/pull/62))
 - [ ] Add a global, local-only search covering pages, Unbound tabs, all guided
       settings, configuration views, diagnostics, history, and important
       actions in both supported languages, including technical directive names
