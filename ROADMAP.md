@@ -278,6 +278,18 @@ Product boundary:
 - [ ] Document backup and restore ownership for AdGuard configuration, work
       data, query history, and filter state
 - [ ] Compatibility tests against every supported AdGuard Home release
+- [ ] Ship a self-hosted, RootGuard-branded blocked-request landing page as a
+      new `rootguard-blockpage` component repository (submodule, same
+      pattern as core/webapp/unbound/updater), AGPL-3.0-or-later like the
+      rest of RootGuard. A fresh design, not a port of the visuals from the
+      existing standalone `foxly-it/adguard-blockpage` project; keep its
+      proven technical shape (static HTML/CSS/JS, auto dark/light, no
+      external dependencies). Configure AdGuard Home's "custom IP for
+      blocked hosts" to it automatically during guided setup. HTTP only - a
+      DNS-level blocking IP cannot present a valid TLS certificate for
+      arbitrary blocked domains, so HTTPS requests show the browser's own
+      certificate-warning interstitial instead of the page; this is AdGuard
+      Home's documented `custom_ip` behaviour, not a RootGuard limitation
 
 Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
 coherent appliance lifecycle around it.
