@@ -382,7 +382,7 @@ export default function Unbound() {
             </ContentModal>
           </section>
         )}
-        <UnboundExpertEditor version={history[0]?.id} onActivated={reload} />
+        <UnboundExpertEditor version={history[0]?.id} baseConfig={liveConfig?.base_config} onActivated={reload} />
         <section className="glass-card history-panel">
           <details className="history-disclosure">
             <summary><span><span className="unbound-eyebrow">ROLLBACK</span><strong>{t("unbound.history")}</strong></span><em>{t("unbound.versions", { count: history.length })}</em></summary>

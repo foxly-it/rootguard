@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type UIEvent } from "react";
+import { createPortal } from "react-dom";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   fetchUnboundCustom,
   fetchUnboundDirectives,
@@ -18,9 +20,10 @@ const templates = [
   { label: "expert.template.hardening", content: "server:\n    hide-identity: yes\n    hide-version: yes\n    harden-glue: yes\n    harden-dnssec-stripped: yes\n    aggressive-nsec: yes\n" },
 ];
 
-export default function UnboundExpertEditor({ version, onActivated }: { version?: string; onActivated: () => Promise<void> }) {
+export default function UnboundExpertEditor({ version, baseConfig, onActivated }: { version?: string; baseConfig?: string; onActivated: () => Promise<void> }) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
   const [active, setActive] = useState("");
   const [draft, setDraft] = useState("");
   const [maxBytes, setMaxBytes] = useState(65536);
@@ -46,6 +49,19 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
   useEffect(() => {
     load().catch((err: unknown) => setError(errorMessage(err, t("expert.loadError"))));
   }, [load, t, version]);
+
+  useEffect(() => {
+    if (!open) setFullscreen(false);
+  }, [open]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    function onKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setFullscreen(false);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [fullscreen]);
 
   const prefix = useMemo(() => directivePrefix(draft, cursor), [draft, cursor]);
   const suggestions = useMemo(() => {
@@ -133,11 +149,30 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
     setMessage("");
   }
 
-  return (
-    <section className="glass-card expert-panel">
+  // Fullscreen escapes via a portal: .unbound-page carries a permanent
+  // `animation: ... both` that freezes a non-none transform on it after
+  // the entrance animation ends, which makes it a containing block for
+  // position:fixed descendants - without the portal the "fullscreen"
+  // panel would size itself against that page div instead of the
+  // viewport (see ContentModal/SearchModal for the same escape pattern).
+  const panel = (
+    <section className={`glass-card expert-panel${fullscreen ? " expert-panel-fullscreen" : ""}`}>
       <div className="panel-heading expert-heading">
         <div><p className="unbound-eyebrow">{t("expert.eyebrow")}</p><h2>{t("expert.title")}</h2></div>
-        <button className="rg-button rg-button-secondary secondary-action" type="button" onClick={() => setOpen(!open)}>{open ? t("expert.close") : t("expert.open")}</button>
+        <div className="expert-heading-actions">
+          {open && (
+            <button
+              className="rg-button rg-button-secondary secondary-action"
+              type="button"
+              onClick={() => setFullscreen(!fullscreen)}
+              aria-pressed={fullscreen}
+            >
+              {fullscreen ? <Minimize2 size={15} aria-hidden="true" /> : <Maximize2 size={15} aria-hidden="true" />}
+              {fullscreen ? t("expert.exitFullscreen") : t("expert.fullscreen")}
+            </button>
+          )}
+          <button className="rg-button rg-button-secondary secondary-action" type="button" onClick={() => setOpen(!open)}>{open ? t("expert.close") : t("expert.open")}</button>
+        </div>
       </div>
       <p className="muted-copy">{t("expert.intro")}</p>
       {!open && <div className="expert-summary"><span>{active ? t("expert.bytes", { count: new TextEncoder().encode(active).length }) : t("expert.none")}</span><span>{t("expert.safety")}</span></div>}
@@ -145,9 +180,15 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
         <div className="expert-warning"><strong>{t("expert.title")}</strong><span>{t("expert.warning")}</span></div>
         {message && <div className="feedback success">{message}</div>}
         {error && <div className="feedback error">{error}</div>}
+        {baseConfig && (
+          <details className="live-config-disclosure expert-base-config">
+            <summary>{t("expert.baseConfigSummary")}</summary>
+            <pre>{baseConfig}</pre>
+          </details>
+        )}
         <div className="template-row">{templates.map((template) => <button type="button" key={template.label} onClick={() => insertTemplate(template.content)}>{t(template.label)}</button>)}</div>
         <div className="expert-grid">
-          <div>
+          <div className="expert-editor-column">
             <div className="editor-toolbar"><span>90-rootguard-custom.conf</span><span className={bytes > maxBytes ? "limit-exceeded" : ""}>{bytes.toLocaleString(locale)} / {maxBytes.toLocaleString(locale)} Bytes</span></div>
             <div className="code-editor">
               <pre ref={highlightRef} aria-hidden="true">{highlightConfig(draft)}{"\n"}</pre>
@@ -176,6 +217,8 @@ export default function UnboundExpertEditor({ version, onActivated }: { version?
       </>}
     </section>
   );
+
+  return fullscreen ? createPortal(panel, document.body) : panel;
 }
 
 function directivePrefix(content: string, cursor: number) {

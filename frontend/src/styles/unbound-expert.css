@@ -1,5 +1,28 @@
 .expert-panel { box-sizing: border-box; margin-top: 22px; }
 .expert-heading { margin-bottom: 8px; }
+.expert-heading-actions { display: flex; gap: 8px; align-items: center; }
+.expert-base-config { margin: 0 0 18px; }
+.expert-base-config > pre { color: var(--text-muted); opacity: 0.85; }
+
+/* Fullscreen: an in-page overlay (not a portal) - .main has no transform
+   so position:fixed still escapes it. The editor column becomes a flex
+   column so .code-editor can grow to fill the freed-up height instead
+   of staying at its compact default. */
+.expert-panel-fullscreen {
+  position: fixed;
+  inset: 16px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+  padding: 28px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 30px 90px rgb(var(--shadow-ink) / calc(0.4 * var(--shadow-scale)));
+}
+.expert-panel-fullscreen .expert-grid { flex: 1; min-height: 0; }
+.expert-panel-fullscreen .expert-editor-column { display: flex; flex-direction: column; min-height: 0; }
+.expert-panel-fullscreen .code-editor { flex: 1; height: auto; min-height: 260px; }
 .expert-summary { display: flex; justify-content: space-between; gap: 18px; padding: 13px 15px; border-radius: 8px; background: var(--accent-soft); color: var(--text-muted); font-size: 13px; }
 .expert-warning { display: flex; gap: 15px; margin: 18px 0; padding: 14px 16px; border: 1px solid var(--warning-soft); border-radius: 9px; background: var(--warning-soft); }
 .expert-warning strong { color: var(--warning); }
