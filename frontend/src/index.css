@@ -65,6 +65,12 @@
   /* Sunken input-field background, distinct from --surface-soft (which is
      a lighter overlay used for raised chrome like toolbars). */
   --field-bg: rgba(2, 12, 23, 0.57);
+
+  /* Category accent for forwarding/private-DNS panels, distinct from the
+     primary teal --accent. */
+  --category-violet: #a99cff;
+  --category-violet-soft: rgba(145, 119, 255, 0.12);
+  --category-violet-border: rgba(145, 119, 255, 0.28);
 }
 
 /* -----------------------------------------------------
@@ -106,6 +112,10 @@
 
   --focus-glow: rgba(14, 116, 144, 0.3);
   --field-bg: rgba(15, 23, 42, 0.04);
+
+  --category-violet: #6d4fd1;
+  --category-violet-soft: rgba(109, 79, 209, 0.1);
+  --category-violet-border: rgba(109, 79, 209, 0.3);
 }
 
 /* -----------------------------------------------------

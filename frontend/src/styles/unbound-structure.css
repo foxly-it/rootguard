@@ -8,9 +8,9 @@
   gap: 11px;
   min-width: 170px;
   padding: 13px 16px;
-  border: 1px solid rgba(94, 234, 212, 0.2);
+  border: 1px solid var(--success-soft);
   border-radius: 13px;
-  background: rgba(3, 18, 28, 0.38);
+  background: var(--surface-soft);
 }
 
 .unbound-heading-status > i {
@@ -18,8 +18,8 @@
   height: 9px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 0 5px rgba(74, 222, 128, 0.1);
+  background: var(--success);
+  box-shadow: 0 0 0 5px var(--success-soft);
 }
 
 .unbound-heading-status span,
@@ -28,7 +28,7 @@
 }
 
 .unbound-heading-status small {
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   font-size: 0.67rem;
 }
 
@@ -43,9 +43,9 @@
   gap: 7px;
   margin: 0 0 24px;
   padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-subtle);
   border-radius: 15px;
-  background: rgba(7, 20, 34, 0.72);
+  background: var(--surface);
 }
 
 .unbound-tabs button {
@@ -58,7 +58,7 @@
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   font: inherit;
   font-size: 0.82rem;
   font-weight: 700;
@@ -71,14 +71,14 @@
 }
 
 .unbound-tabs button:hover {
-  color: var(--rg-text-primary);
-  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  background: var(--surface-soft);
 }
 
 .unbound-tabs button[aria-selected="true"] {
-  border-color: rgba(94, 234, 212, 0.2);
-  color: #d7fffa;
-  background: linear-gradient(135deg, rgba(20, 184, 166, 0.13), rgba(34, 211, 238, 0.07));
+  border-color: var(--success-soft);
+  color: var(--text);
+  background: var(--success-soft);
   box-shadow: 0 7px 24px rgba(0, 0, 0, 0.13);
 }
 
@@ -89,7 +89,7 @@
 .unbound-page select:focus-visible,
 .unbound-page textarea:focus-visible,
 .unbound-page [role="tabpanel"]:focus-visible {
-  outline: 3px solid #67e8f9;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
 }
 
@@ -111,13 +111,13 @@
   display: grid;
   min-width: 0;
   padding: 19px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-subtle);
   border-radius: 14px;
-  background: linear-gradient(145deg, rgba(18, 34, 54, 0.82), rgba(8, 23, 39, 0.88));
+  background: var(--surface);
 }
 
 .unbound-summary-card > span {
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   font-size: 0.7rem;
   font-weight: 750;
   letter-spacing: 0.06em;
@@ -138,16 +138,16 @@
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #64748b;
+  background: var(--text-muted);
 }
 
 .unbound-summary-card strong i.healthy {
-  background: #4ade80;
+  background: var(--success);
 }
 
 .unbound-summary-card small {
   margin-top: 7px;
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   line-height: 1.4;
 }
 
@@ -170,16 +170,16 @@
   justify-content: space-between;
   gap: 18px;
   padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(9, 17, 29, 0.42);
+  background: var(--surface-soft);
 }
 
 .diagnostic-logging-control small {
   display: block;
   max-width: 720px;
   margin-top: 5px;
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   line-height: 1.45;
 }
 
@@ -211,15 +211,15 @@
 }
 
 .section-introduction > p:not(.unbound-eyebrow) {
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   line-height: 1.6;
 }
 
 .advanced-settings {
   margin: 18px 0 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(4, 15, 27, 0.28);
+  background: var(--surface-soft);
 }
 
 .advanced-settings > summary,
@@ -227,13 +227,13 @@
   display: grid;
   cursor: pointer;
   padding: 15px 17px;
-  color: var(--rg-text-primary);
+  color: var(--text);
   font-weight: 750;
 }
 
 .advanced-settings > summary small {
   margin-top: 4px;
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   font-weight: 400;
 }
 
@@ -251,9 +251,9 @@
 }
 
 .live-config-disclosure > summary {
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-subtle);
   border-radius: 10px;
-  background: rgba(3, 13, 23, 0.32);
+  background: var(--surface-soft);
 }
 
 .live-config-disclosure > pre {
@@ -282,7 +282,7 @@
 }
 
 .history-disclosure > summary em {
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-style: normal;
 }
