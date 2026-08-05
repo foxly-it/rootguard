@@ -375,6 +375,13 @@ Trustworthy Stack Center and production visibility:
   originating tab/section is the next roadmap item, since Unbound's tab
   state isn't currently URL-addressable
   ([rootguard-webapp#64](https://github.com/foxly-it/rootguard-webapp/pull/64)).
+- removed the four decorative bordered-circle pseudo-elements on the
+  Dashboard/Setup/Unbound/Stack hero cards (user-reported: too
+  prominent in light mode, distracting in dark mode) and fixed the
+  search control's header integration - `vdev` no longer splits the
+  Search/GitHub/Docs/account button group, and the search trigger now
+  shows a visible `S` key badge instead of only a hover tooltip
+  ([rootguard-webapp#66](https://github.com/foxly-it/rootguard-webapp/pull/66)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
