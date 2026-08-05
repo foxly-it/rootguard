@@ -11,18 +11,18 @@
 
   background: linear-gradient(
     145deg,
-    rgba(255,255,255,0.08),
-    rgba(255,255,255,0.03)
+    var(--border),
+    var(--surface-soft)
   );
 
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
 
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border);
 
   box-shadow:
     0 40px 120px rgba(0,0,0,0.6),
-    inset 0 1px 0 rgba(255,255,255,0.08);
+    inset 0 1px 0 var(--border);
 
   overflow: hidden;
 }
@@ -44,8 +44,8 @@
 
   background: linear-gradient(
     90deg,
-    #22c55e,
-    #3b82f6
+    var(--success),
+    var(--info)
   );
 
   opacity: 0.9;

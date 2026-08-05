@@ -17,8 +17,8 @@
 }
 
 .status-healthy {
-  background: #22c55e;
-  box-shadow: 0 0 8px #22c55eaa;
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success-soft);
 }
 
 .status-healthy::after {
@@ -27,7 +27,7 @@
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #22c55e;
+  background: var(--success);
   animation: pulse 1.8s infinite;
   opacity: 0.6;
 }

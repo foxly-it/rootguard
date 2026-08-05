@@ -4,9 +4,9 @@
    ===================================================== */
 
 .card {
-  background: #243447;
+  background: var(--surface);
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.04);
+  border: 1px solid var(--border-subtle);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -14,15 +14,15 @@
 
 /* Subtle top accent */
 .card-accent-healthy {
-  border-top: 3px solid #22c55e;
+  border-top: 3px solid var(--success);
 }
 
 .card-accent-degraded {
-  border-top: 3px solid #f59e0b;
+  border-top: 3px solid var(--warning);
 }
 
 .card-accent-down {
-  border-top: 3px solid #ef4444;
+  border-top: 3px solid var(--danger);
 }
 
 /* ================= HEADER ================= */
@@ -43,7 +43,7 @@
 /* Divider between header and content */
 .card-divider {
   height: 1px;
-  background: rgba(255,255,255,0.06);
+  background: var(--border-subtle);
 }
 
 /* ================= BODY ================= */

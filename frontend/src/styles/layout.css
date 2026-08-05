@@ -8,9 +8,9 @@ body {
   font-family: Inter, system-ui, sans-serif;
 
   background:
-    radial-gradient(circle at 20% 20%, rgba(34,197,94,0.15), transparent 40%),
-    radial-gradient(circle at 80% 70%, rgba(59,130,246,0.15), transparent 40%),
-    #071521;
+    radial-gradient(circle at 20% 20%, var(--success-soft), transparent 40%),
+    radial-gradient(circle at 80% 70%, var(--info-soft), transparent 40%),
+    var(--bg);
 
-  color: #e6edf3;
+  color: var(--text);
 }

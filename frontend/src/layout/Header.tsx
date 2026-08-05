@@ -22,8 +22,12 @@ import logo from "../assets/rootguard-icon.svg";
 import GithubIcon from "../components/icons/GithubIcon";
 import DocsIcon from "../components/icons/DocsIcon";
 import { useI18n } from "../i18n";
-import { LogOut } from "lucide-react";
+import { LogOut, Monitor, Sun, Moon } from "lucide-react";
 import { useAuth } from "../auth";
+import { useTheme, type ThemeMode } from "../theme";
+
+const themeOrder: ThemeMode[] = ["system", "light", "dark"];
+const themeIcon: Record<ThemeMode, typeof Monitor> = { system: Monitor, light: Sun, dark: Moon };
 
 interface VersionData {
   version: string;
@@ -33,6 +37,7 @@ interface VersionData {
 export default function Header() {
   const [version, setVersion] = useState<VersionData | null>(null);
   const { locale, locales, setLocale, t } = useI18n();
+  const { mode, setMode } = useTheme();
   const { username, logout } = useAuth();
   const location = useLocation();
   const pageName = pageTitle(location.pathname, t);
@@ -96,6 +101,18 @@ export default function Header() {
             {locales.map((item) => <option value={item.code} key={item.code}>{item.label}</option>)}
           </select>
         </label>
+
+        {/* Temporary header placement; the WebGUI navigation/appearance
+            slice moves this into a consolidated user menu. */}
+        <button
+          className="rg-theme-toggle"
+          type="button"
+          onClick={() => setMode(themeOrder[(themeOrder.indexOf(mode) + 1) % themeOrder.length])}
+          title={t("theme.toggle", { mode: t(`theme.${mode}`) })}
+          aria-label={t("theme.toggle", { mode: t(`theme.${mode}`) })}
+        >
+          {(() => { const Icon = themeIcon[mode]; return <Icon />; })()}
+        </button>
 
         <button className="rg-logout" type="button" onClick={() => void logout()} title={t("login.signOut")}>
           <LogOut />

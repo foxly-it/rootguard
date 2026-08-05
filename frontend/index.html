@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0f1c2f" />
     <title>RootGuard</title>
+    <script>
+      (function () {
+        try {
+          var stored = window.localStorage.getItem("rootguard.theme");
+          var mode = stored === "light" || stored === "dark" ? stored : "system";
+          var resolved =
+            mode === "system"
+              ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+              : mode;
+          if (resolved === "light") document.documentElement.dataset.theme = "light";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

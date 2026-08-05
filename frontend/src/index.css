@@ -9,25 +9,103 @@
 
 :root {
 
-  /* Backgrounds */
-  --rg-bg-main: #0b1628;
-  --rg-bg-sidebar: #162338;
-  --rg-bg-header: #0f1c2f;
-
-  /* Cards */
-  --rg-card-bg: #1e2c42;
-  --rg-card-border: rgba(255,255,255,0.05);
-
-  /* Text */
-  --rg-text-primary: #f3f6fb;
-  --rg-text-secondary: #9fb4d4;
-
-  /* Accent */
-  --rg-accent: #00bcd4;
-  --rg-success: #22c55e;
+  /* Semantic tokens - dark (default). Every value here has a matching
+     override in the [data-theme="light"] block below; keep both in sync
+     when adding a token. Values were previously scattered as hardcoded
+     literals across the component stylesheets - see docs in the PR that
+     introduced this block for the consolidation mapping. */
+  --bg: #0b1628;
+  --bg-sidebar: #142338;
+  --bg-header: #0f1c2f;
+  --surface: #1e2c42;
+  --surface-soft: rgba(255, 255, 255, 0.03);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --text: #f3f6fb;
+  --text-muted: #9fb4d4;
+  --accent: #00bcd4;
+  --accent-soft: rgba(0, 188, 212, 0.12);
+  --accent-border: rgba(0, 188, 212, 0.35);
+  --focus-ring: #67e8f9;
+  --success: #22c55e;
+  --success-soft: rgba(34, 197, 94, 0.12);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.12);
+  --info: #93c5fd;
+  --info-soft: rgba(147, 197, 253, 0.12);
 
   /* Layout */
   --rg-content-max: 1100px;
+
+  /* Legacy rg-prefixed aliases: kept so existing var(--rg-*) references
+     stay theme-aware without touching every call site in one pass. */
+  --rg-bg-main: var(--bg);
+  --rg-bg-sidebar: var(--bg-sidebar);
+  --rg-bg-header: var(--bg-header);
+  --rg-card-bg: var(--surface);
+  --rg-card-border: var(--border-subtle);
+  --rg-text-primary: var(--text);
+  --rg-text-secondary: var(--text-muted);
+  --rg-accent: var(--accent);
+  --rg-success: var(--success);
+
+  /* Brand wordmark accent ("Guard" in "RootGuard"); independent of the
+     --success status color even though the dark value happens to match. */
+  --brand-accent: #74d98d;
+
+  /* Solid-fill primary button (inverted: dark text on a bright fill). */
+  --primary-fill: #7dd3fc;
+  --primary-fill-hover: #a5f3fc;
+  --primary-fill-text: #06151f;
+
+  --focus-glow: rgba(103, 232, 249, 0.35);
+
+  /* Sunken input-field background, distinct from --surface-soft (which is
+     a lighter overlay used for raised chrome like toolbars). */
+  --field-bg: rgba(2, 12, 23, 0.57);
+}
+
+/* -----------------------------------------------------
+   Light theme
+   Applied via `document.documentElement.dataset.theme`
+   (see src/theme/). System default resolves to dark; an
+   explicit or system-detected light preference sets
+   [data-theme="light"]. All values verified >=4.5:1 (text)
+   or >=3:1 (large text/UI) against their paired surface.
+----------------------------------------------------- */
+
+:root[data-theme="light"] {
+  --bg: #f4f7fb;
+  --bg-sidebar: #eef2f8;
+  --bg-header: #ffffff;
+  --surface: #ffffff;
+  --surface-soft: rgba(15, 23, 42, 0.03);
+  --border: rgba(15, 23, 42, 0.1);
+  --border-subtle: rgba(15, 23, 42, 0.06);
+  --text: #101b2d;
+  --text-muted: #4b5d78;
+  --accent: #0e7490;
+  --accent-soft: rgba(14, 116, 144, 0.12);
+  --accent-border: rgba(14, 116, 144, 0.35);
+  --focus-ring: #0e7490;
+  --success: #15803d;
+  --success-soft: rgba(21, 128, 61, 0.1);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.1);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.1);
+  --info: #2563eb;
+  --info-soft: rgba(37, 99, 235, 0.1);
+  --brand-accent: #15803d;
+
+  --primary-fill: #0e7490;
+  --primary-fill-hover: #0c6e86;
+  --primary-fill-text: #ffffff;
+
+  --focus-glow: rgba(14, 116, 144, 0.3);
+  --field-bg: rgba(15, 23, 42, 0.04);
 }
 
 /* -----------------------------------------------------
@@ -42,6 +120,8 @@ body {
 }
 
 .rg-skip-link {
+  /* Fixed bright-on-dark pair, not themed: it must stay maximally
+     conspicuous on first Tab press regardless of the active theme. */
   position: fixed;
   top: 8px;
   left: 8px;
@@ -60,7 +140,7 @@ body {
 }
 
 .nav-item:focus-visible {
-  outline: 3px solid #67e8f9;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -70,16 +150,16 @@ body {
   align-content: center;
   gap: 14px;
   min-height: 100vh;
-  color: #dff8fb;
-  background: #091727;
+  color: var(--text);
+  background: var(--bg);
   letter-spacing: -0.02em;
 }
 
 .auth-loading span {
   width: 30px;
   height: 30px;
-  border: 2px solid rgba(103, 232, 249, 0.16);
-  border-top-color: #67e8f9;
+  border: 2px solid var(--border);
+  border-top-color: var(--focus-ring);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -93,18 +173,9 @@ body {
   min-height: calc(100vh - 70px);
 }
 
-.sidebar {
-  width: 230px;
-  background: var(--rg-bg-sidebar);
-  padding: 30px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 .sidebar a {
   text-decoration: none;
-  color: var(--rg-text-secondary);
+  color: var(--text-muted);
   font-size: 0.95rem;
   padding: 8px 10px;
   border-radius: 6px;
@@ -112,8 +183,8 @@ body {
 }
 
 .sidebar a:hover {
-  background: rgba(255,255,255,0.05);
-  color: var(--rg-text-primary);
+  background: var(--border-subtle);
+  color: var(--text);
 }
 
 .main {
@@ -136,7 +207,7 @@ body {
 .sidebar {
   width: 240px;
   flex: 0 0 240px;
-  background: #142338;
+  background: var(--bg-sidebar);
   padding: 40px 20px;
   display: flex;
   flex-direction: column;
@@ -158,7 +229,7 @@ body {
   min-height: 42px;
   box-sizing: border-box;
   text-decoration: none;
-  color: #9fb4d4;
+  color: var(--text-muted);
   font-size: 0.95rem;
   padding: 10px 14px;
   border-radius: 6px;
@@ -192,10 +263,10 @@ body {
   gap: 12px;
   min-height: 40px;
   margin: -20px 0 10px;
-  border: 1px solid rgba(159, 180, 212, 0.13);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.025);
-  color: #9fb4d4;
+  background: var(--surface-soft);
+  color: var(--text-muted);
   padding: 9px 13px;
   cursor: pointer;
   font: inherit;
@@ -206,13 +277,13 @@ body {
 
 .sidebar-toggle:hover,
 .sidebar-toggle:focus-visible {
-  border-color: rgba(0, 188, 212, 0.35);
-  background: rgba(0, 188, 212, 0.08);
-  color: #fff;
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--text);
 }
 
 .sidebar-toggle:focus-visible {
-  outline: 3px solid #67e8f9;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -237,11 +308,11 @@ body {
   top: 50%;
   left: calc(100% + 12px);
   padding: 7px 10px;
-  border: 1px solid rgba(103, 232, 249, 0.2);
+  border: 1px solid var(--border);
   border-radius: 7px;
-  background: #091727;
+  background: var(--bg-header);
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
-  color: #e8f6ff;
+  color: var(--text);
   content: attr(data-tooltip);
   font-size: 0.78rem;
   font-weight: 650;
@@ -259,13 +330,13 @@ body {
 }
 
 .nav-item:hover {
-  background: rgba(255,255,255,0.05);
-  color: #ffffff;
+  background: var(--border-subtle);
+  color: var(--text);
 }
 
 .nav-item.active {
-  color: #ffffff;
-  background: rgba(0, 188, 212, 0.1);
+  color: var(--text);
+  background: var(--accent-soft);
 }
 
 .nav-item.active::before {
@@ -297,7 +368,7 @@ body {
     gap: 5px;
     overflow-x: auto;
     padding: 9px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid var(--border-subtle);
     scrollbar-width: none;
   }
 

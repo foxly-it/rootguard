@@ -1,11 +1,16 @@
 .modal-open{overflow:hidden}
 .content-modal-backdrop{position:fixed;z-index:2147483647;inset:0;display:block;padding:24px;overflow-y:auto;overscroll-behavior:contain;background:rgba(1,7,14,.78);backdrop-filter:blur(10px);isolation:isolate}
-.content-modal{display:block;width:min(1120px,calc(100vw - 48px));min-height:min(820px,calc(100dvh - 48px));margin:auto;overflow:visible;border:1px solid rgba(136,172,216,.25);border-radius:20px;background:#07111e;box-shadow:0 28px 90px rgba(0,0,0,.55)}
+/* This viewer (backdrop, panel, header, <pre>) is intentionally always
+   dark, independent of the active theme - consistent with treating
+   logs/config output like a code block. Do not wire its chrome to the
+   theme tokens above; only its own literals should change if its look
+   is revisited. */
+.content-modal{display:block;width:min(1120px,calc(100vw - 48px));min-height:min(820px,calc(100dvh - 48px));margin:auto;overflow:visible;border:1px solid rgba(136,172,216,.25);border-radius:20px;background:#07111e;color:#e8f3ff;box-shadow:0 28px 90px rgba(0,0,0,.55)}
 .content-modal.content-modal-medium{width:min(880px,calc(100vw - 48px));min-height:0}
 .content-modal>header{position:sticky;z-index:1;top:-24px;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;border-bottom:1px solid rgba(136,172,216,.16);border-radius:20px 20px 0 0;background:rgba(7,17,30,.97);backdrop-filter:blur(14px)}
-.content-modal>header span{display:block;margin-bottom:5px;color:var(--rg-accent);font-size:.68rem;font-weight:800;letter-spacing:.14em}
-.content-modal>header h2{display:flex;align-items:center;gap:9px;margin:0;font-size:1rem}
-.content-modal>header button{display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid rgba(136,172,216,.2);border-radius:10px;background:rgba(255,255,255,.035);color:var(--rg-text-primary)}
+.content-modal>header span{display:block;margin-bottom:5px;color:#67e8f9;font-size:.68rem;font-weight:800;letter-spacing:.14em}
+.content-modal>header h2{display:flex;align-items:center;gap:9px;margin:0;font-size:1rem;color:#e8f3ff}
+.content-modal>header button{display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid rgba(136,172,216,.2);border-radius:10px;background:rgba(255,255,255,.035);color:#e8f3ff}
 .content-modal-body{min-height:0;padding:18px}
 .content-modal-body>pre{box-sizing:border-box;min-width:100%;margin:0;padding:18px;border-radius:13px;overflow:auto;background:#030a13;color:#c8d8ec;font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;tab-size:2}
 @media(max-width:620px){.content-modal-backdrop{padding:0}.content-modal{width:100%;min-height:100dvh;border:0;border-radius:0}.content-modal>header{top:0;padding:14px;border-radius:0}.content-modal-body{padding:12px}}

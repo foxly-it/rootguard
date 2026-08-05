@@ -24,8 +24,8 @@
 /* ================= OK ================= */
 
 .rg-status.ok .rg-status-dot {
-  background: #22c55e;
-  box-shadow: 0 0 8px rgba(34,197,94,0.6);
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success-soft);
 }
 
 .rg-status.ok .rg-status-dot::after {
@@ -33,7 +33,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: #22c55e;
+  background: var(--success);
   opacity: 0.6;
   animation: pulse 2s infinite;
 }
@@ -41,15 +41,15 @@
 /* ================= WARNING ================= */
 
 .rg-status.warning .rg-status-dot {
-  background: #f59e0b;
-  box-shadow: 0 0 8px rgba(245,158,11,0.6);
+  background: var(--warning);
+  box-shadow: 0 0 8px var(--warning-soft);
 }
 
 /* ================= ERROR ================= */
 
 .rg-status.error .rg-status-dot {
-  background: #ef4444;
-  box-shadow: 0 0 8px rgba(239,68,68,0.6);
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger-soft);
 }
 
 /* ================= Pulse Animation ================= */

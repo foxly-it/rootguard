@@ -14,8 +14,8 @@
 }
 
 @keyframes rg-status-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(103, 232, 249, 0.35); }
-  50% { box-shadow: 0 0 0 7px rgba(103, 232, 249, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 var(--focus-glow); }
+  50% { box-shadow: 0 0 0 7px transparent; }
 }
 
 @keyframes rg-soft-glow {
