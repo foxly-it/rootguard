@@ -1,0 +1,46 @@
+name: rootguard-updater-e2e
+
+services:
+  core:
+    image: rootguard-e2e-core:old
+    container_name: rootguard-core
+    environment:
+      PORT: "8081"
+    networks: [control]
+
+  webapp:
+    image: rootguard-e2e-webapp:old
+    container_name: rootguard-webapp
+    environment:
+      PORT: "8080"
+    networks: [control]
+
+  updater:
+    build:
+      context: ..
+    image: rootguard-updater:e2e
+    container_name: rootguard-updater
+    environment:
+      ROOTGUARD_UPDATER_TOKEN: integration-token
+      ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
+      ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.e2e.yaml
+      ROOTGUARD_COMPOSE_PROJECT: rootguard-updater-e2e
+      ROOTGUARD_CORE_UPDATE_IMAGE: rootguard-e2e-core:new
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "rootguard-e2e-webapp:${WEB_TARGET_TAG:-new}"
+      ROOTGUARD_UPDATER_SKIP_PULL: "true"
+      ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - updater-data:/var/lib/rootguard
+      - updater-sessions:/var/lib/rootguard-sessions
+      - ./compose.e2e.yaml:/opt/rootguard/compose.e2e.yaml:ro
+    ports:
+      - "127.0.0.1:18082:8082"
+    networks: [control]
+
+networks:
+  control:
+
+volumes:
+  updater-data:
+  updater-sessions:
