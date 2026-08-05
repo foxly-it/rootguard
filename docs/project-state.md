@@ -357,7 +357,6 @@ Trustworthy Stack Center and production visibility:
   icon size, hover, focus-visible), including a fix for GithubIcon/DocsIcon
   rendering unconstrained at their raw 22px SVG size
   ([rootguard-webapp#60](https://github.com/foxly-it/rootguard-webapp/pull/60)).
-  Global search (not yet built) will adopt the same control style.
 - language, appearance, and sign-out consolidated into an accessible user
   menu (trigger + panel with explicit System/Light/Dark options, the
   language select, and sign-out). GitHub/Docs stay direct on desktop and
@@ -382,6 +381,19 @@ Trustworthy Stack Center and production visibility:
   Search/GitHub/Docs/account button group, and the search trigger now
   shows a visible `S` key badge instead of only a hover tooltip
   ([rootguard-webapp#66](https://github.com/foxly-it/rootguard-webapp/pull/66)).
+- sidebar collapse control moved to the sidebar's bottom edge; new desktop
+  sessions now default to the collapsed icon view, and an existing
+  explicit local preference always wins
+  ([rootguard-webapp#68](https://github.com/foxly-it/rootguard-webapp/pull/68)).
+- fixed app-shell layout: only the main content pane scrolls now, so the
+  sidebar (and its collapse control) stay visible on long pages
+  regardless of scroll position; the nav item list gets its own internal
+  scroll if it ever outgrows the viewport. A same-PR follow-up fixed a
+  regression this introduced (a CSS overflow-axis coupling quirk had
+  clipped the collapsed-sidebar hover tooltips and shown a stray
+  scrollbar); tooltips now render via a `document.body` portal instead of
+  a clipped CSS `::after`
+  ([rootguard-webapp#70](https://github.com/foxly-it/rootguard-webapp/pull/70)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

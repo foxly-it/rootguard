@@ -183,12 +183,14 @@ operable.
       ([rootguard-webapp#54](https://github.com/foxly-it/rootguard-webapp/pull/54),
       [#56](https://github.com/foxly-it/rootguard-webapp/pull/56),
       [#58](https://github.com/foxly-it/rootguard-webapp/pull/58))
-- [ ] Move the sidebar collapse control to its bottom edge, default new desktop
+- [x] Move the sidebar collapse control to its bottom edge, default new desktop
       sessions to the collapsed icon view, and preserve an existing explicit
       local preference
-- [ ] Keep sidebar navigation and its collapse control visible while long
+      ([rootguard-webapp#68](https://github.com/foxly-it/rootguard-webapp/pull/68))
+- [x] Keep sidebar navigation and its collapse control visible while long
       settings pages scroll; allow the navigation region itself to scroll when
       viewport height is insufficient and keep mobile navigation fully labelled
+      ([rootguard-webapp#70](https://github.com/foxly-it/rootguard-webapp/pull/70))
 - [ ] Add sticky in-page navigation for long settings sections where it
       materially improves orientation and connect its destinations to global
       search results
