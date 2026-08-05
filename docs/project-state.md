@@ -363,6 +363,18 @@ Trustworthy Stack Center and production visibility:
   language select, and sign-out). GitHub/Docs stay direct on desktop and
   fold into the same menu on narrow viewports
   ([rootguard-webapp#62](https://github.com/foxly-it/rootguard-webapp/pull/62)).
+- global, local-only search: a hand-curated index (~45 entries) covering
+  all pages, the 4 Unbound tabs, and the meaningfully distinct guided
+  settings/actions across Unbound, Setup, Stack Center, and AdGuard,
+  including technical directive keywords (`qname-minimisation`,
+  `prefetch-key`, `local-zone`, `forward-zone`,
+  `90-rootguard-custom.conf`, ...). Opens from the header search chip,
+  `S` (ignored while typing), or `Ctrl`/`Cmd`+`K`; full keyboard
+  navigation, Escape restores focus to the trigger. Selecting a result
+  navigates to the matching page only - landing on the exact
+  originating tab/section is the next roadmap item, since Unbound's tab
+  state isn't currently URL-addressable
+  ([rootguard-webapp#64](https://github.com/foxly-it/rootguard-webapp/pull/64)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
