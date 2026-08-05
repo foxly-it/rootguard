@@ -174,10 +174,11 @@ operable.
       the default for users who have not made a selection, for the app shell
       and first screen (header, sidebar, buttons, cards, status, login)
       ([rootguard-webapp#54](https://github.com/foxly-it/rootguard-webapp/pull/54))
+- [x] Migrate the Dashboard page to design tokens
+      ([rootguard-webapp#56](https://github.com/foxly-it/rootguard-webapp/pull/56))
 - [ ] Extend the same token migration to the remaining page-specific
-      stylesheets (Setup, Stack Center, Dashboard, AdGuard, Unbound settings);
-      these currently keep their previous dark-only appearance under both
-      themes
+      stylesheets (Setup, Stack Center, AdGuard, Unbound settings); these
+      currently keep their previous dark-only appearance under both themes
 - [ ] Move the sidebar collapse control to its bottom edge, default new desktop
       sessions to the collapsed icon view, and preserve an existing explicit
       local preference
