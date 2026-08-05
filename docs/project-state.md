@@ -357,8 +357,12 @@ Trustworthy Stack Center and production visibility:
   icon size, hover, focus-visible), including a fix for GithubIcon/DocsIcon
   rendering unconstrained at their raw 22px SVG size
   ([rootguard-webapp#60](https://github.com/foxly-it/rootguard-webapp/pull/60)).
-  Global search (not yet built) will adopt the same control style; the user
-  menu consolidation is the next WebGUI navigation slice item.
+  Global search (not yet built) will adopt the same control style.
+- language, appearance, and sign-out consolidated into an accessible user
+  menu (trigger + panel with explicit System/Light/Dark options, the
+  language select, and sign-out). GitHub/Docs stay direct on desktop and
+  fold into the same menu on narrow viewports
+  ([rootguard-webapp#62](https://github.com/foxly-it/rootguard-webapp/pull/62)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
