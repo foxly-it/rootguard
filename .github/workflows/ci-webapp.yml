@@ -1,19 +1,21 @@
-name: Build and Push RootGuard WebApp
+name: WebApp CI
 
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
+    paths:
+      - "rootguard-webapp/**"
+      - ".github/workflows/ci-webapp.yml"
   pull_request:
+    paths:
+      - "rootguard-webapp/**"
+      - ".github/workflows/ci-webapp.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
   packages: write
-  id-token: write
-  attestations: write
 
 env:
   REGISTRY: ghcr.io
@@ -29,15 +31,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: backend/go.mod
-          cache-dependency-path: backend/go.sum
+          go-version-file: rootguard-webapp/backend/go.mod
+          cache-dependency-path: rootguard-webapp/backend/go.sum
 
       - name: Test backend
-        working-directory: backend
+        working-directory: rootguard-webapp/backend
         run: go test ./...
 
       - name: Vet backend
-        working-directory: backend
+        working-directory: rootguard-webapp/backend
         run: go vet ./...
 
       - name: Set up Node.js
@@ -45,22 +47,22 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: rootguard-webapp/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        working-directory: frontend
+        working-directory: rootguard-webapp/frontend
         run: npm ci
 
       - name: Audit frontend dependencies
-        working-directory: frontend
+        working-directory: rootguard-webapp/frontend
         run: npm audit --audit-level=high
 
       - name: Lint frontend
-        working-directory: frontend
+        working-directory: rootguard-webapp/frontend
         run: npm run lint
 
       - name: Build frontend
-        working-directory: frontend
+        working-directory: rootguard-webapp/frontend
         run: npm run build
 
   build:
@@ -78,9 +80,6 @@ jobs:
           images: ghcr.io/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=sha,format=short,prefix=sha-
 
       - name: Set up QEMU
@@ -101,7 +100,7 @@ jobs:
         id: push
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: rootguard-webapp
           push: ${{ github.event_name != 'pull_request' }}
           platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}

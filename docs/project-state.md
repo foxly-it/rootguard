@@ -7,13 +7,19 @@ before repeating repository-wide discovery.
 
 ## Repository layout
 
-- `foxly-it/rootguard` coordinates deployment, documentation, CI, and website.
-- `foxly-it/rootguard-core` owns privileged orchestration and configuration.
-- `foxly-it/rootguard-webapp` owns the authenticated backend proxy and React UI.
-- `foxly-it/rootguard-unbound` is also usable as a standalone resolver image.
+`foxly-it/rootguard` is a monorepo coordinating deployment, documentation,
+CI, and website, alongside four independently buildable component
+directories (each with its own Dockerfile and path-filtered CI workflow):
 
-The component repositories are included in the main repository as Git
-submodules. Component PRs are merged before their revisions are updated here.
+- `rootguard-core/` owns privileged orchestration and configuration.
+- `rootguard-webapp/` owns the authenticated backend proxy and React UI.
+- `rootguard-unbound/` is also usable as a standalone resolver image.
+- `rootguard-updater/` is the internal control-plane updater helper.
+
+These were four separate repositories included as Git submodules until the
+monorepo migration (see "Delivered and verified" below); their full commit
+history was preserved via `git subtree` merges. The formerly-separate repos
+are now archived on GitHub, read-only, for history and old issue/PR links.
 
 ## Runtime architecture
 
@@ -232,13 +238,15 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   persists status outside either target, verifies exact image IDs and both
   health endpoints, and pins both previous images if either check fails.
   Browser requests cannot supply images, services, or Compose arguments.
-- Updater source and history live in the independently versioned
-  `foxly-it/rootguard-updater` component repository. Its own CI runs tests,
-  vetting, and `amd64`/`arm64` image builds; the main repository pins the exact
-  reviewed component commit as a Git submodule. The GHCR package explicitly
-  grants the updater repository write access for Actions; its `latest` and
-  commit tags were republished successfully as a multi-architecture manifest
-  on 2026-07-29.
+- Updater source and history live in `rootguard-updater/`, a monorepo
+  directory since the [monorepo migration](#delivered-and-verified) (formerly
+  an independently versioned component repository pinned as a Git submodule;
+  full history preserved). Its path-filtered CI (`ci-updater.yml`) runs
+  tests, vetting, and `amd64`/`arm64` image builds on every change under that
+  directory; `release-alpha.yml` builds and pushes its versioned release
+  image alongside the other three components under one shared version. Its
+  `latest` and commit tags were republished successfully as a
+  multi-architecture manifest on 2026-07-29.
 - The Updater CI also runs two real Docker scenarios with old and new
   Core/WebApp fixture images. It verifies both running image IDs after a paired
   update, then introduces an HTTP-503 WebApp candidate and proves that both
@@ -432,6 +440,22 @@ Trustworthy Stack Center and production visibility:
   that would otherwise trap a `position:fixed` panel inside the page
   instead of the viewport
   ([rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74)).
+- Monorepo migration: merged the full commit history of `rootguard-core`,
+  `rootguard-webapp`, `rootguard-unbound`, and `rootguard-updater` into this
+  repository as top-level directories via `git subtree`, removed
+  `.gitmodules`. Motivation: as a solo maintainer, every change previously
+  needed two PRs (component repo, then a submodule-bump follow-up here) and
+  cutting a full alpha release required manually pushing matching version
+  tags to four separate repos - `release-alpha.yml` already built all four
+  images under one shared version number, just sourced from separately
+  tagged repos instead of one commit. Path-filtered CI workflows
+  (`ci-core.yml`, `ci-webapp.yml`, `ci-unbound.yml`, `ci-updater.yml`) replace
+  the four repos' own workflows, each triggering only on changes under its
+  own directory; `release-alpha.yml`'s publish matrix now builds and pushes
+  all four images directly from one workflow instead of only Core, with the
+  other three verified to already exist. The four original repositories are
+  archived (read-only, history and issue/PR links preserved) rather than
+  deleted.
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

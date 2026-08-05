@@ -19,7 +19,7 @@ Sicherheitslücken gehören nicht in öffentliche Issues. Verwende dafür den in
 ## Entwicklungsumgebung
 
 ```sh
-git clone --recurse-submodules https://github.com/foxly-it/rootguard.git
+git clone https://github.com/foxly-it/rootguard.git
 cd rootguard
 cp .env.example .env
 ```
@@ -31,25 +31,20 @@ Recovery-Token. Anschließend lässt sich der Entwicklungsstack bauen:
 docker compose up --build -d
 ```
 
-Bei einem bestehenden Checkout:
+## Das richtige Verzeichnis wählen
 
-```sh
-git submodule update --init --recursive
-```
-
-## Das richtige Repository wählen
-
-Dieses Hauptrepository koordiniert Compose, Website, Dokumentation, Releases
-und die Komponentenstände. Änderungen am Anwendungscode gehören zunächst in
-das jeweilige Komponenten-Repository:
+RootGuard ist ein Monorepo. Anwendungscode gehört in das jeweilige
+Komponentenverzeichnis, jedes mit eigenem Dockerfile und eigenem
+pfadgefiltertem CI-Workflow:
 
 - `rootguard-core` – Orchestrierung und interne API
 - `rootguard-webapp` – Benutzeroberfläche und Anmeldung
 - `rootguard-updater` – kontrollierte Core-/WebApp-Updates
 - `rootguard-unbound` – Unbound-Image und Resolver-Basis
 
-Nach einem gemergten Komponenten-PR wird der zugehörige Submodule-Stand im
-Hauptrepository aktualisiert.
+Ein Pull Request kann ein oder mehrere dieser Verzeichnisse gemeinsam mit den
+zugehörigen Doku-Updates (`ROADMAP.md`, `docs/project-state.md`) in einem
+Schritt ändern.
 
 ## Änderungen umsetzen
 
@@ -71,8 +66,8 @@ git diff --check
 docker compose config
 ```
 
-Führe zusätzlich die Tests des betroffenen Komponenten-Repositories aus. Die
-CI des Hauptrepositories startet einen vollständigen Stack und prüft Login,
+Führe zusätzlich die Tests des betroffenen Komponentenverzeichnisses aus. Die
+Integrations-CI startet zudem einen vollständigen Stack und prüft Login,
 Setup, DNS-Auflösung und DNSSEC.
 
 ## Pull Request

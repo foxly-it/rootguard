@@ -42,8 +42,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
       - uses: actions/setup-go@v7
         with:
           go-version-file: rootguard-core/go.mod
@@ -76,10 +74,17 @@ jobs:
           - component: core
             image: rootguard-core
             context: rootguard-core
+          - component: webapp
+            image: rootguard-webapp
+            context: rootguard-webapp
+          - component: updater
+            image: rootguard-updater
+            context: rootguard-updater
+          - component: unbound
+            image: rootguard-unbound
+            context: rootguard-unbound
     steps:
       - uses: actions/checkout@v5
-        with:
-          submodules: recursive
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -113,7 +118,7 @@ jobs:
           build-args: |
             VERSION=${{ needs.version.outputs.value }}
             COMMIT=${{ github.sha }}
-      - name: Attest published Core image provenance
+      - name: Attest published image provenance
         if: steps.existing.outputs.exists != 'true'
         uses: actions/attest@v4
         with:
@@ -145,11 +150,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Verify independently published component images
-        run: |
-          docker buildx imagetools inspect "$ROOTGUARD_WEBAPP_IMAGE"
-          docker buildx imagetools inspect "$ROOTGUARD_UPDATER_IMAGE"
-          docker buildx imagetools inspect "$ROOTGUARD_UNBOUND_IMAGE"
       - name: Start published control plane
         run: docker compose -f compose.alpha.yaml up -d
       - name: Install and verify the DNS stack

@@ -60,8 +60,8 @@ Core listens on port `8081` by default. Except for `/api/health`, routes require
 `Authorization: Bearer <ROOTGUARD_API_TOKEN>`.
 
 For the complete development stack, clone the
-[RootGuard main repository](https://github.com/foxly-it/rootguard) with its
-submodules and run `docker compose up --build -d`.
+[RootGuard monorepo](https://github.com/foxly-it/rootguard) and run
+`docker compose up --build -d`.
 
 ## API areas
 

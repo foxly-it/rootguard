@@ -8,6 +8,6 @@ updates:
       actions:
         patterns: ["*"]
   - package-ecosystem: gomod
-    directory: /
+    directory: /rootguard-updater
     schedule:
       interval: weekly

@@ -291,9 +291,10 @@ Product boundary:
       data, query history, and filter state
 - [ ] Compatibility tests against every supported AdGuard Home release
 - [ ] Ship a self-hosted, RootGuard-branded blocked-request landing page as a
-      new `rootguard-blockpage` component repository (submodule, same
-      pattern as core/webapp/unbound/updater), AGPL-3.0-or-later like the
-      rest of RootGuard. A fresh design, not a port of the visuals from the
+      new `rootguard-blockpage` monorepo directory (same pattern as
+      core/webapp/unbound/updater: own Dockerfile, own path-filtered CI),
+      AGPL-3.0-or-later like the rest of RootGuard. A fresh design, not a
+      port of the visuals from the
       existing standalone `foxly-it/adguard-blockpage` project; keep its
       proven technical shape (static HTML/CSS/JS, auto dark/light, no
       external dependencies). Configure AdGuard Home's "custom IP for

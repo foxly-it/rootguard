@@ -1,0 +1,31 @@
+name: Core CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "rootguard-core/**"
+      - ".github/workflows/ci-core.yml"
+  pull_request:
+    paths:
+      - "rootguard-core/**"
+      - ".github/workflows/ci-core.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: rootguard-core/go.mod
+          cache-dependency-path: rootguard-core/go.sum
+      - working-directory: rootguard-core
+        run: go test ./...
+      - working-directory: rootguard-core
+        run: go vet ./...
+      - working-directory: rootguard-core
+        run: docker build -t rootguard-core:test .

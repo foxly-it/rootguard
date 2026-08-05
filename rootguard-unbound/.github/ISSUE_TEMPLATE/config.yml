@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: RootGuard Unbound manual
-    url: https://rootguard.foxly.de/docs.html#unbound
-    about: Configuration and troubleshooting
-  - name: Report a vulnerability privately
-    url: https://github.com/foxly-it/rootguard-unbound/security/advisories/new
-    about: Do not publish security vulnerabilities as issues

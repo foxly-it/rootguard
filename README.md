@@ -123,24 +123,28 @@ diesem Einstieg ausgelagert:
 
 ## Entwicklung
 
-Für Änderungen am gesamten Projekt wird das Repository mit seinen
-Komponenten-Submodules geklont:
+RootGuard ist ein Monorepo. Für Änderungen am gesamten Projekt reicht ein
+einfacher Klon:
 
 ```sh
-git clone --recurse-submodules https://github.com/foxly-it/rootguard.git
+git clone https://github.com/foxly-it/rootguard.git
 cd rootguard
 cp .env.example .env
 docker compose up --build -d
 ```
 
-Die Komponenten bleiben eigenständige Repositories:
+Die Komponenten sind eigenständig baubare Verzeichnisse im selben Repository:
 
-| Repository | Verantwortung |
+| Verzeichnis | Verantwortung |
 | --- | --- |
-| [`rootguard-core`](https://github.com/foxly-it/rootguard-core) | Control Plane und DNS-Orchestrierung |
-| [`rootguard-webapp`](https://github.com/foxly-it/rootguard-webapp) | Weboberfläche und Sitzungsverwaltung |
-| [`rootguard-updater`](https://github.com/foxly-it/rootguard-updater) | Kontrollierte Control-Plane-Updates |
-| [`rootguard-unbound`](https://github.com/foxly-it/rootguard-unbound) | Gehärtetes Unbound-Image |
+| [`rootguard-core`](rootguard-core) | Control Plane und DNS-Orchestrierung |
+| [`rootguard-webapp`](rootguard-webapp) | Weboberfläche und Sitzungsverwaltung |
+| [`rootguard-updater`](rootguard-updater) | Kontrollierte Control-Plane-Updates |
+| [`rootguard-unbound`](rootguard-unbound) | Gehärtetes Unbound-Image |
+
+Die vormaligen eigenständigen Repositories sind archiviert und weiterhin
+lesbar (Historie, alte Issues/PRs); aktive Entwicklung findet nur noch hier
+statt.
 
 ## Mitwirken
 
@@ -261,10 +265,10 @@ Further technical information:
 
 ### Development and contributions
 
-Clone the main repository with all component submodules:
+RootGuard is a monorepo, so a plain clone is enough:
 
 ```sh
-git clone --recurse-submodules https://github.com/foxly-it/rootguard.git
+git clone https://github.com/foxly-it/rootguard.git
 cd rootguard
 cp .env.example .env
 docker compose up --build -d
