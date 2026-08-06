@@ -1,5 +1,4 @@
 document.getElementById("m-host").textContent = location.hostname;
-document.getElementById("m-host2").textContent = location.hostname;
 document.getElementById("m-time").textContent = new Date().toLocaleString("de-DE");
 
 fetch("/clientip.txt", { cache: "no-store" })
