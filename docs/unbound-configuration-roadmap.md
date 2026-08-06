@@ -80,6 +80,32 @@ reverse data in the same visible, reversible configuration lifecycle.
 AdGuard Home's separate private reverse-resolver routing remains part of the
 later cross-service integration instead of being reimplemented in RootGuard.
 
+### Zone-centred host inventory and router import — planned
+
+The delivered local-zone assistant already owns guided A, AAAA, CNAME, and
+optional PTR records. Its next iteration should present these records as hosts
+or devices grouped below a zone, so an operator can create `home.lab.` once and
+manage named clients, servers, gateways, access points, printers, and similar
+local systems without editing individual Unbound directives.
+
+- Add, rename, remove, and bulk-edit hosts with IPv4 and/or IPv6 addresses.
+- Generate PTR records only after the existing uniqueness and reverse-zone
+  checks pass; preserve forward-confirmed reverse-DNS consistency.
+- Keep the term *client* for AdGuard Home policy ownership. Unbound entries are
+  local DNS hosts and do not represent end-client access rules.
+- Support bounded discovery from `in-addr.arpa` and `ip6.arpa` plus optional
+  router adapters. The first vendor adapter may use FRITZ!Box's documented
+  TR-064 host-list interface; adapters for other routers must implement the
+  same normalized import contract.
+- Treat all discovered data as an untrusted draft. Show source, hostname,
+  address, proposed zone, conflicts, and skipped entries before selection.
+- Keep router credentials in bounded server-side request handling only. Never
+  place them in browser storage, logs, history, generated configuration, or
+  diagnostic responses.
+- Apply selected records only through the shared preview, effective
+  `unbound-checkconf`, version history, activation health check, and rollback
+  path.
+
 ### Client access networks — fixed ownership
 
 RootGuard clients query AdGuard Home, not Unbound. Exposing Unbound CIDR rules
