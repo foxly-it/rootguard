@@ -81,7 +81,7 @@ func TestBootstrapInstallsAndConfiguresUnbound(t *testing.T) {
 	})
 
 	manager := newTestManager(t, handler)
-	status, err := manager.Bootstrap(context.Background())
+	status, err := manager.Bootstrap(context.Background(), "192.168.1.10")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +91,13 @@ func TestBootstrapInstallsAndConfiguresUnbound(t *testing.T) {
 	if !status.StatsAvailable || status.Queries != 125 || status.Blocked != 25 {
 		t.Fatalf("unexpected statistics: %+v", status)
 	}
+	mu.Lock()
+	if dnsConfig["blocking_mode"] != "custom_ip" || dnsConfig["blocking_ipv4"] != "192.168.1.10" || dnsConfig["blocking_ipv6"] != "::1" {
+		t.Fatalf("expected custom_ip blocking mode pointed at the blockpage, got: %+v", dnsConfig)
+	}
+	mu.Unlock()
 
-	status, err = manager.Bootstrap(context.Background())
+	status, err = manager.Bootstrap(context.Background(), "192.168.1.10")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +152,7 @@ func TestBootstrapRejectsBrokenUpstream(t *testing.T) {
 		t.Fatal(err)
 	}
 	manager := newTestManagerWithDir(handler, dir)
-	if _, err := manager.Bootstrap(context.Background()); err == nil {
+	if _, err := manager.Bootstrap(context.Background(), "192.168.1.10"); err == nil {
 		t.Fatal("expected upstream validation failure")
 	}
 }

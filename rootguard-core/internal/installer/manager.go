@@ -29,9 +29,10 @@ var (
 )
 
 type Config struct {
-	DNSBindAddress string `json:"dns_bind_address"`
-	DNSPort        int    `json:"dns_port"`
-	AdGuardChannel string `json:"adguard_channel"`
+	DNSBindAddress   string `json:"dns_bind_address"`
+	DNSPort          int    `json:"dns_port"`
+	AdGuardChannel   string `json:"adguard_channel"`
+	BlockpageEnabled bool   `json:"blockpage_enabled"`
 }
 
 type Check struct {
@@ -74,7 +75,7 @@ type Status struct {
 }
 
 type CommandRunner func(context.Context, ...string) ([]byte, error)
-type BootstrapFunc func(context.Context) error
+type BootstrapFunc func(context.Context, string) error
 
 type Options struct {
 	DataDir          string
@@ -82,6 +83,7 @@ type Options struct {
 	UnboundImage     string
 	AdGuardImage     string
 	AdGuardBetaImage string
+	BlockpageImage   string
 	DNSNetworkCIDR   string
 	Run              CommandRunner
 	Bootstrap        BootstrapFunc
@@ -95,6 +97,7 @@ type Manager struct {
 	unboundImage     string
 	adGuardImage     string
 	adGuardBetaImage string
+	blockpageImage   string
 	dnsNetworkCIDR   string
 	run              CommandRunner
 	bootstrap        BootstrapFunc
@@ -105,7 +108,7 @@ func NewManager(options Options) *Manager {
 		options.Run = runDocker
 	}
 	if options.Bootstrap == nil {
-		options.Bootstrap = func(context.Context) error { return nil }
+		options.Bootstrap = func(context.Context, string) error { return nil }
 	}
 	manager := &Manager{
 		dataDir:          options.DataDir,
@@ -113,6 +116,7 @@ func NewManager(options Options) *Manager {
 		unboundImage:     options.UnboundImage,
 		adGuardImage:     options.AdGuardImage,
 		adGuardBetaImage: options.AdGuardBetaImage,
+		blockpageImage:   options.BlockpageImage,
 		dnsNetworkCIDR:   options.DNSNetworkCIDR,
 		run:              options.Run,
 		bootstrap:        options.Bootstrap,
@@ -302,7 +306,11 @@ func (m *Manager) deploy(config Config) {
 		m.fail("bootstrap", err)
 		return
 	}
-	if err := m.bootstrap(ctx); err != nil {
+	blockPageIP := ""
+	if config.BlockpageEnabled {
+		blockPageIP = config.DNSBindAddress
+	}
+	if err := m.bootstrap(ctx, blockPageIP); err != nil {
 		m.fail("bootstrap", fmt.Errorf("bootstrap AdGuard Home: %w", err))
 		return
 	}
@@ -341,7 +349,7 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 	if config.AdGuardChannel == "beta" {
 		adGuardImage = m.adGuardBetaImage
 	}
-	content, err := renderCompose(config, m.unboundImage, adGuardImage, m.dnsNetworkCIDR)
+	content, err := renderCompose(config, m.unboundImage, adGuardImage, m.blockpageImage, m.dnsNetworkCIDR)
 	if err != nil {
 		return "", err
 	}
@@ -356,10 +364,43 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 	return path, nil
 }
 
-func renderCompose(config Config, unboundImage, adGuardImage, networkCIDR string) (string, error) {
+func renderCompose(config Config, unboundImage, adGuardImage, blockpageImage, networkCIDR string) (string, error) {
 	resolverAddress, err := resolverAddress(networkCIDR)
 	if err != nil {
 		return "", err
+	}
+	var blockpageService string
+	if config.BlockpageEnabled {
+		blockpageIP, err := blockpageAddress(networkCIDR)
+		if err != nil {
+			return "", err
+		}
+		blockpageService = fmt.Sprintf(`
+  blockpage:
+    image: %s
+    container_name: rootguard-blockpage
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /run
+    cap_drop: [ALL]
+    # nginx's master process starts as root and drops worker processes -
+    # the ones that actually handle client connections - to the non-root
+    # nginx user. That handoff needs exactly these three capabilities;
+    # everything else stays dropped.
+    cap_add: [CHOWN, SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      io.rootguard.managed: "true"
+      io.rootguard.component: "blockpage"
+    ports:
+      - "%s:80:8080/tcp"
+    networks:
+      dns:
+        ipv4_address: %s
+`, blockpageImage, config.DNSBindAddress, blockpageIP)
 	}
 	return fmt.Sprintf(`name: rootguard-dns
 
@@ -400,7 +441,7 @@ services:
       - rootguard-adguard-config:/opt/adguardhome/conf
     networks:
       - dns
-
+%s
 networks:
   dns:
     name: rootguard-dns
@@ -418,18 +459,26 @@ volumes:
   rootguard-adguard-config:
     name: rootguard-adguard-config
 `, unboundImage, resolverAddress, adGuardImage, config.DNSBindAddress, config.DNSPort,
-		config.DNSBindAddress, config.DNSPort, networkCIDR), nil
+		config.DNSBindAddress, config.DNSPort, blockpageService, networkCIDR), nil
 }
 
 func resolverAddress(networkCIDR string) (string, error) {
+	return networkAddress(networkCIDR, 2)
+}
+
+func blockpageAddress(networkCIDR string) (string, error) {
+	return networkAddress(networkCIDR, 3)
+}
+
+func networkAddress(networkCIDR string, offset byte) (string, error) {
 	ip, network, err := net.ParseCIDR(networkCIDR)
 	if err != nil || ip.To4() == nil {
 		return "", fmt.Errorf("invalid IPv4 DNS network %q", networkCIDR)
 	}
 	address := append(net.IP(nil), ip.To4()...)
-	address[3] += 2
+	address[3] += offset
 	if !network.Contains(address) {
-		return "", fmt.Errorf("DNS network %q has no resolver address", networkCIDR)
+		return "", fmt.Errorf("DNS network %q has no address at offset %d", networkCIDR, offset)
 	}
 	return address.String(), nil
 }
@@ -480,6 +529,17 @@ func validateConfig(config Config) []Check {
 		checks = append(checks, Check{
 			ID: "dns_port", Code: "dns_port_valid", OK: true,
 			Message: "The DNS port is valid. Docker performs the final host availability check during deployment.",
+		})
+	}
+	if config.BlockpageEnabled {
+		checks = append(checks, Check{
+			ID: "blockpage", Code: "blockpage_enabled", OK: true,
+			Message: "AdGuard Home will point blocked requests at the RootGuard blockpage.",
+		})
+	} else {
+		checks = append(checks, Check{
+			ID: "blockpage", Code: "blockpage_disabled", OK: true,
+			Message: "The RootGuard blockpage is disabled; AdGuard Home keeps its default blocking response.",
 		})
 	}
 	return checks

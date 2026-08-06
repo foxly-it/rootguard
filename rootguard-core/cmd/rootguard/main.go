@@ -43,9 +43,10 @@ func main() {
 		UnboundImage:     envOrDefault("ROOTGUARD_UNBOUND_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
 		AdGuardImage:     envOrDefault("ROOTGUARD_ADGUARD_IMAGE", "adguard/adguardhome:v0.107.78"),
 		AdGuardBetaImage: envOrDefault("ROOTGUARD_ADGUARD_BETA_IMAGE", "adguard/adguardhome:beta"),
+		BlockpageImage:   envOrDefault("ROOTGUARD_BLOCKPAGE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
 		DNSNetworkCIDR:   "172.29.53.0/24",
-		Bootstrap: func(ctx context.Context) error {
-			status, err := adguardManager.Bootstrap(ctx)
+		Bootstrap: func(ctx context.Context, dnsBindAddress string) error {
+			status, err := adguardManager.Bootstrap(ctx, dnsBindAddress)
 			if err != nil {
 				return err
 			}

@@ -404,6 +404,7 @@ export interface InstallationConfig {
   dns_bind_address: string;
   dns_port: number;
   adguard_channel: "stable" | "beta";
+  blockpage_enabled: boolean;
 }
 
 export interface InstallationCheck {

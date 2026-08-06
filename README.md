@@ -141,6 +141,7 @@ Die Komponenten sind eigenständig baubare Verzeichnisse im selben Repository:
 | [`rootguard-webapp`](rootguard-webapp) | Weboberfläche und Sitzungsverwaltung |
 | [`rootguard-updater`](rootguard-updater) | Kontrollierte Control-Plane-Updates |
 | [`rootguard-unbound`](rootguard-unbound) | Gehärtetes Unbound-Image |
+| [`rootguard-blockpage`](rootguard-blockpage) | Landingpage für geblockte Anfragen |
 
 Die vormaligen eigenständigen Repositories sind archiviert und weiterhin
 lesbar (Historie, alte Issues/PRs); aktive Entwicklung findet nur noch hier

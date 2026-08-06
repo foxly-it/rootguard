@@ -20,6 +20,7 @@ services:
       ROOTGUARD_ADGUARD_BETA_IMAGE: "${ROOTGUARD_ADGUARD_BETA_IMAGE:-adguard/adguardhome:beta}"
       ROOTGUARD_ADGUARD_UPDATE_IMAGE: "${ROOTGUARD_ADGUARD_UPDATE_IMAGE:-adguard/adguardhome:latest}"
       ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:latest}"
+      ROOTGUARD_BLOCKPAGE_IMAGE: "${ROOTGUARD_BLOCKPAGE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:latest}"
       ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"

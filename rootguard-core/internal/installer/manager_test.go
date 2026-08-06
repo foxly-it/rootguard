@@ -27,8 +27,8 @@ func TestPreflightRejectsInvalidNetworkValues(t *testing.T) {
 	if report.Ready {
 		t.Fatal("expected preflight to reject invalid settings")
 	}
-	if len(report.Checks) != 5 {
-		t.Fatalf("expected five checks, got %d", len(report.Checks))
+	if len(report.Checks) != 6 {
+		t.Fatalf("expected six checks, got %d", len(report.Checks))
 	}
 }
 
@@ -164,6 +164,7 @@ func TestRenderedComposeKeepsAdministrationPrivate(t *testing.T) {
 		Config{DNSBindAddress: "192.168.1.2", DNSPort: 53},
 		"ghcr.io/foxly-it/rootguard-unbound:latest",
 		"adguard/adguardhome:v0.107.78",
+		"ghcr.io/foxly-it/rootguard-blockpage:latest",
 		"172.29.53.0/24",
 	)
 	if err != nil {
@@ -182,6 +183,45 @@ func TestRenderedComposeKeepsAdministrationPrivate(t *testing.T) {
 	}
 	if strings.Contains(content, "3000:3000") || strings.Contains(content, "80:80") {
 		t.Fatal("AdGuard administration must not be published")
+	}
+}
+
+func TestRenderedComposeBlockpageIsOptional(t *testing.T) {
+	enabled, err := renderCompose(
+		Config{DNSBindAddress: "192.168.1.2", DNSPort: 53, BlockpageEnabled: true},
+		"rootguard-unbound:test",
+		"adguard:test",
+		"ghcr.io/foxly-it/rootguard-blockpage:latest",
+		"172.29.53.0/24",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		"rootguard-blockpage",
+		"ghcr.io/foxly-it/rootguard-blockpage:latest",
+		`"192.168.1.2:80:8080/tcp"`,
+		`io.rootguard.component: "blockpage"`,
+		"cap_add: [CHOWN, SETUID, SETGID]",
+		"ipv4_address: 172.29.53.3",
+	} {
+		if !strings.Contains(enabled, expected) {
+			t.Fatalf("expected enabled compose to contain %q:\n%s", expected, enabled)
+		}
+	}
+
+	disabled, err := renderCompose(
+		Config{DNSBindAddress: "192.168.1.2", DNSPort: 53, BlockpageEnabled: false},
+		"rootguard-unbound:test",
+		"adguard:test",
+		"ghcr.io/foxly-it/rootguard-blockpage:latest",
+		"172.29.53.0/24",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(disabled, "blockpage") {
+		t.Fatalf("expected disabled compose to omit the blockpage service:\n%s", disabled)
 	}
 }
 
@@ -242,6 +282,7 @@ func TestRenderedComposeRejectsInvalidInternalNetwork(t *testing.T) {
 		Config{DNSBindAddress: "0.0.0.0", DNSPort: 53},
 		"rootguard-unbound:test",
 		"adguard:test",
+		"rootguard-blockpage:test",
 		"not-a-network",
 	)
 	if err == nil {
