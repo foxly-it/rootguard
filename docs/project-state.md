@@ -433,17 +433,21 @@ Trustworthy Stack Center and production visibility:
   "cross-service diagnostics Client→AdGuard→Unbound→DNSSEC" (Dashboard's
   Data Flow card shows this exact chain, but as status display rather
   than diagnostics).
-- Unbound expert editor: added a fullscreen mode and an inline,
-  collapsed-by-default disclosure showing the immutable base
-  configuration's already-active directives, so experts no longer need a
-  separate popup to cross-reference them while writing overrides.
-  Fullscreen renders through a `document.body` portal rather than a plain
-  CSS toggle - the parent `.unbound-page` carries a permanent
-  `animation: ... both` that leaves a non-`none` transform applied after
-  the entrance animation ends, which turns it into a containing block
-  that would otherwise trap a `position:fixed` panel inside the page
-  instead of the viewport
+- Unbound expert editor: added a fullscreen mode and an inline panel
+  showing the immutable base configuration's already-active directives, so
+  experts no longer need a separate popup to cross-reference them while
+  writing overrides. Fullscreen renders through a `document.body` portal
+  rather than a plain CSS toggle - the parent `.unbound-page` carries a
+  permanent `animation: ... both` that leaves a non-`none` transform
+  applied after the entrance animation ends, which turns it into a
+  containing block that would otherwise trap a `position:fixed` panel
+  inside the page instead of the viewport
   ([rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74)).
+  The base-config panel was initially a collapsed `<details>` disclosure;
+  feedback was that a power user needs to see what's already active at a
+  glance, without an extra click, so it was changed to a permanently
+  visible, height-capped, scrollable panel
+  ([rootguard#101](https://github.com/foxly-it/rootguard/issues/101)).
 - Monorepo migration: merged the full commit history of `rootguard-core`,
   `rootguard-webapp`, `rootguard-unbound`, and `rootguard-updater` into this
   repository as top-level directories via `git subtree`, removed
@@ -461,11 +465,10 @@ Trustworthy Stack Center and production visibility:
   archived (read-only, history and issue/PR links preserved) rather than
   deleted.
 - RootGuard Blockpage: a new `rootguard-blockpage/` monorepo directory - a
-  static, AGPL-3.0-or-later nginx image with a fresh design matching the
-  WebGUI's own hero/KPI visual language (not the old standalone
-  `adguard-blockpage` project's visuals). Guided setup configures AdGuard
+  static, AGPL-3.0-or-later nginx image. Guided setup configures AdGuard
   Home's `blocking_mode: custom_ip` automatically, optional and enabled by
-  default with its own preflight check; `blocking_ipv6` is set to `::1`
+  default with its own preflight check and a dedicated Setup toggle for
+  users who explicitly want it disabled; `blocking_ipv6` is set to `::1`
   since AdGuard's API requires a valid IPv6 value even for RootGuard's
   IPv4-only configuration. The container runs `read_only: true`,
   `cap_drop: [ALL]` with only `CHOWN`/`SETUID`/`SETGID` added back for
@@ -474,7 +477,14 @@ Trustworthy Stack Center and production visibility:
   static one). End-to-end verified on a live stack: a blocked domain
   resolves to the blockpage's address, and an HTTP request with that
   domain's Host header renders the actual page
-  ([rootguard#98](https://github.com/foxly-it/rootguard/pull/98)).
+  ([rootguard#98](https://github.com/foxly-it/rootguard/pull/98)). The
+  first design leaned on the WebGUI's own dashboard visual language
+  (hero/KPI grid, red "danger" framing), which read poorly and didn't fit
+  a landing page shown to end users rather than an admin. Rebuilt around
+  AdGuard Home's own brand green as a positive "protection working"
+  signal, with a restrained, high-contrast, single-accent, non-nested-card
+  layout; verified in both themes plus the `/info/` explainer page
+  ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
