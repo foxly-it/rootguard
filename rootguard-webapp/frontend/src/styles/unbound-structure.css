@@ -2,6 +2,16 @@
   display: none !important;
 }
 
+/* Without this, the last section in a tab can never be scrolled flush to
+   the top - there's nothing left below it to make room, so it settles
+   wherever the page happens to run out, regardless of scrollIntoView's own
+   "start" request. That leaves both the sticky section nav's active-state
+   detection and the visual "did this actually get revealed" experience
+   permanently wrong for trailing sections. */
+[role="tabpanel"] {
+  padding-bottom: 50vh;
+}
+
 .unbound-heading-status {
   display: flex;
   align-items: center;
@@ -88,9 +98,56 @@
 .unbound-page input:focus-visible,
 .unbound-page select:focus-visible,
 .unbound-page textarea:focus-visible,
-.unbound-page [role="tabpanel"]:focus-visible {
+.unbound-page [role="tabpanel"]:focus-visible,
+.unbound-page [tabindex="-1"]:focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 3px;
+}
+
+/* Sticky in-page nav for the sections within the current tab (Resolver,
+   Local DNS & forwarding, Advanced). Sticks at the top of .main's own
+   scrollport - see index.css - so it stays visible while a long tab
+   scrolls, without needing its own scroll container. Hidden entirely for
+   tabs with fewer than two registered sections (see sectionsFor in
+   Unbound.tsx), since a one-item nav has nothing to orient between. */
+.unbound-section-nav {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 24px;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 7px 24px rgb(var(--shadow-ink) / calc(0.1 * var(--shadow-scale)));
+}
+
+.unbound-section-nav a {
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.unbound-section-nav a:hover {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.unbound-section-nav a.active {
+  color: var(--text);
+  background: var(--success-soft);
+}
+
+.unbound-section-nav a:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .unbound-page [role="tabpanel"] {
@@ -312,6 +369,17 @@
   .unbound-tabs button {
     min-width: max-content;
     flex: 1 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .unbound-section-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+  }
+
+  .unbound-section-nav a {
     scroll-snap-align: start;
   }
 

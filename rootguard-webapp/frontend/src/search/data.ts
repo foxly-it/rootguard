@@ -33,34 +33,34 @@ export const searchIndex: SearchEntry[] = [
   { id: "unbound-tab-advanced", labelKey: "unbound.tab.advanced", categoryKey: "search.category.unbound", route: "/unbound/advanced" },
 
   // ---------------- Unbound: guided resolver settings ----------------
-  { id: "unbound-qname", labelKey: "unbound.qname", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["qname-minimisation", "privacy"] },
-  { id: "unbound-prefetch", labelKey: "unbound.prefetch", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["prefetch"] },
-  { id: "unbound-prefetch-key", labelKey: "unbound.prefetchKey", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["prefetch-key", "dnssec"] },
-  { id: "unbound-aggressive-nsec", labelKey: "unbound.aggressiveNsec", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["aggressive-nsec", "nsec", "dnssec"] },
-  { id: "unbound-edns-buffer", labelKey: "unbound.ednsBufferSize", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["edns-buffer-size", "1232"] },
-  { id: "unbound-logging", labelKey: "unbound.operationalLogging", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["verbosity", "logging"] },
-  { id: "unbound-serve-expired", labelKey: "unbound.expired", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["serve-expired", "availability"] },
-  { id: "unbound-serve-expired-ttl", labelKey: "unbound.expiredTtl", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["serve-expired-ttl"] },
-  { id: "unbound-serve-expired-timeout", labelKey: "unbound.expiredTimeout", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["serve-expired-client-timeout"] },
-  { id: "unbound-threads", labelKey: "unbound.threads", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["num-threads"] },
-  { id: "unbound-resource-profile", labelKey: "unbound.resourceProfile", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["msg-cache-size", "rrset-cache-size", "cache"] },
-  { id: "unbound-network-mode", labelKey: "network.title", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["do-ip4", "do-ip6", "ipv6"] },
-  { id: "unbound-presets", labelKey: "unbound.chooseProfile", categoryKey: "search.category.unbound", route: "/unbound/resolver", keywords: ["balanced", "privacy", "performance", "high availability", "presets"] },
+  { id: "unbound-qname", labelKey: "unbound.qname", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["qname-minimisation", "privacy"] },
+  { id: "unbound-prefetch", labelKey: "unbound.prefetch", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["prefetch"] },
+  { id: "unbound-prefetch-key", labelKey: "unbound.prefetchKey", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["prefetch-key", "dnssec"] },
+  { id: "unbound-aggressive-nsec", labelKey: "unbound.aggressiveNsec", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["aggressive-nsec", "nsec", "dnssec"] },
+  { id: "unbound-edns-buffer", labelKey: "unbound.ednsBufferSize", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["edns-buffer-size", "1232"] },
+  { id: "unbound-logging", labelKey: "unbound.operationalLogging", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["verbosity", "logging"] },
+  { id: "unbound-serve-expired", labelKey: "unbound.expired", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["serve-expired", "availability"] },
+  { id: "unbound-serve-expired-ttl", labelKey: "unbound.expiredTtl", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["serve-expired-ttl"] },
+  { id: "unbound-serve-expired-timeout", labelKey: "unbound.expiredTimeout", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["serve-expired-client-timeout"] },
+  { id: "unbound-threads", labelKey: "unbound.threads", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["num-threads"] },
+  { id: "unbound-resource-profile", labelKey: "unbound.resourceProfile", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["msg-cache-size", "rrset-cache-size", "cache"] },
+  { id: "unbound-network-mode", labelKey: "network.title", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-settings", keywords: ["do-ip4", "do-ip6", "ipv6"] },
+  { id: "unbound-presets", labelKey: "unbound.chooseProfile", categoryKey: "search.category.unbound", route: "/unbound/resolver#unbound-section-resolver-presets", keywords: ["balanced", "privacy", "performance", "high availability", "presets"] },
 
   // ---------------- Unbound: local DNS & forwarding ----------------
-  { id: "unbound-local-zones", labelKey: "zones.title", categoryKey: "search.category.unbound", route: "/unbound/zones", keywords: ["local-zone", "local-data", "a record", "aaaa record", "cname"] },
-  { id: "unbound-forwarding", labelKey: "forward.title", categoryKey: "search.category.unbound", route: "/unbound/zones", keywords: ["forward-zone", "stub-zone"] },
-  { id: "unbound-private-domains", labelKey: "private.title", categoryKey: "search.category.unbound", route: "/unbound/zones", keywords: ["private-domain", "private-address", "rfc1918"] },
-  { id: "unbound-reverse-zones", labelKey: "private.reverseTitle", categoryKey: "search.category.unbound", route: "/unbound/zones", keywords: ["in-addr.arpa", "ip6.arpa", "ptr"] },
+  { id: "unbound-local-zones", labelKey: "zones.title", categoryKey: "search.category.unbound", route: "/unbound/zones#unbound-section-zones-local", keywords: ["local-zone", "local-data", "a record", "aaaa record", "cname"] },
+  { id: "unbound-forwarding", labelKey: "forward.title", categoryKey: "search.category.unbound", route: "/unbound/zones#unbound-section-zones-forwarding", keywords: ["forward-zone", "stub-zone"] },
+  { id: "unbound-private-domains", labelKey: "private.title", categoryKey: "search.category.unbound", route: "/unbound/zones#unbound-section-zones-private", keywords: ["private-domain", "private-address", "rfc1918"] },
+  { id: "unbound-reverse-zones", labelKey: "private.reverseTitle", categoryKey: "search.category.unbound", route: "/unbound/zones#unbound-section-zones-private", keywords: ["in-addr.arpa", "ip6.arpa", "ptr"] },
 
   // ---------------- Unbound: advanced ----------------
-  { id: "unbound-expert", labelKey: "expert.title", categoryKey: "search.category.unbound", route: "/unbound/advanced", keywords: ["90-rootguard-custom.conf", "expert editor", "custom config"] },
-  { id: "unbound-live-config", labelKey: "unbound.liveTitle", categoryKey: "search.category.unbound", route: "/unbound/advanced", keywords: ["live configuration"] },
-  { id: "unbound-history", labelKey: "unbound.history", categoryKey: "search.category.unbound", route: "/unbound/advanced", keywords: ["rollback", "versions"] },
+  { id: "unbound-expert", labelKey: "expert.title", categoryKey: "search.category.unbound", route: "/unbound/advanced#unbound-section-advanced-expert", keywords: ["90-rootguard-custom.conf", "expert editor", "custom config"] },
+  { id: "unbound-live-config", labelKey: "unbound.liveTitle", categoryKey: "search.category.unbound", route: "/unbound/advanced#unbound-section-advanced-live", keywords: ["live configuration"] },
+  { id: "unbound-history", labelKey: "unbound.history", categoryKey: "search.category.unbound", route: "/unbound/advanced#unbound-section-advanced-history", keywords: ["rollback", "versions"] },
 
   // ---------------- Unbound: diagnostics ----------------
-  { id: "unbound-diagnostics", labelKey: "unbound.liveDiagnostics", categoryKey: "search.category.unbound", route: "/unbound", keywords: ["diagnostics", "dnssec check"] },
-  { id: "unbound-diagnostic-logging", labelKey: "unbound.diagnosticLogging", categoryKey: "search.category.unbound", route: "/unbound", keywords: ["verbosity 2"] },
+  { id: "unbound-diagnostics", labelKey: "unbound.liveDiagnostics", categoryKey: "search.category.unbound", route: "/unbound#unbound-section-overview-diagnostics", keywords: ["diagnostics", "dnssec check"] },
+  { id: "unbound-diagnostic-logging", labelKey: "unbound.diagnosticLogging", categoryKey: "search.category.unbound", route: "/unbound#unbound-section-overview-diagnostics", keywords: ["verbosity 2"] },
 
   // ---------------- Setup ----------------
   { id: "setup-network", labelKey: "setup.network", categoryKey: "search.category.setup", route: "/setup", keywords: ["bind address", "dns port", "interface"] },

@@ -20,7 +20,7 @@ const templates = [
   { label: "expert.template.hardening", content: "server:\n    hide-identity: yes\n    hide-version: yes\n    harden-glue: yes\n    harden-dnssec-stripped: yes\n    aggressive-nsec: yes\n" },
 ];
 
-export default function UnboundExpertEditor({ version, baseConfig, onActivated }: { version?: string; baseConfig?: string; onActivated: () => Promise<void> }) {
+export default function UnboundExpertEditor({ id, version, baseConfig, onActivated }: { id?: string; version?: string; baseConfig?: string; onActivated: () => Promise<void> }) {
   const { locale, t } = useI18n();
   const [open, setOpen] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -156,7 +156,7 @@ export default function UnboundExpertEditor({ version, baseConfig, onActivated }
   // panel would size itself against that page div instead of the
   // viewport (see ContentModal/SearchModal for the same escape pattern).
   const panel = (
-    <section className={`glass-card expert-panel${fullscreen ? " expert-panel-fullscreen" : ""}`}>
+    <section id={id} className={`glass-card expert-panel${fullscreen ? " expert-panel-fullscreen" : ""}`} tabIndex={-1}>
       <div className="panel-heading expert-heading">
         <div><p className="unbound-eyebrow">{t("expert.eyebrow")}</p><h2>{t("expert.title")}</h2></div>
         <div className="expert-heading-actions">

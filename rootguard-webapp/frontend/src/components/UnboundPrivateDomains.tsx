@@ -19,9 +19,11 @@ const reverseNetworks: UnboundReverseZonePolicy["network"][] = [
 ];
 
 export default function UnboundPrivateDomains({
+  id,
   version,
   onActivated,
 }: {
+  id?: string;
   version?: string;
   onActivated: () => Promise<void>;
 }) {
@@ -129,7 +131,7 @@ export default function UnboundPrivateDomains({
   }
 
   return (
-    <section className="glass-card private-domains-panel">
+    <section id={id} className="glass-card private-domains-panel" tabIndex={-1}>
       <div className="panel-heading private-heading">
         <div>
           <p className="unbound-eyebrow">{t("private.eyebrow")}</p>

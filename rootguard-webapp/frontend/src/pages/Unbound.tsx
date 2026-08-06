@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { Activity, Code2, Expand, MapPinned, SlidersHorizontal } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
@@ -52,6 +52,7 @@ export default function Unbound() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
   const { section: sectionParam } = useParams<{ section?: string }>();
   const activeSection: UnboundSection = isUnboundSection(sectionParam) ? sectionParam : "overview";
   const setActiveSection = useCallback(
@@ -132,6 +133,16 @@ export default function Unbound() {
     }, 10_000);
     return () => window.clearInterval(refresh);
   }, [diagnosticLogging?.active]);
+
+  // Deep-links and search results can point at a specific section within a
+  // tab (e.g. "/unbound/advanced#unbound-section-advanced-expert"), not just
+  // the tab itself. Both panels and their sections stay in the DOM (toggled
+  // via `hidden`), so once loading finishes the target is guaranteed to
+  // exist for every section id this page actually renders.
+  useEffect(() => {
+    if (loading || !location.hash) return;
+    jumpToSection(location.hash.slice(1));
+  }, [loading, location.hash]);
 
   async function selectPreset(preset: UnboundPreset) {
     if (busy || !settings) return;
@@ -256,6 +267,7 @@ export default function Unbound() {
       </div>
 
       <UnboundTabs active={activeSection} onChange={setActiveSection} t={t} />
+      <UnboundSectionNav section={activeSection} hash={location.hash} t={t} />
 
       <div className="unbound-feedback" aria-live="polite" aria-atomic="true">
         {message && <div className="feedback success">{message}</div>}
@@ -269,7 +281,7 @@ export default function Unbound() {
           <SummaryCard label={t("unbound.summary.history")} value={t("unbound.summary.versionCount", { count: history.length })} detail={history[0] ? formatDate(history[0].created_at) : t("unbound.noHistoryShort")} />
           <SummaryCard label={t("unbound.summary.customConfig")} value={liveConfig?.custom_config ? t("common.active") : t("unbound.summary.none")} detail={t("unbound.summary.customHelp")} />
         </div>
-        <section className="glass-card compact overview-diagnostics">
+        <section id="unbound-section-overview-diagnostics" className="glass-card compact overview-diagnostics" tabIndex={-1}>
           <div>
             <p className="unbound-eyebrow">{t("unbound.overviewHealth")}</p>
             <h2>{t("unbound.liveDiagnostics")}</h2>
@@ -294,7 +306,7 @@ export default function Unbound() {
       </section>
 
       <section id="unbound-panel-resolver" role="tabpanel" aria-labelledby="unbound-tab-resolver" hidden={activeSection !== "resolver"} tabIndex={0}>
-        <section className="glass-card preset-panel">
+        <section id="unbound-section-resolver-presets" className="glass-card preset-panel" tabIndex={-1}>
           <div className="panel-heading"><div><p className="unbound-eyebrow">{t("unbound.presets")}</p><h2>{t("unbound.chooseProfile")}</h2></div><span>{t("unbound.draftOnly")}</span></div>
           <div className="preset-grid">{presets.map((preset) => (
             <button key={preset.id} className={`preset-card ${settingsEqual(settings, preset.settings) ? "selected" : ""}`} type="button" aria-pressed={settingsEqual(settings, preset.settings)} disabled={busy} onClick={() => selectPreset(preset)}>
@@ -306,7 +318,7 @@ export default function Unbound() {
         </section>
 
         <div className="unbound-grid">
-          <form onSubmit={createPreview} className="glass-card compact settings-panel">
+          <form id="unbound-section-resolver-settings" onSubmit={createPreview} className="glass-card compact settings-panel" tabIndex={-1}>
             <h2>{t("unbound.resolverSettings")}</h2>
             <p className="muted-copy">{t("unbound.resolverSettingsHelp")}</p>
             <Toggle directive="qname-minimisation" label={t("unbound.qname")} badge={t("unbound.qnameBadge")} description={t("unbound.qnameHelp")} checked={settings.qname_minimisation} onChange={(value) => setSettings({ ...settings, qname_minimisation: value })} />
@@ -352,7 +364,7 @@ export default function Unbound() {
             </details>
             <button className="rg-button rg-button-primary" type="submit" disabled={busy}>{t("unbound.review")}</button>
           </form>
-          <section className="glass-card compact side-panel advisor-panel">
+          <section id="unbound-section-resolver-advisor" className="glass-card compact side-panel advisor-panel" tabIndex={-1}>
             <div className="advisor-heading"><h2>RootGuard Advisor</h2>{advice && <span className={`advice-state ${advice.status}`}>{t(`unbound.advice.${advice.status}`)}</span>}</div>
             {!advice && <p className="muted-copy">{t("unbound.advisorHelp")}</p>}
             {advice?.recommendations.map((item) => <article className={`advice-item ${item.severity}`} key={item.id}><strong>{adviceText(item.id, "title", t, item.title)}</strong><p>{adviceText(item.id, "description", t, item.description)}</p><small>{adviceText(item.id, "suggestion", t, item.suggestion)}</small></article>)}
@@ -368,15 +380,15 @@ export default function Unbound() {
 
       <section id="unbound-panel-zones" role="tabpanel" aria-labelledby="unbound-tab-zones" hidden={activeSection !== "zones"} tabIndex={0}>
         <div className="section-introduction"><p className="unbound-eyebrow">{t("unbound.localDnsEyebrow")}</p><h2>{t("unbound.localDnsTitle")}</h2><p>{t("unbound.localDnsHelp")}</p></div>
-        <UnboundGuidedZones version={history[0]?.id} onActivated={reload} />
-        <UnboundPrivateDomains version={history[0]?.id} onActivated={reload} />
-        <UnboundForwardZones version={history[0]?.id} onActivated={reload} />
+        <UnboundGuidedZones id="unbound-section-zones-local" version={history[0]?.id} onActivated={reload} />
+        <UnboundPrivateDomains id="unbound-section-zones-private" version={history[0]?.id} onActivated={reload} />
+        <UnboundForwardZones id="unbound-section-zones-forwarding" version={history[0]?.id} onActivated={reload} />
       </section>
 
       <section id="unbound-panel-advanced" role="tabpanel" aria-labelledby="unbound-tab-advanced" hidden={activeSection !== "advanced"} tabIndex={0}>
         <div className="section-introduction"><p className="unbound-eyebrow">{t("unbound.advancedEyebrow")}</p><h2>{t("unbound.advancedTitle")}</h2><p>{t("unbound.advancedHelp")}</p></div>
         {liveConfig && (
-          <section className="glass-card live-config-panel">
+          <section id="unbound-section-advanced-live" className="glass-card live-config-panel" tabIndex={-1}>
             <div className="panel-heading"><div><p className="unbound-eyebrow">LIVE · READ ONLY</p><h2>{t("unbound.liveTitle")}</h2><p className="muted-copy">{t("unbound.liveHelp")}</p></div><span className="live-config-state"><i /> {t("common.active")} · {formatDate(liveConfig.checked_at)}</span></div>
             <div className="config-file-label"><span>50-rootguard.conf</span><code>/etc/unbound/unbound.d/50-rootguard.conf</code></div>
             <details className="live-config-disclosure"><summary>{t("unbound.managedConfig")}</summary><pre>{liveConfig.managed_config}</pre></details>
@@ -389,8 +401,8 @@ export default function Unbound() {
             </ContentModal>
           </section>
         )}
-        <UnboundExpertEditor version={history[0]?.id} baseConfig={liveConfig?.base_config} onActivated={reload} />
-        <section className="glass-card history-panel">
+        <UnboundExpertEditor id="unbound-section-advanced-expert" version={history[0]?.id} baseConfig={liveConfig?.base_config} onActivated={reload} />
+        <section id="unbound-section-advanced-history" className="glass-card history-panel" tabIndex={-1}>
           <details className="history-disclosure">
             <summary><span><span className="unbound-eyebrow">ROLLBACK</span><strong>{t("unbound.history")}</strong></span><em>{t("unbound.versions", { count: history.length })}</em></summary>
             {history.length === 0 ? <p className="muted-copy">{t("unbound.noHistory")}</p> : <div className="history-list">{history.map((entry, index) => <article key={entry.id}><div><strong>{index === 0 ? t("unbound.latest") : t("unbound.saved")}</strong><span>{formatDate(entry.created_at)}</span><small>Threads {entry.settings.threads} · TTL {entry.settings.cache_min_ttl}–{entry.settings.cache_max_ttl} · {t("forward.historyCount", { count: entry.settings.forward_zones?.length ?? 0 })}{entry.custom_config ? " · Custom Config" : ""}</small></div><button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy || index === 0} onClick={() => restore(entry)}>{index === 0 ? t("common.active") : t("unbound.restore")}</button></article>)}</div>}
@@ -424,6 +436,118 @@ function UnboundTabs({ active, onChange, t }: { active: UnboundSection; onChange
     event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
   return <div className="unbound-tabs" role="tablist" aria-label={t("unbound.navigation")}>{tabs.map((tab, index) => <button id={`unbound-tab-${tab.id}`} role="tab" type="button" key={tab.id} aria-selected={active === tab.id} aria-controls={`unbound-panel-${tab.id}`} tabIndex={active === tab.id ? 0 : -1} onKeyDown={(event) => handleKeys(event, index)} onClick={() => onChange(tab.id)}>{tab.icon}<span>{t(`unbound.tab.${tab.id}`)}</span></button>)}</div>;
+}
+
+interface UnboundSubSection { id: string; label: string }
+
+function sectionsFor(section: UnboundSection, t: (key: string) => string): UnboundSubSection[] {
+  switch (section) {
+    case "resolver":
+      return [
+        { id: "unbound-section-resolver-presets", label: t("unbound.section.profiles") },
+        { id: "unbound-section-resolver-settings", label: t("unbound.resolverSettings") },
+        { id: "unbound-section-resolver-advisor", label: "RootGuard Advisor" },
+      ];
+    case "zones":
+      return [
+        { id: "unbound-section-zones-local", label: t("zones.title") },
+        { id: "unbound-section-zones-private", label: t("private.title") },
+        { id: "unbound-section-zones-forwarding", label: t("forward.title") },
+      ];
+    case "advanced":
+      return [
+        { id: "unbound-section-advanced-live", label: t("unbound.liveTitle") },
+        { id: "unbound-section-advanced-expert", label: t("expert.title") },
+        { id: "unbound-section-advanced-history", label: t("unbound.history") },
+      ];
+    default:
+      return [];
+  }
+}
+
+function jumpToSection(id: string) {
+  const target = document.getElementById(id);
+  if (!target) return;
+  // A collapsed <details> (e.g. the history panel) would otherwise scroll
+  // into view showing only its closed summary - open it so "reveal the
+  // section" actually reveals its content, not just its header.
+  target.querySelector<HTMLDetailsElement>("details")?.setAttribute("open", "");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  target.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+  target.focus({ preventScroll: true });
+  window.history.replaceState(null, "", `#${id}`);
+}
+
+function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash: string; t: (key: string) => string }) {
+  const sections = useMemo(() => sectionsFor(section, t), [section, t]);
+  const requestedId = hash.slice(1);
+  const [activeId, setActiveId] = useState("");
+
+  useEffect(() => {
+    if (sections.length === 0) { setActiveId(""); return; }
+    // Seed from the requested hash (a deep link or search result) so the
+    // nav highlights the actual destination right away, instead of always
+    // defaulting to the first section until the next manual scroll makes
+    // the observer below correct it.
+    setActiveId(sections.some((entry) => entry.id === requestedId) ? requestedId : sections[0].id);
+    const elements = sections
+      .map((entry) => document.getElementById(entry.id))
+      .filter((element): element is HTMLElement => element !== null);
+    if (elements.length === 0) return;
+    // The seeded value above can be permanently un-reachable by the
+    // observer below: the last section on a short tab can't be scrolled
+    // any further up once the page hits its max scroll position, so it may
+    // never count as "intersecting" the top band even at rest - that's not
+    // transient race noise, it's the genuine final geometry. So the
+    // observer stays inert until the user actually tries to scroll
+    // themselves; only then does real scroll-spy behaviour take over.
+    let userScrolled = false;
+    const markScrolled = () => { userScrolled = true; };
+    const scrollHost = document.getElementById("main-content");
+    scrollHost?.addEventListener("wheel", markScrolled, { passive: true, once: true });
+    scrollHost?.addEventListener("touchmove", markScrolled, { passive: true, once: true });
+    scrollHost?.addEventListener("keydown", markScrolled, { once: true });
+    // Each callback only reports entries whose intersection state actually
+    // changed since the last check, not a full snapshot of every observed
+    // element - so the latest state per id has to be tracked across calls
+    // rather than treating each callback's entries as the complete picture.
+    const latestById = new Map<string, IntersectionObserverEntry>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => latestById.set(entry.target.id, entry));
+        if (!userScrolled) return;
+        const visible = Array.from(latestById.values())
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (visible) setActiveId(visible.target.id);
+      },
+      { rootMargin: "-96px 0px -60% 0px", threshold: 0 },
+    );
+    elements.forEach((element) => observer.observe(element));
+    return () => {
+      observer.disconnect();
+      scrollHost?.removeEventListener("wheel", markScrolled);
+      scrollHost?.removeEventListener("touchmove", markScrolled);
+      scrollHost?.removeEventListener("keydown", markScrolled);
+    };
+  }, [sections, requestedId]);
+
+  if (sections.length < 2) return null;
+
+  return (
+    <nav className="unbound-section-nav" aria-label={t("unbound.sectionNav")}>
+      {sections.map((entry) => (
+        <a
+          key={entry.id}
+          href={`#${entry.id}`}
+          className={activeId === entry.id ? "active" : ""}
+          onClick={(event) => { event.preventDefault(); jumpToSection(entry.id); setActiveId(entry.id); }}
+        >
+          {entry.label}
+        </a>
+      ))}
+    </nav>
+  );
 }
 
 function SummaryCard({ label, value, detail, state = "neutral" }: { label: string; value: string; detail: string; state?: "healthy" | "neutral" }) {
