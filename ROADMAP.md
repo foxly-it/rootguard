@@ -176,8 +176,12 @@ operable.
       reload-safe) and every Unbound search entry points at its actual tab
       instead of only the bare page
       ([rootguard#106](https://github.com/foxly-it/rootguard/pull/106))
-- [ ] Reveal the relevant section within the destination tab and place focus
-      there, without changing a setting directly from the result list
+- [x] Reveal the relevant section within the destination tab and place focus
+      there, without changing a setting directly from the result list -
+      search entries now carry a `#unbound-section-...` hash alongside
+      their tab route; landing scrolls to and focuses that element, and
+      auto-expands it if it's a collapsed panel like the version history
+      ([rootguard#107](https://github.com/foxly-it/rootguard/pull/107))
 - [x] Replace hard-coded theme colours with semantic design tokens and offer
       persistent System, Light, and Dark modes, with the system preference as
       the default for users who have not made a selection. Covers the app
@@ -199,9 +203,13 @@ operable.
       settings pages scroll; allow the navigation region itself to scroll when
       viewport height is insufficient and keep mobile navigation fully labelled
       ([rootguard-webapp#70](https://github.com/foxly-it/rootguard-webapp/pull/70))
-- [ ] Add sticky in-page navigation for long settings sections where it
+- [x] Add sticky in-page navigation for long settings sections where it
       materially improves orientation and connect its destinations to global
-      search results
+      search results - a sticky section nav appears under the tab strip for
+      Resolver, Local DNS & forwarding, and Advanced (each has 3+ distinct
+      sub-sections), with scroll-spy highlighting of the currently visible
+      section
+      ([rootguard#107](https://github.com/foxly-it/rootguard/pull/107))
 - [ ] Verify responsive behaviour, 200% browser zoom, WCAG 2.2 AA contrast,
       screen-reader names, focus order, tooltips, menus, shortcuts, and both
       colour themes in German and English

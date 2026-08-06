@@ -32,9 +32,11 @@ const emptyRecord = (): LocalRecord => ({ name: "router", type: "A", value: "192
 const emptyZone = (): LocalZone => ({ zone: "home.arpa", records: [emptyRecord()] });
 
 export default function UnboundGuidedZones({
+  id,
   version,
   onActivated,
 }: {
+  id?: string;
   version?: string;
   onActivated: () => Promise<void>;
 }) {
@@ -152,7 +154,7 @@ export default function UnboundGuidedZones({
   }
 
   return (
-    <section className="glass-card guided-zones-panel">
+    <section id={id} className="glass-card guided-zones-panel" tabIndex={-1}>
       <div className="panel-heading guided-heading">
         <div>
           <p className="unbound-eyebrow">{t("zones.eyebrow")}</p>

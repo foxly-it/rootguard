@@ -26,9 +26,11 @@ const emptyZone = (): UnboundForwardZone => ({
 });
 
 export default function UnboundForwardZones({
+  id,
   version,
   onActivated,
 }: {
+  id?: string;
   version?: string;
   onActivated: () => Promise<void>;
 }) {
@@ -174,7 +176,7 @@ export default function UnboundForwardZones({
   }
 
   return (
-    <section className="glass-card forward-zones-panel">
+    <section id={id} className="glass-card forward-zones-panel" tabIndex={-1}>
       <div className="panel-heading forward-heading">
         <div>
           <p className="unbound-eyebrow">{t("forward.eyebrow")}</p>

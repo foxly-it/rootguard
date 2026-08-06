@@ -3,8 +3,10 @@
 // Purpose: Global, local-only search. Opens from its own
 // header trigger, the "S" key, or Ctrl/Cmd+K; navigates to
 // each entry's route, which for Unbound entries includes the
-// specific tab (e.g. "/unbound/resolver"), landing directly
-// on the relevant section instead of just the page.
+// specific tab and, where one exists, a "#unbound-section-..."
+// hash - Unbound.tsx scrolls to and focuses that element once
+// the page has loaded, landing on the exact setting instead of
+// just the tab.
 // =====================================================
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";

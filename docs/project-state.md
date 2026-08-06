@@ -393,9 +393,31 @@ Trustworthy Stack Center and production visibility:
   so selecting e.g. "expert editor" or "forward-zone" lands directly on
   the Advanced or Local DNS & forwarding tab. Sidebar active-state
   highlighting needed no change, since `NavLink` already does
-  non-exact prefix matching. Reveal-the-exact-section-and-place-focus
-  within the destination tab remains open
+  non-exact prefix matching
   ([rootguard#106](https://github.com/foxly-it/rootguard/pull/106)).
+  Every major sub-section across the Resolver, Local DNS & forwarding,
+  and Advanced tabs (plus the Overview diagnostics block) now has an id;
+  search entries carry a `#unbound-section-...` hash alongside their tab
+  route, and landing on one scrolls to and focuses that element, opening
+  it first if it's a collapsed panel like the version history. A sticky
+  `UnboundSectionNav` bar under the tab strip lists the current tab's
+  sections (only rendered when a tab has 2+ of them) with scroll-spy
+  highlighting of whichever one is currently in view. Getting the
+  scroll-spy right needed two fixes beyond the initial version:
+  IntersectionObserver callbacks report only the elements whose state
+  *changed*, not a full snapshot of everything being observed, so the
+  latest state per element has to be tracked across calls rather than
+  read fresh from each individual callback; and the observer must not
+  react at all until the user has scrolled themselves, since a section
+  can be positioned exactly where a deep link or search result put it
+  and *still* not count as "intersecting" a percentage-based trigger
+  band - not a race condition, just the real geometry for whichever
+  section happens to be last on a tab, since nothing follows it to make
+  room to scroll it any further up. Fixed at the layout level instead of
+  purely in JS: tab panels now carry generous `padding-bottom`, the
+  standard technique for making every anchor on a page - including the
+  last one - reachable at the top of the viewport
+  ([rootguard#107](https://github.com/foxly-it/rootguard/pull/107)).
 - removed the four decorative bordered-circle pseudo-elements on the
   Dashboard/Setup/Unbound/Stack hero cards (user-reported: too
   prominent in light mode, distracting in dark mode) and fixed the

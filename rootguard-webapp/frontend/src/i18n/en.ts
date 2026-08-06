@@ -399,6 +399,8 @@ export const en: LocaleDefinition = {
     "unbound.statusActive": "Loaded successfully",
     "unbound.statusUnknown": "Status unavailable",
     "unbound.navigation": "Unbound configuration sections",
+    "unbound.sectionNav": "Sections in this tab",
+    "unbound.section.profiles": "Profiles",
     "unbound.tab.overview": "Overview",
     "unbound.tab.resolver": "Resolver",
     "unbound.tab.zones": "Local DNS & forwarding",
