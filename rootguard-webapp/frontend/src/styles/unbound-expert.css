@@ -1,8 +1,29 @@
 .expert-panel { box-sizing: border-box; margin-top: 22px; }
 .expert-heading { margin-bottom: 8px; }
 .expert-heading-actions { display: flex; gap: 8px; align-items: center; }
-.expert-base-config { margin: 0 0 18px; }
-.expert-base-config > pre { color: var(--text-muted); opacity: 0.85; }
+/* Always visible, not a click-to-expand disclosure: a power user should
+   see what the immutable base already sets at a glance, without leaving
+   the editor or expanding anything. Height-capped with its own scroll so
+   it stays a reference panel rather than dominating the page. */
+.expert-base-config {
+  margin: 0 0 18px;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+.expert-base-config > p { margin: 0 0 10px; }
+.expert-base-config > pre {
+  max-height: 220px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-radius: 7px;
+  background: #07101c;
+  color: #9fb4d4;
+  font-size: 11px;
+  line-height: 1.6;
+}
 
 /* Fullscreen: an in-page overlay (not a portal) - .main has no transform
    so position:fixed still escapes it. The editor column becomes a flex

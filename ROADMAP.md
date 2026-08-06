@@ -252,8 +252,10 @@ The detailed ownership and directive plan lives in
       immutable base configuration's already-active directives inline
       (greyed out, read-only) instead of only in a separate popup, so expert
       users get a complete picture of the effective configuration without
-      leaving the editor
-      ([rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74))
+      leaving the editor. The base config panel is permanently visible next
+      to the editor, not behind a click-to-expand disclosure
+      ([rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74),
+      [rootguard#101](https://github.com/foxly-it/rootguard/issues/101))
 - [ ] Conflict detection across zones, forwarding, access rules, and expert text
 - [ ] Import/export of the complete logical resolver configuration
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
@@ -293,17 +295,22 @@ Product boundary:
 - [x] Ship a self-hosted, RootGuard-branded blocked-request landing page as a
       new `rootguard-blockpage` monorepo directory (same pattern as
       core/webapp/unbound/updater: own Dockerfile, own path-filtered CI),
-      AGPL-3.0-or-later like the rest of RootGuard. A fresh design matching
-      the WebGUI's own hero/KPI visual language, not a port of the visuals
-      from the existing standalone `foxly-it/adguard-blockpage` project;
-      static HTML/CSS/JS, auto dark/light, no external dependencies.
-      Configures AdGuard Home's "custom IP for blocked hosts" automatically
-      during guided setup, optional and enabled by default. HTTP only - a
-      DNS-level blocking IP cannot present a valid TLS certificate for
-      arbitrary blocked domains, so HTTPS requests show the browser's own
+      AGPL-3.0-or-later like the rest of RootGuard. Static HTML/CSS/JS, auto
+      dark/light, no external dependencies. Configures AdGuard Home's
+      "custom IP for blocked hosts" automatically during guided setup,
+      optional and enabled by default (a dedicated Setup toggle lets users
+      who explicitly don't want it disable it; recommended by default). HTTP
+      only - a DNS-level blocking IP cannot present a valid TLS certificate
+      for arbitrary blocked domains, so HTTPS requests show the browser's own
       certificate-warning interstitial instead of the page; this is AdGuard
       Home's documented `custom_ip` behaviour, not a RootGuard limitation
-      ([rootguard#98](https://github.com/foxly-it/rootguard/pull/98))
+      ([rootguard#98](https://github.com/foxly-it/rootguard/pull/98)).
+      Redesigned after initial feedback that the first version leaned too
+      much on the WebGUI's own dashboard visual language (hero/KPI grid, red
+      "danger" framing); the shipped design instead follows AdGuard Home's
+      own brand green as a positive "protection working" signal, with a
+      restrained, high-contrast, single-accent layout
+      ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100))
 
 Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
 coherent appliance lifecycle around it.

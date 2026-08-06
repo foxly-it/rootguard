@@ -181,10 +181,10 @@ export default function UnboundExpertEditor({ version, baseConfig, onActivated }
         {message && <div className="feedback success">{message}</div>}
         {error && <div className="feedback error">{error}</div>}
         {baseConfig && (
-          <details className="live-config-disclosure expert-base-config">
-            <summary>{t("expert.baseConfigSummary")}</summary>
+          <div className="expert-base-config">
+            <p className="unbound-eyebrow">{t("expert.baseConfigSummary")}</p>
             <pre>{baseConfig}</pre>
-          </details>
+          </div>
         )}
         <div className="template-row">{templates.map((template) => <button type="button" key={template.label} onClick={() => insertTemplate(template.content)}>{t(template.label)}</button>)}</div>
         <div className="expert-grid">
