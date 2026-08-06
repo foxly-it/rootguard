@@ -16,6 +16,7 @@ const defaultConfig: InstallationConfig = {
   dns_bind_address: "0.0.0.0",
   dns_port: 53,
   adguard_channel: "stable",
+  blockpage_enabled: true,
 };
 
 export default function Setup() {
@@ -196,6 +197,28 @@ export default function Setup() {
             <div><strong>{t("setup.channel.betaWarningTitle")}</strong><p>{t("setup.channel.betaWarning")}</p></div>
           </div>
         )}
+
+        <fieldset className="release-channel blockpage-toggle" disabled={deploying}>
+          <legend>{t("setup.blockpage.title")}</legend>
+          <p>{t("setup.blockpage.help")}</p>
+          <div className="release-channel-options blockpage-toggle-options">
+            <label className={config.blockpage_enabled ? "selected" : ""}>
+              <input
+                type="checkbox"
+                checked={config.blockpage_enabled}
+                onChange={(event) => {
+                  setConfig({ ...config, blockpage_enabled: event.target.checked });
+                  setPreflight(null);
+                }}
+              />
+              <span>
+                <strong>{t("setup.blockpage.enable")}</strong>
+                <small>{t("setup.blockpage.enableHelp")}</small>
+              </span>
+              <i>{t("setup.channel.recommended")}</i>
+            </label>
+          </div>
+        </fieldset>
 
         <div className="setup-actions">
           <button className="rg-button rg-button-secondary setup-button secondary" disabled={busy || deploying} onClick={runPreflight}>

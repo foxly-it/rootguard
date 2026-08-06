@@ -65,7 +65,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/unbound/directives", unboundDirectivesHandler)
 	apiMux.HandleFunc("GET /api/adguard/status", getAdGuardStatusHandler(deps.AdGuard))
 	apiMux.HandleFunc("GET /api/adguard/filter-report", getAdGuardFilterReportHandler(deps.AdGuard))
-	apiMux.HandleFunc("POST /api/adguard/bootstrap", bootstrapAdGuardHandler(deps.AdGuard))
+	apiMux.HandleFunc("POST /api/adguard/bootstrap", bootstrapAdGuardHandler(deps.AdGuard, deps.Installer))
 	apiMux.Handle("/api/adguard/ui/", deps.AdGuard.UIHandler())
 
 	root := http.NewServeMux()
@@ -234,9 +234,13 @@ func getAdGuardFilterReportHandler(manager *adguard.Manager) http.HandlerFunc {
 	}
 }
 
-func bootstrapAdGuardHandler(manager *adguard.Manager) http.HandlerFunc {
+func bootstrapAdGuardHandler(manager *adguard.Manager, installer *installer.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		status, err := manager.Bootstrap(r.Context())
+		var blockPageIP string
+		if config := installer.Status().Config; config != nil && config.BlockpageEnabled {
+			blockPageIP = config.DNSBindAddress
+		}
+		status, err := manager.Bootstrap(r.Context(), blockPageIP)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err)
 			return

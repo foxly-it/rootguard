@@ -432,6 +432,8 @@
   text-transform: uppercase;
 }
 
+.blockpage-toggle-options { grid-template-columns: 1fr; }
+
 .beta-warning {
   display: flex;
   gap: 12px;

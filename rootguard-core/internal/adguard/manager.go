@@ -154,7 +154,7 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 	return status, nil
 }
 
-func (m *Manager) Bootstrap(ctx context.Context) (Status, error) {
+func (m *Manager) Bootstrap(ctx context.Context, blockPageIP string) (Status, error) {
 	credentials, err := m.loadCredentials()
 	if errors.Is(err, os.ErrNotExist) {
 		credentials, err = m.install(ctx)
@@ -165,7 +165,7 @@ func (m *Manager) Bootstrap(ctx context.Context) (Status, error) {
 	if err := m.waitUntilReady(ctx, credentials); err != nil {
 		return Status{}, err
 	}
-	if err := m.configureUpstream(ctx, credentials); err != nil {
+	if err := m.configureUpstream(ctx, credentials, blockPageIP); err != nil {
 		return Status{}, err
 	}
 	return m.Status(ctx)
@@ -257,7 +257,7 @@ func (m *Manager) waitUntilReady(ctx context.Context, credentials Credentials) e
 	return fmt.Errorf("adguard did not become ready: %w", lastErr)
 }
 
-func (m *Manager) configureUpstream(ctx context.Context, credentials Credentials) error {
+func (m *Manager) configureUpstream(ctx context.Context, credentials Credentials, blockPageIP string) error {
 	testRequest := map[string]any{
 		"bootstrap_dns":    []string{},
 		"upstream_dns":     []string{m.upstream},
@@ -288,6 +288,16 @@ func (m *Manager) configureUpstream(ctx context.Context, credentials Credentials
 		"cache_optimistic":     false,
 		"blocked_response_ttl": 10,
 		"upstream_timeout":     10,
+	}
+	if blockPageIP != "" {
+		dnsConfig["blocking_mode"] = "custom_ip"
+		dnsConfig["blocking_ipv4"] = blockPageIP
+		// AdGuard's dns_config validator requires blocking_ipv6 to be a
+		// valid IPv6 address whenever blocking_mode is custom_ip, even
+		// though RootGuard's DNS bind address (and this blockpage) is
+		// IPv4-only. Point it at loopback: an IPv6 client hitting a
+		// blocked domain fails closed instead of reaching the real site.
+		dnsConfig["blocking_ipv6"] = "::1"
 	}
 	if err := m.request(ctx, http.MethodPost, m.apiURL+"/control/dns_config", dnsConfig, nil, &credentials); err != nil {
 		return fmt.Errorf("configure unbound upstream: %w", err)

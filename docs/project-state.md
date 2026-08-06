@@ -8,13 +8,15 @@ before repeating repository-wide discovery.
 ## Repository layout
 
 `foxly-it/rootguard` is a monorepo coordinating deployment, documentation,
-CI, and website, alongside four independently buildable component
+CI, and website, alongside five independently buildable component
 directories (each with its own Dockerfile and path-filtered CI workflow):
 
 - `rootguard-core/` owns privileged orchestration and configuration.
 - `rootguard-webapp/` owns the authenticated backend proxy and React UI.
 - `rootguard-unbound/` is also usable as a standalone resolver image.
 - `rootguard-updater/` is the internal control-plane updater helper.
+- `rootguard-blockpage/` is the landing page shown for AdGuard-blocked
+  requests; also usable standalone (see its own README).
 
 These were four separate repositories included as Git submodules until the
 monorepo migration (see "Delivered and verified" below); their full commit
@@ -458,6 +460,21 @@ Trustworthy Stack Center and production visibility:
   other three verified to already exist. The four original repositories are
   archived (read-only, history and issue/PR links preserved) rather than
   deleted.
+- RootGuard Blockpage: a new `rootguard-blockpage/` monorepo directory - a
+  static, AGPL-3.0-or-later nginx image with a fresh design matching the
+  WebGUI's own hero/KPI visual language (not the old standalone
+  `adguard-blockpage` project's visuals). Guided setup configures AdGuard
+  Home's `blocking_mode: custom_ip` automatically, optional and enabled by
+  default with its own preflight check; `blocking_ipv6` is set to `::1`
+  since AdGuard's API requires a valid IPv6 value even for RootGuard's
+  IPv4-only configuration. The container runs `read_only: true`,
+  `cap_drop: [ALL]` with only `CHOWN`/`SETUID`/`SETGID` added back for
+  nginx's own root-master-to-non-root-worker privilege drop, and a fixed
+  internal network address (auto-assigned addresses raced with Unbound's
+  static one). End-to-end verified on a live stack: a blocked domain
+  resolves to the blockpage's address, and an HTTP request with that
+  domain's Host header renders the actual page
+  ([rootguard#98](https://github.com/foxly-it/rootguard/pull/98)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
