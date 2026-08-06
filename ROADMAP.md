@@ -171,9 +171,13 @@ operable.
       `Ctrl`/`Cmd` + `K`; ignores shortcuts while typing and supports complete
       keyboard navigation, `Escape`, focus restoration, and reduced motion
       ([rootguard-webapp#64](https://github.com/foxly-it/rootguard-webapp/pull/64))
-- [ ] Navigate search results to the correct page and tab, reveal the relevant
-      section, and place focus at the destination without changing a setting
-      directly from the result list
+- [x] Navigate search results to the correct page and tab: Unbound's active
+      tab is now URL-addressable (`/unbound/:section`, deep-linkable and
+      reload-safe) and every Unbound search entry points at its actual tab
+      instead of only the bare page
+      ([rootguard#106](https://github.com/foxly-it/rootguard/pull/106))
+- [ ] Reveal the relevant section within the destination tab and place focus
+      there, without changing a setting directly from the result list
 - [x] Replace hard-coded theme colours with semantic design tokens and offer
       persistent System, Light, and Dark modes, with the system preference as
       the default for users who have not made a selection. Covers the app

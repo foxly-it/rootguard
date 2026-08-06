@@ -386,6 +386,16 @@ Trustworthy Stack Center and production visibility:
   originating tab/section is the next roadmap item, since Unbound's tab
   state isn't currently URL-addressable
   ([rootguard-webapp#64](https://github.com/foxly-it/rootguard-webapp/pull/64)).
+  Unbound's active tab is now URL-addressable (`/unbound/:section`,
+  derived from a route param, falls back to Overview on an invalid or
+  missing value, deep-linkable and reload-safe); every Unbound search
+  entry's route now points at its actual tab instead of the bare page,
+  so selecting e.g. "expert editor" or "forward-zone" lands directly on
+  the Advanced or Local DNS & forwarding tab. Sidebar active-state
+  highlighting needed no change, since `NavLink` already does
+  non-exact prefix matching. Reveal-the-exact-section-and-place-focus
+  within the destination tab remains open
+  ([rootguard#106](https://github.com/foxly-it/rootguard/pull/106)).
 - removed the four decorative bordered-circle pseudo-elements on the
   Dashboard/Setup/Unbound/Stack hero cards (user-reported: too
   prominent in light mode, distracting in dark mode) and fixed the
