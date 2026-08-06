@@ -40,6 +40,7 @@ function App() {
         <Route path="/" element={<Navigate replace to="/dashboard" />} />
         <Route path="/dashboard" element={<Overview />} />
         <Route path="/unbound" element={<Unbound />} />
+        <Route path="/unbound/:section" element={<Unbound />} />
         <Route path="/adguard" element={<AdGuard />} />
         <Route path="/setup" element={<Setup />} />
         <Route path="/stack" element={<Stack />} />
