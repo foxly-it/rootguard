@@ -208,7 +208,7 @@ export default function UnboundPrivateDomains({
       {preview && (
         <div className="private-preview" aria-live="polite">
           <div><Check size={16} /><strong>{t("private.valid")}</strong></div>
-          <details open><summary>{t("private.showGenerated")}</summary><pre>{privateSection(preview.rendered_config)}</pre></details>
+          <details open><summary>{t("private.showGenerated")}</summary><pre tabIndex={0} aria-label={t("private.showGenerated")}>{privateSection(preview.rendered_config)}</pre></details>
           <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("private.activating") : t("private.activate")}</button>
         </div>
       )}

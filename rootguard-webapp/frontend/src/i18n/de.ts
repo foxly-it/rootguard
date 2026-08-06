@@ -607,6 +607,7 @@ export const de: LocaleDefinition = {
     "zones.draftAdded": "Zone als Entwurf übernommen. Vor der Aktivierung folgt die echte Unbound-Validierung.",
     "zones.invalid": "Zone ist ungültig.",
     "zones.removed": "Zone aus dem Entwurf entfernt. Die aktive Konfiguration bleibt bis zur Validierung unverändert.",
+    "zones.allRemoved": "# Alle geführten lokalen Zonen werden entfernt.",
     "zones.previewAccepted": "Unbound hat den geführten Entwurf akzeptiert. Prüfe die Vorschau vor der Aktivierung.",
     "zones.previewRejected": "Der Zonenentwurf wurde von Unbound abgelehnt.",
     "zones.confirmActivate": "Geprüfte lokale Zonen aktivieren und Unbound neu starten?",

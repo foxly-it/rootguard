@@ -337,7 +337,7 @@ function DiagnosticPanel({ diagnostic }: { diagnostic: InstallationDiagnostic })
       {diagnostic.detail && (
         <details>
           <summary>{t("setup.diagnostic.technical")}</summary>
-          <pre>{diagnostic.detail}</pre>
+          <pre tabIndex={0} aria-label={t("setup.diagnostic.technical")}>{diagnostic.detail}</pre>
         </details>
       )}
     </section>

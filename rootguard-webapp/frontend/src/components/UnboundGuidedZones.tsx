@@ -238,7 +238,7 @@ export default function UnboundGuidedZones({
       {preview && (
         <div className="guided-preview">
           <div className="guided-preview-state"><Check size={16} /><strong>{t("zones.valid")}</strong></div>
-          <pre>{guidedSection(preview.content) || "# Alle geführten lokalen Zonen werden entfernt."}</pre>
+          <pre tabIndex={0} aria-label={t("zones.title")}>{guidedSection(preview.content) || t("zones.allRemoved")}</pre>
           <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("zones.activating") : preview.changed ? t("zones.activate") : t("zones.alreadyActive")}</button>
         </div>
       )}

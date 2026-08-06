@@ -296,7 +296,7 @@ export default function Stack() {
       <ContentModal open={openLogs !== ""} eyebrow={t("stack.logsWindow")} title={t("stack.logsTitle")} closeLabel={t("common.close")} onClose={() => setOpenLogs("")}>
         <div className="stack-log-modal">
           <p>{t("stack.logsPrivacy")}</p>
-          <pre>{openLogs && serviceLogs[openLogs]?.lines.length ? serviceLogs[openLogs]?.lines.join("\n") : t("stack.logsEmpty")}</pre>
+          <pre tabIndex={0} aria-label={t("stack.logsTitle")}>{openLogs && serviceLogs[openLogs]?.lines.length ? serviceLogs[openLogs]?.lines.join("\n") : t("stack.logsEmpty")}</pre>
           {openLogs && serviceLogs[openLogs]?.truncated && <small>{t("stack.logsTruncated")}</small>}
         </div>
       </ContentModal>

@@ -274,7 +274,7 @@ export default function UnboundForwardZones({
               </div>
             ))}
           </div>
-          <details><summary>{t("forward.showGenerated")}</summary><pre>{forwardingSection(preview.rendered_config) || t("forward.removalPreview")}</pre></details>
+          <details><summary>{t("forward.showGenerated")}</summary><pre tabIndex={0} aria-label={t("forward.showGenerated")}>{forwardingSection(preview.rendered_config) || t("forward.removalPreview")}</pre></details>
           <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed || !allReachable} onClick={activate}>{busy ? t("forward.activating") : allReachable ? t("forward.activate") : t("forward.fixTargets")}</button>
         </div>
       )}

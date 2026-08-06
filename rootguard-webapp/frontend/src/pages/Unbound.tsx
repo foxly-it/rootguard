@@ -373,7 +373,7 @@ export default function Unbound() {
         {preview && (
           <section className="glass-card preview-panel" aria-live="polite">
             <div className="panel-heading"><div><p className="unbound-eyebrow">{t("unbound.preview")}</p><h2>{t("unbound.changes")}</h2></div><button className="text-action" type="button" onClick={() => setPreview(null)}>{t("common.close")}</button></div>
-            {!preview.changed ? <p>{t("unbound.noChanges")}</p> : <><div className="change-list">{preview.changes.map((change) => <div key={change.field}><code>{fieldLabel(change.field, t)}</code><span>{change.before}</span><b aria-hidden="true">→</b><span>{change.after}</span></div>)}</div><details><summary>{t("unbound.showGenerated")}</summary><pre>{preview.rendered_config}</pre></details><button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={applyPreview}>{busy ? t("unbound.activating") : t("unbound.validateActivate")}</button></>}
+            {!preview.changed ? <p>{t("unbound.noChanges")}</p> : <><div className="change-list">{preview.changes.map((change) => <div key={change.field}><code>{fieldLabel(change.field, t)}</code><span>{change.before}</span><b aria-hidden="true">→</b><span>{change.after}</span></div>)}</div><details><summary>{t("unbound.showGenerated")}</summary><pre tabIndex={0} aria-label={t("unbound.showGenerated")}>{preview.rendered_config}</pre></details><button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={applyPreview}>{busy ? t("unbound.activating") : t("unbound.validateActivate")}</button></>}
           </section>
         )}
       </section>
@@ -391,13 +391,13 @@ export default function Unbound() {
           <section id="unbound-section-advanced-live" className="glass-card live-config-panel" tabIndex={-1}>
             <div className="panel-heading"><div><p className="unbound-eyebrow">LIVE · READ ONLY</p><h2>{t("unbound.liveTitle")}</h2><p className="muted-copy">{t("unbound.liveHelp")}</p></div><span className="live-config-state"><i /> {t("common.active")} · {formatDate(liveConfig.checked_at)}</span></div>
             <div className="config-file-label"><span>50-rootguard.conf</span><code>/etc/unbound/unbound.d/50-rootguard.conf</code></div>
-            <details className="live-config-disclosure"><summary>{t("unbound.managedConfig")}</summary><pre>{liveConfig.managed_config}</pre></details>
+            <details className="live-config-disclosure"><summary>{t("unbound.managedConfig")}</summary><pre tabIndex={0} aria-label={t("unbound.managedConfig")}>{liveConfig.managed_config}</pre></details>
             <div className="live-config-details">
               <button type="button" onClick={() => setConfigModal("base")}><span>{t("unbound.baseConfig")}</span><Expand size={16} /></button>
               <button type="button" onClick={() => setConfigModal("custom")}><span>{t("unbound.customConfig")}</span><Expand size={16} /></button>
             </div>
             <ContentModal open={configModal !== null} eyebrow="LIVE · READ ONLY" title={configModal === "base" ? t("unbound.baseConfig") : t("unbound.customConfig")} closeLabel={t("common.close")} onClose={() => setConfigModal(null)}>
-              <pre>{configModal === "base" ? liveConfig.base_config : liveConfig.custom_config || t("unbound.noCustom")}</pre>
+              <pre tabIndex={0} aria-label={configModal === "base" ? t("unbound.baseConfig") : t("unbound.customConfig")}>{configModal === "base" ? liveConfig.base_config : liveConfig.custom_config || t("unbound.noCustom")}</pre>
             </ContentModal>
           </section>
         )}

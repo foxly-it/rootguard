@@ -183,7 +183,7 @@ export default function UnboundExpertEditor({ id, version, baseConfig, onActivat
         {baseConfig && (
           <div className="expert-base-config">
             <p className="unbound-eyebrow">{t("expert.baseConfigSummary")}</p>
-            <pre>{baseConfig}</pre>
+            <pre tabIndex={0} aria-label={t("expert.baseConfigSummary")}>{baseConfig}</pre>
           </div>
         )}
         <div className="template-row">{templates.map((template) => <button type="button" key={template.label} onClick={() => insertTemplate(template.content)}>{t(template.label)}</button>)}</div>
@@ -202,7 +202,7 @@ export default function UnboundExpertEditor({ id, version, baseConfig, onActivat
           </div>
           <aside className="directive-help">
             <p className="unbound-eyebrow">{t("expert.context")}</p>
-            {selectedDirective ? <><div className="directive-title"><code>{selectedDirective.name}</code><span className={`risk-${selectedDirective.risk}`}>{t(`expert.risk.${selectedDirective.risk}`)}</span></div><p>{selectedDirective.description}</p><pre>{selectedDirective.example}</pre></> : <p className="muted-copy">{t("expert.contextHelp")}</p>}
+            {selectedDirective ? <><div className="directive-title"><code>{selectedDirective.name}</code><span className={`risk-${selectedDirective.risk}`}>{t(`expert.risk.${selectedDirective.risk}`)}</span></div><p>{selectedDirective.description}</p><pre tabIndex={0} aria-label={selectedDirective.name}>{selectedDirective.example}</pre></> : <p className="muted-copy">{t("expert.contextHelp")}</p>}
             <button className="rg-button rg-button-secondary secondary-action catalog-action" type="button" onClick={() => setCatalogOpen(true)}>{t("expert.catalog")}</button>
           </aside>
         </div>
