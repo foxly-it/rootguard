@@ -50,6 +50,21 @@ The Updater release includes dependency-workflow maintenance. The Unbound
 release keeps the stable non-root `100:101` identity so existing named volumes
 remain writable after upgrading.
 
+## Recorded 0.1.0-alpha.6 manifests
+
+| Component | Version tag | Multi-architecture manifest digest |
+| --- | --- | --- |
+| Core | `0.1.0-alpha.6` | `sha256:fedcb900d5d4f56ee7833555ce064b5773bb10e27e726b0f14b4cf3f5ca65790` |
+| WebApp | `0.1.0-alpha.6` | `sha256:b156427f404da1d7ca71bc6c7621a31d36a1eaf0379b41926d59803ac9204d45` |
+| Updater | `0.1.0-alpha.6` | `sha256:8fa7bf11aa044c2e5586d9811eca7c1355998f6044d685de2c3ab398e0cf185b` |
+| Unbound | `0.1.0-alpha.6` | `sha256:4e5a8fa999774726cdc3fba88cc996d27514749d14e80de71b8b48c7349d021e` |
+| AdGuard Home | `v0.107.78` | `sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5` |
+| AdGuard Home Beta | `beta` (verified 2026-08-01) | `sha256:2b77703b27730d5c0c7045fcd6c98834169cd5c69af5f86a43947425f2d367fd` |
+
+All four RootGuard images are now built and pushed from the `rootguard`
+monorepo's `release-alpha.yml` (previously Core only; WebApp, Unbound, and
+Updater required separately tagged pushes to their own repositories).
+
 ## Recorded 0.1.0-alpha.5 manifests
 
 | Component | Version tag | Multi-architecture manifest digest |

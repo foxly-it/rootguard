@@ -264,13 +264,15 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   WebApp's Lucide symbols for endpoint, services, DNSSEC, filter chain, CPU,
   memory, query, blocked-query, and filter-rate cards instead of substituting
   unrelated text glyphs.
-- Public alpha `v0.1.0-alpha.5` is published around a single
-  `compose.alpha.yaml` that
-  contains no local build contexts and pulls one named RootGuard version for
-  Core, WebApp, Updater, and Unbound. Component-owned tag workflows publish
-  `amd64` and `arm64` images, after which
-  the main release workflow smoke-tests the published Compose through the real
-  guided AIO installation, DNS resolution, and DNSSEC rejection path.
+- Public alpha `v0.1.0-alpha.6` is published around a single
+  `compose.alpha.yaml` that contains no local build contexts and pulls one
+  named RootGuard version for Core, WebApp, Updater, and Unbound.
+  `release-alpha.yml`'s publish matrix builds and pushes `amd64`/`arm64`
+  images for all four components directly (previously only Core; WebApp,
+  Updater, and Unbound required separately tagged pushes to their own
+  repositories before the monorepo migration), after which the same workflow
+  smoke-tests the published Compose through the real guided AIO installation,
+  DNS resolution, and DNSSEC rejection path.
 - Dedicated bilingual documentation at `/docs.html` covering installation,
   first setup, router and client configuration, the WebGUI, Unbound, AdGuard
   Home, updates and rollback, security, operations, troubleshooting, and
@@ -491,10 +493,10 @@ visible no-op instead of widening its scope.
 
 ## Release status
 
-`v0.1.0-alpha.5` was published on 2026-08-01 as a GitHub pre-release with
+`v0.1.0-alpha.6` was published on 2026-08-06 as a GitHub pre-release with
 public, digest-pinned `amd64`/`arm64` images for all four RootGuard components.
-The release adds cryptographically verifiable GitHub build provenance for Core
-and WebApp. Release workflow run `30700196286` built and attested Core before
+Release workflow run `31081554868` built and attested all four components
+directly from the monorepo (the first release since the migration) before
 installing the released stack and verifying recursive DNS plus DNSSEC
 rejection. RootGuard remains in active alpha development:
 update safety, backup/restore, broader authentication hardening and roles, and
