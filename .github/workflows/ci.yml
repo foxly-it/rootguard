@@ -20,7 +20,7 @@ jobs:
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet
