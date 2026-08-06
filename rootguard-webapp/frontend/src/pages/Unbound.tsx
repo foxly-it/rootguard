@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useNavigate, useParams } from "react-router";
 import { Activity, Code2, Expand, MapPinned, SlidersHorizontal } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
@@ -50,7 +51,13 @@ export default function Unbound() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [activeSection, setActiveSection] = useState<UnboundSection>("overview");
+  const navigate = useNavigate();
+  const { section: sectionParam } = useParams<{ section?: string }>();
+  const activeSection: UnboundSection = isUnboundSection(sectionParam) ? sectionParam : "overview";
+  const setActiveSection = useCallback(
+    (section: UnboundSection) => navigate(section === "overview" ? "/unbound" : `/unbound/${section}`, { replace: true }),
+    [navigate],
+  );
   const [networkCapabilities, setNetworkCapabilities] = useState<UnboundNetworkCapabilities | null>(null);
   const [configModal, setConfigModal] = useState<"base" | "custom" | null>(null);
 
@@ -395,6 +402,12 @@ export default function Unbound() {
 }
 
 type UnboundSection = "overview" | "resolver" | "zones" | "advanced";
+
+const UNBOUND_SECTIONS: readonly UnboundSection[] = ["overview", "resolver", "zones", "advanced"];
+
+function isUnboundSection(value: string | undefined): value is UnboundSection {
+  return !!value && (UNBOUND_SECTIONS as readonly string[]).includes(value);
+}
 
 function UnboundTabs({ active, onChange, t }: { active: UnboundSection; onChange: (section: UnboundSection) => void; t: (key: string) => string }) {
   const tabs: Array<{ id: UnboundSection; icon: React.ReactNode }> = [

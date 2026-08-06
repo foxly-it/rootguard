@@ -2,8 +2,9 @@
 // File: frontend/src/search/SearchModal.tsx
 // Purpose: Global, local-only search. Opens from its own
 // header trigger, the "S" key, or Ctrl/Cmd+K; navigates to
-// the matching page on selection. Landing on the exact tab
-// or section within a page is a follow-up (see ROADMAP.md).
+// each entry's route, which for Unbound entries includes the
+// specific tab (e.g. "/unbound/resolver"), landing directly
+// on the relevant section instead of just the page.
 // =====================================================
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
