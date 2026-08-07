@@ -167,6 +167,28 @@ but not casually editable:
 - private-address protections for RFC1918, link-local, ULA, and documentation
   networks without breaking explicitly configured private domains
 
+### Status: fixed base directives (implemented in `rootguard-unbound/unbound.conf`)
+
+| Directive | Purpose | Tested by |
+| --- | --- | --- |
+| `hide-identity`, `hide-version` | Refuse CHAOS-class `id.server`/`version.server` probes that fingerprint the resolver for targeted exploits | `ci-unbound.yml`: `dig CH TXT id.server`/`version.server` return empty |
+| `harden-glue` | Ignore untrusted glue records outside a delegation's own zone (glue/cache poisoning) | Directive-presence check in the built image (behavioral poisoning test would need a malicious authoritative test zone - out of scope here, same as upstream Unbound's own test suite boundary) |
+| `harden-dnssec-stripped` | Treat an unsigned answer as bogus, not insecure, when the zone is known-signed (downgrade-attack resistance) | Directive-presence check; downgrade behavior is exercised indirectly by the existing `dnssec-failed.org` `SERVFAIL` check |
+| `harden-below-nxdomain` | Trust a proven NXDOMAIN for the whole empty non-terminal space below it (RFC 8020), reducing needless lookups an attacker could otherwise abuse for enumeration | Directive-presence check |
+| `aggressive-nsec` | Synthesize denial-of-existence from cached NSEC/NSEC3 without repeat upstream queries | Directive-presence check |
+| `unwanted-reply-threshold` | Reset internal caches after `10000000` unsolicited/mismatched replies per thread - upstream's own recommended defensive-reset value, not a RootGuard tuning choice | Directive-presence check |
+| `root-hints`, `auto-trust-anchor-file` | Debian `dns-root-data` root server list; RFC 5011 trust-anchor auto-maintenance in the writable `/var/lib/unbound/root.key` | Existing DNSSEC `dig +dnssec` / trust-anchor volume-compatibility checks |
+| `private-address` (RFC1918, link-local, ULA) | Reject externally-sourced answers claiming to be these ranges (DNS rebinding protection) | Directive-presence check |
+
+`harden-referral-path` and `use-caps-for-id` remain deliberately deferred, not
+forgotten: `harden-referral-path` needs compatibility testing against
+RootGuard's supported upstream/forwarding configurations first (it can break
+legitimate non-compliant authoritative servers), and `use-caps-for-id`
+depends on current upstream guidance justifying it as still worthwhile
+against modern spoofing risk versus its 0x20-encoding compatibility cost.
+Revisit both if upstream guidance or a real compatibility test changes the
+calculus.
+
 ## Priority C — later or expert-only
 
 - Stub zones for authoritative local servers

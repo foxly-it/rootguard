@@ -49,6 +49,21 @@ jobs:
           docker run --rm
           rootguard-unbound:test unbound-checkconf /etc/unbound/unbound.conf
 
+      - name: Verify fixed hardening directives are baked into the image
+        run: |
+          docker run --rm --entrypoint cat rootguard-unbound:test /etc/unbound/unbound.conf > /tmp/unbound.conf
+          for directive in \
+            "harden-glue: yes" \
+            "harden-dnssec-stripped: yes" \
+            "harden-below-nxdomain: yes" \
+            "aggressive-nsec: yes" \
+            "hide-identity: yes" \
+            "hide-version: yes" \
+            "unwanted-reply-threshold: 10000000" \
+            "minimal-responses: yes"; do
+            grep -qF "$directive" /tmp/unbound.conf || { echo "missing: $directive"; exit 1; }
+          done
+
       - name: Verify stable non-root identity
         run: |
           test "$(docker run --rm --entrypoint id rootguard-unbound:test -u unbound)" = "100"
@@ -87,6 +102,13 @@ jobs:
           grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
           broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=3 +tries=1)"
           grep -q 'status: SERVFAIL' <<<"$broken"
+          # hide-identity/hide-version: these CHAOS-class probes are how a
+          # scanner fingerprints the resolver software/version to target
+          # known exploits - both must come back empty.
+          identity="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 CH TXT id.server +short +time=3 +tries=1)"
+          test -z "$identity"
+          version="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 CH TXT version.server +short +time=3 +tries=1)"
+          test -z "$version"
           docker exec rootguard-unbound-ci unbound-control status
           docker exec rootguard-unbound-ci unbound-control verbosity 2
           test "$(docker exec rootguard-unbound-ci unbound-control status | awk '/^verbosity:/ {print $2}')" = "2"
