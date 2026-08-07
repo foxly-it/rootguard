@@ -17,7 +17,17 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
       org.opencontainers.image.revision="${COMMIT}"
 
 RUN rm -f /etc/nginx/conf.d/default.conf
-COPY nginx/blockpage.conf /etc/nginx/conf.d/blockpage.conf
+# Deliberately NOT under /etc/nginx/templates/: the stock image's own
+# 20-envsubst-on-templates.sh hook scans that directory and runs its own
+# unscoped envsubst (no variable allowlist) over anything ending in
+# .template - which would also "substitute" this file's real nginx
+# variables ($host, $remote_addr, $binary_remote_addr, ...) as if they were
+# unset shell variables, wiping them out. Keeping the template outside that
+# directory means only our own entrypoint script (which passes an explicit
+# envsubst allowlist) ever touches it.
+COPY nginx/blockpage.conf.template /etc/nginx/blockpage.conf.template
+COPY nginx/entrypoint.d/19-render-blockpage-conf.sh /docker-entrypoint.d/19-render-blockpage-conf.sh
+RUN chmod +x /docker-entrypoint.d/19-render-blockpage-conf.sh
 COPY web/ /usr/share/nginx/html/
 
 # Deliberately no USER instruction: the stock image's nginx.conf already

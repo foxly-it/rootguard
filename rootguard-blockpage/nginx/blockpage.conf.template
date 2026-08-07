@@ -1,0 +1,75 @@
+limit_req_zone $binary_remote_addr zone=reason_lookup:10m rate=5r/s;
+proxy_cache_path /var/cache/nginx/reason levels=1:2 keys_zone=reason_cache:1m max_size=1m inactive=30s;
+
+server {
+    listen 8080 default_server;
+    listen [::]:8080 default_server;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    access_log off;
+    error_log /dev/stderr warn;
+
+    # DNS-level blocking IP cannot present a valid TLS certificate for the
+    # originally requested hostname, so this page is served over plain HTTP
+    # only. See docs/architecture.md for the documented limitation.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location = /clientip.txt {
+        default_type text/plain;
+        return 200 "$remote_addr\n";
+    }
+
+    location /info/ {
+        try_files $uri $uri/ /info/index.html;
+    }
+
+    # Reads AdGuard's actual filtering verdict for the domain that got this
+    # request sinkholed here, so the page can show the real block reason
+    # instead of a decorative always-checked list. $host only - never a
+    # client-supplied parameter - so this can't become a free "is domain X
+    # blocked" oracle against the reader's own AdGuard instance, and the
+    # proxied path is hardcoded so a compromised request here can't reach
+    # any other AdGuard admin endpoint even though the credential behind it
+    # is a full-admin one.
+    location = /api/reason {
+        limit_req zone=reason_lookup burst=10 nodelay;
+        limit_req_status 429;
+
+        # Docker's embedded resolver, re-resolved per request via the
+        # variable in proxy_pass below - if AdGuard's container is ever
+        # recreated (image update) its IP can change, and without this
+        # nginx would keep proxying to a stale address until its own
+        # restart.
+        resolver 127.0.0.11 valid=10s ipv6=off;
+        set $adguard_upstream "http://rootguard-adguard";
+        proxy_pass $adguard_upstream/control/filtering/check_host?name=$host;
+        proxy_set_header Authorization "Basic ${ADGUARD_AUTH_TOKEN}";
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 2s;
+
+        proxy_cache reason_cache;
+        proxy_cache_key $host;
+        proxy_cache_valid 200 5s;
+
+        # Any upstream failure (AdGuard down, missing/rejected token,
+        # timeout) collapses to one uniform "unavailable" response so the
+        # page has a single fallback branch instead of a status-code matrix.
+        proxy_intercept_errors on;
+        error_page 401 403 404 500 502 503 504 = @reason_unavailable;
+    }
+
+    location @reason_unavailable {
+        default_type application/json;
+        return 200 '{"available":false}';
+    }
+
+    add_header X-Frame-Options SAMEORIGIN always;
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy no-referrer always;
+    add_header Content-Security-Policy "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:" always;
+}
