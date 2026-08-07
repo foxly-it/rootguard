@@ -92,7 +92,7 @@ export default function Header() {
         <SearchModal />
 
         <a
-          href="https://github.com/foxly-it/rootguard-webapp"
+          href="https://github.com/foxly-it/rootguard"
           target="_blank"
           rel="noreferrer"
           className="rg-link rg-link-desktop-only"

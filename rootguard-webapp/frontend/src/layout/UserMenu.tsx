@@ -95,7 +95,7 @@ export default function UserMenu() {
           </label>
 
           <div className="rg-user-panel-section rg-user-panel-mobile-links">
-            <a href="https://github.com/foxly-it/rootguard-webapp" target="_blank" rel="noreferrer" className="rg-user-panel-link">
+            <a href="https://github.com/foxly-it/rootguard" target="_blank" rel="noreferrer" className="rg-user-panel-link">
               <GithubIcon />
               <span>GitHub</span>
             </a>
