@@ -24,26 +24,21 @@ permissions:
   packages: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  test:
+    name: Test ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v4
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build validation image
         working-directory: rootguard-unbound
@@ -113,10 +108,39 @@ jobs:
           test "$(docker image inspect rootguard-unbound:test --format '{{index .Config.Labels "io.rootguard.base.digest"}}')" = "sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd"
           echo "Validated upstream Unbound: $VERSION"
 
+  # Runs only after both native amd64 and arm64 legs of `test` pass - the
+  # multi-arch image built and pushed here previously went out with only
+  # amd64 ever having run unbound-checkconf, the DNSSEC/identity/version
+  # smoke tests, or the trust-anchor compatibility check against it; arm64
+  # was built and shipped on trust alone. `needs: test` closes that gap.
+  build-push:
+    name: Build and push multi-arch image
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Extract installed Unbound version
         id: version
+        working-directory: rootguard-unbound
         run: |
-          VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:test -V 2>&1 | awk '/^Version / {print $2; exit}')"
+          docker build -t rootguard-unbound:versioncheck .
+          VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:versioncheck -V 2>&1 | awk '/^Version / {print $2; exit}')"
           MAJORMINOR="$(echo "$VERSION" | cut -d'.' -f1,2)"
           echo "Detected upstream version: $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
