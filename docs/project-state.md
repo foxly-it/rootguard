@@ -623,6 +623,22 @@ Trustworthy Stack Center and production visibility:
   match, including a hardcoded example of one matched card since that copy
   has no live request to describe
   ([rootguard#119](https://github.com/foxly-it/rootguard/pull/119)).
+- Blockpage narrative redesign: replaced the five-card "why blocked" grid
+  with a single-sentence headline + lead ("Diese Seite ist blockiert -
+  {reason}." / "RootGuard hat den Zugriff auf {domain} blockiert, weil
+  ..."), reusing the same `/api/reason` data from the previous change but
+  presenting it as a sentence instead of a highlighted card among four
+  dimmed ones. Added a commissioned fox mascot illustration (AI-generated,
+  background-removed and cropped locally) in the hero, matching RootGuard's
+  green accent and carrying a root-vein motif on its tail/shield to tie
+  "fox" (Foxly IT) to "root network" without being literal. `meta.js`'s
+  `REASON_INFO` map now holds a short label plus a full sentence clause per
+  AdGuard reason, replacing the previous five-entry DOM-attribute lookup.
+  Unmatched or failed lookups keep the original generic headline/lead - the
+  same text that already ships as the default render, so there's still no
+  separate fallback path to maintain. `rootguard-webapp`'s manually-synced
+  preview copy updated to match, including the mascot asset
+  ([rootguard#125](https://github.com/foxly-it/rootguard/pull/125)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

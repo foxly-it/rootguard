@@ -18,106 +18,82 @@
   <link rel="stylesheet" href="./styles.css">
 
   <style>
-    body { padding: 60px 20px 50px; }
+    body { padding: 56px 20px 50px; }
 
-    .page { width: min(720px, 100%); margin: 0 auto; text-align: center; }
+    .page { width: min(980px, 100%); margin: 0 auto; }
 
-    .mark {
-      width: 128px;
-      height: 128px;
-      margin: 0 auto 22px;
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 32px;
+      align-items: center;
+      margin: 0 0 44px;
     }
 
-    .mark svg { width: 100%; height: 100%; }
-    .mark .ring { fill: none; stroke: var(--accent); stroke-width: 5; opacity: 0.16; }
-    .mark .shield { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linejoin: round; }
-    .mark .slash { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; }
+    .eyebrow {
+      margin: 0 0 14px;
+      color: var(--accent);
+      font-size: 0.8rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
 
     h1 {
-      margin: 0 0 14px;
-      font-size: clamp(2.1rem, 6vw, 3.1rem);
+      margin: 0 0 16px;
+      font-size: clamp(2rem, 4.6vw, 2.9rem);
       font-weight: 800;
       letter-spacing: -0.02em;
-      line-height: 1.08;
+      line-height: 1.1;
     }
 
+    h1 .headline-reason { color: var(--accent); }
+
     .lead {
-      margin: 0 auto 34px;
-      max-width: 46ch;
+      margin: 0 0 26px;
+      max-width: 50ch;
       color: var(--muted);
       font-size: 1.02rem;
       line-height: 1.6;
     }
 
-    .reasons-title {
-      margin: 0 auto 14px;
-      max-width: 640px;
-      font-size: 1.02rem;
-      font-weight: 750;
-      text-align: left;
-    }
+    .lead strong { color: var(--fg); }
 
-    .reasons {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 12px;
-      margin: 0 auto 20px;
-      max-width: 640px;
-      text-align: left;
-    }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
 
-    @keyframes reason-card-enter {
-      from { transform: translateY(10px) scale(0.97); }
-      to { transform: none; }
-    }
+    .hero-mascot { display: flex; justify-content: center; }
 
-    .reasons div[data-reason] {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 14px 16px;
+    .hero-mascot img { width: 100%; max-width: 300px; height: auto; }
+
+    .faq { margin: 0 0 20px; }
+
+    .faq details {
       border: 1px solid var(--box-border);
-      border-top: 3px solid transparent;
-      border-radius: 16px;
+      border-radius: 12px;
       background: var(--box-bg);
+      padding: 14px 18px;
+      margin-bottom: 10px;
+    }
+
+    .faq summary {
+      cursor: pointer;
+      font-weight: 650;
+      font-size: 0.94rem;
+    }
+
+    .faq p {
+      margin: 10px 0 0;
       color: var(--muted);
       font-size: 0.9rem;
-      line-height: 1.3;
-      box-shadow: var(--shadow);
-      animation: reason-card-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
-      transition: opacity 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-
-    .reasons div[data-reason]:nth-child(2) { animation-delay: 0.03s; }
-    .reasons div[data-reason]:nth-child(3) { animation-delay: 0.06s; }
-    .reasons div[data-reason]:nth-child(4) { animation-delay: 0.09s; }
-    .reasons div[data-reason]:nth-child(5) { animation-delay: 0.12s; }
-
-    .reasons svg { width: 20px; height: 20px; flex: 0 0 auto; stroke: var(--accent); stroke-width: 2; }
-
-    .reasons .reason-match {
-      color: var(--fg);
-      font-weight: 650;
-      border-top-color: var(--accent);
-      box-shadow: var(--shadow-raised);
-    }
-    .reasons .reason-dim { opacity: 0.5; }
-    .reasons .reason-dim svg { visibility: hidden; }
-
-    .reasons-note {
-      margin: 0 auto 20px;
-      max-width: 46ch;
-      font-size: 0.86rem;
-      color: var(--muted);
+      line-height: 1.55;
     }
 
     .meta {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      justify-content: center;
       gap: 8px 26px;
-      margin: 0 auto 32px;
+      margin: 0 0 32px;
       padding: 14px 22px;
       border: 1px solid var(--border-soft);
       border-radius: 12px;
@@ -127,13 +103,14 @@
 
     .meta strong { color: var(--fg); font-weight: 700; }
 
-    .actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 40px; }
-
     .page-footer { color: var(--muted); font-size: 0.8rem; }
 
-    @media (max-width: 560px) {
-      .reasons { grid-template-columns: 1fr; }
-      .meta { flex-direction: column; gap: 6px; }
+    @media (max-width: 720px) {
+      .hero { grid-template-columns: 1fr; text-align: center; margin-bottom: 30px; }
+      .lead { margin-left: auto; margin-right: auto; }
+      .actions { justify-content: center; }
+      .hero-mascot img { max-width: 190px; }
+      .meta { flex-direction: column; align-items: flex-start; gap: 6px; }
     }
   </style>
 </head>
@@ -146,63 +123,45 @@
   </div>
 
   <main class="page">
-    <div class="mark">
-      <svg viewBox="0 0 128 128" aria-hidden="true">
-        <circle class="ring" cx="64" cy="64" r="58"/>
-        <path class="shield" d="M64 14 104 28v30c0 34-24 52-40 56-16-4-40-22-40-56V28Z"/>
-        <path class="slash" d="M46 46 82 82M82 46 46 82"/>
-      </svg>
-    </div>
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">RootGuard hat eingegriffen</p>
+        <!-- Static preview: hardcodes a matched example ("Filterliste"),
+             matching the example domain below. The real page fills this in
+             live via /api/reason (see rootguard-blockpage/web/meta.js). -->
+        <h1>Diese Seite ist blockiert - <span class="headline-reason">Filterliste.</span></h1>
+        <p class="lead">RootGuard hat den Zugriff auf <strong>werbung.tracking-beispiel.com</strong> blockiert, weil die Domain auf einer Filterliste für Werbung, Tracking oder bekannte Bedrohungen steht.</p>
+        <div class="actions">
+          <button class="btn primary" type="button" onclick="location.reload()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6"/></svg>
+            Erneut prüfen
+          </button>
+          <a class="btn" href="./info/">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+            Mehr Infos
+          </a>
+        </div>
+      </div>
+      <div class="hero-mascot">
+        <img src="./mascot-fox.png" alt="" width="600" height="610">
+      </div>
+    </section>
 
-    <h1>Diese Seite ist blockiert.</h1>
-    <p class="lead">RootGuard hat diese Anfrage über AdGuard Home gefiltert, bevor eine Verbindung zustande kam.</p>
-
-    <p class="reasons-title">Warum wurde diese Seite blockiert?</p>
-    <div class="reasons">
-      <!--
-        Static preview: the real page highlights whichever card matches via
-        a live /api/reason fetch (see rootguard-blockpage/web/meta.js). This
-        copy has no live request to describe, so "Filterliste" is hardcoded
-        as the matched example, matching the example domain below.
-      -->
-      <div data-reason="FilteredBlackList" class="reason-match">
-        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3Z"/></svg>
-        Filterliste (Werbung, Tracking oder bekannte Bedrohung)
-      </div>
-      <div data-reason="SafeBrowsing" class="reason-dim">
-        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M12 8v4M12 16h.01"/></svg>
-        Malware oder Phishing
-      </div>
-      <div data-reason="FilteredCustomRule" class="reason-dim">
-        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.5 5.5 13 13"/></svg>
-        Manuelle Sperrregel
-      </div>
-      <div data-reason="FilteredBlockedService" class="reason-dim">
-        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
-        Gesperrter Dienst
-      </div>
-      <div data-reason="Parental" class="reason-dim">
-        <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
-        Jugendschutz
-      </div>
+    <div class="faq">
+      <details>
+        <summary>Warum kann ich nicht auf diese Seite zugreifen?</summary>
+        <p>RootGuard verbindet AdGuard Home mit einem eigenen rekursiven Unbound-Resolver. Bevor eine Verbindung überhaupt zustande kommt, prüft AdGuard Home jede DNS-Anfrage gegen Filterlisten, bekannte Bedrohungen, gesperrte Dienste und - falls aktiv - Jugendschutz-Regeln.</p>
+      </details>
+      <details>
+        <summary>Was, wenn das ein Fehler ist?</summary>
+        <p>Fehlalarme können vorkommen. Der Administrator kann die Filterregeln in AdGuard Home prüfen und bei Bedarf eine Ausnahme für diese Domain eintragen.</p>
+      </details>
     </div>
-    <p class="reasons-note">Der hervorgehobene Grund ist der tatsächlich für diese Anfrage ermittelte Treffer.</p>
 
     <div class="meta">
       <span>Domain: <strong id="m-host">werbung.tracking-beispiel.com</strong></span>
       <span>Zeit: <strong id="m-time">06.08.2026, 21:04</strong></span>
       <span>Client-IP: <strong id="m-ip">192.168.178.42</strong></span>
-    </div>
-
-    <div class="actions">
-      <a class="btn primary" href="./info/">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        Mehr Infos
-      </a>
-      <button class="btn" type="button" onclick="location.reload()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6"/></svg>
-        Erneut prüfen
-      </button>
     </div>
 
     <p class="page-footer">

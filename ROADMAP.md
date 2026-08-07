@@ -391,6 +391,19 @@ Product boundary:
       shadow/animation *mechanics* rather than the WebApp's teal/danger
       *palette*
       ([rootguard#119](https://github.com/foxly-it/rootguard/pull/119))
+- [x] Follow-up redesign after live user feedback on #119: the five-card grid
+      still made someone read past four irrelevant cards to find the one that
+      actually applied. Replaced with a narrative layout - "Diese Seite ist
+      blockiert - {reason}." as the headline, the domain and reason spelled
+      out in one sentence - alongside a commissioned RootGuard fox mascot
+      illustration (green cloak/shield matching the brand accent, root-vein
+      motif tying "fox" to "root network"), closer in spirit to how AdGuard
+      Home's own block page reads. The two-tier fallback (`FilteredBlackList`
+      alone can't distinguish ads from generic threat-list hits) collapses
+      into the sentence's `Filterliste` phrasing rather than a card label;
+      unmatched/failed lookups keep the original generic headline, still the
+      default render
+      ([rootguard#125](https://github.com/foxly-it/rootguard/pull/125))
 
 Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
 coherent appliance lifecycle around it.
