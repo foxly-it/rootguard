@@ -517,6 +517,24 @@ Trustworthy Stack Center and production visibility:
   signal, with a restrained, high-contrast, single-accent, non-nested-card
   layout; verified in both themes plus the `/info/` explainer page
   ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100)).
+- Blockpage preview + a real contrast bug fix: Setup's blockpage toggle now
+  links to a static preview of the page (bundled into the WebApp at
+  `public/blockpage-preview/`, realistic example domain/time/IP instead of
+  the real page's dynamic `meta.js` fetch - it's a manual snapshot copy,
+  not an automated cross-component build step, so it needs a matching
+  manual update if the real blockpage's design changes later). Running an
+  axe-core scan against that copy surfaced a genuine WCAG AA contrast
+  failure in the actual shipped `rootguard-blockpage` itself, not just the
+  preview: light-theme `--accent` (`#39ac31`) was too light for both
+  white-text-on-green buttons (2.94:1) and green-text-on-white links
+  (2.82:1), against a 4.5:1 requirement. Neither the original blockpage
+  work above nor the separate WebGUI-wide accessibility audit had scanned
+  `rootguard-blockpage` itself, since it's a separately deployed component
+  with its own design tokens - each had verified its own surface only.
+  Darkened `--accent`/`--accent-border`; dark theme was already passing
+  and is untouched. Re-verified with axe against the real (rebuilt, not
+  copied) Docker image on both light and dark
+  ([rootguard#111](https://github.com/foxly-it/rootguard/pull/111)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

@@ -322,7 +322,16 @@ Product boundary:
       "danger" framing); the shipped design instead follows AdGuard Home's
       own brand green as a positive "protection working" signal, with a
       restrained, high-contrast, single-accent layout
-      ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100))
+      ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100)).
+      Setup's blockpage toggle now links to a bundled static preview so an
+      operator can see the actual page before (or without) deploying it;
+      building the preview surfaced a real WCAG AA contrast failure in the
+      shipped page itself (light-theme `--accent` too light for both
+      white-on-green buttons and green-on-white links), fixed in the same
+      change - the earlier blockpage work and the separate WebGUI-wide
+      accessibility audit had each verified their own surface but neither
+      had scanned this component
+      ([rootguard#111](https://github.com/foxly-it/rootguard/pull/111))
 
 Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
 coherent appliance lifecycle around it.

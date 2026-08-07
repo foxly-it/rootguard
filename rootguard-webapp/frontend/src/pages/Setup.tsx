@@ -10,7 +10,7 @@ import {
 } from "../api/client";
 import "../styles/setup.css";
 import { useI18n } from "../i18n";
-import { AlertTriangle, ArrowRight, Check, Filter, Network, RotateCcw, ServerCog, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, ExternalLink, Filter, Network, RotateCcw, ServerCog, ShieldCheck } from "lucide-react";
 
 const defaultConfig: InstallationConfig = {
   dns_bind_address: "0.0.0.0",
@@ -200,7 +200,13 @@ export default function Setup() {
 
         <fieldset className="release-channel blockpage-toggle" disabled={deploying}>
           <legend>{t("setup.blockpage.title")}</legend>
-          <p>{t("setup.blockpage.help")}</p>
+          <p>
+            {t("setup.blockpage.help")}{" "}
+            <a className="text-link" href="/blockpage-preview/" target="_blank" rel="noopener noreferrer">
+              {t("setup.blockpage.preview")}
+              <ExternalLink size={13} aria-hidden="true" />
+            </a>
+          </p>
           <div className="release-channel-options blockpage-toggle-options">
             <label className={config.blockpage_enabled ? "selected" : ""}>
               <input

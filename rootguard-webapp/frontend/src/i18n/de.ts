@@ -96,6 +96,7 @@ export const de: LocaleDefinition = {
     "setup.channel.betaWarning": "Beta-Versionen können Fehler enthalten. DNS-Auflösung und Werbeblocking können ausfallen oder unerwartet arbeiten. Verwende Beta nur zum Testen und halte einen funktionierenden DNS-Rückfall bereit.",
     "setup.blockpage.title": "RootGuard-Blockpage",
     "setup.blockpage.help": "Zeigt blockierten Anfragen eine RootGuard-Seite statt einer Verbindungsfehlermeldung des Browsers.",
+    "setup.blockpage.preview": "Vorschau ansehen",
     "setup.blockpage.enable": "Blockpage aktivieren",
     "setup.blockpage.enableHelp": "Konfiguriert AdGuard Homes benutzerdefinierte IP für blockierte Hosts automatisch. Nur über HTTP erreichbar, da die blockierende IP kein gültiges Zertifikat für die ursprüngliche Domain vorweisen kann.",
     "setup.checking": "Prüfung läuft…",
