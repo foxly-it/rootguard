@@ -114,6 +114,7 @@ html, body {
   font-weight: 700;
   font-size: 0.85rem;
   color: var(--muted);
+  vertical-align: middle;
 }
 
 .brand img { width: 17px; height: 17px; }
