@@ -106,6 +106,7 @@ type UnboundSettings struct {
 	ForwardZones              []UnboundForwardZone       `json:"forward_zones"`
 	PrivateDomains            []string                   `json:"private_domains"`
 	ReverseZones              []UnboundReverseZonePolicy `json:"reverse_zones"`
+	LocalZones                []UnboundLocalZone         `json:"local_zones"`
 }
 
 type UnboundForwardZone struct {
@@ -114,6 +115,18 @@ type UnboundForwardZone struct {
 	ForwardFirst          bool     `json:"forward_first"`
 	AllowUnsigned         bool     `json:"allow_unsigned"`
 	AllowPrivateAddresses bool     `json:"allow_private_addresses"`
+}
+
+type UnboundLocalHost struct {
+	Hostname string `json:"hostname"`
+	IPv4     string `json:"ipv4,omitempty"`
+	IPv6     string `json:"ipv6,omitempty"`
+	PTR      bool   `json:"ptr"`
+}
+
+type UnboundLocalZone struct {
+	Name  string             `json:"name"`
+	Hosts []UnboundLocalHost `json:"hosts"`
 }
 
 type UnboundDiagnosticLoggingStatus struct {

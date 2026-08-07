@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-08-07
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -254,7 +254,19 @@ The detailed ownership and directive plan lives in
 - [x] Privacy-safe logging level and temporary diagnostic logging
 - [ ] Expand Local DNS into a zone-centred host inventory: create a zone once,
       then add, rename, remove, and bulk-edit devices and servers by hostname
-      plus IPv4/IPv6 address, with optional forward-confirmed PTR generation
+      plus IPv4/IPv6 address, with optional forward-confirmed PTR generation.
+      The typed backend model landed first: `LocalZone`/`LocalHost` in
+      `rootguard-core/internal/unbound/settings.go`, validated (canonical
+      zone/hostname syntax, per-zone and total host limits, address-family
+      and reserved-address checks, one PTR claim per address across zones)
+      and rendered as `local-zone`/`local-data`/`local-data-ptr` directives
+      through the existing `Preview`/`Apply`/`History`/`Restore` lifecycle
+      unchanged - no new activation path. Still missing: the guided-zones
+      frontend (`UnboundGuidedZones.tsx`) still manages its own generic
+      A/AAAA/CNAME records as JSON-in-a-comment inside the custom expert
+      config instead of this typed model
+      ([rootguard#129](https://github.com/foxly-it/rootguard/pull/129), closes
+      [#127](https://github.com/foxly-it/rootguard/issues/127))
 - [ ] Import local hosts through bounded `in-addr.arpa`/`ip6.arpa` discovery and
       optional router adapters, beginning with the documented FRITZ!Box TR-064
       host list; keep router credentials server-side and never persist them in

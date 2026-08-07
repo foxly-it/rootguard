@@ -47,6 +47,25 @@ func TestPreviewReportsPrivateDomainAndReversePolicyChanges(t *testing.T) {
 	}
 }
 
+func TestPreviewReportsLocalZoneChanges(t *testing.T) {
+	manager := newTestManager(t)
+	settings := DefaultSettings()
+	settings.LocalZones = []LocalZone{{
+		Name:  "home.lab.",
+		Hosts: []LocalHost{{Hostname: "printer", IPv4: "192.168.1.20", PTR: true}},
+	}}
+	preview, err := manager.Preview(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.Changes) != 1 || preview.Changes[0].Field != "local_zones" {
+		t.Fatalf("unexpected local zone preview: %+v", preview)
+	}
+	if !strings.Contains(preview.RenderedConfig, `local-data-ptr: "192.168.1.20 printer.home.lab"`) {
+		t.Fatalf("preview did not render the proposed local host: %s", preview.RenderedConfig)
+	}
+}
+
 func TestPreviewReportsNetworkModeChange(t *testing.T) {
 	manager := newTestManager(t)
 	settings := DefaultSettings()

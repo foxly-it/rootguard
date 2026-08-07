@@ -112,6 +112,12 @@ func settingsChanges(before, after Settings) []Change {
 			After: formatJSON(after.ReverseZones),
 		})
 	}
+	if !localZonesEqual(before.LocalZones, after.LocalZones) {
+		changes = append(changes, Change{
+			Field: "local_zones", Before: formatJSON(before.LocalZones),
+			After: formatJSON(after.LocalZones),
+		})
+	}
 	return changes
 }
 
