@@ -147,6 +147,11 @@ func validateGuidedConflicts(settings Settings, custom string) error {
 			}
 		}
 	}
+	for _, zone := range settings.LocalZones {
+		if containsZoneDirective(custom, "local-zone", zone.Name) {
+			return fmt.Errorf("%w: expert local-zone %q conflicts with the guided local host inventory", ErrInvalidCustomConfig, zone.Name)
+		}
+	}
 	return nil
 }
 

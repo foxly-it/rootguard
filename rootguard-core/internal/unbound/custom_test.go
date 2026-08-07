@@ -142,3 +142,18 @@ func TestGuidedPrivateSettingsRejectExpertDirectiveConflicts(t *testing.T) {
 		t.Fatalf("expected guided reverse-zone ownership conflict, got %v", err)
 	}
 }
+
+func TestGuidedLocalHostInventoryRejectsExpertLocalZoneConflict(t *testing.T) {
+	manager := newTestManager(t)
+	settings := DefaultSettings()
+	settings.LocalZones = []LocalZone{{
+		Name:  "home.lab.",
+		Hosts: []LocalHost{{Hostname: "printer", IPv4: "192.168.1.20"}},
+	}}
+	if err := manager.Apply(context.Background(), settings); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ApplyCustom(context.Background(), "server:\n    local-zone: \"home.lab.\" transparent\n"); !errors.Is(err, ErrInvalidCustomConfig) {
+		t.Fatalf("expected guided local host inventory conflict, got %v", err)
+	}
+}

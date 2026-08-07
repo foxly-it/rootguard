@@ -22,6 +22,9 @@ const (
 	maxForwardServers      = 8
 	maxForwardTargets      = 32
 	maxPrivateDomains      = 32
+	maxLocalZones          = 16
+	maxLocalHostsPerZone   = 128
+	maxLocalHostsTotal     = 512
 	reverseModeNXDOMAIN    = "nxdomain"
 	reverseModeTransparent = "transparent"
 	networkModeIPv4        = "ipv4"
@@ -47,6 +50,24 @@ type ReverseZonePolicy struct {
 	Mode    string `json:"mode"`
 }
 
+// LocalHost is one device or server in a zone-centred host inventory: a
+// hostname plus its IPv4 and/or IPv6 address, with optional PTR generation.
+// This is a distinct, host-oriented model from the frontend's older
+// generic-record ("A"/"AAAA"/"CNAME" + free-text value) guided zones, which
+// currently live entirely inside the custom expert config rather than here -
+// see docs/unbound-configuration-roadmap.md.
+type LocalHost struct {
+	Hostname string `json:"hostname"`
+	IPv4     string `json:"ipv4,omitempty"`
+	IPv6     string `json:"ipv6,omitempty"`
+	PTR      bool   `json:"ptr"`
+}
+
+type LocalZone struct {
+	Name  string      `json:"name"`
+	Hosts []LocalHost `json:"hosts"`
+}
+
 type Settings struct {
 	QnameMinimisation         bool                `json:"qname_minimisation"`
 	Prefetch                  bool                `json:"prefetch"`
@@ -65,6 +86,7 @@ type Settings struct {
 	ForwardZones              []ForwardZone       `json:"forward_zones"`
 	PrivateDomains            []string            `json:"private_domains"`
 	ReverseZones              []ReverseZonePolicy `json:"reverse_zones"`
+	LocalZones                []LocalZone         `json:"local_zones"`
 }
 
 type ActiveConfiguration struct {
@@ -92,6 +114,7 @@ func DefaultSettings() Settings {
 		NetworkMode:               networkModeIPv4,
 		ForwardZones:              []ForwardZone{},
 		PrivateDomains:            []string{},
+		LocalZones:                []LocalZone{},
 		ReverseZones: []ReverseZonePolicy{
 			{Network: "10.0.0.0/8", Mode: reverseModeNXDOMAIN},
 			{Network: "172.16.0.0/12", Mode: reverseModeNXDOMAIN},
@@ -185,6 +208,9 @@ func (s Settings) Validate() error {
 			}
 		}
 	}
+	if err := validateLocalZones(s.LocalZones); err != nil {
+		return err
+	}
 	if len(s.ReverseZones) > len(rfc1918ReverseZones) {
 		return fmt.Errorf("%w: reverse_zones contains unsupported entries", ErrInvalidSettings)
 	}
@@ -227,13 +253,8 @@ func validateCanonicalZoneName(name string) error {
 	}
 	labels := strings.Split(strings.TrimSuffix(name, "."), ".")
 	for _, label := range labels {
-		if len(label) == 0 || len(label) > 63 || !isASCIILetterOrDigit(label[0]) || !isASCIILetterOrDigit(label[len(label)-1]) {
+		if err := validateHostLabel(label); err != nil {
 			return errors.New("contains an invalid DNS label")
-		}
-		for index := 1; index < len(label)-1; index++ {
-			if !isASCIILetterOrDigit(label[index]) && label[index] != '-' {
-				return errors.New("contains an invalid DNS label")
-			}
 		}
 	}
 	return nil
@@ -241,6 +262,102 @@ func validateCanonicalZoneName(name string) error {
 
 func isASCIILetterOrDigit(value byte) bool {
 	return value >= 'a' && value <= 'z' || value >= '0' && value <= '9'
+}
+
+// validateHostLabel checks a single DNS label - either one label of a zone
+// FQDN, or a local-inventory hostname that is prefixed onto its zone.
+func validateHostLabel(label string) error {
+	if len(label) == 0 || len(label) > 63 || label != strings.ToLower(label) {
+		return errors.New("must be a lowercase DNS label of at most 63 characters")
+	}
+	if !isASCIILetterOrDigit(label[0]) || !isASCIILetterOrDigit(label[len(label)-1]) {
+		return errors.New("must start and end with a letter or digit")
+	}
+	for index := 1; index < len(label)-1; index++ {
+		if !isASCIILetterOrDigit(label[index]) && label[index] != '-' {
+			return errors.New("contains an invalid character")
+		}
+	}
+	return nil
+}
+
+func validateLocalZones(zones []LocalZone) error {
+	if len(zones) > maxLocalZones {
+		return fmt.Errorf("%w: local_zones must contain at most %d zones", ErrInvalidSettings, maxLocalZones)
+	}
+	names := make(map[string]struct{}, len(zones))
+	totalHosts := 0
+	ptrAddresses := make(map[netip.Addr]struct{})
+	for zoneIndex, zone := range zones {
+		if err := validateCanonicalZoneName(zone.Name); err != nil {
+			return fmt.Errorf("%w: local_zones[%d].name: %v", ErrInvalidSettings, zoneIndex, err)
+		}
+		if _, exists := names[zone.Name]; exists {
+			return fmt.Errorf("%w: local_zones[%d].name duplicates %q", ErrInvalidSettings, zoneIndex, zone.Name)
+		}
+		names[zone.Name] = struct{}{}
+		if len(zone.Hosts) == 0 || len(zone.Hosts) > maxLocalHostsPerZone {
+			return fmt.Errorf("%w: local_zones[%d].hosts must contain between 1 and %d hosts", ErrInvalidSettings, zoneIndex, maxLocalHostsPerZone)
+		}
+		totalHosts += len(zone.Hosts)
+		if totalHosts > maxLocalHostsTotal {
+			return fmt.Errorf("%w: local_zones must contain at most %d total hosts", ErrInvalidSettings, maxLocalHostsTotal)
+		}
+		hostnames := make(map[string]struct{}, len(zone.Hosts))
+		for hostIndex, host := range zone.Hosts {
+			if err := validateLocalHost(host, hostnames, ptrAddresses); err != nil {
+				return fmt.Errorf("%w: local_zones[%d].hosts[%d].%v", ErrInvalidSettings, zoneIndex, hostIndex, err)
+			}
+		}
+	}
+	return nil
+}
+
+func validateLocalHost(host LocalHost, hostnames map[string]struct{}, ptrAddresses map[netip.Addr]struct{}) error {
+	if err := validateHostLabel(host.Hostname); err != nil {
+		return fmt.Errorf("hostname: %v", err)
+	}
+	if _, exists := hostnames[host.Hostname]; exists {
+		return fmt.Errorf("hostname duplicates %q", host.Hostname)
+	}
+	hostnames[host.Hostname] = struct{}{}
+	if host.IPv4 == "" && host.IPv6 == "" {
+		return errors.New("must set ipv4, ipv6, or both")
+	}
+	if host.IPv4 != "" {
+		if err := validateLocalHostAddress(host.IPv4, true, host.PTR, ptrAddresses); err != nil {
+			return fmt.Errorf("ipv4: %v", err)
+		}
+	}
+	if host.IPv6 != "" {
+		if err := validateLocalHostAddress(host.IPv6, false, host.PTR, ptrAddresses); err != nil {
+			return fmt.Errorf("ipv6: %v", err)
+		}
+	}
+	return nil
+}
+
+func validateLocalHostAddress(value string, wantIPv4, ptr bool, ptrAddresses map[netip.Addr]struct{}) error {
+	address, err := netip.ParseAddr(value)
+	if err != nil || address.String() != value {
+		return errors.New("must be a canonical IP address")
+	}
+	if wantIPv4 && !address.Is4() {
+		return errors.New("must be a canonical IPv4 address")
+	}
+	if !wantIPv4 && (address.Is4() || address.Is4In6()) {
+		return errors.New("must be a canonical IPv6 address")
+	}
+	if address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() {
+		return errors.New("must not be unspecified, loopback, or multicast")
+	}
+	if ptr {
+		if _, exists := ptrAddresses[address]; exists {
+			return fmt.Errorf("%q is already claimed by another PTR-enabled host", value)
+		}
+		ptrAddresses[address] = struct{}{}
+	}
+	return nil
 }
 
 func settingsEqual(left, right Settings) bool {
@@ -260,7 +377,8 @@ func settingsEqual(left, right Settings) bool {
 		left.NetworkMode != right.NetworkMode ||
 		len(left.ForwardZones) != len(right.ForwardZones) ||
 		len(left.PrivateDomains) != len(right.PrivateDomains) ||
-		len(left.ReverseZones) != len(right.ReverseZones) {
+		len(left.ReverseZones) != len(right.ReverseZones) ||
+		!localZonesEqual(left.LocalZones, right.LocalZones) {
 		return false
 	}
 	for index, leftZone := range left.ForwardZones {
@@ -286,6 +404,24 @@ func settingsEqual(left, right Settings) bool {
 	for index, policy := range left.ReverseZones {
 		if policy != right.ReverseZones[index] {
 			return false
+		}
+	}
+	return true
+}
+
+func localZonesEqual(left, right []LocalZone) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index, leftZone := range left {
+		rightZone := right[index]
+		if leftZone.Name != rightZone.Name || len(leftZone.Hosts) != len(rightZone.Hosts) {
+			return false
+		}
+		for hostIndex, leftHost := range leftZone.Hosts {
+			if leftHost != rightZone.Hosts[hostIndex] {
+				return false
+			}
 		}
 	}
 	return true
@@ -351,6 +487,28 @@ func (s Settings) Render() ([]byte, error) {
 		for _, zone := range rfc1918ReverseZones[policy.Network] {
 			fmt.Fprintln(&out, "    # RFC1918 reverse DNS: static returns local data or NXDOMAIN; transparent permits normal resolution.")
 			fmt.Fprintf(&out, "    local-zone: %q %s\n", zone, reverseZoneType(policy.Mode))
+		}
+	}
+	for _, zone := range s.LocalZones {
+		fmt.Fprintln(&out, "    # Local host inventory: authoritative answers for hosts in this RootGuard-managed zone.")
+		fmt.Fprintf(&out, "    local-zone: %q static\n", zone.Name)
+		for _, host := range zone.Hosts {
+			fqdn := host.Hostname + "." + zone.Name
+			if host.IPv4 != "" {
+				fmt.Fprintf(&out, "    local-data: %q\n", fqdn+" IN A "+host.IPv4)
+			}
+			if host.IPv6 != "" {
+				fmt.Fprintf(&out, "    local-data: %q\n", fqdn+" IN AAAA "+host.IPv6)
+			}
+			if host.PTR {
+				target := strings.TrimSuffix(fqdn, ".")
+				if host.IPv4 != "" {
+					fmt.Fprintf(&out, "    local-data-ptr: \"%s %s\"\n", host.IPv4, target)
+				}
+				if host.IPv6 != "" {
+					fmt.Fprintf(&out, "    local-data-ptr: \"%s %s\"\n", host.IPv6, target)
+				}
+			}
 		}
 	}
 	for _, zone := range s.ForwardZones {
@@ -431,6 +589,9 @@ func (m *Manager) Load() (Settings, error) {
 	}
 	if settings.ReverseZones == nil {
 		settings.ReverseZones = DefaultSettings().ReverseZones
+	}
+	if settings.LocalZones == nil {
+		settings.LocalZones = []LocalZone{}
 	}
 	if settings.NetworkMode == "" {
 		settings.NetworkMode = networkModeIPv4

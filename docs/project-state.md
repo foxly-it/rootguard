@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-05
+Last updated: 2026-08-07
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -164,6 +164,22 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   preview, effective `unbound-checkconf`, history, activation, and rollback all
   cover the new settings. AdGuard Home's own private reverse-resolver routing
   remains an integration responsibility rather than duplicated resolver logic.
+- Typed backend foundation for the planned zone-centred host inventory: new
+  `LocalZone`/`LocalHost` types in `rootguard-core/internal/unbound/settings.go`
+  (hostname plus IPv4 and/or IPv6, optional PTR), validated (canonical zone and
+  hostname syntax, per-zone and total host limits, address family and
+  reserved-address checks, and at most one PTR claim per address across all
+  zones) and rendered as `local-zone`/`local-data`/`local-data-ptr` directives -
+  verified against the real Unbound binary's `unbound-checkconf`, not just
+  parsed. Reuses the existing `Preview`/`Apply`/`History`/`Restore` lifecycle
+  and the expert-config conflict check unchanged; no new activation path or API
+  route was needed since Core's settings endpoints already decode the whole
+  `Settings` struct. This does not yet replace `UnboundGuidedZones.tsx`, which
+  still manages its own generic A/AAAA/CNAME records as JSON embedded in a
+  comment inside the custom expert config - that frontend migration, plus the
+  FRITZ!Box TR-064 import, are tracked separately
+  ([rootguard#129](https://github.com/foxly-it/rootguard/pull/129), closes
+  [#127](https://github.com/foxly-it/rootguard/issues/127)).
 - Guided resolver protocol mode defaults to IPv4 and offers dual-stack or
   IPv6-only operation only after the running Unbound container reaches an
   authoritative root server over IPv6. Core repeats this decision server-side
