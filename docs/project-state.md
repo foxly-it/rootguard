@@ -589,7 +589,7 @@ Trustworthy Stack Center and production visibility:
   manually-synced preview copy (`public/blockpage-preview/`) updated to
   match, including a hardcoded example of one matched card since that copy
   has no live request to describe
-  ([rootguard#116](https://github.com/foxly-it/rootguard/issues/116)).
+  ([rootguard#119](https://github.com/foxly-it/rootguard/pull/119)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

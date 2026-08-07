@@ -352,7 +352,7 @@ Product boundary:
       already rejected - same restrained AdGuard-green accent, borrowed card/
       shadow/animation *mechanics* rather than the WebApp's teal/danger
       *palette*
-      ([rootguard#116](https://github.com/foxly-it/rootguard/issues/116))
+      ([rootguard#119](https://github.com/foxly-it/rootguard/pull/119))
 
 Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
 coherent appliance lifecycle around it.
