@@ -249,6 +249,15 @@ pre[tabindex]:focus-visible {
   padding: 50px 40px;
   display: flex;
   justify-content: center;
+  /* Without this, the default flex align-items: stretch clamps every page to
+     .main's own visible height instead of letting it size to its content.
+     The overflow stays visible (nothing looks clipped, .main still scrolls
+     via layout overflow), but any position: sticky descendant computes its
+     unstick boundary against that wrong, viewport-sized parent box instead
+     of the real content height - it stops sticking and scrolls away as soon
+     as one viewport's worth of content has passed, long before the section
+     it belongs to actually ends. */
+  align-items: flex-start;
 }
 
 /* Content wrapper */

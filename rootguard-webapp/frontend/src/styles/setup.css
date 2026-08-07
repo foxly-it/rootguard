@@ -434,17 +434,7 @@
 
 .blockpage-toggle-options { grid-template-columns: 1fr; }
 
-.blockpage-toggle .text-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--accent);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.blockpage-toggle .text-link:hover { text-decoration: underline; }
-.blockpage-toggle .text-link:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+.blockpage-preview-button { margin: 4px 0 14px; }
 
 .beta-warning {
   display: flex;
