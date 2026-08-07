@@ -22,7 +22,14 @@
   --btn-border: #d5d8dd;
   --btn-fg: #1c1f24;
 
-  --shadow: 0 2px 10px rgba(17, 18, 23, 0.06);
+  /* Shadows share one shape (set at each call site) but scale intensity per
+     theme through this pair, rather than hand-tuning flat rgba() values per
+     theme - a dark surface needs a much stronger alpha to read as a shadow
+     at all than a light one does for the same visual weight. */
+  --shadow-ink: 17 18 23;
+  --shadow-scale: 1;
+  --shadow: 0 2px 10px rgb(var(--shadow-ink) / calc(0.06 * var(--shadow-scale)));
+  --shadow-raised: 0 8px 24px rgb(var(--shadow-ink) / calc(0.12 * var(--shadow-scale)));
 }
 
 @media (prefers-color-scheme: dark) {
@@ -45,7 +52,8 @@
     --btn-border: #2e333b;
     --btn-fg: #e9eef5;
 
-    --shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+    --shadow-ink: 0 0 0;
+    --shadow-scale: 5;
   }
 }
 
@@ -68,7 +76,8 @@
   --btn-border: #2e333b;
   --btn-fg: #e9eef5;
 
-  --shadow: 0 2px 14px rgba(0, 0, 0, 0.4);
+  --shadow-ink: 0 0 0;
+  --shadow-scale: 5;
 }
 
 * { box-sizing: border-box; }
@@ -138,3 +147,12 @@ html, body {
 
 .btn.primary { background: var(--accent); border-color: var(--accent-border); color: var(--accent-ink); }
 .btn.primary:hover { filter: brightness(1.05); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

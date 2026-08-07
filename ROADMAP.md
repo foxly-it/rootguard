@@ -346,7 +346,7 @@ Product boundary:
       (the previous four conflated two AdGuard reasons that `check_host`
       can't actually distinguish, and had no card at all for AdGuard's
       "blocked service"/parental-control verdicts)
-      ([rootguard#115](https://github.com/foxly-it/rootguard/issues/115));
+      ([rootguard#118](https://github.com/foxly-it/rootguard/pull/118));
       (3) a visual redesign bringing back cards and motion in the spirit of
       the main WebApp, deliberately not the #98 hero/KPI treatment #100
       already rejected - same restrained AdGuard-green accent, borrowed card/

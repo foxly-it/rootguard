@@ -571,7 +571,25 @@ Trustworthy Stack Center and production visibility:
   offline, AdGuard down, timeout - leaves every card in its plain default
   state, which is also exactly what a JS-disabled or pre-fetch page already
   renders, so there's no separate fallback path to maintain
-  ([rootguard#115](https://github.com/foxly-it/rootguard/issues/115)).
+  ([rootguard#118](https://github.com/foxly-it/rootguard/pull/118)).
+- Blockpage visual redesign (part 3 of 3): brings back cards and motion
+  without repeating what PR #100 already rejected (a heavy, admin-dashboard-
+  like hero/KPI treatment) - the *mechanics* are borrowed from the main
+  WebApp (individual cards with a colored top-accent bar instead of one
+  bordered box, a two-token `--shadow-ink`/`--shadow-scale` pattern instead
+  of flat per-theme rgba() shadows, a staggered fade-free rise-and-scale
+  entrance animation with a `prefers-reduced-motion` kill-switch that didn't
+  exist here before), but not its *color language* - AdGuard green stays
+  the only accent, no WebApp teal or danger red. The matched reason card
+  (from the previous entry) gets the raised shadow and colored top border;
+  the rest stay flat. The flat filled shield mark and the single reused
+  checkmark icon are now stroke-based, with a distinct icon per category,
+  closer to the WebApp's lucide-react line-icon language, while the
+  brand mark (`rootguard-icon.svg`) is untouched. `rootguard-webapp`'s
+  manually-synced preview copy (`public/blockpage-preview/`) updated to
+  match, including a hardcoded example of one matched card since that copy
+  has no live request to describe
+  ([rootguard#116](https://github.com/foxly-it/rootguard/issues/116)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
