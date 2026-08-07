@@ -271,7 +271,15 @@ The detailed ownership and directive plan lives in
       maintenance
 - [ ] Show fixed base protections in the WebGUI without making unsafe values
       freely editable
-- [ ] Validate generated configurations against every supported Unbound image
+- [x] Validate generated configurations against every supported Unbound image -
+      `unbound-checkconf`, the DNSSEC/identity/version smoke tests, and the
+      trust-anchor volume-compatibility check now run natively on both
+      supported architectures (`amd64`, `arm64`) before the multi-arch image
+      is pushed. Previously only `amd64` ever ran them; the `arm64` half of
+      `linux/amd64,linux/arm64` shipped on the assumption that a successful
+      QEMU-emulated build implied a working image, with no functional
+      verification of its own
+      ([rootguard#121](https://github.com/foxly-it/rootguard/pull/121))
 
 ### User experience and safety
 

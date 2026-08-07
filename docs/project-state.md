@@ -58,6 +58,16 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   recorded `rolled_back`; the restored image also passed source-checksum,
   DNSSEC, and clean-log checks. The host was returned to zero test containers,
   volumes, and RootGuard networks afterward.
+- `ci-unbound.yml`'s functional checks (`unbound-checkconf`, the DNSSEC/
+  identity/version smoke tests, the trust-anchor volume-compatibility check)
+  now run as a native matrix on both `amd64` and `arm64` (`ubuntu-latest`,
+  `ubuntu-24.04-arm`) before the multi-arch push, gated behind both legs
+  passing. Previously these only ever ran on the implicit `amd64` runner;
+  the separate `docker/build-push-action` step that produces and pushes the
+  actual `linux/amd64,linux/arm64` manifest built `arm64` under QEMU
+  emulation but never functionally verified it - a successful cross-arch
+  build was silently treated as proof the image worked
+  ([rootguard#121](https://github.com/foxly-it/rootguard/pull/121)).
 - Unbound keeps a stable non-root identity (`100:101`) across image rebuilds,
   uses the system socket send buffer, and Core migrates the persistent resolver
   state ownership with a network-isolated, capability-restricted helper before
