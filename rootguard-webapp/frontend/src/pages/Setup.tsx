@@ -200,13 +200,16 @@ export default function Setup() {
 
         <fieldset className="release-channel blockpage-toggle" disabled={deploying}>
           <legend>{t("setup.blockpage.title")}</legend>
-          <p>
-            {t("setup.blockpage.help")}{" "}
-            <a className="text-link" href="/blockpage-preview/" target="_blank" rel="noopener noreferrer">
-              {t("setup.blockpage.preview")}
-              <ExternalLink size={13} aria-hidden="true" />
-            </a>
-          </p>
+          <p>{t("setup.blockpage.help")}</p>
+          <a
+            className="rg-button rg-button-secondary blockpage-preview-button"
+            href="/blockpage-preview/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t("setup.blockpage.preview")}
+            <ExternalLink size={13} aria-hidden="true" />
+          </a>
           <div className="release-channel-options blockpage-toggle-options">
             <label className={config.blockpage_enabled ? "selected" : ""}>
               <input
