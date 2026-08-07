@@ -315,8 +315,18 @@ func (m *Manager) deploy(config Config) {
 		return
 	}
 	if config.BlockpageEnabled {
-		if _, err := m.run(ctx, "restart", "rootguard-blockpage"); err != nil {
-			m.fail("bootstrap", fmt.Errorf("restart blockpage to pick up its AdGuard auth token: %w", err))
+		// Re-render blockpage's nginx config (now that Core has published its
+		// AdGuard auth token) and reload nginx in place, rather than
+		// restarting the container: a restart tears down and re-creates its
+		// network endpoint, racing AdGuard's dynamically-assigned address for
+		// the static IP blockpage needs - a reload has no such networking
+		// side effect and keeps the blockpage continuously reachable.
+		if _, err := m.run(ctx, "exec", "rootguard-blockpage", "sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"); err != nil {
+			m.fail("bootstrap", fmt.Errorf("render blockpage nginx config with its AdGuard auth token: %w", err))
+			return
+		}
+		if _, err := m.run(ctx, "exec", "rootguard-blockpage", "nginx", "-s", "reload"); err != nil {
+			m.fail("bootstrap", fmt.Errorf("reload blockpage nginx to pick up its AdGuard auth token: %w", err))
 			return
 		}
 	}

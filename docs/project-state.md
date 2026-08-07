@@ -548,10 +548,14 @@ Trustworthy Stack Center and production visibility:
   holds the raw admin username/password - Core derives a `base64(user:pass)`
   token after AdGuard bootstrap succeeds and publishes it to a dedicated
   `rootguard-adguard-auth` volume (same external-volume pattern as
-  `rootguard-unbound-config`), read-only, then restarts the blockpage
-  container so its self-contained entrypoint script (not the stock
-  `envsubst` hook - see script comment for the fork/export pitfall that
-  motivated a custom one) can render the token into its nginx config. Any
+  `rootguard-unbound-config`), read-only, then re-runs the blockpage's
+  self-contained entrypoint script in place (not the stock `envsubst` hook -
+  see script comment for the fork/export pitfall that motivated a custom
+  one) and reloads nginx - deliberately not a container restart, which
+  would tear down and re-create blockpage's network endpoint and race
+  AdGuard's dynamically-assigned address for the static IP blockpage needs
+  (found by testing this on a live deploy: the restart intermittently lost
+  that race with "address already in use"). Any
   upstream failure (AdGuard down, bad/missing token, timeout) collapses to
   one uniform `{"available":false}` response
   ([rootguard#114](https://github.com/foxly-it/rootguard/issues/114)).

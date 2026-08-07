@@ -278,8 +278,8 @@ func TestDeploymentPersistsCompletedState(t *testing.T) {
 			t.Fatalf("expected command containing %q in:\n%s", expected, allCommands)
 		}
 	}
-	if strings.Contains(allCommands, "restart rootguard-blockpage") {
-		t.Fatalf("expected no blockpage restart when the blockpage is disabled:\n%s", allCommands)
+	if strings.Contains(allCommands, "rootguard-blockpage") {
+		t.Fatalf("expected no blockpage config reload when the blockpage is disabled:\n%s", allCommands)
 	}
 }
 
@@ -325,8 +325,16 @@ func TestDeploymentRestartsBlockpageAfterBootstrapWhenEnabled(t *testing.T) {
 	mu.Lock()
 	allCommands := strings.Join(commands, "\n")
 	mu.Unlock()
-	if !strings.Contains(allCommands, "restart rootguard-blockpage") {
-		t.Fatalf("expected blockpage to be restarted after bootstrap so it picks up its AdGuard auth token, got:\n%s", allCommands)
+	for _, expected := range []string{
+		"exec rootguard-blockpage sh /docker-entrypoint.d/19-render-blockpage-conf.sh",
+		"exec rootguard-blockpage nginx -s reload",
+	} {
+		if !strings.Contains(allCommands, expected) {
+			t.Fatalf("expected blockpage config to be re-rendered and reloaded after bootstrap so it picks up its AdGuard auth token, missing %q in:\n%s", expected, allCommands)
+		}
+	}
+	if strings.Contains(allCommands, "restart rootguard-blockpage") {
+		t.Fatalf("expected a config reload, not a container restart (races AdGuard's dynamic IP for blockpage's static one), got:\n%s", allCommands)
 	}
 }
 
