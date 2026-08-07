@@ -34,7 +34,7 @@
 .manual-callout.warning { border-left-color: var(--yellow); background: rgba(246, 200, 95, .07); }
 .manual-callout.warning b { color: var(--yellow); }
 .code-block { margin: 22px 0; overflow: hidden; border: 1px solid var(--border); border-radius: 13px; background: #090e13; }
-.code-block > div { border-bottom: 1px solid var(--border); background: #141b22; padding: 8px 15px; color: #71808d; font: 10px "SFMono-Regular", Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; }
+.code-block > div { border-bottom: 1px solid var(--border); background: #141b22; padding: 8px 15px; color: #8a97a5; font: 10px "SFMono-Regular", Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; }
 .code-block pre { overflow-x: hidden; margin: 0; padding: 20px; color: #d9e4ec; font: 13px/1.75 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
 .steps { display: grid; gap: 12px; margin: 25px 0; padding: 0; list-style: none; }
 .steps li { display: grid; grid-template-columns: 38px 1fr; gap: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 17px; }
