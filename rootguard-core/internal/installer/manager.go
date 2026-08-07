@@ -314,6 +314,12 @@ func (m *Manager) deploy(config Config) {
 		m.fail("bootstrap", fmt.Errorf("bootstrap AdGuard Home: %w", err))
 		return
 	}
+	if config.BlockpageEnabled {
+		if _, err := m.run(ctx, "restart", "rootguard-blockpage"); err != nil {
+			m.fail("bootstrap", fmt.Errorf("restart blockpage to pick up its AdGuard auth token: %w", err))
+			return
+		}
+	}
 	_ = m.setStep("bootstrap", "done", "AdGuard Home forwards exclusively to Unbound")
 
 	m.mu.Lock()
@@ -384,6 +390,9 @@ func renderCompose(config Config, unboundImage, adGuardImage, blockpageImage, ne
     tmpfs:
       - /var/cache/nginx
       - /run
+      - /etc/nginx/conf.d
+    volumes:
+      - rootguard-adguard-auth:/etc/nginx/secrets:ro
     cap_drop: [ALL]
     # nginx's master process starts as root and drops worker processes -
     # the ones that actually handle client connections - to the non-root
@@ -451,6 +460,8 @@ networks:
 
 volumes:
   rootguard-unbound-config:
+    external: true
+  rootguard-adguard-auth:
     external: true
   rootguard-unbound-state:
     name: rootguard-unbound-state

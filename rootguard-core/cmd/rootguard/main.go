@@ -36,6 +36,7 @@ func main() {
 		envOrDefault("ADGUARD_API_URL", "http://rootguard-adguard:80"),
 		envOrDefault("ADGUARD_DATA_DIR", "/var/lib/rootguard/adguard"),
 		envOrDefault("ADGUARD_UPSTREAM", "rootguard-unbound:5335"),
+		envOrDefault("ROOTGUARD_BLOCKPAGE_AUTH_DIR", "/var/lib/rootguard/adguard-auth"),
 	)
 	installationManager := installer.NewManager(installer.Options{
 		DataDir:          envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),

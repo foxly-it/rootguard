@@ -331,7 +331,28 @@ Product boundary:
       change - the earlier blockpage work and the separate WebGUI-wide
       accessibility audit had each verified their own surface but neither
       had scanned this component
-      ([rootguard#111](https://github.com/foxly-it/rootguard/pull/111))
+      ([rootguard#112](https://github.com/foxly-it/rootguard/pull/112))
+- [ ] The "why blocked" reasons on the landing page are currently a static,
+      always-all-checked list - not tied to what actually matched for this
+      request. Three-part fix: (1) a narrow, rate-limited nginx proxy on the
+      blockpage itself (`/api/reason`) that asks AdGuard's own `check_host`
+      for the real verdict on the specific host that got sinkholed here,
+      authenticated with a derived token Core publishes - never the raw
+      AdGuard admin credentials - to a dedicated volume, since the blockpage
+      is the one component here reachable, unauthenticated, by anyone who
+      gets DNS-sinkholed to it
+      ([rootguard#114](https://github.com/foxly-it/rootguard/issues/114));
+      (2) wire the real per-request reason into five honest category cards
+      (the previous four conflated two AdGuard reasons that `check_host`
+      can't actually distinguish, and had no card at all for AdGuard's
+      "blocked service"/parental-control verdicts)
+      ([rootguard#115](https://github.com/foxly-it/rootguard/issues/115));
+      (3) a visual redesign bringing back cards and motion in the spirit of
+      the main WebApp, deliberately not the #98 hero/KPI treatment #100
+      already rejected - same restrained AdGuard-green accent, borrowed card/
+      shadow/animation *mechanics* rather than the WebApp's teal/danger
+      *palette*
+      ([rootguard#116](https://github.com/foxly-it/rootguard/issues/116))
 
 Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
 coherent appliance lifecycle around it.

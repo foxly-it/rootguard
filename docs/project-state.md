@@ -534,7 +534,27 @@ Trustworthy Stack Center and production visibility:
   Darkened `--accent`/`--accent-border`; dark theme was already passing
   and is untouched. Re-verified with axe against the real (rebuilt, not
   copied) Docker image on both light and dark
-  ([rootguard#111](https://github.com/foxly-it/rootguard/pull/111)).
+  ([rootguard#112](https://github.com/foxly-it/rootguard/pull/112)).
+- Blockpage reason-lookup backend (part 1 of 3 toward showing the real block
+  reason instead of a static always-checked list, see ROADMAP): the
+  blockpage's own nginx now proxies `/api/reason` to AdGuard's
+  `check_host`, using `$host` only - never a client-supplied parameter, so
+  it can't become a free "is domain X blocked" probe against the reader's
+  own AdGuard instance - and a hardcoded upstream path, so a compromised
+  request here can't reach any other AdGuard admin endpoint. Rate-limited
+  (`limit_req`) and short-TTL cached per host to bound both single-client
+  abuse and duplicate load from many clients hitting the same blocked
+  domain. AdGuard requires Basic-Auth for `check_host`; the blockpage never
+  holds the raw admin username/password - Core derives a `base64(user:pass)`
+  token after AdGuard bootstrap succeeds and publishes it to a dedicated
+  `rootguard-adguard-auth` volume (same external-volume pattern as
+  `rootguard-unbound-config`), read-only, then restarts the blockpage
+  container so its self-contained entrypoint script (not the stock
+  `envsubst` hook - see script comment for the fork/export pitfall that
+  motivated a custom one) can render the token into its nginx config. Any
+  upstream failure (AdGuard down, bad/missing token, timeout) collapses to
+  one uniform `{"available":false}` response
+  ([rootguard#114](https://github.com/foxly-it/rootguard/issues/114)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

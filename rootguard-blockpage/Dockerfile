@@ -17,7 +17,9 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
       org.opencontainers.image.revision="${COMMIT}"
 
 RUN rm -f /etc/nginx/conf.d/default.conf
-COPY nginx/blockpage.conf /etc/nginx/conf.d/blockpage.conf
+COPY nginx/blockpage.conf.template /etc/nginx/templates/blockpage.conf.template
+COPY nginx/entrypoint.d/19-render-blockpage-conf.sh /docker-entrypoint.d/19-render-blockpage-conf.sh
+RUN chmod +x /docker-entrypoint.d/19-render-blockpage-conf.sh
 COPY web/ /usr/share/nginx/html/
 
 # Deliberately no USER instruction: the stock image's nginx.conf already

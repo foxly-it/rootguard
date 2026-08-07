@@ -72,22 +72,24 @@ var filterProbes = []filterProbe{
 }
 
 type Manager struct {
-	installerURL string
-	apiURL       string
-	dataDir      string
-	upstream     string
-	http         *http.Client
-	retryDelay   time.Duration
+	installerURL     string
+	apiURL           string
+	dataDir          string
+	upstream         string
+	blockpageAuthDir string
+	http             *http.Client
+	retryDelay       time.Duration
 }
 
-func NewManager(installerURL, apiURL, dataDir, upstream string) *Manager {
+func NewManager(installerURL, apiURL, dataDir, upstream, blockpageAuthDir string) *Manager {
 	return &Manager{
-		installerURL: strings.TrimRight(installerURL, "/"),
-		apiURL:       strings.TrimRight(apiURL, "/"),
-		dataDir:      dataDir,
-		upstream:     upstream,
-		http:         &http.Client{Timeout: 10 * time.Second},
-		retryDelay:   500 * time.Millisecond,
+		installerURL:     strings.TrimRight(installerURL, "/"),
+		apiURL:           strings.TrimRight(apiURL, "/"),
+		dataDir:          dataDir,
+		upstream:         upstream,
+		blockpageAuthDir: blockpageAuthDir,
+		http:             &http.Client{Timeout: 10 * time.Second},
+		retryDelay:       500 * time.Millisecond,
 	}
 }
 
@@ -168,7 +170,37 @@ func (m *Manager) Bootstrap(ctx context.Context, blockPageIP string) (Status, er
 	if err := m.configureUpstream(ctx, credentials, blockPageIP); err != nil {
 		return Status{}, err
 	}
+	if blockPageIP != "" {
+		if err := m.publishBlockpageAuthToken(credentials); err != nil {
+			return Status{}, fmt.Errorf("publish blockpage auth token: %w", err)
+		}
+	}
 	return m.Status(ctx)
+}
+
+// publishBlockpageAuthToken derives a Basic-Auth token from the AdGuard
+// admin credentials and writes it to the volume shared with the blockpage
+// container, so the blockpage's own nginx can proxy /api/reason to AdGuard's
+// check_host endpoint without ever holding the raw username/password - the
+// one component here that's reachable, unauthenticated, by anyone who gets
+// DNS-sinkholed to it.
+func (m *Manager) publishBlockpageAuthToken(credentials Credentials) error {
+	if m.blockpageAuthDir == "" {
+		return nil
+	}
+	if err := os.MkdirAll(m.blockpageAuthDir, 0700); err != nil {
+		return fmt.Errorf("create blockpage auth directory: %w", err)
+	}
+	token := base64.StdEncoding.EncodeToString([]byte(credentials.Username + ":" + credentials.Password))
+	tempPath := filepath.Join(m.blockpageAuthDir, ".basic-auth-token.tmp")
+	if err := os.WriteFile(tempPath, []byte(token), 0600); err != nil {
+		return fmt.Errorf("write blockpage auth token: %w", err)
+	}
+	defer os.Remove(tempPath)
+	if err := os.Rename(tempPath, filepath.Join(m.blockpageAuthDir, "basic-auth-token")); err != nil {
+		return fmt.Errorf("activate blockpage auth token: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) install(ctx context.Context) (Credentials, error) {

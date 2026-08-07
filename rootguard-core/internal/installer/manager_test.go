@@ -204,6 +204,9 @@ func TestRenderedComposeBlockpageIsOptional(t *testing.T) {
 		`io.rootguard.component: "blockpage"`,
 		"cap_add: [CHOWN, SETUID, SETGID]",
 		"ipv4_address: 172.29.53.3",
+		"rootguard-adguard-auth:/etc/nginx/secrets:ro",
+		"- /etc/nginx/conf.d",
+		"rootguard-adguard-auth:\n    external: true",
 	} {
 		if !strings.Contains(enabled, expected) {
 			t.Fatalf("expected enabled compose to contain %q:\n%s", expected, enabled)
@@ -274,6 +277,56 @@ func TestDeploymentPersistsCompletedState(t *testing.T) {
 		if !strings.Contains(allCommands, expected) {
 			t.Fatalf("expected command containing %q in:\n%s", expected, allCommands)
 		}
+	}
+	if strings.Contains(allCommands, "restart rootguard-blockpage") {
+		t.Fatalf("expected no blockpage restart when the blockpage is disabled:\n%s", allCommands)
+	}
+}
+
+func TestDeploymentRestartsBlockpageAfterBootstrapWhenEnabled(t *testing.T) {
+	dataDir := t.TempDir()
+	var mu sync.Mutex
+	var commands []string
+	manager := NewManager(Options{
+		DataDir:        dataDir,
+		CoreContainer:  "rootguard-core",
+		UnboundImage:   "rootguard-unbound:test",
+		AdGuardImage:   "adguard:test",
+		BlockpageImage: "ghcr.io/foxly-it/rootguard-blockpage:latest",
+		DNSNetworkCIDR: "172.29.53.0/24",
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			mu.Lock()
+			commands = append(commands, strings.Join(arguments, " "))
+			mu.Unlock()
+			if arguments[0] == "inspect" {
+				return []byte("healthy\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	_, err := manager.Start(context.Background(), Config{
+		DNSBindAddress:   "192.168.1.2",
+		DNSPort:          53,
+		BlockpageEnabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if status := manager.Status(); status.State != StateInstalled {
+		t.Fatalf("expected installed state, got %#v", status)
+	}
+
+	mu.Lock()
+	allCommands := strings.Join(commands, "\n")
+	mu.Unlock()
+	if !strings.Contains(allCommands, "restart rootguard-blockpage") {
+		t.Fatalf("expected blockpage to be restarted after bootstrap so it picks up its AdGuard auth token, got:\n%s", allCommands)
 	}
 }
 
