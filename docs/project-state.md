@@ -558,7 +558,20 @@ Trustworthy Stack Center and production visibility:
   that race with "address already in use"). Any
   upstream failure (AdGuard down, bad/missing token, timeout) collapses to
   one uniform `{"available":false}` response
-  ([rootguard#114](https://github.com/foxly-it/rootguard/issues/114)).
+  ([rootguard#117](https://github.com/foxly-it/rootguard/pull/117)).
+- Blockpage real reason display (part 2 of 3): the four "why blocked" cards
+  are now five, reflecting what AdGuard's `check_host` can actually
+  distinguish - the previous four conflated two reasons (`FilteredBlackList`
+  covers both ad/tracking and generic threat-list hits, indistinguishable
+  from `check_host` alone) into a single honest "Filterliste" card, and
+  added two that had no card at all: "Gesperrter Dienst"
+  (`FilteredBlockedService`) and "Jugendschutz" (`Parental`). `meta.js`
+  fetches `/api/reason` (2.5s client-side timeout on top of the proxy's own
+  2s) and highlights the one matching card, dimming the rest; any failure -
+  offline, AdGuard down, timeout - leaves every card in its plain default
+  state, which is also exactly what a JS-disabled or pre-fetch page already
+  renders, so there's no separate fallback path to maintain
+  ([rootguard#115](https://github.com/foxly-it/rootguard/issues/115)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

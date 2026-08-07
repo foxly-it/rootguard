@@ -341,7 +341,7 @@ Product boundary:
       AdGuard admin credentials - to a dedicated volume, since the blockpage
       is the one component here reachable, unauthenticated, by anyone who
       gets DNS-sinkholed to it
-      ([rootguard#114](https://github.com/foxly-it/rootguard/issues/114));
+      ([rootguard#117](https://github.com/foxly-it/rootguard/pull/117));
       (2) wire the real per-request reason into five honest category cards
       (the previous four conflated two AdGuard reasons that `check_host`
       can't actually distinguish, and had no card at all for AdGuard's

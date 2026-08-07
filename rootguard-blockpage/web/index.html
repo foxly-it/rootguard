@@ -70,6 +70,19 @@
 
     .reasons svg { width: 19px; height: 19px; flex: 0 0 auto; stroke: var(--accent); stroke-width: 2.6; }
 
+    .reasons div[data-reason] { transition: opacity 0.2s ease, color 0.2s ease; }
+    .reasons .reason-match { color: var(--fg); font-weight: 650; }
+    .reasons .reason-match svg { stroke-width: 3.4; }
+    .reasons .reason-dim { opacity: 0.4; }
+    .reasons .reason-dim svg { visibility: hidden; }
+
+    .reasons-note {
+      margin: 0 auto 20px;
+      max-width: 46ch;
+      font-size: 0.86rem;
+      color: var(--muted);
+    }
+
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -116,13 +129,15 @@
     <h1>Diese Seite ist blockiert.</h1>
     <p class="lead">RootGuard hat diese Anfrage über AdGuard Home gefiltert, bevor eine Verbindung zustande kam.</p>
 
-    <div class="reasons">
+    <div class="reasons" id="reasons">
       <p class="reasons-title">Warum wurde diese Seite blockiert?</p>
-      <div><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Werbung oder Tracking</div>
-      <div><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Malware oder Phishing</div>
-      <div><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Bekannte Bedrohungsliste</div>
-      <div><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Manuelle Sperrregel</div>
+      <div data-reason="FilteredBlackList"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Filterliste (Werbung, Tracking oder bekannte Bedrohung)</div>
+      <div data-reason="SafeBrowsing"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Malware oder Phishing</div>
+      <div data-reason="FilteredCustomRule"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Manuelle Sperrregel</div>
+      <div data-reason="FilteredBlockedService"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Gesperrter Dienst</div>
+      <div data-reason="Parental"><svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5l9-9"/></svg> Jugendschutz</div>
     </div>
+    <p class="reasons-note" id="reasons-note" hidden>Der hervorgehobene Grund ist der tatsächlich für diese Anfrage ermittelte Treffer.</p>
 
     <div class="meta">
       <span>Domain: <strong id="m-host">–</strong></span>
