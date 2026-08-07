@@ -266,9 +266,19 @@ The detailed ownership and directive plan lives in
 
 ### Fixed secure base
 
-- [ ] Document and test DNSSEC hardening, glue/referral hardening, identity and
+- [x] Document and test DNSSEC hardening, glue/referral hardening, identity and
       version hiding, unwanted-reply threshold, root hints, and trust-anchor
-      maintenance
+      maintenance - added the previously-missing `unwanted-reply-threshold`
+      (upstream's own recommended defensive-reset value), documented every
+      fixed-base directive's purpose and test coverage in
+      `docs/unbound-configuration-roadmap.md`, and added CI checks for what
+      wasn't tested yet: `hide-identity`/`hide-version` now get a real CHAOS
+      `id.server`/`version.server` probe (previously only declared, never
+      exercised), plus a presence check confirming every hardening directive
+      actually ships in the built image. `harden-referral-path` and
+      `use-caps-for-id` remain deliberately deferred (documented why), not
+      silently dropped
+      ([rootguard#122](https://github.com/foxly-it/rootguard/pull/122))
 - [ ] Show fixed base protections in the WebGUI without making unsafe values
       freely editable
 - [x] Validate generated configurations against every supported Unbound image -
