@@ -196,6 +196,42 @@ function initializeHeaderNavigation() {
   });
 }
 
+function initializeBackToTop() {
+  const label = { de: "Nach oben scrollen", en: "Scroll to top" };
+  const button = document.createElement("button");
+  button.type = "button";
+  button.id = "back-to-top";
+  button.setAttribute("aria-label", label[currentLanguage]);
+  button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+
+  let visible = false;
+  let ticking = false;
+  const updateVisibility = () => {
+    ticking = false;
+    const shouldShow = window.scrollY > 500;
+    if (shouldShow === visible) return;
+    visible = shouldShow;
+    button.classList.toggle("visible", visible);
+  };
+
+  window.addEventListener("scroll", () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(updateVisibility);
+  }, { passive: true });
+
+  button.addEventListener("click", () => {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+  });
+
+  document.body.append(button);
+  updateVisibility();
+  return button;
+}
+
+const backToTopButton = initializeBackToTop();
+
 function setLanguage(language, persist = true) {
   if (!translations[language]) return;
   currentLanguage = language;
@@ -206,6 +242,7 @@ function setLanguage(language, persist = true) {
   document.querySelectorAll(".lang-button").forEach((button) => {
     button.classList.toggle("active", button.dataset.language === language);
   });
+  backToTopButton.setAttribute("aria-label", language === "de" ? "Nach oben scrollen" : "Scroll to top");
   const pageTitle = document.body.dataset[language === "de" ? "titleDe" : "titleEn"];
   const pageDescription = document.body.dataset[language === "de" ? "descriptionDe" : "descriptionEn"];
   document.title = pageTitle || translations[language].title;

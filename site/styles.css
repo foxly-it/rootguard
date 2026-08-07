@@ -156,3 +156,31 @@ body{overflow-x:hidden}
   .hero .dashboard-current{animation:none;transition:none}
   .hero .dashboard-current:hover{transform:perspective(900px) rotateZ(1deg) rotateY(0) translateX(0)}
 }
+
+/* Jump-to-top button, injected by script.js and shown past a scroll threshold */
+#back-to-top{
+  position:fixed;
+  right:24px;
+  bottom:24px;
+  z-index:15;
+  display:grid;
+  place-items:center;
+  width:46px;
+  height:46px;
+  border:1px solid var(--border);
+  border-radius:50%;
+  background:var(--panel);
+  color:var(--text);
+  box-shadow:var(--shadow);
+  cursor:pointer;
+  opacity:0;
+  transform:translateY(8px);
+  pointer-events:none;
+  transition:opacity 200ms ease,transform 200ms ease,border-color 200ms ease,background 200ms ease;
+}
+#back-to-top svg{width:19px;height:19px;stroke-width:2.4}
+#back-to-top.visible{opacity:1;transform:none;pointer-events:auto}
+#back-to-top:hover{border-color:var(--green);background:var(--soft)}
+#back-to-top:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+@media(max-width:640px){#back-to-top{right:14px;bottom:14px;width:42px;height:42px}}
+@media(prefers-reduced-motion:reduce){#back-to-top{transition:opacity 120ms ease,border-color 120ms ease,background 120ms ease}}

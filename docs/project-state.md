@@ -298,14 +298,20 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   capabilities, including the delivered privacy-preserving live stack and
   AdGuard Home metrics.
 - Consistent public-site header navigation keeps Docs and quick start directly
-  reachable, groups Wiki, project status, and roadmap under
-  Project, and groups the Foxly tool overview, MOTD, and AdGuard Home updater
-  separately. Keyboard-friendly native dropdowns close on outside click or
-  Escape, and the language switch is integrated into the navigation surface.
-  A dedicated GitHub icon beside the navigation links directly to the repository.
+  reachable and groups Wiki, project status, and roadmap under Project.
+  Keyboard-friendly native dropdowns close on outside click or Escape, and the
+  language switch is integrated into the navigation surface. A dedicated
+  GitHub icon beside the navigation links directly to the repository.
   RootGuard now carries its own bilingual imprint and privacy notice
   tailored to the static GitHub Pages deployment instead of redirecting legal
-  links to the Foxly blog.
+  links to the Foxly blog. The off-topic "Foxly Tools" dropdown (MOTD, AdGuard
+  Home Updater) was later dropped from the primary nav on every page -
+  `tools.html` itself is untouched and still reachable via the footer link.
+  The hero dashboard mockup was rebuilt to match the shipped WebGUI chrome
+  (collapsed icon-rail sidebar, appbar search/theme/user controls, a Runtime
+  services panel next to the data-flow panel), and a fixed jump-to-top button
+  (bottom right, appears past a scroll threshold, `prefers-reduced-motion`
+  aware) was added site-wide.
 - Detailed Unbound configuration ownership and priority plan in
   `docs/unbound-configuration-roadmap.md`: fixed secure base, typed guided
   values, guarded expert directives, and permanently blocked browser controls.
