@@ -308,8 +308,12 @@
   margin-top: auto;
 }
 
-.adguard-filter-launcher.unavailable {
-  opacity: 0.72;
+/* Dim only the decorative icon, not the heading/eyebrow/paragraph text -
+   opacity on an ancestor composites its whole subtree as one unit, so a
+   child can't "undo" it with its own opacity: 1. Applying it just to the
+   icon keeps the card's already-muted text readable at full contrast. */
+.adguard-filter-launcher.unavailable .adguard-filter-launcher-icon {
+  opacity: 0.6;
 }
 
 .adguard-filter-modal {

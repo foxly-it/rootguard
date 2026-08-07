@@ -517,6 +517,29 @@ Trustworthy Stack Center and production visibility:
   signal, with a restrained, high-contrast, single-accent, non-nested-card
   layout; verified in both themes plus the `/info/` explainer page
   ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100)).
+- Accessibility verification pass (the 0.1 navigation slice's exit gate):
+  automated axe-core scans (wcag2a/aa, wcag21a/aa, wcag22aa) across every
+  page, both themes, both languages, and several interactive states (search
+  modal, user menu, expert editor, expert editor fullscreen, a
+  `ContentModal`) - 28+ combinations, all clean after fixes, plus the same
+  at a 375px mobile viewport. Found and fixed: four design tokens
+  (`--info`/`--accent`/`--success`/`--warning`) that failed WCAG AA 4.5:1
+  once composited over a real card background even though they read as
+  passing against the flat `--surface` color alone; a dark-mode-only code
+  label whose background wasn't opaque enough; a blanket `opacity: 0.72` on
+  a whole card that silently broke its descendant text's contrast (CSS
+  opacity composites a subtree as one unit - a child can't restore full
+  contrast with its own `opacity: 1`); eight scrollable `<pre>` blocks
+  (generated-config previews, the Stack log viewer, Setup's diagnostic
+  detail) with no keyboard access; and `ContentModal` not trapping focus,
+  letting Tab walk out of an open dialog into the covered background page.
+  Also scripted-verified: logical Dashboard focus order, `S`/`Ctrl`+`K`
+  open search (ignored while typing in a field), `Escape`
+  closes-and-restores-focus, Unbound tabs respond to Arrow/Home/End, the
+  user menu opens with `Enter`, sidebar tooltips appear on keyboard focus
+  (not just hover), and no horizontal overflow at 640px (200%-zoom
+  equivalent) or 320px (WCAG 1.4.10's 400%-zoom reflow width) on any tested
+  page ([rootguard#109](https://github.com/foxly-it/rootguard/pull/109)).
 - Blockpage preview + a real contrast bug fix: Setup's blockpage toggle now
   links to a static preview of the page (bundled into the WebApp at
   `public/blockpage-preview/`, realistic example domain/time/IP instead of

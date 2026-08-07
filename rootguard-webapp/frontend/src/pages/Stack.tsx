@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   CheckCircle2,
@@ -42,6 +42,12 @@ export default function Stack() {
   const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
   const [openLogs, setOpenLogs] = useState<ServiceInfo["name"] | "">("");
   const [error, setError] = useState("");
+  // toggleLogs disables its trigger button while it fetches (first open per
+  // service), which blurs it to <body> before the modal ever mounts -
+  // ContentModal's own document.activeElement auto-capture would then
+  // restore focus to nothing. Capture the real trigger synchronously in the
+  // click handler instead, before any of that async/disabled state kicks in.
+  const logsTriggerRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -284,7 +290,7 @@ export default function Stack() {
                 <button type="button" className="rg-button rg-button-secondary quiet" disabled={busy} onClick={() => control(service.name, runtime?.status === "running" ? "stop" : "start")}>
                   {runtime?.status === "running" ? t("common.stop") : t("common.start")}
                 </button>
-                <button type="button" className="rg-button rg-button-secondary quiet" disabled={loadingLogs === service.name} onClick={() => toggleLogs(service.name)}>
+                <button type="button" className="rg-button rg-button-secondary quiet" disabled={loadingLogs === service.name} onClick={(event) => { logsTriggerRef.current = event.currentTarget; toggleLogs(service.name); }}>
                   {loadingLogs === service.name ? <LoaderCircle className="spin" size={15} /> : <FileText size={15} />}
                   {t("stack.showLogs")}
                 </button>
@@ -293,10 +299,10 @@ export default function Stack() {
           );
         })}
       </section>
-      <ContentModal open={openLogs !== ""} eyebrow={t("stack.logsWindow")} title={t("stack.logsTitle")} closeLabel={t("common.close")} onClose={() => setOpenLogs("")}>
+      <ContentModal open={openLogs !== ""} eyebrow={t("stack.logsWindow")} title={t("stack.logsTitle")} closeLabel={t("common.close")} onClose={() => setOpenLogs("")} returnFocusTo={logsTriggerRef}>
         <div className="stack-log-modal">
           <p>{t("stack.logsPrivacy")}</p>
-          <pre>{openLogs && serviceLogs[openLogs]?.lines.length ? serviceLogs[openLogs]?.lines.join("\n") : t("stack.logsEmpty")}</pre>
+          <pre tabIndex={0} aria-label={t("stack.logsTitle")}>{openLogs && serviceLogs[openLogs]?.lines.length ? serviceLogs[openLogs]?.lines.join("\n") : t("stack.logsEmpty")}</pre>
           {openLogs && serviceLogs[openLogs]?.truncated && <small>{t("stack.logsTruncated")}</small>}
         </div>
       </ContentModal>

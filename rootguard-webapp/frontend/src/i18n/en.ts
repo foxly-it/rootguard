@@ -656,6 +656,7 @@ export const en: LocaleDefinition = {
     "zones.draftAdded": "Zone added to the draft. Real Unbound validation happens before activation.",
     "zones.invalid": "The zone is invalid.",
     "zones.removed": "Zone removed from the draft. The active configuration remains unchanged until validation.",
+    "zones.allRemoved": "# All guided local zones will be removed.",
     "zones.previewAccepted": "Unbound accepted the guided draft. Review the preview before activation.",
     "zones.previewRejected": "Unbound rejected the zone draft.",
     "zones.confirmActivate": "Activate the validated local zones and restart Unbound?",

@@ -210,9 +210,18 @@ operable.
       sub-sections), with scroll-spy highlighting of the currently visible
       section
       ([rootguard#107](https://github.com/foxly-it/rootguard/pull/107))
-- [ ] Verify responsive behaviour, 200% browser zoom, WCAG 2.2 AA contrast,
+- [x] Verify responsive behaviour, 200% browser zoom, WCAG 2.2 AA contrast,
       screen-reader names, focus order, tooltips, menus, shortcuts, and both
-      colour themes in German and English
+      colour themes in German and English - automated axe-core scans across
+      every page, both themes, both languages, and several interactive
+      states, plus scripted checks for focus order/trapping, keyboard
+      shortcuts, tooltip-on-focus, and 200%/400%-zoom reflow. Found and
+      fixed four color-contrast design tokens that failed 4.5:1 once
+      composited over real card backgrounds (not just checked against flat
+      `--surface`), a blanket-opacity dimming that silently broke
+      descendant text contrast, eight keyboard-inaccessible scrollable
+      `<pre>` blocks, and a dialog (`ContentModal`) that didn't trap focus
+      ([rootguard#109](https://github.com/foxly-it/rootguard/pull/109))
 
 Exit: all pages and settings are discoverable without navigating the complete
 sidebar manually, and the application shell remains readable and operable with
@@ -402,8 +411,18 @@ a trusted network.
 - [ ] Threat model covering Docker socket holders, browser, internal networks,
       update supply chain, backups, and the AdGuard gateway
 - [ ] Dependency, container, secret, and static-analysis scans in CI
-- [ ] Keyboard and screen-reader audit of every WebGUI workflow
-- [ ] WCAG 2.2 AA contrast, focus, labels, errors, and reduced-motion review
+- [ ] Keyboard and screen-reader audit of every WebGUI workflow - partial
+      groundwork already done as part of the 0.1 navigation slice's exit
+      gate ([rootguard#109](https://github.com/foxly-it/rootguard/pull/109)),
+      but that pass covered pages and common interaction patterns rather
+      than every workflow branch (error states, full Setup wizard flow,
+      etc.); treat this as a formal release-gate re-verification, not a
+      from-scratch audit
+- [ ] WCAG 2.2 AA contrast, focus, labels, errors, and reduced-motion review -
+      contrast and focus got real fixes in
+      [rootguard#109](https://github.com/foxly-it/rootguard/pull/109); a
+      systematic reduced-motion sweep across every CSS animation/transition
+      is still open
 - [x] Security policy and private vulnerability-reporting instructions
 
 Later: multiple roles and external identity providers unless real 1.0 demand
