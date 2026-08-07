@@ -22,10 +22,6 @@
   --btn-border: #d5d8dd;
   --btn-fg: #1c1f24;
 
-  /* Shadows share one shape (set at each call site) but scale intensity per
-     theme through this pair, rather than hand-tuning flat rgba() values per
-     theme - a dark surface needs a much stronger alpha to read as a shadow
-     at all than a light one does for the same visual weight. */
   --shadow-ink: 17 18 23;
   --shadow-scale: 1;
   --shadow: 0 2px 10px rgb(var(--shadow-ink) / calc(0.06 * var(--shadow-scale)));

@@ -5,3 +5,4 @@
 # AI assistant tooling (local workflow only, not part of the public repo)
 .claude/
 CLAUDE.md
+AGENTS.md

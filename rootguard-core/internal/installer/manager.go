@@ -314,6 +314,22 @@ func (m *Manager) deploy(config Config) {
 		m.fail("bootstrap", fmt.Errorf("bootstrap AdGuard Home: %w", err))
 		return
 	}
+	if config.BlockpageEnabled {
+		// Re-render blockpage's nginx config (now that Core has published its
+		// AdGuard auth token) and reload nginx in place, rather than
+		// restarting the container: a restart tears down and re-creates its
+		// network endpoint, racing AdGuard's dynamically-assigned address for
+		// the static IP blockpage needs - a reload has no such networking
+		// side effect and keeps the blockpage continuously reachable.
+		if _, err := m.run(ctx, "exec", "rootguard-blockpage", "sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"); err != nil {
+			m.fail("bootstrap", fmt.Errorf("render blockpage nginx config with its AdGuard auth token: %w", err))
+			return
+		}
+		if _, err := m.run(ctx, "exec", "rootguard-blockpage", "nginx", "-s", "reload"); err != nil {
+			m.fail("bootstrap", fmt.Errorf("reload blockpage nginx to pick up its AdGuard auth token: %w", err))
+			return
+		}
+	}
 	_ = m.setStep("bootstrap", "done", "AdGuard Home forwards exclusively to Unbound")
 
 	m.mu.Lock()
@@ -384,6 +400,9 @@ func renderCompose(config Config, unboundImage, adGuardImage, blockpageImage, ne
     tmpfs:
       - /var/cache/nginx
       - /run
+      - /etc/nginx/conf.d
+    volumes:
+      - rootguard-adguard-auth:/etc/nginx/secrets:ro
     cap_drop: [ALL]
     # nginx's master process starts as root and drops worker processes -
     # the ones that actually handle client connections - to the non-root
@@ -451,6 +470,8 @@ networks:
 
 volumes:
   rootguard-unbound-config:
+    external: true
+  rootguard-adguard-auth:
     external: true
   rootguard-unbound-state:
     name: rootguard-unbound-state

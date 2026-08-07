@@ -2,9 +2,13 @@ package adguard
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -129,6 +133,71 @@ func TestBootstrapInstallsAndConfiguresUnbound(t *testing.T) {
 	}
 }
 
+func bootstrapSuccessHandler() http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/control/install/get_addresses":
+			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": map[string]any{}})
+		case "/control/install/check_config":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"web": map[string]any{"status": "", "can_autofix": false},
+				"dns": map[string]any{"status": "", "can_autofix": false},
+			})
+		case "/control/install/configure":
+			w.WriteHeader(http.StatusOK)
+		case "/control/status":
+			_ = json.NewEncoder(w).Encode(map[string]any{"dns_addresses": []string{"0.0.0.0"}})
+		case "/control/test_upstream_dns":
+			_ = json.NewEncoder(w).Encode(map[string]string{"rootguard-unbound:5335": "OK"})
+		case "/control/dns_config", "/control/filtering/config":
+			w.WriteHeader(http.StatusOK)
+		case "/control/dns_info":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"upstream_dns": []string{"rootguard-unbound:5335"},
+				"fallback_dns": []string{},
+			})
+		case "/control/stats":
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+}
+
+func TestBootstrapPublishesBlockpageAuthToken(t *testing.T) {
+	authDir := t.TempDir()
+	manager := newTestManagerWithDir(bootstrapSuccessHandler(), t.TempDir(), authDir)
+
+	if _, err := manager.Bootstrap(context.Background(), "192.168.1.10"); err != nil {
+		t.Fatal(err)
+	}
+
+	token, err := os.ReadFile(filepath.Join(authDir, "basic-auth-token"))
+	if err != nil {
+		t.Fatalf("expected blockpage auth token to be written: %v", err)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(string(token))
+	if err != nil {
+		t.Fatalf("token is not valid base64: %v", err)
+	}
+	if !strings.HasPrefix(string(decoded), "rootguard:") {
+		t.Fatalf("expected token to encode the rootguard admin credentials, got %q", decoded)
+	}
+}
+
+func TestBootstrapWithoutBlockpageSkipsAuthToken(t *testing.T) {
+	authDir := filepath.Join(t.TempDir(), "unused")
+	manager := newTestManagerWithDir(bootstrapSuccessHandler(), t.TempDir(), authDir)
+
+	if _, err := manager.Bootstrap(context.Background(), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := os.Stat(authDir); !os.IsNotExist(err) {
+		t.Fatalf("expected no auth token directory when blockpage is disabled, got err=%v", err)
+	}
+}
+
 func TestBootstrapRejectsBrokenUpstream(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -151,7 +220,7 @@ func TestBootstrapRejectsBrokenUpstream(t *testing.T) {
 	if err := writeCredentials(dir+"/credentials.json", Credentials{Username: "rootguard", Password: "secret"}); err != nil {
 		t.Fatal(err)
 	}
-	manager := newTestManagerWithDir(handler, dir)
+	manager := newTestManagerWithDir(handler, dir, t.TempDir())
 	if _, err := manager.Bootstrap(context.Background(), "192.168.1.10"); err == nil {
 		t.Fatal("expected upstream validation failure")
 	}
@@ -178,7 +247,7 @@ func TestFilterReportClassifiesExpectedAndInformationalHosts(t *testing.T) {
 	if err := writeCredentials(dir+"/credentials.json", Credentials{Username: "rootguard", Password: "secret"}); err != nil {
 		t.Fatal(err)
 	}
-	report, err := newTestManagerWithDir(handler, dir).FilterReport(context.Background())
+	report, err := newTestManagerWithDir(handler, dir, t.TempDir()).FilterReport(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +269,7 @@ func TestFilterReportClassifiesExpectedAndInformationalHosts(t *testing.T) {
 
 func TestInstallerReadinessRetriesTemporaryFailures(t *testing.T) {
 	attempts := 0
-	manager := NewManager("http://adguard-installer", "http://adguard", t.TempDir(), "rootguard-unbound:5335")
+	manager := NewManager("http://adguard-installer", "http://adguard", t.TempDir(), "rootguard-unbound:5335", t.TempDir())
 	manager.retryDelay = time.Millisecond
 	manager.http.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		recorder := httptest.NewRecorder()
@@ -229,11 +298,11 @@ func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, 
 
 func newTestManager(t *testing.T, handler http.Handler) *Manager {
 	t.Helper()
-	return newTestManagerWithDir(handler, t.TempDir())
+	return newTestManagerWithDir(handler, t.TempDir(), t.TempDir())
 }
 
-func newTestManagerWithDir(handler http.Handler, dir string) *Manager {
-	manager := NewManager("http://adguard-installer", "http://adguard", dir, "rootguard-unbound:5335")
+func newTestManagerWithDir(handler http.Handler, dir, blockpageAuthDir string) *Manager {
+	manager := NewManager("http://adguard-installer", "http://adguard", dir, "rootguard-unbound:5335", blockpageAuthDir)
 	manager.http.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, request)

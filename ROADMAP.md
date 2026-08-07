@@ -331,7 +331,37 @@ Product boundary:
       "danger" framing); the shipped design instead follows AdGuard Home's
       own brand green as a positive "protection working" signal, with a
       restrained, high-contrast, single-accent layout
-      ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100))
+      ([rootguard#100](https://github.com/foxly-it/rootguard/pull/100)).
+      Setup's blockpage toggle now links to a bundled static preview so an
+      operator can see the actual page before (or without) deploying it;
+      building the preview surfaced a real WCAG AA contrast failure in the
+      shipped page itself (light-theme `--accent` too light for both
+      white-on-green buttons and green-on-white links), fixed in the same
+      change - the earlier blockpage work and the separate WebGUI-wide
+      accessibility audit had each verified their own surface but neither
+      had scanned this component
+      ([rootguard#112](https://github.com/foxly-it/rootguard/pull/112))
+- [ ] The "why blocked" reasons on the landing page are currently a static,
+      always-all-checked list - not tied to what actually matched for this
+      request. Three-part fix: (1) a narrow, rate-limited nginx proxy on the
+      blockpage itself (`/api/reason`) that asks AdGuard's own `check_host`
+      for the real verdict on the specific host that got sinkholed here,
+      authenticated with a derived token Core publishes - never the raw
+      AdGuard admin credentials - to a dedicated volume, since the blockpage
+      is the one component here reachable, unauthenticated, by anyone who
+      gets DNS-sinkholed to it
+      ([rootguard#117](https://github.com/foxly-it/rootguard/pull/117));
+      (2) wire the real per-request reason into five honest category cards
+      (the previous four conflated two AdGuard reasons that `check_host`
+      can't actually distinguish, and had no card at all for AdGuard's
+      "blocked service"/parental-control verdicts)
+      ([rootguard#118](https://github.com/foxly-it/rootguard/pull/118));
+      (3) a visual redesign bringing back cards and motion in the spirit of
+      the main WebApp, deliberately not the #98 hero/KPI treatment #100
+      already rejected - same restrained AdGuard-green accent, borrowed card/
+      shadow/animation *mechanics* rather than the WebApp's teal/danger
+      *palette*
+      ([rootguard#119](https://github.com/foxly-it/rootguard/pull/119))
 
 Exit: AdGuard Home remains recognisably native while RootGuard provides a safe,
 coherent appliance lifecycle around it.

@@ -540,6 +540,79 @@ Trustworthy Stack Center and production visibility:
   (not just hover), and no horizontal overflow at 640px (200%-zoom
   equivalent) or 320px (WCAG 1.4.10's 400%-zoom reflow width) on any tested
   page ([rootguard#109](https://github.com/foxly-it/rootguard/pull/109)).
+- Blockpage preview + a real contrast bug fix: Setup's blockpage toggle now
+  links to a static preview of the page (bundled into the WebApp at
+  `public/blockpage-preview/`, realistic example domain/time/IP instead of
+  the real page's dynamic `meta.js` fetch - it's a manual snapshot copy,
+  not an automated cross-component build step, so it needs a matching
+  manual update if the real blockpage's design changes later). Running an
+  axe-core scan against that copy surfaced a genuine WCAG AA contrast
+  failure in the actual shipped `rootguard-blockpage` itself, not just the
+  preview: light-theme `--accent` (`#39ac31`) was too light for both
+  white-text-on-green buttons (2.94:1) and green-text-on-white links
+  (2.82:1), against a 4.5:1 requirement. Neither the original blockpage
+  work above nor the separate WebGUI-wide accessibility audit had scanned
+  `rootguard-blockpage` itself, since it's a separately deployed component
+  with its own design tokens - each had verified its own surface only.
+  Darkened `--accent`/`--accent-border`; dark theme was already passing
+  and is untouched. Re-verified with axe against the real (rebuilt, not
+  copied) Docker image on both light and dark
+  ([rootguard#112](https://github.com/foxly-it/rootguard/pull/112)).
+- Blockpage reason-lookup backend (part 1 of 3 toward showing the real block
+  reason instead of a static always-checked list, see ROADMAP): the
+  blockpage's own nginx now proxies `/api/reason` to AdGuard's
+  `check_host`, using `$host` only - never a client-supplied parameter, so
+  it can't become a free "is domain X blocked" probe against the reader's
+  own AdGuard instance - and a hardcoded upstream path, so a compromised
+  request here can't reach any other AdGuard admin endpoint. Rate-limited
+  (`limit_req`) and short-TTL cached per host to bound both single-client
+  abuse and duplicate load from many clients hitting the same blocked
+  domain. AdGuard requires Basic-Auth for `check_host`; the blockpage never
+  holds the raw admin username/password - Core derives a `base64(user:pass)`
+  token after AdGuard bootstrap succeeds and publishes it to a dedicated
+  `rootguard-adguard-auth` volume (same external-volume pattern as
+  `rootguard-unbound-config`), read-only, then re-runs the blockpage's
+  self-contained entrypoint script in place (not the stock `envsubst` hook -
+  see script comment for the fork/export pitfall that motivated a custom
+  one) and reloads nginx - deliberately not a container restart, which
+  would tear down and re-create blockpage's network endpoint and race
+  AdGuard's dynamically-assigned address for the static IP blockpage needs
+  (found by testing this on a live deploy: the restart intermittently lost
+  that race with "address already in use"). Any
+  upstream failure (AdGuard down, bad/missing token, timeout) collapses to
+  one uniform `{"available":false}` response
+  ([rootguard#117](https://github.com/foxly-it/rootguard/pull/117)).
+- Blockpage real reason display (part 2 of 3): the four "why blocked" cards
+  are now five, reflecting what AdGuard's `check_host` can actually
+  distinguish - the previous four conflated two reasons (`FilteredBlackList`
+  covers both ad/tracking and generic threat-list hits, indistinguishable
+  from `check_host` alone) into a single honest "Filterliste" card, and
+  added two that had no card at all: "Gesperrter Dienst"
+  (`FilteredBlockedService`) and "Jugendschutz" (`Parental`). `meta.js`
+  fetches `/api/reason` (2.5s client-side timeout on top of the proxy's own
+  2s) and highlights the one matching card, dimming the rest; any failure -
+  offline, AdGuard down, timeout - leaves every card in its plain default
+  state, which is also exactly what a JS-disabled or pre-fetch page already
+  renders, so there's no separate fallback path to maintain
+  ([rootguard#118](https://github.com/foxly-it/rootguard/pull/118)).
+- Blockpage visual redesign (part 3 of 3): brings back cards and motion
+  without repeating what PR #100 already rejected (a heavy, admin-dashboard-
+  like hero/KPI treatment) - the *mechanics* are borrowed from the main
+  WebApp (individual cards with a colored top-accent bar instead of one
+  bordered box, a two-token `--shadow-ink`/`--shadow-scale` pattern instead
+  of flat per-theme rgba() shadows, a staggered fade-free rise-and-scale
+  entrance animation with a `prefers-reduced-motion` kill-switch that didn't
+  exist here before), but not its *color language* - AdGuard green stays
+  the only accent, no WebApp teal or danger red. The matched reason card
+  (from the previous entry) gets the raised shadow and colored top border;
+  the rest stay flat. The flat filled shield mark and the single reused
+  checkmark icon are now stroke-based, with a distinct icon per category,
+  closer to the WebApp's lucide-react line-icon language, while the
+  brand mark (`rootguard-icon.svg`) is untouched. `rootguard-webapp`'s
+  manually-synced preview copy (`public/blockpage-preview/`) updated to
+  match, including a hardcoded example of one matched card since that copy
+  has no live request to describe
+  ([rootguard#119](https://github.com/foxly-it/rootguard/pull/119)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

@@ -5,8 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <meta name="robots" content="noindex, nofollow">
-  <title>Seite blockiert · RootGuard</title>
-  <link rel="stylesheet" href="/styles.css">
+  <title>Vorschau: Seite blockiert · RootGuard</title>
+  <!--
+    Static preview copy of rootguard-blockpage/web/index.html, bundled into
+    the WebApp so Setup can show what the blockpage looks like before it's
+    even deployed. Paths are relative (not root-absolute) since this lives
+    under /blockpage-preview/, not at the app root. meta.js's live
+    fetch/location values are replaced with fixed example data below - keep
+    this file's visual markup in sync with the real blockpage by hand if
+    that design changes; there's no automated sync between the two.
+  -->
+  <link rel="stylesheet" href="./styles.css">
 
   <style>
     body { padding: 60px 20px 50px; }
@@ -149,38 +158,44 @@
     <p class="lead">RootGuard hat diese Anfrage über AdGuard Home gefiltert, bevor eine Verbindung zustande kam.</p>
 
     <p class="reasons-title">Warum wurde diese Seite blockiert?</p>
-    <div class="reasons" id="reasons">
-      <div data-reason="FilteredBlackList">
+    <div class="reasons">
+      <!--
+        Static preview: the real page highlights whichever card matches via
+        a live /api/reason fetch (see rootguard-blockpage/web/meta.js). This
+        copy has no live request to describe, so "Filterliste" is hardcoded
+        as the matched example, matching the example domain below.
+      -->
+      <div data-reason="FilteredBlackList" class="reason-match">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3Z"/></svg>
         Filterliste (Werbung, Tracking oder bekannte Bedrohung)
       </div>
-      <div data-reason="SafeBrowsing">
+      <div data-reason="SafeBrowsing" class="reason-dim">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="M12 8v4M12 16h.01"/></svg>
         Malware oder Phishing
       </div>
-      <div data-reason="FilteredCustomRule">
+      <div data-reason="FilteredCustomRule" class="reason-dim">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m5.5 5.5 13 13"/></svg>
         Manuelle Sperrregel
       </div>
-      <div data-reason="FilteredBlockedService">
+      <div data-reason="FilteredBlockedService" class="reason-dim">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>
         Gesperrter Dienst
       </div>
-      <div data-reason="Parental">
+      <div data-reason="Parental" class="reason-dim">
         <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
         Jugendschutz
       </div>
     </div>
-    <p class="reasons-note" id="reasons-note" hidden>Der hervorgehobene Grund ist der tatsächlich für diese Anfrage ermittelte Treffer.</p>
+    <p class="reasons-note">Der hervorgehobene Grund ist der tatsächlich für diese Anfrage ermittelte Treffer.</p>
 
     <div class="meta">
-      <span>Domain: <strong id="m-host">–</strong></span>
-      <span>Zeit: <strong id="m-time">–</strong></span>
-      <span>Client-IP: <strong id="m-ip">–</strong></span>
+      <span>Domain: <strong id="m-host">werbung.tracking-beispiel.com</strong></span>
+      <span>Zeit: <strong id="m-time">06.08.2026, 21:04</strong></span>
+      <span>Client-IP: <strong id="m-ip">192.168.178.42</strong></span>
     </div>
 
     <div class="actions">
-      <a class="btn primary" href="/info/">
+      <a class="btn primary" href="./info/">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         Mehr Infos
       </a>
@@ -191,12 +206,11 @@
     </div>
 
     <p class="page-footer">
-      <span class="brand"><img src="/rootguard-icon.svg" alt="">Root<em>Guard</em></span>
+      <span class="brand"><img src="./rootguard-icon.svg" alt="">Root<em>Guard</em></span>
       · selbst gehosteter DNS-Schutz
     </p>
   </main>
 
-  <script src="/meta.js"></script>
-  <script src="/theme.js"></script>
+  <script src="./theme.js"></script>
 </body>
 </html>
