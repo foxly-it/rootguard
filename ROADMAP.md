@@ -391,8 +391,16 @@ Product boundary:
       general settings, DNS settings, and the blocklist page, placed next
       to the status rows and filter-test results they're each relevant to
       ([rootguard#150](https://github.com/foxly-it/rootguard/pull/150))
-- [ ] Document backup and restore ownership for AdGuard configuration, work
-      data, query history, and filter state
+- [x] Document backup and restore ownership for AdGuard configuration, work
+      data, query history, and filter state (`docs/architecture.md`): the
+      two dedicated volumes (`rootguard-adguard-config`,
+      `rootguard-adguard-work`) are already covered by the existing
+      pre-update backup/rollback mechanism, but that's an internal
+      update-time safety net, not an operator-triggered or long-term
+      retained restore point - documents the current split of
+      responsibility and a manual `docker run`-based volume backup for
+      anything beyond it, pending the native backup/export work in 0.4
+      ([rootguard#151](https://github.com/foxly-it/rootguard/pull/151))
 - [ ] Compatibility tests against every supported AdGuard Home release
 - [x] Ship a self-hosted, RootGuard-branded blocked-request landing page as a
       new `rootguard-blockpage` monorepo directory (same pattern as
