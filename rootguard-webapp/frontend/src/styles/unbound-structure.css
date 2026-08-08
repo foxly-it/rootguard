@@ -159,65 +159,88 @@
   outline-offset: 2px;
 }
 
+/* Only shown in rail/widget mode below - the horizontal sticky bar reads
+   fine without a heading, and the visible heading would be redundant next
+   to the bar's already-visible section labels. */
+.unbound-section-nav-heading {
+  display: none;
+}
+
 .unbound-page [role="tabpanel"] {
   scroll-margin-top: 20px;
 }
 
-/* Above ~1440px there's reliably enough space beside the content (measured
-   live: ~40px at 1280px, ~92px at 1440px, ~170px at 1600px) for a floating
-   icon rail instead of the horizontal bar - fixed positioning also sidesteps
-   position: sticky's dependency on its parent's own box height entirely.
-   Below the breakpoint the horizontal, in-flow sticky bar above stays the
-   only layout that reliably fits. */
-@media (min-width: 1440px) {
+/* Above ~1600px there's reliably enough room in the gutter between the main
+   sidebar and the content column (measured live: ~92px at 1440px, ~172px at
+   1600px, ~212px at 1680px) for a compact "on this page" widget instead of
+   the horizontal bar - fixed positioning also sidesteps position: sticky's
+   dependency on its parent's own box height entirely. Below the breakpoint
+   the horizontal, in-flow sticky bar above stays the only layout that
+   reliably fits. Lives in that left gutter (positioned by JS in
+   Unbound.tsx, which centers it in the gutter's actual measured width)
+   rather than floating alone past the content's right edge - reads as part
+   of the navigation area instead of a lone rail in open space. Narrow by
+   design: sized, with padding+border, to leave a real margin either side
+   even at the breakpoint's low end, not just at wider viewports. */
+@media (min-width: 1600px) {
   .unbound-section-nav {
     position: fixed;
-    top: 50%;
-    right: 24px;
+    top: 96px;
     z-index: 20;
     display: flex;
     flex-direction: column;
-    width: auto;
+    gap: 2px;
+    width: 130px;
     margin: 0;
-    transform: translateY(-50%);
+    padding: 8px;
+    transform: none;
+  }
+
+  .unbound-section-nav-heading {
+    display: block;
+    margin: 0 0 6px;
+    padding: 0 2px;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    font-weight: 750;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
   }
 
   .unbound-section-nav a {
-    position: relative;
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    justify-content: center;
+    position: static;
+    width: auto;
+    /* Flex items default to min-width: auto, i.e. they refuse to shrink
+       below their content's intrinsic width - for a nowrap label that
+       means the *unclipped* text width, blowing the widget out past its
+       130px column regardless of the label's own overflow/ellipsis rules
+       below. Without this, longer German labels (e.g. "Hosts vom Router
+       importieren") pushed the widget wide enough to overlap the content
+       card next to it; only reproduced with real long labels, not the
+       shorter English ones used while first building this. */
+    min-width: 0;
+    height: auto;
+    padding: 6px 7px;
+    justify-content: flex-start;
+  }
+
+  .unbound-section-nav a svg {
+    width: 13px;
+    height: 13px;
   }
 
   .unbound-section-nav-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
+    position: static;
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+    height: auto;
+    margin: 0;
     overflow: hidden;
-    clip: rect(0, 0, 0, 0);
+    clip: auto;
+    font-size: 0.74rem;
+    text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .unbound-section-nav a[data-tooltip]:hover::after,
-  .unbound-section-nav a[data-tooltip]:focus-visible::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    right: calc(100% + 10px);
-    top: 50%;
-    z-index: 21;
-    padding: 7px 10px;
-    border: 1px solid var(--border);
-    border-radius: 7px;
-    background: var(--bg-header);
-    box-shadow: 0 12px 30px rgb(var(--shadow-ink) / calc(0.32 * var(--shadow-scale)));
-    color: var(--text);
-    font-size: 0.78rem;
-    font-weight: 650;
-    white-space: nowrap;
-    pointer-events: none;
-    transform: translateY(-50%);
   }
 }
 

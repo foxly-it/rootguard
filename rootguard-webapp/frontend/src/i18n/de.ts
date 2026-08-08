@@ -401,6 +401,7 @@ export const de: LocaleDefinition = {
     "unbound.statusUnknown": "Status nicht verfügbar",
     "unbound.navigation": "Bereiche der Unbound-Konfiguration",
     "unbound.sectionNav": "Abschnitte in diesem Tab",
+    "unbound.sectionNav.heading": "Auf dieser Seite",
     "unbound.section.profiles": "Profile",
     "unbound.tab.overview": "Übersicht",
     "unbound.tab.resolver": "Resolver",
