@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import {
   Activity, Code2, Expand, MapPinned, SlidersHorizontal,
   Sparkles, Settings2, Lightbulb, Home, Lock, Route, FileText, SquarePen, History as HistoryIcon,
+  Router as RouterIcon,
 } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
@@ -36,6 +37,7 @@ import "../styles/unbound-structure.css";
 import "../styles/unbound-actions.css";
 import UnboundExpertEditor from "../components/UnboundExpertEditor";
 import UnboundForwardZones from "../components/UnboundForwardZones";
+import UnboundRouterImport from "../components/UnboundRouterImport";
 import UnboundGuidedZones from "../components/UnboundGuidedZones";
 import UnboundPrivateDomains from "../components/UnboundPrivateDomains";
 import ContentModal from "../components/ContentModal";
@@ -79,6 +81,7 @@ export default function Unbound() {
       forward_zones: loadedSettings.forward_zones ?? [],
       private_domains: loadedSettings.private_domains ?? [],
       reverse_zones: loadedSettings.reverse_zones ?? [],
+      local_zones: loadedSettings.local_zones ?? [],
       network_mode: loadedSettings.network_mode ?? "ipv4",
       resource_profile: loadedSettings.resource_profile ?? "medium",
       prefetch_key: loadedSettings.prefetch_key ?? true,
@@ -387,6 +390,7 @@ export default function Unbound() {
         <UnboundGuidedZones id="unbound-section-zones-local" version={history[0]?.id} onActivated={reload} />
         <UnboundPrivateDomains id="unbound-section-zones-private" version={history[0]?.id} onActivated={reload} />
         <UnboundForwardZones id="unbound-section-zones-forwarding" version={history[0]?.id} onActivated={reload} />
+        <UnboundRouterImport id="unbound-section-zones-router-import" version={history[0]?.id} onActivated={reload} />
       </section>
 
       <section id="unbound-panel-advanced" role="tabpanel" aria-labelledby="unbound-tab-advanced" hidden={activeSection !== "advanced"} tabIndex={0}>
@@ -457,6 +461,7 @@ function sectionsFor(section: UnboundSection, t: (key: string) => string): Unbou
         { id: "unbound-section-zones-local", label: t("zones.title"), icon: <Home aria-hidden="true" /> },
         { id: "unbound-section-zones-private", label: t("private.title"), icon: <Lock aria-hidden="true" /> },
         { id: "unbound-section-zones-forwarding", label: t("forward.title"), icon: <Route aria-hidden="true" /> },
+        { id: "unbound-section-zones-router-import", label: t("routerImport.title"), icon: <RouterIcon aria-hidden="true" /> },
       ];
     case "advanced":
       return [
