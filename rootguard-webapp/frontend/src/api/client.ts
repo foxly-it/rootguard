@@ -135,6 +135,19 @@ export interface UnboundSettings {
   forward_zones: UnboundForwardZone[];
   private_domains: string[];
   reverse_zones: UnboundReverseZonePolicy[];
+  local_zones: UnboundLocalZone[];
+}
+
+export interface UnboundLocalHost {
+  hostname: string;
+  ipv4?: string;
+  ipv6?: string;
+  ptr: boolean;
+}
+
+export interface UnboundLocalZone {
+  name: string;
+  hosts: UnboundLocalHost[];
 }
 
 export interface UnboundForwardZone {
@@ -297,6 +310,26 @@ export async function checkUnboundForwardTargets(zones: UnboundForwardZone[]): P
   return request<UnboundForwardTargetCheck[]>("/api/unbound/forward-check", {
     method: "POST",
     body: JSON.stringify({ zones }),
+  });
+}
+
+export interface DiscoveredHost {
+  hostname: string;
+  ipv4: string;
+  mac?: string;
+  active: boolean;
+  source: string;
+}
+
+export interface RouterDiscoveryResult {
+  hosts: DiscoveredHost[];
+  truncated: boolean;
+}
+
+export async function discoverFritzBoxHosts(address: string, username: string, password: string): Promise<RouterDiscoveryResult> {
+  return request<RouterDiscoveryResult>("/api/router-import/fritzbox/discover", {
+    method: "POST",
+    body: JSON.stringify({ address, username, password }),
   });
 }
 
