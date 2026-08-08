@@ -121,10 +121,10 @@ export default function AdGuard() {
             <span className={`adguard-state ${ready ? "healthy" : ""}`}>{loading ? t("common.checking") : ready ? t("adguard.ready") : t("adguard.incomplete")}</span>
           </div>
           <div className="adguard-status-list">
-            <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} />
+            <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} adguardHash="#settings" adguardHashLabel={t("adguard.openSettings")} />
             <StatusRow label={t("adguard.service")} active={Boolean(status?.healthy)} activeText={t("adguard.reachable")} inactiveText={t("adguard.unreachable")} />
             <StatusRow label={t("adguard.upstream")} active={Boolean(status?.upstream_ready)} activeText={t("adguard.validated")} inactiveText={t("adguard.pending")} />
-            <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} />
+            <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} adguardHash="#dns" adguardHashLabel={t("adguard.openDnsSettings")} />
           </div>
           <div className="adguard-upstream">
             <span>{t("adguard.activeUpstream")}</span>
@@ -203,6 +203,9 @@ export default function AdGuard() {
                 {filterReport.checks.map((check) => <FilterCheck key={check.host} check={check} />)}
               </div>
               <small className="adguard-filter-note">{t("adguard.filterTestNote")}</small>
+              <a className="adguard-manage-filters-link" href="/adguard-ui/#filters" target="_blank" rel="noreferrer">
+                {t("adguard.manageFilters")} <ExternalLink size={14} aria-hidden="true" />
+              </a>
             </>
           )}
         </div>
@@ -252,16 +255,30 @@ function categoryLabel(t: (key: string) => string, category: AdGuardFilterCheck[
   return t(keys[category]);
 }
 
-function StatusRow({ label, active, activeText, inactiveText }: {
+function StatusRow({ label, active, activeText, inactiveText, adguardHash, adguardHashLabel }: {
   label: string;
   active: boolean;
   activeText: string;
   inactiveText: string;
+  // Deep-links straight into the relevant native AdGuard Home page through
+  // the existing protected proxy - never a raw admin-port URL - so an
+  // operator who spots something to fix doesn't have to hunt for it inside
+  // AdGuard's own navigation first.
+  adguardHash?: string;
+  adguardHashLabel?: string;
 }) {
   return (
     <div>
       <span className={active ? "status-check active" : "status-check"}>{active ? <Check size={14} /> : "!"}</span>
-      <strong>{label}</strong>
+      <strong>
+        {label}
+        {adguardHash && (
+          <a className="adguard-contextual-link" href={`/adguard-ui/${adguardHash}`} target="_blank" rel="noreferrer" title={adguardHashLabel}>
+            <ExternalLink size={13} aria-hidden="true" />
+            <span className="sr-only">{adguardHashLabel}</span>
+          </a>
+        )}
+      </strong>
       <small>{active ? activeText : inactiveText}</small>
     </div>
   );

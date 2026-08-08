@@ -143,7 +143,19 @@
 }
 
 .adguard-status-list strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.82rem;
+}
+
+.adguard-contextual-link {
+  display: inline-flex;
+  color: var(--text-muted);
+}
+
+.adguard-contextual-link:hover {
+  color: var(--rg-accent);
 }
 
 .adguard-status-list small {
@@ -418,6 +430,21 @@
   margin-top: 14px;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+.adguard-manage-filters-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 13px;
+  color: var(--rg-accent);
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.adguard-manage-filters-link:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 820px) {
