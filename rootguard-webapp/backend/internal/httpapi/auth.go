@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -33,8 +34,27 @@ type SessionAuth struct {
 }
 
 type session struct {
+	// ID is a separate opaque value from the map key (the actual bearer
+	// token) specifically so the inventory/revocation API below can
+	// reference a session without ever putting a live credential in a
+	// response body - a leaked listing response can't be replayed as a
+	// session cookie the way a leaked token could.
+	ID        string    `json:"id"`
 	Username  string    `json:"username"`
+	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
+	UserAgent string    `json:"user_agent"`
+	RemoteIP  string    `json:"remote_ip"`
+}
+
+type sessionSummary struct {
+	ID        string    `json:"id"`
+	Username  string    `json:"username"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	UserAgent string    `json:"user_agent"`
+	RemoteIP  string    `json:"remote_ip"`
+	Current   bool      `json:"current"`
 }
 
 type credentials struct {
@@ -95,8 +115,16 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 		case "/api/auth/recovery":
 			a.handleRecovery(w, r)
 			return
+		case "/api/auth/sessions":
+			a.handleSessions(w, r)
+			return
 		case "/health":
 			next.ServeHTTP(w, r)
+			return
+		}
+
+		if strings.HasPrefix(r.URL.Path, "/api/auth/sessions/") {
+			a.handleRevokeSession(w, r)
 			return
 		}
 
@@ -201,10 +229,22 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to create session", http.StatusInternalServerError)
 		return
 	}
+	sessionID, err := randomSessionToken()
+	if err != nil {
+		http.Error(w, "Unable to create session", http.StatusInternalServerError)
+		return
+	}
 	expiresAt := time.Now().Add(a.ttl)
 	a.mu.Lock()
 	a.deleteExpiredLocked(time.Now())
-	a.sessions[token] = session{Username: input.Username, ExpiresAt: expiresAt}
+	a.sessions[token] = session{
+		ID:        sessionID,
+		Username:  input.Username,
+		CreatedAt: time.Now(),
+		ExpiresAt: expiresAt,
+		UserAgent: r.Header.Get("User-Agent"),
+		RemoteIP:  clientAddress(r),
+	}
 	if err := a.persistLocked(); err != nil {
 		delete(a.sessions, token)
 		a.mu.Unlock()
@@ -265,6 +305,85 @@ func (a *SessionAuth) handleSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": username})
 }
 
+func (a *SessionAuth) handleSessions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := a.authenticatedUser(r); !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	currentToken := ""
+	if cookie, err := r.Cookie(sessionCookieName); err == nil {
+		currentToken = cookie.Value
+	}
+
+	now := time.Now()
+	a.mu.Lock()
+	a.deleteExpiredLocked(now)
+	entries := make([]sessionSummary, 0, len(a.sessions))
+	for token, entry := range a.sessions {
+		entries = append(entries, sessionSummary{
+			ID:        entry.ID,
+			Username:  entry.Username,
+			CreatedAt: entry.CreatedAt,
+			ExpiresAt: entry.ExpiresAt,
+			UserAgent: entry.UserAgent,
+			RemoteIP:  entry.RemoteIP,
+			Current:   token == currentToken,
+		})
+	}
+	a.mu.Unlock()
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].CreatedAt.After(entries[j].CreatedAt) })
+	writeJSON(w, http.StatusOK, entries)
+}
+
+func (a *SessionAuth) handleRevokeSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := a.authenticatedUser(r); !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	id := strings.TrimPrefix(r.URL.Path, "/api/auth/sessions/")
+	if id == "" {
+		http.Error(w, "Missing session id", http.StatusBadRequest)
+		return
+	}
+
+	a.mu.Lock()
+	var found bool
+	for token, entry := range a.sessions {
+		if entry.ID != id {
+			continue
+		}
+		delete(a.sessions, token)
+		found = true
+		break
+	}
+	var persistErr error
+	if found {
+		persistErr = a.persistLocked()
+	}
+	a.mu.Unlock()
+
+	if !found {
+		http.Error(w, "Session not found", http.StatusNotFound)
+		return
+	}
+	if persistErr != nil {
+		http.Error(w, "Unable to persist session revocation", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
+}
+
 func (a *SessionAuth) authenticatedUser(r *http.Request) (string, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
@@ -302,6 +421,33 @@ func (a *SessionAuth) loadSessions() {
 	defer a.mu.Unlock()
 	_ = json.Unmarshal(data, &a.sessions)
 	a.deleteExpiredLocked(time.Now())
+	// Sessions persisted before the ID field existed all decode with the
+	// same zero value ("") - left as-is, that collides as a React list key
+	// on the frontend and can never be revoked individually (the revoke
+	// endpoint rejects an empty id). Backfilling a fresh ID (and a
+	// reasonable CreatedAt, since that field is equally absent on these
+	// entries) self-heals the persisted file on the very next load instead
+	// of leaving every pre-upgrade session broken until it naturally
+	// expires.
+	var migrated bool
+	for token, entry := range a.sessions {
+		if entry.ID != "" {
+			continue
+		}
+		id, err := randomSessionToken()
+		if err != nil {
+			continue
+		}
+		entry.ID = id
+		if entry.CreatedAt.IsZero() {
+			entry.CreatedAt = time.Now()
+		}
+		a.sessions[token] = entry
+		migrated = true
+	}
+	if migrated {
+		_ = a.persistLocked()
+	}
 }
 
 func (a *SessionAuth) loadCredentials() {
@@ -398,6 +544,21 @@ func randomSessionToken() (string, error) {
 
 func requestIsHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+// clientAddress is purely descriptive - shown in the session inventory so
+// an operator can recognize their own devices - never used for any
+// access-control decision, so trusting a client-spoofable header here (when
+// no reverse proxy overwrites it first) carries none of the risk it would
+// for an actual security check.
+func clientAddress(r *http.Request) string {
+	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
+		if first, _, ok := strings.Cut(forwarded, ","); ok {
+			return strings.TrimSpace(first)
+		}
+		return strings.TrimSpace(forwarded)
+	}
+	return r.RemoteAddr
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -148,6 +149,149 @@ func TestPasswordRecoveryPersistsPasswordAndInvalidatesSessions(t *testing.T) {
 	restarted.Handler(http.NotFoundHandler()).ServeHTTP(newLogin, newLoginRequest)
 	if newLogin.Code != http.StatusOK {
 		t.Fatalf("expected persisted reset password to work, got %d", newLogin.Code)
+	}
+}
+
+func TestSessionInventoryListsAndRevokes(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	loginBody := []byte(`{"username":"admin","password":"secret"}`)
+
+	login := func() *http.Cookie {
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+		request.Header.Set("User-Agent", "test-agent")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("expected login 200, got %d", response.Code)
+		}
+		return response.Result().Cookies()[0]
+	}
+
+	firstCookie := login()
+	secondCookie := login()
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/auth/sessions", nil)
+	listRequest.AddCookie(secondCookie)
+	listResponse := httptest.NewRecorder()
+	handler.ServeHTTP(listResponse, listRequest)
+	if listResponse.Code != http.StatusOK {
+		t.Fatalf("expected session list 200, got %d", listResponse.Code)
+	}
+	var entries []sessionSummary
+	if err := json.Unmarshal(listResponse.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("failed to decode session list: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 sessions, got %d", len(entries))
+	}
+	var currentCount int
+	var otherID string
+	for _, entry := range entries {
+		if entry.Current {
+			currentCount++
+		} else {
+			otherID = entry.ID
+		}
+		if entry.ID == "" {
+			t.Fatal("expected non-empty session id")
+		}
+		if entry.UserAgent != "test-agent" {
+			t.Fatalf("expected user agent to be recorded, got %q", entry.UserAgent)
+		}
+	}
+	if currentCount != 1 {
+		t.Fatalf("expected exactly 1 session marked current, got %d", currentCount)
+	}
+	if otherID == "" {
+		t.Fatal("expected to find the other (non-current) session's id")
+	}
+
+	revokeRequest := httptest.NewRequest(http.MethodDelete, "/api/auth/sessions/"+otherID, nil)
+	revokeRequest.Header.Set("Origin", "http://example.com")
+	revokeRequest.Host = "example.com"
+	revokeRequest.AddCookie(secondCookie)
+	revokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokeResponse, revokeRequest)
+	if revokeResponse.Code != http.StatusOK {
+		t.Fatalf("expected revoke 200, got %d: %s", revokeResponse.Code, revokeResponse.Body.String())
+	}
+
+	revokedSessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	revokedSessionRequest.AddCookie(firstCookie)
+	revokedSessionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokedSessionResponse, revokedSessionRequest)
+	if revokedSessionResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("expected revoked session to return 401, got %d", revokedSessionResponse.Code)
+	}
+
+	stillValidSessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	stillValidSessionRequest.AddCookie(secondCookie)
+	stillValidSessionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(stillValidSessionResponse, stillValidSessionRequest)
+	if stillValidSessionResponse.Code != http.StatusOK {
+		t.Fatalf("expected the caller's own session to remain valid, got %d", stillValidSessionResponse.Code)
+	}
+
+	unauthorizedListRequest := httptest.NewRequest(http.MethodGet, "/api/auth/sessions", nil)
+	unauthorizedListResponse := httptest.NewRecorder()
+	handler.ServeHTTP(unauthorizedListResponse, unauthorizedListRequest)
+	if unauthorizedListResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthenticated session list request 401, got %d", unauthorizedListResponse.Code)
+	}
+
+	missingRevokeRequest := httptest.NewRequest(http.MethodDelete, "/api/auth/sessions/does-not-exist", nil)
+	missingRevokeRequest.Header.Set("Origin", "http://example.com")
+	missingRevokeRequest.Host = "example.com"
+	missingRevokeRequest.AddCookie(secondCookie)
+	missingRevokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(missingRevokeResponse, missingRevokeRequest)
+	if missingRevokeResponse.Code != http.StatusNotFound {
+		t.Fatalf("expected revoking an unknown session id to return 404, got %d", missingRevokeResponse.Code)
+	}
+}
+
+func TestSessionInventoryMigratesPreExistingSessionsWithoutID(t *testing.T) {
+	sessionFile := filepath.Join(t.TempDir(), "sessions.json")
+	// Simulates a sessions.json written before the ID field existed: every
+	// entry decodes with ID == "" and CreatedAt as the zero value.
+	legacy := `{"legacy-token-1":{"username":"admin","expires_at":"2999-01-01T00:00:00Z"}}`
+	if err := os.WriteFile(sessionFile, []byte(legacy), 0600); err != nil {
+		t.Fatalf("failed to seed legacy session file: %v", err)
+	}
+
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, sessionFile)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	legacyRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	legacyRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "legacy-token-1"})
+	legacyResponse := httptest.NewRecorder()
+	handler.ServeHTTP(legacyResponse, legacyRequest)
+	if legacyResponse.Code != http.StatusOK {
+		t.Fatalf("expected legacy session to still authenticate, got %d", legacyResponse.Code)
+	}
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/auth/sessions", nil)
+	listRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "legacy-token-1"})
+	listResponse := httptest.NewRecorder()
+	handler.ServeHTTP(listResponse, listRequest)
+	var entries []sessionSummary
+	if err := json.Unmarshal(listResponse.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("failed to decode session list: %v", err)
+	}
+	if len(entries) != 1 || entries[0].ID == "" {
+		t.Fatalf("expected the legacy session to be backfilled with a non-empty id, got %#v", entries)
+	}
+	legacyID := entries[0].ID
+
+	revokeRequest := httptest.NewRequest(http.MethodDelete, "/api/auth/sessions/"+legacyID, nil)
+	revokeRequest.Header.Set("Origin", "http://example.com")
+	revokeRequest.Host = "example.com"
+	revokeRequest.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "legacy-token-1"})
+	revokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokeResponse, revokeRequest)
+	if revokeResponse.Code != http.StatusOK {
+		t.Fatalf("expected the backfilled legacy session to be individually revocable, got %d: %s", revokeResponse.Code, revokeResponse.Body.String())
 	}
 }
 

@@ -488,7 +488,13 @@ a trusted network.
       serve-expired client-timeout controls
 - [ ] Built-in HTTPS or a supported reverse-proxy deployment with secure defaults
 - [ ] Secure-cookie enforcement when HTTPS is active
-- [ ] Session inventory and session revocation
+- [x] Session inventory and session revocation: `GET /api/auth/sessions` lists
+      every active session with a friendly device label, sign-in/expiry
+      time, and remote address, without ever returning the actual session
+      token; `DELETE /api/auth/sessions/{id}` revokes one by its separate
+      opaque id. Reachable from the user menu ("Active sessions"). Sessions
+      persisted before this feature (no id/created-at) are backfilled on
+      the next load instead of staying permanently unrevocable
 - [x] Recovery path for lost administrator credentials
 - [ ] Rate limits and audit events for authentication and destructive actions
 - [x] Threat model covering Docker socket holders, browser, internal networks,

@@ -6,18 +6,20 @@
 // =====================================================
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Monitor, Sun, Moon, LogOut, User } from "lucide-react";
+import { ChevronDown, Monitor, Sun, Moon, LogOut, User, Laptop } from "lucide-react";
 import { useI18n } from "../i18n";
 import { useAuth } from "../auth";
 import { useTheme, type ThemeMode } from "../theme";
 import GithubIcon from "../components/icons/GithubIcon";
 import DocsIcon from "../components/icons/DocsIcon";
+import SessionsModal from "../components/SessionsModal";
 
 const themeOrder: ThemeMode[] = ["system", "light", "dark"];
 const themeIcon: Record<ThemeMode, typeof Monitor> = { system: Monitor, light: Sun, dark: Moon };
 
 export default function UserMenu() {
   const [open, setOpen] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstItemRef = useRef<HTMLButtonElement>(null);
@@ -105,12 +107,19 @@ export default function UserMenu() {
             </a>
           </div>
 
+          <button type="button" className="rg-user-panel-action" onClick={() => { setSessionsOpen(true); setOpen(false); }}>
+            <Laptop aria-hidden="true" />
+            {t("sessions.manage")}
+          </button>
+
           <button type="button" className="rg-user-panel-signout" onClick={() => void logout()}>
             <LogOut aria-hidden="true" />
             {t("login.signOut")}
           </button>
         </div>
       )}
+
+      <SessionsModal open={sessionsOpen} onClose={() => setSessionsOpen(false)} />
     </div>
   );
 }

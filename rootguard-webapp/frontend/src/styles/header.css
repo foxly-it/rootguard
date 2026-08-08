@@ -261,6 +261,33 @@
   height: 16px;
 }
 
+.rg-user-panel-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 6px;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.rg-user-panel-action:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.rg-user-panel-action svg {
+  width: 16px;
+  height: 16px;
+}
+
 .rg-user-panel-signout {
   display: flex;
   align-items: center;
