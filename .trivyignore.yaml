@@ -1,0 +1,32 @@
+misconfigurations:
+  # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
+  # HEALTHCHECK) are whole-file absence checks with no associated line, so
+  # trivy's inline `# trivy:ignore:` comments can never attach to them -
+  # every suppression here has to go through this file instead. Each entry
+  # below has a matching explanatory comment in the Dockerfile itself.
+
+  - id: AVD-DS-0002
+    paths:
+      # Core and Updater both hold the Docker socket to orchestrate/update
+      # the other managed services; that requires root or the host's
+      # docker-group GID, which differs per installation and can't be
+      # hardcoded. See the comment above EXPOSE in each Dockerfile.
+      - "rootguard-core/Dockerfile"
+      - "rootguard-updater/Dockerfile"
+      # Stock nginx's own `user nginx;` directive already drops worker
+      # processes to non-root; the master needs root for cache/pid file
+      # creation under this image's read-only+tmpfs mount setup. See the
+      # comment above USER in the Dockerfile.
+      - "rootguard-blockpage/Dockerfile"
+
+  - id: AVD-DS-0026
+    paths:
+      # All three have a healthcheck, just defined at the compose.yaml
+      # service level instead of the Dockerfile level (see compose.yaml's
+      # `core:`, `updater:`, and `webapp:` services).
+      - "rootguard-core/Dockerfile"
+      - "rootguard-updater/Dockerfile"
+      - "rootguard-webapp/Dockerfile"
+      # Test-only fixture for the updater's integration tests, not a real
+      # long-running service - never deployed standalone.
+      - "rootguard-updater/integration/fixture/Dockerfile"

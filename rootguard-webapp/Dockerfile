@@ -80,7 +80,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH \
 # =====================================================
 # Stage 3 – Minimal Runtime (Distroless)
 # =====================================================
-FROM gcr.io/distroless/base-debian12:latest
+FROM gcr.io/distroless/base-debian12@sha256:62730825d3cf03571e0a1b8f014748de94d0404500f063593b614c23da38841d
 
 WORKDIR /app
 

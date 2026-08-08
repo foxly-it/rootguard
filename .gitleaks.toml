@@ -1,0 +1,19 @@
+title = "RootGuard gitleaks config"
+
+[extend]
+useDefault = true
+
+# Known non-secrets: fixed, ephemeral CI-fixture credentials that only ever
+# authenticate against a throwaway container started and torn down within
+# the same CI job (see .github/workflows/ci.yml), and the documented
+# placeholder credential in README.md's example curl command.
+[allowlist]
+description = "CI-only fixture credentials and documented placeholders"
+regexes = [
+  '''ci-rootguard-password''',
+  '''ci-new-rootguard-password''',
+  '''ci-rootguard-recovery-token''',
+  '''ci-rootguard-token''',
+  '''admin:replace-me''',
+  '''integration-token''',
+]

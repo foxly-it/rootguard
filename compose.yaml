@@ -69,6 +69,11 @@ services:
     networks:
       - control
       - edge
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   updater:
     build:

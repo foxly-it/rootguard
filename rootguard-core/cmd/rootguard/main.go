@@ -93,7 +93,7 @@ func main() {
 			case "unbound":
 				report := manager.Diagnose(ctx)
 				if !report.Healthy {
-					return fmt.Errorf("Unbound diagnostics failed")
+					return fmt.Errorf("unbound diagnostics failed")
 				}
 			default:
 				return fmt.Errorf("unknown service %q", service)
