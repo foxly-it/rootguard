@@ -486,8 +486,17 @@ a trusted network.
 
 - [x] Enforce a patched Unbound `1.25.2+` security floor before exposing
       serve-expired client-timeout controls
-- [ ] Built-in HTTPS or a supported reverse-proxy deployment with secure defaults
-- [ ] Secure-cookie enforcement when HTTPS is active
+- [x] Built-in HTTPS or a supported reverse-proxy deployment with secure
+      defaults - scoped deliberately to documentation, not a RootGuard-native
+      TLS implementation: `docs/https-reverse-proxy.md` covers the two hard
+      requirements (Host-header passthrough for the same-origin write check,
+      `X-Forwarded-Proto` for secure-cookie detection) plus working examples
+      for Caddy, Zoraxy, Nginx Proxy Manager, and HAProxy
+- [x] Secure-cookie enforcement when HTTPS is active - already implemented
+      (`requestIsHTTPS` in `rootguard-webapp/backend/internal/httpapi/auth.go`
+      sets the session cookie's `Secure` flag whenever `r.TLS` is set or
+      `X-Forwarded-Proto` reads `https`); documented in
+      `docs/https-reverse-proxy.md`
 - [ ] Session inventory and session revocation
 - [x] Recovery path for lost administrator credentials
 - [ ] Rate limits and audit events for authentication and destructive actions
