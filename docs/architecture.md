@@ -138,6 +138,41 @@ erneut geprüft. Der Helper selbst bleibt während des Vorgangs unverändert und
 ist nicht vom Host aus erreichbar. WebApp-Sitzungen liegen in einem eigenen
 Volume und überstehen den kontrollierten WebApp-Austausch.
 
+## Backup- und Restore-Zuständigkeit für AdGuard Home
+
+AdGuards Zustand liegt in zwei separaten, benannten Docker-Volumes statt in
+Core-eigenen Pfaden:
+
+- `rootguard-adguard-config` (`/opt/adguardhome/conf`) - Filterlisten,
+  Zulassungslisten, DNS-Umschreibungen, Client-/DHCP-Einstellungen,
+  Verschlüsselungskonfiguration; alles, was der Betreiber über die native
+  AdGuard-Oberfläche einstellt.
+- `rootguard-adguard-work` (`/opt/adguardhome/work`) - Abfrageprotokoll und
+  Statistiken.
+
+Beide Pfade sind über `BackupPaths` Teil desselben Sicherungsmechanismus wie
+oben beschrieben: Vor jedem AdGuard-Update kopiert Core sie in sein
+geschütztes Daten-Volume; schlägt die anschließende Gesundheitsprüfung fehl,
+stellt Core beide Pfade automatisch wieder her und rollt auf die vorherige
+Image-ID zurück. Diese Sicherung ist ausschließlich ein interner
+Update-Schutz - kein vom Betreiber auslösbarer, herunterladbarer oder über
+mehrere Zeitpunkte hinweg aufbewahrter Restore-Punkt. Ein Update überschreibt
+die vorherige interne Sicherung; es existiert kein längerfristig
+aufbewahrtes Backup-Set.
+
+Für Datensicherung über den reinen Update-Schutz hinaus - etwa vor einem
+größeren manuellen Eingriff über die native AdGuard-Oberfläche, oder als
+eigenständige Sicherung unabhängig vom RootGuard-Update-Zyklus - liegt die
+Verantwortung aktuell beim Betreiber: Die beiden genannten Docker-Volumes
+lassen sich mit Standard-Docker-Bordmitteln sichern
+(z.B. `docker run --rm -v rootguard-adguard-config:/data -v
+$(pwd):/backup alpine tar czf /backup/adguard-config.tar.gz -C /data .`,
+analog für `rootguard-adguard-work`), bei gestopptem AdGuard-Container für
+einen konsistenten Snapshot. Ein RootGuard-natives, geführtes
+Backup-Export/-Import (verschlüsselt, mit konfigurierbarer Aufbewahrung) ist
+in ROADMAP.md 0.4 als eigener, noch offener Punkt geführt - diese
+Dokumentation beschreibt den aktuellen Stand, nicht das Zielbild.
+
 ## Unbound-Konfigurationszyklus
 
 ```text
