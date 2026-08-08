@@ -52,6 +52,28 @@ export async function fetchDashboard() {
   return request<DashboardResponse>("/api/dashboard");
 }
 
+// =====================================================
+// Session Inventory
+// =====================================================
+
+export interface SessionSummary {
+  id: string;
+  username: string;
+  created_at: string;
+  expires_at: string;
+  user_agent: string;
+  remote_ip: string;
+  current: boolean;
+}
+
+export async function fetchSessions(): Promise<SessionSummary[]> {
+  return request<SessionSummary[]>("/api/auth/sessions");
+}
+
+export async function revokeSession(id: string): Promise<void> {
+  await request<{ revoked: boolean }>(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 export interface ServiceInfo {
   name: "core" | "webapp" | "updater" | "adguard" | "unbound";
   displayName: string;
