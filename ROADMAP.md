@@ -493,7 +493,12 @@ a trusted network.
 - [ ] Rate limits and audit events for authentication and destructive actions
 - [ ] Threat model covering Docker socket holders, browser, internal networks,
       update supply chain, backups, and the AdGuard gateway
-- [ ] Dependency, container, secret, and static-analysis scans in CI
+- [x] Dependency, container, secret, and static-analysis scans in CI:
+      `govulncheck` and `staticcheck` per Go module, `gitleaks` against full
+      git history, and `trivy` filesystem scanning (dependency
+      vulnerabilities, secrets, and Dockerfile misconfigurations) across the
+      whole repository, all gated on pull requests and pushes to `main`
+      ([rootguard#143](https://github.com/foxly-it/rootguard/pull/143))
 - [ ] Keyboard and screen-reader audit of every WebGUI workflow - partial
       groundwork already done as part of the 0.1 navigation slice's exit
       gate ([rootguard#109](https://github.com/foxly-it/rootguard/pull/109)),

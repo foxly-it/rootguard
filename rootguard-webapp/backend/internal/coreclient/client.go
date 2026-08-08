@@ -551,21 +551,26 @@ func (c *Client) AdGuardUIHandler() http.Handler {
 			http.Error(w, "invalid RootGuard Core URL", http.StatusInternalServerError)
 		})
 	}
-	proxy := httputil.NewSingleHostReverseProxy(target)
-	originalDirector := proxy.Director
-	proxy.Director = func(request *http.Request) {
-		originalDirector(request)
-		path := strings.TrimPrefix(request.URL.Path, "/adguard-ui")
-		if path == "" {
-			path = "/"
-		}
-		request.URL.Path = "/api/adguard/ui" + path
-		request.URL.RawPath = ""
-		request.Host = target.Host
-		request.Header.Set("Authorization", "Bearer "+c.token)
-	}
-	proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, proxyErr error) {
-		http.Error(w, fmt.Sprintf("RootGuard AdGuard UI proxy: %v", proxyErr), http.StatusBadGateway)
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			// Director never called this, so client-supplied X-Forwarded-*
+			// headers were passed through unsanitized; Rewrite's
+			// replacement strips them before setting fresh values, closing
+			// that spoofing path.
+			pr.SetXForwarded()
+			path := strings.TrimPrefix(pr.In.URL.Path, "/adguard-ui")
+			if path == "" {
+				path = "/"
+			}
+			pr.Out.URL.Path = "/api/adguard/ui" + path
+			pr.Out.URL.RawPath = ""
+			pr.Out.Host = target.Host
+			pr.Out.Header.Set("Authorization", "Bearer "+c.token)
+		},
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, proxyErr error) {
+			http.Error(w, fmt.Sprintf("RootGuard AdGuard UI proxy: %v", proxyErr), http.StatusBadGateway)
+		},
 	}
 	return proxy
 }
