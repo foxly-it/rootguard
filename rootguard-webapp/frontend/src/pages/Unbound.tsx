@@ -161,6 +161,7 @@ export default function Unbound() {
         forward_zones: settings.forward_zones,
         private_domains: settings.private_domains,
         reverse_zones: settings.reverse_zones,
+        local_zones: settings.local_zones,
         network_mode: settings.network_mode,
       };
       setSettings(proposed);
