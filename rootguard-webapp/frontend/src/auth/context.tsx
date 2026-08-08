@@ -39,7 +39,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: loginUsername, password }),
     });
-    if (!response.ok) throw new Error("invalid_credentials");
+    if (!response.ok) {
+      // The body carries which failure this was (invalid_credentials vs.
+      // rate_limited) so the login form can show the right message instead
+      // of always blaming the password.
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      throw new Error(body?.error ?? "invalid_credentials");
+    }
     const session = await response.json() as SessionResponse;
     setAuthenticated(true);
     setUsername(session.username ?? loginUsername);

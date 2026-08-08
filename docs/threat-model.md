@@ -84,16 +84,25 @@ Updates, AdGuard-Verwaltung.
 - Der separate `ROOTGUARD_RECOVERY_TOKEN` für Passwort-Reset gewährt für
   sich genommen weder Session noch Zugriff auf Core oder AdGuard.
 
+**Bestehende Gegenmaßnahmen (ergänzt):**
+- Session-Inventar mit gezielter Revocation: `GET /api/auth/sessions` /
+  `DELETE /api/auth/sessions/{id}`, erreichbar über "Aktive Sitzungen" im
+  Kontomenü - eine gestohlene Session muss nicht mehr bis zum TTL-Ablauf
+  gültig bleiben.
+- Rate-Limiting auf Login und Passwort-Recovery: 5 Fehlversuche pro
+  5-Minuten-Fenster sperren weitere Versuche - auch ein danach korrektes
+  Passwort wird während einer aktiven Sperre abgelehnt, damit eine Sperre
+  nicht durch schlichtes Weiterprobieren umgangen werden kann.
+- Ein begrenztes, persistiertes Audit-Log (`GET /api/auth/audit`,
+  max. 500 Einträge) zeichnet Login-Erfolg/-Fehlschlag, Rate-Limiting,
+  Logout, Passwort-Recovery und Session-Revocation auf - sichtbar im
+  selben "Aktive Sitzungen"-Panel.
+
 **Bekannte Restrisiken / offen:**
-- Kein Session-Inventar und keine gezielte Session-Revocation - eine
-  gestohlene Session bleibt bis zum Ablauf der TTL gültig, ein Admin kann
-  sie nicht einzeln invalidieren (ROADMAP.md 0.5).
-- Keine Rate-Limits auf Login oder destruktive Aktionen - Online-Brute-Force
-  gegen das Admin-Passwort ist aktuell nur durch dessen Länge/Entropie
-  begrenzt, nicht durch die Anwendung selbst (ROADMAP.md 0.5).
-- Keine Audit-Events - eine erfolgte Kompromittierung hinterlässt aktuell
-  keine für den Betreiber einsehbare Spur außerhalb der ohnehin bereits
-  redigierten Service-Logs (ROADMAP.md 0.5).
+- Rate-Limits und Audit-Events decken bislang nur die Authentifizierung ab,
+  nicht destruktive Aktionen an anderer Stelle der Anwendung (Unbound-
+  Aktivierung, Service-Updates/-Rollbacks, AdGuard-Bootstrap und
+  Vergleichbares) - siehe ROADMAP.md 0.5.
 
 ### 3. Interne Netzwerke (control, edge, DNS-Netz)
 

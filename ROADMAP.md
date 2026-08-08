@@ -505,7 +505,17 @@ a trusted network.
       persisted before this feature (no id/created-at) are backfilled on
       the next load instead of staying permanently unrevocable
 - [x] Recovery path for lost administrator credentials
-- [ ] Rate limits and audit events for authentication and destructive actions
+- [x] Rate limits and audit events for authentication: login and password
+      recovery both lock out after 5 failures in a 5-minute window (an
+      already-issued lockout blocks even a subsequently correct password,
+      rather than letting enough guesses eventually succeed), and a bounded,
+      persisted audit log records login success/failure, rate-limiting,
+      logout, recovery, and session revocation - visible in the user menu's
+      "Active sessions" panel alongside the session inventory
+      ([rootguard#148](https://github.com/foxly-it/rootguard/pull/148))
+- [ ] Rate limits and audit events for destructive actions elsewhere in the
+      app (Unbound activation, service updates/rollbacks, AdGuard bootstrap,
+      and similar) - only the authentication surface above is covered so far
 - [x] Threat model covering Docker socket holders, browser, internal networks,
       update supply chain, backups, and the AdGuard gateway
       (`docs/threat-model.md`,

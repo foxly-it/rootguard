@@ -32,8 +32,9 @@ export default function Login() {
       await login(username.trim(), password);
       const requestedPath = (location.state as { from?: string } | null)?.from;
       navigate(requestedPath && requestedPath !== "/login" ? requestedPath : "/dashboard", { replace: true });
-    } catch {
-      setError(t("login.invalid"));
+    } catch (cause) {
+      const code = cause instanceof Error ? cause.message : "";
+      setError(code === "rate_limited" ? t("login.rateLimited") : t("login.invalid"));
       setPassword("");
     } finally {
       setBusy(false);
@@ -78,7 +79,9 @@ export default function Login() {
       setRecovery(false);
     } catch (cause) {
       const code = cause instanceof Error ? cause.message : "";
-      setError(code === "weak_password" ? t("login.recoveryWeak") : t("login.recoveryInvalid"));
+      if (code === "weak_password") setError(t("login.recoveryWeak"));
+      else if (code === "rate_limited") setError(t("login.rateLimited"));
+      else setError(t("login.recoveryInvalid"));
     } finally {
       setBusy(false);
     }
