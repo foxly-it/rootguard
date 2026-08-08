@@ -126,6 +126,9 @@
 }
 
 .unbound-section-nav a {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   padding: 6px 12px;
   border-radius: 8px;
   color: var(--text-muted);
@@ -133,6 +136,12 @@
   font-weight: 700;
   text-decoration: none;
   white-space: nowrap;
+}
+
+.unbound-section-nav a svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
 }
 
 .unbound-section-nav a:hover {
@@ -152,6 +161,64 @@
 
 .unbound-page [role="tabpanel"] {
   scroll-margin-top: 20px;
+}
+
+/* Above ~1440px there's reliably enough space beside the content (measured
+   live: ~40px at 1280px, ~92px at 1440px, ~170px at 1600px) for a floating
+   icon rail instead of the horizontal bar - fixed positioning also sidesteps
+   position: sticky's dependency on its parent's own box height entirely.
+   Below the breakpoint the horizontal, in-flow sticky bar above stays the
+   only layout that reliably fits. */
+@media (min-width: 1440px) {
+  .unbound-section-nav {
+    position: fixed;
+    top: 50%;
+    right: 24px;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    width: auto;
+    margin: 0;
+    transform: translateY(-50%);
+  }
+
+  .unbound-section-nav a {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .unbound-section-nav-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .unbound-section-nav a[data-tooltip]:hover::after,
+  .unbound-section-nav a[data-tooltip]:focus-visible::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    right: calc(100% + 10px);
+    top: 50%;
+    z-index: 21;
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--bg-header);
+    box-shadow: 0 12px 30px rgb(var(--shadow-ink) / calc(0.32 * var(--shadow-scale)));
+    color: var(--text);
+    font-size: 0.78rem;
+    font-weight: 650;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateY(-50%);
+  }
 }
 
 .unbound-feedback:empty {
