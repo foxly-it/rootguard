@@ -508,11 +508,18 @@ a trusted network.
       than every workflow branch (error states, full Setup wizard flow,
       etc.); treat this as a formal release-gate re-verification, not a
       from-scratch audit
-- [ ] WCAG 2.2 AA contrast, focus, labels, errors, and reduced-motion review -
-      contrast and focus got real fixes in
-      [rootguard#109](https://github.com/foxly-it/rootguard/pull/109); a
-      systematic reduced-motion sweep across every CSS animation/transition
-      is still open
+- [ ] WCAG 2.2 AA contrast, focus, labels, and errors review - contrast and
+      focus got real fixes in
+      [rootguard#109](https://github.com/foxly-it/rootguard/pull/109);
+      labels and errors still need a systematic pass
+- [x] Reduced-motion review: verified live with `prefers-reduced-motion:
+      reduce` emulated - `styles/motion.css`'s universal `*`/`!important`
+      reset neutralizes every CSS animation and transition in the app (no
+      competing `!important` animation/transition rule exists anywhere
+      else in the codebase, so it cannot be overridden regardless of
+      cascade order), and the one JS-driven smooth-scroll call
+      (`Unbound.tsx`'s `jumpToSection`) already branches on the same media
+      query
 - [x] Security policy and private vulnerability-reporting instructions
 
 Later: multiple roles and external identity providers unless real 1.0 demand
