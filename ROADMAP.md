@@ -491,8 +491,10 @@ a trusted network.
 - [ ] Session inventory and session revocation
 - [x] Recovery path for lost administrator credentials
 - [ ] Rate limits and audit events for authentication and destructive actions
-- [ ] Threat model covering Docker socket holders, browser, internal networks,
+- [x] Threat model covering Docker socket holders, browser, internal networks,
       update supply chain, backups, and the AdGuard gateway
+      (`docs/threat-model.md`,
+      [rootguard#144](https://github.com/foxly-it/rootguard/pull/144))
 - [x] Dependency, container, secret, and static-analysis scans in CI:
       `govulncheck` and `staticcheck` per Go module, `gitleaks` against full
       git history, and `trivy` filesystem scanning (dependency
