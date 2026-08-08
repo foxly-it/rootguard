@@ -385,8 +385,12 @@ Product boundary:
       rejection directly against Unbound's port; extending that same check
       through AdGuard's DNS port needs the container network topology
       between AdGuard and Unbound verified first, not yet done
-- [ ] Contextual links from RootGuard guidance to the relevant native AdGuard
-      page without exposing its administration port
+- [x] Contextual links from RootGuard guidance to the relevant native AdGuard
+      page without exposing its administration port: deep-links through the
+      existing protected `/adguard-ui/` proxy (never the raw admin port) to
+      general settings, DNS settings, and the blocklist page, placed next
+      to the status rows and filter-test results they're each relevant to
+      ([rootguard#150](https://github.com/foxly-it/rootguard/pull/150))
 - [ ] Document backup and restore ownership for AdGuard configuration, work
       data, query history, and filter state
 - [ ] Compatibility tests against every supported AdGuard Home release
