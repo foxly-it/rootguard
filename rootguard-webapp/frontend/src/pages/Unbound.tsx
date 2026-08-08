@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import {
   Activity, Code2, Expand, MapPinned, SlidersHorizontal,
@@ -485,6 +485,44 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
   const sections = useMemo(() => sectionsFor(section, t), [section, t]);
   const requestedId = hash.slice(1);
   const [activeId, setActiveId] = useState("");
+  const navRef = useRef<HTMLElement>(null);
+
+  // Above the rail breakpoint (see the media query in unbound-structure.css),
+  // the nav floats at a fixed distance from the *content*, not the viewport
+  // edge - anchoring it to the viewport instead left it stranded far from
+  // the content column on wide monitors, where the centered, max-width
+  // content sits nowhere near the actual edge of the screen. Tracks
+  // .unbound-page's real right edge instead, so it always sits just beside
+  // the content regardless of viewport width or sidebar state.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const rail = window.matchMedia("(min-width: 1440px)");
+    const page = document.querySelector<HTMLElement>(".unbound-page");
+
+    function position() {
+      if (!nav) return;
+      if (!rail.matches || !page) {
+        nav.style.left = "";
+        nav.style.right = "";
+        return;
+      }
+      const contentRight = page.getBoundingClientRect().right;
+      nav.style.left = `${contentRight + 24}px`;
+      nav.style.right = "auto";
+    }
+
+    position();
+    window.addEventListener("resize", position);
+    rail.addEventListener("change", position);
+    const observer = page ? new ResizeObserver(position) : null;
+    if (page) observer?.observe(page);
+    return () => {
+      window.removeEventListener("resize", position);
+      rail.removeEventListener("change", position);
+      observer?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (sections.length === 0) { setActiveId(""); return; }
@@ -538,7 +576,7 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
   if (sections.length < 2) return null;
 
   return (
-    <nav className="unbound-section-nav" aria-label={t("unbound.sectionNav")}>
+    <nav ref={navRef} className="unbound-section-nav" aria-label={t("unbound.sectionNav")}>
       {sections.map((entry) => (
         <a
           key={entry.id}
