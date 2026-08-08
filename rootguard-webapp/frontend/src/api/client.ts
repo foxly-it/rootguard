@@ -74,6 +74,17 @@ export async function revokeSession(id: string): Promise<void> {
   await request<{ revoked: boolean }>(`/api/auth/sessions/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+export interface AuditEvent {
+  timestamp: string;
+  event: "login_success" | "login_failure" | "login_rate_limited" | "logout" | "recovery_success" | "recovery_failure" | "session_revoked";
+  username?: string;
+  remote_ip: string;
+}
+
+export async function fetchAuditLog(): Promise<AuditEvent[]> {
+  return request<AuditEvent[]>("/api/auth/audit");
+}
+
 export interface ServiceInfo {
   name: "core" | "webapp" | "updater" | "adguard" | "unbound";
   displayName: string;

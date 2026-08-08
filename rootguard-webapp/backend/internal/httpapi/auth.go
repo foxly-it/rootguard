@@ -31,6 +31,11 @@ type SessionAuth struct {
 	sessions             map[string]session
 	persistencePath      string
 	credentialsPath      string
+	loginLimiter         *rateLimiter
+	recoveryLimiter      *rateLimiter
+	auditPath            string
+	auditMu              sync.Mutex
+	auditEvents          []auditEvent
 }
 
 type session struct {
@@ -91,12 +96,22 @@ func NewSessionAuth(expectedUser, expectedPassword, recoveryToken string, ttl ti
 		ttl:                  ttl,
 		sessions:             make(map[string]session),
 		persistencePath:      persistencePath,
+		// 5 failures per 5 minutes is generous enough that a fumbled
+		// real password never locks anyone out, but stops an online
+		// brute-force attempt from making more than a handful of guesses
+		// a minute. The recovery token is a long random secret rather
+		// than an operator-chosen password, but gets the same protection
+		// for defense in depth rather than relying on its length alone.
+		loginLimiter:    newRateLimiter(5*time.Minute, 5),
+		recoveryLimiter: newRateLimiter(5*time.Minute, 5),
 	}
 	if persistencePath != "" {
 		auth.credentialsPath = filepath.Join(filepath.Dir(persistencePath), "credentials.json")
+		auth.auditPath = filepath.Join(filepath.Dir(persistencePath), "audit.json")
 	}
 	auth.loadCredentials()
 	auth.loadSessions()
+	auth.loadAudit()
 	return auth
 }
 
@@ -117,6 +132,9 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 			return
 		case "/api/auth/sessions":
 			a.handleSessions(w, r)
+			return
+		case "/api/auth/audit":
+			a.handleAudit(w, r)
 			return
 		case "/health":
 			next.ServeHTTP(w, r)
@@ -154,6 +172,13 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	remoteIP := clientAddress(r)
+	if a.recoveryLimiter.blocked(remoteIP) {
+		a.recordAudit(auditLoginRateLimited, "", remoteIP)
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+		return
+	}
+
 	var input passwordReset
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
 	decoder.DisallowUnknownFields()
@@ -163,6 +188,8 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenHash := sha256.Sum256([]byte(input.RecoveryToken))
 	if subtle.ConstantTimeCompare(tokenHash[:], a.recoveryTokenHash[:]) != 1 {
+		a.recoveryLimiter.recordFailure(remoteIP)
+		a.recordAudit(auditRecoveryFailure, "", remoteIP)
 		time.Sleep(250 * time.Millisecond)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_recovery_token"})
 		return
@@ -192,12 +219,21 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.Unlock()
+	a.recoveryLimiter.reset(remoteIP)
+	a.recordAudit(auditRecoverySuccess, "", remoteIP)
 	writeJSON(w, http.StatusOK, map[string]bool{"reset": true})
 }
 
 func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	remoteIP := clientAddress(r)
+	if a.loginLimiter.blocked(remoteIP) {
+		a.recordAudit(auditLoginRateLimited, "", remoteIP)
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
 	}
 
@@ -219,10 +255,14 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 		err == nil &&
 		subtle.ConstantTimeCompare(passwordHash, expectedPasswordHash) == 1
 	if !valid {
+		a.loginLimiter.recordFailure(remoteIP)
+		a.recordAudit(auditLoginFailure, input.Username, remoteIP)
 		time.Sleep(250 * time.Millisecond)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_credentials"})
 		return
 	}
+	a.loginLimiter.reset(remoteIP)
+	a.recordAudit(auditLoginSuccess, input.Username, remoteIP)
 
 	token, err := randomSessionToken()
 	if err != nil {
@@ -243,7 +283,7 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: time.Now(),
 		ExpiresAt: expiresAt,
 		UserAgent: r.Header.Get("User-Agent"),
-		RemoteIP:  clientAddress(r),
+		RemoteIP:  remoteIP,
 	}
 	if err := a.persistLocked(); err != nil {
 		delete(a.sessions, token)
@@ -274,9 +314,13 @@ func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		a.mu.Lock()
+		entry, existed := a.sessions[cookie.Value]
 		delete(a.sessions, cookie.Value)
 		_ = a.persistLocked()
 		a.mu.Unlock()
+		if existed {
+			a.recordAudit(auditLogout, entry.Username, clientAddress(r))
+		}
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
@@ -359,10 +403,12 @@ func (a *SessionAuth) handleRevokeSession(w http.ResponseWriter, r *http.Request
 
 	a.mu.Lock()
 	var found bool
+	var revokedUsername string
 	for token, entry := range a.sessions {
 		if entry.ID != id {
 			continue
 		}
+		revokedUsername = entry.Username
 		delete(a.sessions, token)
 		found = true
 		break
@@ -381,7 +427,21 @@ func (a *SessionAuth) handleRevokeSession(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Unable to persist session revocation", http.StatusInternalServerError)
 		return
 	}
+	a.recordAudit(auditSessionRevoked, revokedUsername, clientAddress(r))
 	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
+}
+
+func (a *SessionAuth) handleAudit(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if _, ok := a.authenticatedUser(r); !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, a.auditSnapshot())
 }
 
 func (a *SessionAuth) authenticatedUser(r *http.Request) (string, bool) {

@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
 import { Laptop, LogOut } from "lucide-react";
 import ContentModal from "./ContentModal";
-import { fetchSessions, revokeSession, type SessionSummary } from "../api/client";
+import { fetchAuditLog, fetchSessions, revokeSession, type AuditEvent, type SessionSummary } from "../api/client";
 import { useI18n } from "../i18n";
 import "../styles/sessions.css";
+
+const WARNING_AUDIT_EVENTS = new Set<AuditEvent["event"]>(["login_failure", "login_rate_limited", "recovery_failure"]);
 
 export default function SessionsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, locale } = useI18n();
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [error, setError] = useState("");
   const [revokingId, setRevokingId] = useState("");
+  const [auditEvents, setAuditEvents] = useState<AuditEvent[] | null>(null);
+  const [auditError, setAuditError] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -17,6 +21,10 @@ export default function SessionsModal({ open, onClose }: { open: boolean; onClos
     fetchSessions()
       .then(setSessions)
       .catch(() => setError(t("sessions.loadError")));
+    setAuditError("");
+    fetchAuditLog()
+      .then(setAuditEvents)
+      .catch(() => setAuditError(t("sessions.activityLoadError")));
   }, [open, t]);
 
   async function handleRevoke(entry: SessionSummary) {
@@ -98,6 +106,24 @@ export default function SessionsModal({ open, onClose }: { open: boolean; onClos
                 <LogOut aria-hidden="true" size={16} />
                 {revokingId === entry.id ? t("sessions.revoking") : t("sessions.revoke")}
               </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h3 className="sessions-section-heading">{t("sessions.activityTitle")}</h3>
+      {auditError && <p className="feedback error">{auditError}</p>}
+      {auditEvents === null && !auditError && <p className="muted-copy">…</p>}
+      {auditEvents?.length === 0 && <p className="muted-copy">{t("sessions.activityEmpty")}</p>}
+      {auditEvents && auditEvents.length > 0 && (
+        <ul className="audit-list">
+          {auditEvents.map((event) => (
+            <li key={`${event.timestamp}-${event.event}-${event.remote_ip}`} className={WARNING_AUDIT_EVENTS.has(event.event) ? "audit-entry warning" : "audit-entry"}>
+              <i aria-hidden="true" />
+              <div>
+                <strong>{t(`sessions.activity.${event.event}`)}</strong>
+                <small>{formatDate(event.timestamp)} · {event.remote_ip}</small>
+              </div>
             </li>
           ))}
         </ul>

@@ -295,6 +295,88 @@ func TestSessionInventoryMigratesPreExistingSessionsWithoutID(t *testing.T) {
 	}
 }
 
+func TestLoginRateLimitBlocksRepeatedFailuresAndResetsOnSuccess(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
+
+	for i := range auth.loginLimiter.maxFailure {
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(wrongBody))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected 401 before the limit is hit, got %d", i, response.Code)
+		}
+	}
+
+	blockedRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(wrongBody))
+	blockedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(blockedResponse, blockedRequest)
+	if blockedResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 once the failure limit is hit, got %d", blockedResponse.Code)
+	}
+
+	// Even a correct password must not bypass an active block - resetting
+	// the limiter is what a successful login on an *unblocked* client does,
+	// not a way to brute-force past the lockout by eventually guessing right.
+	correctBody := []byte(`{"username":"admin","password":"secret"}`)
+	stillBlockedRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(correctBody))
+	stillBlockedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(stillBlockedResponse, stillBlockedRequest)
+	if stillBlockedResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected the correct password to still be blocked during an active lockout, got %d", stillBlockedResponse.Code)
+	}
+}
+
+func TestAuditLogRecordsLoginLogoutAndRateLimitEvents(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
+	wrongRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(wrongBody))
+	handler.ServeHTTP(httptest.NewRecorder(), wrongRequest)
+
+	correctBody := []byte(`{"username":"admin","password":"secret"}`)
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(correctBody))
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	cookie := loginResponse.Result().Cookies()[0]
+
+	logoutRequest := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	logoutRequest.AddCookie(cookie)
+	handler.ServeHTTP(httptest.NewRecorder(), logoutRequest)
+
+	// The audit endpoint itself requires a valid session, so log back in
+	// before reading it.
+	secondLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(correctBody))
+	secondLoginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(secondLoginResponse, secondLoginRequest)
+	secondCookie := secondLoginResponse.Result().Cookies()[0]
+
+	auditRequest := httptest.NewRequest(http.MethodGet, "/api/auth/audit", nil)
+	auditRequest.AddCookie(secondCookie)
+	auditResponse := httptest.NewRecorder()
+	handler.ServeHTTP(auditResponse, auditRequest)
+	if auditResponse.Code != http.StatusOK {
+		t.Fatalf("expected audit log 200, got %d", auditResponse.Code)
+	}
+
+	var events []auditEvent
+	if err := json.Unmarshal(auditResponse.Body.Bytes(), &events); err != nil {
+		t.Fatalf("failed to decode audit log: %v", err)
+	}
+
+	wantInOrder := []string{auditLoginSuccess, auditLogout, auditLoginSuccess, auditLoginFailure}
+	if len(events) != len(wantInOrder) {
+		t.Fatalf("expected %d audit events, got %d: %#v", len(wantInOrder), len(events), events)
+	}
+	for i, want := range wantInOrder {
+		if events[i].Event != want {
+			t.Fatalf("event %d: expected %q, got %q", i, want, events[i].Event)
+		}
+	}
+}
+
 func TestPasswordRecoveryRejectsInvalidTokenAndWeakPassword(t *testing.T) {
 	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, filepath.Join(t.TempDir(), "sessions.json"))
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))

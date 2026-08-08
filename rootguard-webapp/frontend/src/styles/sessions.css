@@ -60,3 +60,51 @@
   gap: 6px;
   white-space: nowrap;
 }
+
+.sessions-section-heading {
+  margin: 22px 0 4px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  color: var(--rg-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.audit-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.audit-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+}
+
+.audit-entry > i {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.audit-entry.warning > i {
+  background: var(--warning);
+}
+
+.audit-entry > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.audit-entry small {
+  color: var(--rg-text-secondary);
+}
