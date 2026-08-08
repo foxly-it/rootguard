@@ -361,9 +361,33 @@
   font-weight: 400;
 }
 
+/* The summary brings its own horizontal padding (it's the clickable
+   toggle bar); every other direct child needs the same 17px inset
+   explicitly, since .advanced-settings itself has none - without this,
+   the toggle rows and resource-profile field sat flush against the
+   card's edges while .number-grid (below) was the only child bringing
+   its own inset, reading as visibly misaligned columns. */
+.advanced-settings > *:not(summary) {
+  box-sizing: border-box;
+  padding-left: 17px;
+  padding-right: 17px;
+}
+
+/* .toggle-row already carries its own margin: 0 -12px / padding: 17px
+   12px pair (unbound-polish.css) so its :hover highlight can bleed
+   slightly past its content without touching the card edge - that pair
+   nets to zero, so the rule above alone would still leave it flush.
+   Stacking the same 17px on top of the existing 12px (29px total),
+   rather than replacing it, adds the inset while keeping the hover
+   bleed intact. */
+.advanced-settings > .toggle-row {
+  padding-left: 29px;
+  padding-right: 29px;
+}
+
 .advanced-settings .number-grid {
   margin: 0;
-  padding: 0 16px 17px;
+  padding: 0 17px 17px;
 }
 
 .live-config-panel > pre {
