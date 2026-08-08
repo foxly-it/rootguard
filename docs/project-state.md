@@ -196,6 +196,21 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   guided/expert records are tracked separately
   ([rootguard#133](https://github.com/foxly-it/rootguard/pull/133), closes
   [#132](https://github.com/foxly-it/rootguard/issues/132)).
+- Router import UI ("Router import" card on Unbound's Local DNS &
+  forwarding tab): the first UI for the typed `LocalZone`/`LocalHost`
+  model from #129 - discovered hosts start unselected, hostnames are
+  editable per row before import, and selection merges into a named zone
+  through the same preview → validate → activate lifecycle as every other
+  guided Unbound setting. Live-verified end to end against a real
+  FRITZ!Box: discovered 47 real hosts, renamed one, added two to a new
+  `home.lab.` zone, and confirmed the generated `local-zone`/`local-data`
+  directives through a real server-side `unbound-checkconf` pass. The
+  frontend `UnboundSettings` type never got `local_zones` added when #129
+  shipped (backend-only scope at the time) - added here along with
+  `UnboundLocalZone`/`UnboundLocalHost`. Duplicate-hostname detection is
+  scoped to the target zone itself, not yet cross-checked against
+  `UnboundGuidedZones.tsx`'s separate, older custom-config-based records
+  ([rootguard#137](https://github.com/foxly-it/rootguard/pull/137)).
 - Guided resolver protocol mode defaults to IPv4 and offers dual-stack or
   IPv6-only operation only after the running Unbound container reaches an
   authoritative root server over IPv6. Core repeats this decision server-side

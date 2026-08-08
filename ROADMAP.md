@@ -283,10 +283,22 @@ The detailed ownership and directive plan lives in
       discovery without a router, and any other vendor's adapter
       ([rootguard#133](https://github.com/foxly-it/rootguard/pull/133),
       closes [#132](https://github.com/foxly-it/rootguard/issues/132))
-- [ ] Make every host import preview-only until the operator selects entries;
+- [x] Make every host import preview-only until the operator selects entries;
       canonicalise names and addresses, detect duplicates and conflicts with
       guided and expert records, and use the existing preview, validation,
-      versioning, activation-health, and rollback lifecycle
+      versioning, activation-health, and rollback lifecycle. Shipped as a
+      "Router import" card on Unbound's Local DNS & forwarding tab - the
+      first UI for the typed `LocalZone`/`LocalHost` model from #129:
+      discovered hosts start unselected, hostnames are editable per row
+      before import (renaming a device the operator doesn't like the
+      discovered name for), and selection merges into a named zone through
+      the same preview → validate → activate lifecycle as every other
+      guided Unbound setting. Duplicate-hostname detection is scoped to the
+      target zone itself for now, not yet cross-checked against
+      `UnboundGuidedZones.tsx`'s separate, older custom-config-based
+      records - that cross-system check depends on the still-open frontend
+      migration (#131)
+      ([rootguard#137](https://github.com/foxly-it/rootguard/pull/137))
 
 ### Fixed secure base
 
