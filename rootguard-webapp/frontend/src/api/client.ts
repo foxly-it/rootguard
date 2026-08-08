@@ -424,6 +424,7 @@ export async function fetchUnboundDirectives(): Promise<UnboundDirectiveReferenc
 export interface AdGuardStatus {
   configured: boolean;
   healthy: boolean;
+  version?: string;
   upstream: string;
   upstream_ready: boolean;
   stats_available: boolean;

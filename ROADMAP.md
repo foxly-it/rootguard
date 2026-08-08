@@ -375,9 +375,16 @@ Product boundary:
 - [x] Protected same-origin gateway to the native AdGuard Home interface
 - [x] Automatic private bootstrap with generated credentials and fixed Unbound
       upstream
-- [ ] Show AdGuard version, configuration state, protected upstream, and
-      gateway availability together in RootGuard
-- [ ] Cross-service diagnostics showing Client → AdGuard → Unbound → DNSSEC
+- [x] Show AdGuard version, configuration state, protected upstream, and
+      gateway availability together in RootGuard - configuration state,
+      protected upstream, and gateway reachability were already shown in
+      the AdGuard status panel; AdGuard's own reported version (previously
+      discarded from `/control/status`) is now surfaced there too
+- [ ] Cross-service diagnostics showing Client → AdGuard → Unbound → DNSSEC -
+      Unbound's own diagnostics already verify resolution and DNSSEC
+      rejection directly against Unbound's port; extending that same check
+      through AdGuard's DNS port needs the container network topology
+      between AdGuard and Unbound verified first, not yet done
 - [ ] Contextual links from RootGuard guidance to the relevant native AdGuard
       page without exposing its administration port
 - [ ] Document backup and restore ownership for AdGuard configuration, work

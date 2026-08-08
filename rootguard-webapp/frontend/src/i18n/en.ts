@@ -387,6 +387,7 @@ export const en: LocaleDefinition = {
     "adguard.bestPracticesActive": "RootGuard recommendations active",
     "adguard.bestPracticesPending": "Setup reconciliation required",
     "adguard.activeUpstream": "Active upstream",
+    "adguard.version": "AdGuard version",
     "adguard.settingUp": "Setting up…",
     "adguard.finish": "Complete secure setup",
     "adguard.applyBestPractices": "Apply DNS recommendations",
