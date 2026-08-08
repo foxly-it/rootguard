@@ -521,6 +521,7 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
     if (!nav) return;
     if (!isRailMode) {
       nav.style.left = "";
+      nav.style.right = "";
       return;
     }
     const page = document.querySelector<HTMLElement>(".unbound-page");
@@ -528,7 +529,12 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
 
     function position() {
       if (!nav) return;
+      // CSS's fallback right: 24px (see the media query) must be cleared
+      // once left is set - position: fixed with both left and right active
+      // at once makes width: auto stretch to fill the gap between them
+      // instead of shrinking to the icon rail's actual content width.
       nav.style.left = `${page!.getBoundingClientRect().right + 24}px`;
+      nav.style.right = "auto";
     }
 
     position();
