@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-08-07
+Last reviewed: 2026-08-08
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -270,7 +270,19 @@ The detailed ownership and directive plan lives in
 - [ ] Import local hosts through bounded `in-addr.arpa`/`ip6.arpa` discovery and
       optional router adapters, beginning with the documented FRITZ!Box TR-064
       host list; keep router credentials server-side and never persist them in
-      browser storage or generated Unbound configuration
+      browser storage or generated Unbound configuration. The FRITZ!Box
+      adapter landed first: `rootguard-core/internal/routerimport` speaks the
+      standard TR-064 `Hosts:1` service (`GetHostNumberOfEntries` +
+      a bounded `GetGenericHostEntry` loop, capped at 256 entries), answers
+      an HTTP Digest challenge (RFC 7616, MD5/qop=auth) when the router
+      requires one and tolerates one that doesn't, and never persists the
+      submitted credentials - they're used for exactly one discovery
+      request and discarded. Verified live against a real FRITZ!Box 6690
+      Cable (firmware 267.08.25): both the unauthenticated and the
+      Digest-challenged path. Still missing: `in-addr.arpa`/`ip6.arpa`
+      discovery without a router, and any other vendor's adapter
+      ([rootguard#133](https://github.com/foxly-it/rootguard/pull/133),
+      closes [#132](https://github.com/foxly-it/rootguard/issues/132))
 - [ ] Make every host import preview-only until the operator selects entries;
       canonicalise names and addresses, detect duplicates and conflicts with
       guided and expert records, and use the existing preview, validation,

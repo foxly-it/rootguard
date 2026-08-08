@@ -13,6 +13,7 @@ import (
 	"github.com/foxly-it/rootguard-core/internal/controlplane"
 	"github.com/foxly-it/rootguard-core/internal/docker"
 	"github.com/foxly-it/rootguard-core/internal/installer"
+	"github.com/foxly-it/rootguard-core/internal/routerimport"
 	"github.com/foxly-it/rootguard-core/internal/stack"
 	"github.com/foxly-it/rootguard-core/internal/unbound"
 	"github.com/foxly-it/rootguard-core/internal/updater"
@@ -63,6 +64,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("POST /api/unbound/custom/preview", previewUnboundCustomHandler(deps.Unbound))
 	apiMux.HandleFunc("PUT /api/unbound/custom", putUnboundCustomHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/directives", unboundDirectivesHandler)
+	apiMux.HandleFunc("POST /api/router-import/fritzbox/discover", fritzBoxDiscoverHandler)
 	apiMux.HandleFunc("GET /api/adguard/status", getAdGuardStatusHandler(deps.AdGuard))
 	apiMux.HandleFunc("GET /api/adguard/filter-report", getAdGuardFilterReportHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/bootstrap", bootstrapAdGuardHandler(deps.AdGuard, deps.Installer))
@@ -561,6 +563,38 @@ func unboundForwardCheckHandler(manager *unbound.Manager) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, checks)
 	}
+}
+
+type fritzBoxDiscoverRequest struct {
+	Address  string `json:"address"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+func fritzBoxDiscoverHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	decoder.DisallowUnknownFields()
+	var request fritzBoxDiscoverRequest
+	if err := decoder.Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	client, err := routerimport.NewFritzBoxClient(request.Address)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := client.DiscoverHosts(r.Context(), routerimport.Credentials{Username: request.Username, Password: request.Password})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, routerimport.ErrRouterDiscovery) {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 type customConfigRequest struct {

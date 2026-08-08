@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-07
+Last updated: 2026-08-08
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -176,10 +176,26 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   route was needed since Core's settings endpoints already decode the whole
   `Settings` struct. This does not yet replace `UnboundGuidedZones.tsx`, which
   still manages its own generic A/AAAA/CNAME records as JSON embedded in a
-  comment inside the custom expert config - that frontend migration, plus the
-  FRITZ!Box TR-064 import, are tracked separately
+  comment inside the custom expert config - that frontend migration is
+  tracked separately
   ([rootguard#129](https://github.com/foxly-it/rootguard/pull/129), closes
   [#127](https://github.com/foxly-it/rootguard/issues/127)).
+- FRITZ!Box TR-064 host discovery adapter (`rootguard-core/internal/routerimport`):
+  speaks the standard `Hosts:1` service - `GetHostNumberOfEntries` followed by
+  a bounded (256-entry) `GetGenericHostEntry` loop - and answers an HTTP
+  Digest challenge (RFC 7616, MD5, `qop=auth`) when the router requires one,
+  while tolerating one that answers `200` directly without ever challenging
+  (both paths verified live against a real FRITZ!Box 6690 Cable, firmware
+  267.08.25: 47 hosts discovered, correct active/inactive and field mapping).
+  Submitted credentials are used for exactly one discovery request and never
+  persisted, returned in any response, or written into generated Unbound
+  config. A Core endpoint runs discovery and returns the normalized,
+  unselected draft list only - it does not touch `LocalZone`/`Settings` yet,
+  the same read-only-probe shape as the existing forward-zone reachability
+  check. The preview/selection UI and conflict detection against existing
+  guided/expert records are tracked separately
+  ([rootguard#133](https://github.com/foxly-it/rootguard/pull/133), closes
+  [#132](https://github.com/foxly-it/rootguard/issues/132)).
 - Guided resolver protocol mode defaults to IPv4 and offers dual-stack or
   IPv6-only operation only after the running Unbound container reaches an
   authoritative root server over IPv6. Core repeats this decision server-side
