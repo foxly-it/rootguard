@@ -47,7 +47,7 @@ func TestBootstrapInstallsAndConfiguresUnbound(t *testing.T) {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"dns_addresses": []string{"0.0.0.0"}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"dns_addresses": []string{"0.0.0.0"}, "version": "v0.107.99"})
 		case "/control/test_upstream_dns":
 			_ = json.NewEncoder(w).Encode(map[string]string{"rootguard-unbound:5335": "OK"})
 		case "/control/dns_config":
@@ -91,6 +91,9 @@ func TestBootstrapInstallsAndConfiguresUnbound(t *testing.T) {
 	}
 	if !status.Configured || !status.Healthy || !status.UpstreamReady || !status.BestPracticesReady {
 		t.Fatalf("unexpected status: %+v", status)
+	}
+	if status.Version != "v0.107.99" {
+		t.Fatalf("expected AdGuard's reported version to be surfaced, got %q", status.Version)
 	}
 	if !status.StatsAvailable || status.Queries != 125 || status.Blocked != 25 {
 		t.Fatalf("unexpected statistics: %+v", status)

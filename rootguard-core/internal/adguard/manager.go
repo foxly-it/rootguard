@@ -25,6 +25,7 @@ type Credentials struct {
 type Status struct {
 	Configured         bool    `json:"configured"`
 	Healthy            bool    `json:"healthy"`
+	Version            string  `json:"version,omitempty"`
 	Upstream           string  `json:"upstream"`
 	UpstreamReady      bool    `json:"upstream_ready"`
 	StatsAvailable     bool    `json:"stats_available"`
@@ -105,7 +106,10 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 
-	if err := m.request(ctx, http.MethodGet, m.apiURL+"/control/status", nil, nil, &credentials); err != nil {
+	var controlStatus struct {
+		Version string `json:"version"`
+	}
+	if err := m.request(ctx, http.MethodGet, m.apiURL+"/control/status", nil, &controlStatus, &credentials); err != nil {
 		return Status{}, fmt.Errorf("adguard status: %w", err)
 	}
 
@@ -129,6 +133,7 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 	status := Status{
 		Configured: true,
 		Healthy:    true,
+		Version:    controlStatus.Version,
 		Upstream:   m.upstream,
 		UpstreamReady: len(dnsInfo.UpstreamDNS) == 1 &&
 			dnsInfo.UpstreamDNS[0] == m.upstream && len(dnsInfo.FallbackDNS) == 0,

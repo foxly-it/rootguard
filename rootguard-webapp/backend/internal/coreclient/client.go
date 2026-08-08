@@ -248,6 +248,7 @@ type UnboundDirectiveReference struct {
 type AdGuardStatus struct {
 	Configured         bool    `json:"configured"`
 	Healthy            bool    `json:"healthy"`
+	Version            string  `json:"version,omitempty"`
 	Upstream           string  `json:"upstream"`
 	UpstreamReady      bool    `json:"upstream_ready"`
 	StatsAvailable     bool    `json:"stats_available"`

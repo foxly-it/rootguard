@@ -130,6 +130,12 @@ export default function AdGuard() {
             <span>{t("adguard.activeUpstream")}</span>
             <code>{status?.upstream || "172.29.53.2:5335"}</code>
           </div>
+          {status?.version && (
+            <div className="adguard-upstream">
+              <span>{t("adguard.version")}</span>
+              <code>{status.version}</code>
+            </div>
+          )}
           {!loading && installation?.state === "installed" && (!status?.configured || !status?.best_practices_ready) && (
             <button className="rg-button rg-button-primary adguard-primary-action" type="button" disabled={bootstrapping} onClick={initialize}>
               {bootstrapping

@@ -387,6 +387,7 @@ export const de: LocaleDefinition = {
     "adguard.bestPracticesActive": "RootGuard-Empfehlungen aktiv",
     "adguard.bestPracticesPending": "Erneute Einrichtung erforderlich",
     "adguard.activeUpstream": "Aktiver Upstream",
+    "adguard.version": "AdGuard-Version",
     "adguard.settingUp": "Einrichtung läuft…",
     "adguard.finish": "Einrichtung sicher abschließen",
     "adguard.applyBestPractices": "DNS-Empfehlungen anwenden",
