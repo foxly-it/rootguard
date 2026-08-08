@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
-import { Activity, Code2, Expand, MapPinned, SlidersHorizontal } from "lucide-react";
+import {
+  Activity, Code2, Expand, MapPinned, SlidersHorizontal,
+  Sparkles, Settings2, Lightbulb, Home, Lock, Route, FileText, SquarePen, History as HistoryIcon,
+} from "lucide-react";
 import {
   fetchUnboundDiagnostics,
   fetchUnboundDiagnosticLoggingStatus,
@@ -438,27 +441,27 @@ function UnboundTabs({ active, onChange, t }: { active: UnboundSection; onChange
   return <div className="unbound-tabs" role="tablist" aria-label={t("unbound.navigation")}>{tabs.map((tab, index) => <button id={`unbound-tab-${tab.id}`} role="tab" type="button" key={tab.id} aria-selected={active === tab.id} aria-controls={`unbound-panel-${tab.id}`} tabIndex={active === tab.id ? 0 : -1} onKeyDown={(event) => handleKeys(event, index)} onClick={() => onChange(tab.id)}>{tab.icon}<span>{t(`unbound.tab.${tab.id}`)}</span></button>)}</div>;
 }
 
-interface UnboundSubSection { id: string; label: string }
+interface UnboundSubSection { id: string; label: string; icon: React.ReactNode }
 
 function sectionsFor(section: UnboundSection, t: (key: string) => string): UnboundSubSection[] {
   switch (section) {
     case "resolver":
       return [
-        { id: "unbound-section-resolver-presets", label: t("unbound.section.profiles") },
-        { id: "unbound-section-resolver-settings", label: t("unbound.resolverSettings") },
-        { id: "unbound-section-resolver-advisor", label: "RootGuard Advisor" },
+        { id: "unbound-section-resolver-presets", label: t("unbound.section.profiles"), icon: <Sparkles aria-hidden="true" /> },
+        { id: "unbound-section-resolver-settings", label: t("unbound.resolverSettings"), icon: <Settings2 aria-hidden="true" /> },
+        { id: "unbound-section-resolver-advisor", label: "RootGuard Advisor", icon: <Lightbulb aria-hidden="true" /> },
       ];
     case "zones":
       return [
-        { id: "unbound-section-zones-local", label: t("zones.title") },
-        { id: "unbound-section-zones-private", label: t("private.title") },
-        { id: "unbound-section-zones-forwarding", label: t("forward.title") },
+        { id: "unbound-section-zones-local", label: t("zones.title"), icon: <Home aria-hidden="true" /> },
+        { id: "unbound-section-zones-private", label: t("private.title"), icon: <Lock aria-hidden="true" /> },
+        { id: "unbound-section-zones-forwarding", label: t("forward.title"), icon: <Route aria-hidden="true" /> },
       ];
     case "advanced":
       return [
-        { id: "unbound-section-advanced-live", label: t("unbound.liveTitle") },
-        { id: "unbound-section-advanced-expert", label: t("expert.title") },
-        { id: "unbound-section-advanced-history", label: t("unbound.history") },
+        { id: "unbound-section-advanced-live", label: t("unbound.liveTitle"), icon: <FileText aria-hidden="true" /> },
+        { id: "unbound-section-advanced-expert", label: t("expert.title"), icon: <SquarePen aria-hidden="true" /> },
+        { id: "unbound-section-advanced-history", label: t("unbound.history"), icon: <HistoryIcon aria-hidden="true" /> },
       ];
     default:
       return [];
@@ -541,9 +544,11 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
           key={entry.id}
           href={`#${entry.id}`}
           className={activeId === entry.id ? "active" : ""}
+          data-tooltip={entry.label}
           onClick={(event) => { event.preventDefault(); jumpToSection(entry.id); setActiveId(entry.id); }}
         >
-          {entry.label}
+          {entry.icon}
+          <span className="unbound-section-nav-label">{entry.label}</span>
         </a>
       ))}
     </nav>
