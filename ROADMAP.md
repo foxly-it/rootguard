@@ -344,6 +344,11 @@ The detailed ownership and directive plan lives in
       [rootguard#101](https://github.com/foxly-it/rootguard/issues/101))
 - [ ] Conflict detection across zones, forwarding, access rules, and expert text
 - [ ] Import/export of the complete logical resolver configuration
+- [ ] Import an existing hand-written `unbound.conf`: classify each directive
+      against the fixed base, guided settings, expert allowlist, and blocked
+      list, filter out anything RootGuard already owns so nothing gets
+      silently duplicated or overridden, and offer only the remainder for
+      preview-gated adoption (see `docs/unbound-configuration-roadmap.md`)
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
       broken upstreams, and DNSSEC failures
 

@@ -496,8 +496,12 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
   const navRef = useRef<HTMLElement>(null);
 
   // Tracks the rail breakpoint (see the media query in unbound-structure.css).
+  // 1600px, not 1440px: the widget now lives in the *left* gutter next to
+  // the main sidebar (see the positioning effect below), and that gutter is
+  // narrower than the right-hand one at any given viewport width - measured
+  // live at 92px at 1440px, only reaching a comfortable ~172px at 1600px.
   useEffect(() => {
-    const rail = window.matchMedia("(min-width: 1440px)");
+    const rail = window.matchMedia("(min-width: 1600px)");
     const update = () => setIsRailMode(rail.matches);
     update();
     rail.addEventListener("change", update);
@@ -516,7 +520,8 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
   // to <body> (which has no such transform) sidesteps the problem entirely,
   // the same way the sidebar's own tooltip already does (see rg-nav-tooltip
   // in SidebarLayout.tsx) - so this positioning effect only needs to track
-  // .unbound-page's real edge, never fight a containing-block surprise.
+  // the real edges of .sidebar and .unbound-page, never fight a
+  // containing-block surprise.
   useEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
@@ -525,16 +530,24 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
       nav.style.right = "";
       return;
     }
+    const sidebar = document.querySelector<HTMLElement>(".sidebar");
     const page = document.querySelector<HTMLElement>(".unbound-page");
-    if (!page) return;
+    if (!sidebar || !page) return;
 
     function position() {
       if (!nav) return;
-      // CSS's fallback right: 24px (see the media query) must be cleared
-      // once left is set - position: fixed with both left and right active
-      // at once makes width: auto stretch to fill the gap between them
-      // instead of shrinking to the icon rail's actual content width.
-      nav.style.left = `${page!.getBoundingClientRect().right + 24}px`;
+      // Center the widget in the gutter between the main sidebar and the
+      // content column, rather than pinning it to one edge - the gutter's
+      // width varies with viewport (see the breakpoint comment above), so
+      // a fixed offset from either edge would drift off-center on wider
+      // monitors. CSS's fallback right: auto (see the media query) must
+      // stay cleared once left is set - position: fixed with both left and
+      // right active at once makes width: auto stretch to fill the gap
+      // instead of shrinking to the widget's actual content width.
+      const gutterStart = sidebar!.getBoundingClientRect().right;
+      const gutterEnd = page!.getBoundingClientRect().left;
+      const widgetWidth = nav!.getBoundingClientRect().width;
+      nav.style.left = `${Math.round(gutterStart + (gutterEnd - gutterStart - widgetWidth) / 2)}px`;
       nav.style.right = "auto";
     }
 
@@ -542,11 +555,19 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
     window.addEventListener("resize", position);
     const observer = new ResizeObserver(position);
     observer.observe(page);
+    observer.observe(sidebar);
     return () => {
       window.removeEventListener("resize", position);
       observer.disconnect();
     };
-  }, [isRailMode]);
+    // sections.length, not just isRailMode: the <nav> itself only exists
+    // once a tab has 2+ registered sections (see the early return below),
+    // so a plain [isRailMode] dependency misses every case where isRailMode
+    // was already true *before* switching from a single-section tab (e.g.
+    // Overview) to a multi-section one (e.g. Advanced) - the effect never
+    // reruns on that switch since isRailMode itself didn't change, so the
+    // freshly-mounted nav is left unpositioned until the next resize.
+  }, [isRailMode, sections.length > 1]);
 
   useEffect(() => {
     if (sections.length === 0) { setActiveId(""); return; }
@@ -601,12 +622,16 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
 
   const navElement = (
     <nav ref={navRef} className="unbound-section-nav" aria-label={t("unbound.sectionNav")}>
+      {/* Only visible in rail/widget mode (see the media query) - the
+          nav's own aria-label already identifies its purpose to assistive
+          tech, so this is a purely visual heading for sighted rail-mode
+          users and shouldn't be announced a second time. */}
+      <span className="unbound-section-nav-heading" aria-hidden="true">{t("unbound.sectionNav.heading")}</span>
       {sections.map((entry) => (
         <a
           key={entry.id}
           href={`#${entry.id}`}
           className={activeId === entry.id ? "active" : ""}
-          data-tooltip={entry.label}
           onClick={(event) => { event.preventDefault(); jumpToSection(entry.id); setActiveId(entry.id); }}
         >
           {entry.icon}

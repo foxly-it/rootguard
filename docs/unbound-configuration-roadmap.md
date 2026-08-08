@@ -106,6 +106,34 @@ local systems without editing individual Unbound directives.
   `unbound-checkconf`, version history, activation health check, and rollback
   path.
 
+### Existing-configuration import — planned
+
+Operators arriving with a hand-written `unbound.conf` from a prior manual
+setup should not have to retype it directive by directive to get useful
+guided coverage. A bounded importer accepts a pasted or uploaded existing
+configuration, parses its directives, and classifies each one against the
+ownership model above before offering anything for adoption.
+
+- Directives already covered by the fixed base (e.g. listeners, root hints,
+  trust anchor) or by an existing guided setting are filtered out and never
+  presented for import - the point is to fill gaps, not to let an imported
+  file silently duplicate, shadow, or override what RootGuard already owns
+  and secures. A directive whose imported value actually conflicts with the
+  fixed base is reported as rejected with the reason, not silently dropped.
+- Directives that map cleanly onto an existing guided setting (forwarding
+  zones, local records, cache sizing, and so on) are offered as pre-filled
+  guided values for review, not written through verbatim.
+- Remaining directives that have no guided equivalent but pass the same
+  expert allowlist as manual expert input are offered for adoption into
+  `90-rootguard-custom.conf`; anything on the permanently blocked list is
+  reported as unsupported, never silently accepted.
+- Treat the imported file as an untrusted draft, matching the router-import
+  pattern above: show a preview of what will be adopted, what was filtered as
+  already-owned, and what was rejected, before anything is written. Apply
+  selected directives only through the shared preview, effective
+  `unbound-checkconf`, version history, activation health check, and
+  rollback path.
+
 ### Client access networks — fixed ownership
 
 RootGuard clients query AdGuard Home, not Unbound. Exposing Unbound CIDR rules
