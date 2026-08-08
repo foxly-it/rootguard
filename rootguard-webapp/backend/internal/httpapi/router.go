@@ -251,6 +251,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 	mux.HandleFunc("GET /api/unbound/network-capabilities", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundNetworkCapabilities(w, r, core)
 	})
+	mux.HandleFunc("POST /api/router-import/fritzbox/discover", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleFritzBoxDiscover(w, r, core)
+	})
 
 	mux.HandleFunc("GET /api/unbound/custom", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleGetUnboundCustom(w, r, core)

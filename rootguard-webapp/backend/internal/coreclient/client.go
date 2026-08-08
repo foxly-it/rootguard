@@ -475,6 +475,27 @@ func (c *Client) CheckUnboundForwardTargets(ctx context.Context, zones []Unbound
 	return result, err
 }
 
+type DiscoveredHost struct {
+	Hostname string `json:"hostname"`
+	IPv4     string `json:"ipv4"`
+	MAC      string `json:"mac,omitempty"`
+	Active   bool   `json:"active"`
+	Source   string `json:"source"`
+}
+
+type RouterDiscoveryResult struct {
+	Hosts     []DiscoveredHost `json:"hosts"`
+	Truncated bool             `json:"truncated"`
+}
+
+func (c *Client) DiscoverFritzBoxHosts(ctx context.Context, address, username, password string) (RouterDiscoveryResult, error) {
+	var result RouterDiscoveryResult
+	err := c.do(ctx, http.MethodPost, "/api/router-import/fritzbox/discover", map[string]string{
+		"address": address, "username": username, "password": password,
+	}, &result)
+	return result, err
+}
+
 func (c *Client) UnboundNetworkCapabilities(ctx context.Context) (UnboundNetworkCapabilities, error) {
 	var result UnboundNetworkCapabilities
 	err := c.do(ctx, http.MethodGet, "/api/unbound/network-capabilities", nil, &result)
