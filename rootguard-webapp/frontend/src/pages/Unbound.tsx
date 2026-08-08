@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import { useLocation, useNavigate, useParams } from "react-router";
 import {
   Activity, Code2, Expand, MapPinned, SlidersHorizontal,
@@ -485,6 +486,55 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
   const sections = useMemo(() => sectionsFor(section, t), [section, t]);
   const requestedId = hash.slice(1);
   const [activeId, setActiveId] = useState("");
+  const [isRailMode, setIsRailMode] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+
+  // Tracks the rail breakpoint (see the media query in unbound-structure.css).
+  useEffect(() => {
+    const rail = window.matchMedia("(min-width: 1440px)");
+    const update = () => setIsRailMode(rail.matches);
+    update();
+    rail.addEventListener("change", update);
+    return () => rail.removeEventListener("change", update);
+  }, []);
+
+  // In rail mode the nav is a fixed-position element portaled straight to
+  // <body> (see the render below) - .unbound-page permanently carries a
+  // non-"none" transform from its own entrance animation (fill-mode: both
+  // leaves transform: translateY(0) applied forever, and any transform
+  // other than the literal keyword "none" makes an element the containing
+  // block for its position: fixed descendants, per spec). Left in place,
+  // that silently repositions the rail relative to the content box instead
+  // of the viewport - miles off on a wide monitor where the centered,
+  // max-width content sits nowhere near the screen's actual edge. Portaling
+  // to <body> (which has no such transform) sidesteps the problem entirely,
+  // the same way the sidebar's own tooltip already does (see rg-nav-tooltip
+  // in SidebarLayout.tsx) - so this positioning effect only needs to track
+  // .unbound-page's real edge, never fight a containing-block surprise.
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    if (!isRailMode) {
+      nav.style.left = "";
+      return;
+    }
+    const page = document.querySelector<HTMLElement>(".unbound-page");
+    if (!page) return;
+
+    function position() {
+      if (!nav) return;
+      nav.style.left = `${page!.getBoundingClientRect().right + 24}px`;
+    }
+
+    position();
+    window.addEventListener("resize", position);
+    const observer = new ResizeObserver(position);
+    observer.observe(page);
+    return () => {
+      window.removeEventListener("resize", position);
+      observer.disconnect();
+    };
+  }, [isRailMode]);
 
   useEffect(() => {
     if (sections.length === 0) { setActiveId(""); return; }
@@ -537,8 +587,8 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
 
   if (sections.length < 2) return null;
 
-  return (
-    <nav className="unbound-section-nav" aria-label={t("unbound.sectionNav")}>
+  const navElement = (
+    <nav ref={navRef} className="unbound-section-nav" aria-label={t("unbound.sectionNav")}>
       {sections.map((entry) => (
         <a
           key={entry.id}
@@ -553,6 +603,8 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
       ))}
     </nav>
   );
+
+  return isRailMode ? createPortal(navElement, document.body) : navElement;
 }
 
 function SummaryCard({ label, value, detail, state = "neutral" }: { label: string; value: string; detail: string; state?: "healthy" | "neutral" }) {
