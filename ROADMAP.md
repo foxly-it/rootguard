@@ -409,7 +409,17 @@ Product boundary:
       responsibility and a manual `docker run`-based volume backup for
       anything beyond it, pending the native backup/export work in 0.4
       ([rootguard#151](https://github.com/foxly-it/rootguard/pull/151))
-- [ ] Compatibility tests against every supported AdGuard Home release
+- [x] Compatibility tests against every supported AdGuard Home release -
+      RootGuard only ever ships two channels (the pinned stable image and
+      the beta channel, per the guided setup's `adguard_channel` option), so
+      "every supported release" means both of those, not an unbounded
+      version matrix. A new `ci-adguard-compat.yml` workflow runs the full
+      bootstrap → status → filtering-toggle → DNS-resolution → filter-check
+      surface against each, on a matrix so a channel-specific break doesn't
+      mask the other, on pushes/PRs touching the AdGuard integration code
+      plus a weekly schedule to catch upstream drift independent of
+      RootGuard's own commits
+      ([rootguard#158](https://github.com/foxly-it/rootguard/pull/158))
 - [x] Ship a self-hosted, RootGuard-branded blocked-request landing page as a
       new `rootguard-blockpage` monorepo directory (same pattern as
       core/webapp/unbound/updater: own Dockerfile, own path-filtered CI),

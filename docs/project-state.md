@@ -723,11 +723,13 @@ Milestone completion snapshot:
   draft→preview→activate workflow generalisation, cross-setting conflict
   detection, resolver config import/export, hand-written `unbound.conf`
   import, and scenario tests.
-- **0.3 AdGuard integration** - 2 items open: cross-service Client → AdGuard
-  → Unbound → DNSSEC diagnostics (blocked on verifying the AdGuard/Unbound
-  container network topology first) and compatibility tests against every
-  supported AdGuard Home release. Everything else in 0.3, including the
-  blockpage's real per-request block reason, is delivered.
+- **0.3 AdGuard integration** - 1 item open: cross-service Client → AdGuard
+  → Unbound → DNSSEC diagnostics, blocked on verifying the AdGuard/Unbound
+  container network topology first. Compatibility tests against both
+  supported AdGuard channels (stable, beta) landed as `ci-adguard-compat.yml`
+  ([rootguard#158](https://github.com/foxly-it/rootguard/pull/158));
+  everything else in 0.3, including the blockpage's real per-request block
+  reason, is delivered.
 - **0.4 operations/backup/recovery** - barely started, 7 of 9 items open:
   configurable retention, manual cleanup preview, encrypted export, full
   restore into a clean install, pre-update snapshot/restore verification,
@@ -745,9 +747,9 @@ Milestone completion snapshot:
 Recommended next sequence (closest-to-done first, so 0.1-0.5 gates keep
 closing before 0.6's release-engineering surface opens):
 
-1. **Close 0.3** - smallest remaining surface. AdGuard compatibility tests
-   first (no prerequisites), then cross-service diagnostics once the
-   AdGuard↔Unbound network topology is confirmed.
+1. **Close 0.3** - one item left. Verify the AdGuard↔Unbound container
+   network topology, then build cross-service Client → AdGuard → Unbound →
+   DNSSEC diagnostics on top of it.
 2. **Close 0.5** - WCAG labels/errors review, the full keyboard/screen-reader
    workflow audit, then destructive-action rate limits/audit (Unbound
    activation, service updates/rollbacks, AdGuard bootstrap).
@@ -767,8 +769,9 @@ closing before 0.6's release-engineering surface opens):
    (compatibility matrix, upgrade tests, migration framework) depend on them
    existing.
 
-**Immediate next item when resuming:** 0.3's AdGuard compatibility tests -
-smallest scope, no architectural prerequisites, and it closes a milestone.
+**Immediate next item when resuming:** verify the AdGuard↔Unbound container
+network topology, then implement 0.3's cross-service Client → AdGuard →
+Unbound → DNSSEC diagnostics on top of it - the last item in 0.3.
 
 ## Tracked editor follow-ups
 
