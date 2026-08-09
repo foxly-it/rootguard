@@ -376,14 +376,19 @@ The detailed ownership and directive plan lives in
       (`rootguard-core/internal/unbound/custom.go`) cross-checks guided
       forward zones, private domains, and the RFC1918/local-zone inventory
       against expert-text `forward-zone`/`private-domain`/`local-zone`
-      blocks on every activation, and cross-zone PTR-address uniqueness is
-      enforced across the whole typed host inventory (not just within one
-      zone), covered by `TestLocalZonePTRRejectsDuplicateAddressAcrossZones`.
-      Still genuinely missing: cross-zone *hostname* uniqueness (only
-      checked within a single zone today), any cross-check against the
-      legacy `UnboundGuidedZones.tsx` JSON-in-comment records, and access
-      rules, which have no guided surface at all yet (expert-only, advisor
-      warning + high-risk catalog entry only)
+      blocks on every activation. Cross-zone uniqueness is now enforced for
+      both PTR addresses (`TestLocalZonePTRRejectsDuplicateAddressAcrossZones`)
+      and hostnames (`TestLocalZoneHostnameRejectsDuplicateAcrossZones`)
+      across the whole typed host inventory, not just within one zone -
+      checked both client-side (guided zones, router import) and
+      server-side (`validateLocalZones`) on every save/activation. The
+      legacy `UnboundGuidedZones.tsx` JSON-in-comment scheme this line used
+      to worry about no longer exists (migrated to the typed model in
+      #167). Still genuinely missing: access rules have no guided surface
+      at all (expert-only, advisor warning + high-risk catalog entry only),
+      so there is nothing for this item to conflict-check yet - building
+      that guided surface is a separate, currently untracked feature, not
+      part of conflict detection itself
 - [ ] Import/export of the complete logical resolver configuration
 - [ ] Import an existing hand-written `unbound.conf`: classify each directive
       against the fixed base, guided settings, expert allowlist, and blocked

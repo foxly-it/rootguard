@@ -124,7 +124,7 @@ func TestLocalZonePTRRejectsDuplicateAddressAcrossZones(t *testing.T) {
 	settings := DefaultSettings()
 	settings.LocalZones = []LocalZone{
 		{Name: "home.lab.", Hosts: []LocalHost{{Hostname: "printer", IPv4: "192.168.1.20", PTR: true}}},
-		{Name: "guests.lab.", Hosts: []LocalHost{{Hostname: "printer", IPv4: "192.168.1.20", PTR: true}}},
+		{Name: "guests.lab.", Hosts: []LocalHost{{Hostname: "printer-guest", IPv4: "192.168.1.20", PTR: true}}},
 	}
 	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
 		t.Fatalf("expected PTR address conflict rejection, got %v", err)
@@ -136,6 +136,17 @@ func TestLocalZonePTRRejectsDuplicateAddressAcrossZones(t *testing.T) {
 	settings.LocalZones[1].Hosts[0].PTR = false
 	if err := settings.Validate(); err != nil {
 		t.Fatalf("expected non-PTR duplicate addresses to be allowed, got %v", err)
+	}
+}
+
+func TestLocalZoneHostnameRejectsDuplicateAcrossZones(t *testing.T) {
+	settings := DefaultSettings()
+	settings.LocalZones = []LocalZone{
+		{Name: "home.lab.", Hosts: []LocalHost{{Hostname: "printer", IPv4: "192.168.1.20"}}},
+		{Name: "guests.lab.", Hosts: []LocalHost{{Hostname: "printer", IPv4: "192.168.2.20"}}},
+	}
+	if err := settings.Validate(); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected hostname conflict rejection across zones, got %v", err)
 	}
 }
 

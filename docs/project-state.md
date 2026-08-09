@@ -728,10 +728,11 @@ Entwicklung" without re-deriving what's next.
 Milestone completion snapshot:
 
 - **0.2 Unbound administration** - 5 items open, in top-to-bottom roadmap
-  order: cross-setting conflict detection (cross-zone hostname uniqueness,
-  access rules), resolver config import/export, hand-written `unbound.conf`
-  import, scenario tests, and host-discovery beyond the FRITZ!Box adapter.
-  The guided-zones frontend migration
+  order: cross-setting conflict detection (the cross-zone hostname-uniqueness
+  gap is closed; access rules have no guided surface to conflict-check
+  against yet, tracked separately below), resolver config import/export,
+  hand-written `unbound.conf` import, scenario tests, and host-discovery
+  beyond the FRITZ!Box adapter. The guided-zones frontend migration
   ([#131](https://github.com/foxly-it/rootguard/issues/131)), the read-only
   fixed-base display, and the shared draft→preview→activate workflow
   abstraction (`useUnboundDraftWorkflow`, migrated onto by four of the five
@@ -766,10 +767,11 @@ user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
 1. **0.2 Unbound administration** (current) - work the remaining 5 items in
-   the order they appear in `ROADMAP.md`: conflict detection (cross-zone
-   hostname uniqueness, access rules), resolver config import/export,
-   hand-written `unbound.conf` import, scenario tests, then host-discovery
-   beyond FRITZ!Box.
+   the order they appear in `ROADMAP.md`: conflict detection (still open only
+   pending the untracked guided access-rules surface - see "Tracked editor
+   follow-ups" below), resolver config import/export, hand-written
+   `unbound.conf` import, scenario tests, then host-discovery beyond
+   FRITZ!Box.
 2. **0.4 operations/backup/recovery** - the whole milestone is still open,
    in document order: configurable retention, manual cleanup preview,
    encrypted export, full restore, pre-update snapshot verification,
@@ -783,11 +785,13 @@ previously recommended. 0.1 and 0.3 are fully closed, so the order is:
    provenance, image signing/verification, compatibility matrix, upgrade
    tests, migration framework, changelog generation, website/Wiki CI check.
 
-**Immediate next item when resuming:** 0.2's conflict detection - the next
-unchecked item in document order, now that the shared guided workflow
-abstraction is done. Cross-zone hostname uniqueness (currently only scoped
-within a single zone, see `settings.go`'s `validateLocalHost`) and a guided
-surface for access rules (currently expert-only) are the two concrete gaps.
+**Immediate next item when resuming:** 0.2's conflict-detection checkbox
+stays unchecked, but the only concrete gap left under it is a guided surface
+for access rules (currently expert-only) - a separate, larger feature (see
+"Tracked editor follow-ups" below), not a conflict-detection bug. Cross-zone
+hostname uniqueness is now enforced (mirrors the existing PTR-address
+check). Move on to **resolver config import/export**, the next unchecked
+0.2 item in document order.
 
 ## Tracked editor follow-ups
 

@@ -68,6 +68,7 @@ export default function UnboundGuidedZones({
         ? [...zones, normalized]
         : zones.map((zone, index) => (index === editing ? normalized : zone));
       validatePTRUniqueness(next, t);
+      validateHostnameUniqueness(next, t);
       setZones(next);
       setDraft(emptyZone());
       setEditing(null);
@@ -221,6 +222,16 @@ function normalizeDraftZone(zone: DraftZone, t: (key: string, values?: Record<st
     return { hostname, ipv4: ipv4 || undefined, ipv6: ipv6 || undefined, ptr: host.ptr };
   });
   return { name, hosts };
+}
+
+function validateHostnameUniqueness(zones: UnboundLocalZone[], t: (key: string, values?: Record<string, string | number>) => string) {
+  const seen = new Set<string>();
+  for (const zone of zones) {
+    for (const host of zone.hosts) {
+      if (seen.has(host.hostname)) throw new Error(t("zones.validation.duplicateHostname", { name: host.hostname }));
+      seen.add(host.hostname);
+    }
+  }
 }
 
 function validatePTRUniqueness(zones: UnboundLocalZone[], t: (key: string, values?: Record<string, string | number>) => string) {
