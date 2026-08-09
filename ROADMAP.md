@@ -315,8 +315,16 @@ The detailed ownership and directive plan lives in
       `use-caps-for-id` remain deliberately deferred (documented why), not
       silently dropped
       ([rootguard#122](https://github.com/foxly-it/rootguard/pull/122))
-- [ ] Show fixed base protections in the WebGUI without making unsafe values
-      freely editable
+- [x] Show fixed base protections in the WebGUI without making unsafe values
+      freely editable - two read-only surfaces, neither editable: the
+      Advanced tab's "LIVE · READ ONLY" panel opens the actual running
+      `/etc/unbound/unbound.conf` (hardening directives included) in a
+      focused, keyboard-accessible view, and the expert editor's permanently
+      visible immutable-base panel (already checked below,
+      [rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74))
+      shows the same directives inline next to guided settings. Both are raw
+      config dumps rather than an explained, per-directive protections list -
+      that framing would be a follow-up, not what this item asked for
 - [x] Validate generated configurations against every supported Unbound image -
       `unbound-checkconf`, the DNSSEC/identity/version smoke tests, and the
       trust-anchor volume-compatibility check now run natively on both
@@ -333,7 +341,15 @@ The detailed ownership and directive plan lives in
       the same allowlisted five-service inventory; a healthy full stack now
       shows `5 / 5` instead of a stale `5 / 2`
       ([rootguard-webapp#50](https://github.com/foxly-it/rootguard-webapp/pull/50))
-- [ ] Shared guided workflow: draft → explanation → preview → validate → activate
+- [ ] Shared guided workflow: draft → explanation → preview → validate → activate -
+      the workflow itself is already the de-facto standard, independently
+      implemented in five places (main settings, guided zones, private
+      domains, forward zones, router import), each with its own
+      preview/activate pair and local busy/message/error state; only guided
+      zones shows a visible step indicator. What's actually missing is the
+      shared abstraction (no `hooks/` directory, no extracted component) and
+      a consistent step indicator across all five - not the workflow
+      behaviour itself
 - [x] Add a fullscreen mode to the expert configuration editor, and show the
       immutable base configuration's already-active directives inline
       (greyed out, read-only) instead of only in a separate popup, so expert
@@ -342,7 +358,19 @@ The detailed ownership and directive plan lives in
       to the editor, not behind a click-to-expand disclosure
       ([rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74),
       [rootguard#101](https://github.com/foxly-it/rootguard/issues/101))
-- [ ] Conflict detection across zones, forwarding, access rules, and expert text
+- [ ] Conflict detection across zones, forwarding, access rules, and expert text -
+      more already ships than this line credited: `validateGuidedConflicts`
+      (`rootguard-core/internal/unbound/custom.go`) cross-checks guided
+      forward zones, private domains, and the RFC1918/local-zone inventory
+      against expert-text `forward-zone`/`private-domain`/`local-zone`
+      blocks on every activation, and cross-zone PTR-address uniqueness is
+      enforced across the whole typed host inventory (not just within one
+      zone), covered by `TestLocalZonePTRRejectsDuplicateAddressAcrossZones`.
+      Still genuinely missing: cross-zone *hostname* uniqueness (only
+      checked within a single zone today), any cross-check against the
+      legacy `UnboundGuidedZones.tsx` JSON-in-comment records, and access
+      rules, which have no guided surface at all yet (expert-only, advisor
+      warning + high-risk catalog entry only)
 - [ ] Import/export of the complete logical resolver configuration
 - [ ] Import an existing hand-written `unbound.conf`: classify each directive
       against the fixed base, guided settings, expert allowlist, and blocked
@@ -350,7 +378,13 @@ The detailed ownership and directive plan lives in
       silently duplicated or overridden, and offer only the remainder for
       preview-gated adoption (see `docs/unbound-configuration-roadmap.md`)
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
-      broken upstreams, and DNSSEC failures
+      broken upstreams, and DNSSEC failures - 2 of 6 partially, incidentally
+      covered rather than as named scenarios: DNSSEC failures are verified
+      in CI on both architectures (`ci-unbound.yml`, `dnssec-failed.org` →
+      `SERVFAIL`), and broken upstreams have unit coverage for unreachable/
+      erroring forward targets (`forwarding_test.go`) but not end-to-end
+      resolver behaviour. Home network, VLANs, split DNS, and IPv6-only
+      local records have no coverage at all
 
 Exit: normal resolver administration no longer depends on raw Unbound syntax.
 
@@ -602,13 +636,26 @@ Exit: documented security review has no unresolved critical or high finding.
 Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
 
 - [ ] Automated semantic versioning across all component repositories
-- [ ] Multi-architecture GHCR manifest lists pinned by digest
+- [ ] Multi-architecture GHCR manifest lists pinned by digest - the property
+      itself already holds (`release-alpha.yml` publishes proper
+      `linux/amd64,linux/arm64` manifest lists for all 5 components, and
+      `compose.alpha.yaml` references every one of them, including
+      third-party AdGuard, by digest), but the pins are maintained by hand -
+      no CI step updates `compose.alpha.yaml` after a release publishes new
+      digests. Stays open until that update is automated, not just present
 - [ ] SBOM and provenance for every image
 - [ ] Image signing and signature verification in the release/update path
 - [ ] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions
 - [ ] Upgrade tests from every supported previous RootGuard release
 - [ ] Migration framework for persistent state and configuration schemas
-- [ ] GitHub issue templates for bugs, installations, security, and features
+- [x] GitHub issue templates for bugs, installations, security, and features -
+      `.github/ISSUE_TEMPLATE/bug_report.yml` (its "Betroffene Komponente"
+      dropdown includes "Compose / Installation" as a category, covering
+      installation issues within the bug template rather than a separate
+      one) and `feature_request.yml` cover bugs/installations/features;
+      `config.yml` routes security reports to GitHub's private security
+      advisories instead of a public template, which is the correct handling
+      for vulnerabilities, not a gap
 - [ ] Public changelog generated from reviewed release entries
 - [ ] Website status and Wiki updated as a required CI/release check
 
