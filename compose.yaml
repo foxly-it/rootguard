@@ -70,7 +70,11 @@ services:
       - control
       - edge
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/api/health"]
+      # The distroless runtime image has neither wget nor a shell - unlike
+      # core/updater's docker:29-cli base, there's nothing here for a
+      # "CMD wget ..." style check to exec. rootguard-webapp itself
+      # implements -healthcheck for exactly this (see cmd/rootguard-webapp).
+      test: ["CMD", "/app/rootguard-webapp", "-healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 5

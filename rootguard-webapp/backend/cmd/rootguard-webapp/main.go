@@ -24,6 +24,12 @@ import (
 	"github.com/foxly-it/rootguard-webapp/backend/internal/httpapi"
 )
 
+// healthcheckFlag lets compose.yaml's HEALTHCHECK exec this same binary
+// instead of curl/wget - the distroless runtime image has neither, or any
+// shell at all, so a "CMD wget ..." style check (which works for Core and
+// Updater's docker:29-cli base) can never run here.
+const healthcheckFlag = "-healthcheck"
+
 // =====================================================
 // Build Metadata (Injected at build time)
 //
@@ -51,6 +57,9 @@ func init() {
 
 func main() {
 	port := getEnv("PORT", "8080")
+	if len(os.Args) > 1 && os.Args[1] == healthcheckFlag {
+		runHealthcheck(port)
+	}
 	coreToken := os.Getenv("ROOTGUARD_API_TOKEN")
 	adminPassword := os.Getenv("ROOTGUARD_ADMIN_PASSWORD")
 	if coreToken == "" {
@@ -116,6 +125,27 @@ func main() {
 	}
 
 	log.Println("Server stopped cleanly")
+}
+
+// =====================================================
+// runHealthcheck()
+// Standalone mode invoked by compose.yaml's HEALTHCHECK: makes a real HTTP
+// request against the running server's own /health endpoint (not just a
+// process-liveness check) and exits 0/1 accordingly, then terminates
+// immediately - it never falls through to starting a second server.
+// =====================================================
+
+func runHealthcheck(port string) {
+	client := http.Client{Timeout: 3 * time.Second}
+	response, err := client.Get("http://127.0.0.1:" + port + "/health")
+	if err != nil {
+		os.Exit(1)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
 
 // =====================================================
