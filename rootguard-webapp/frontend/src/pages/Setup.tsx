@@ -161,9 +161,9 @@ export default function Setup() {
             <small>{t("setup.endpointPreview")}</small>
             <strong>{config.dns_bind_address}:{config.dns_port}</strong>
             <p>{t("setup.endpointHelp")}</p>
-            <div><ShieldCheck size={14} /><span><b>{t("setup.privateAdmin")}</b>{t("setup.privateAdminHelp")}</span></div>
           </aside>
         </div>
+        <div className="network-card-footnote"><ShieldCheck size={14} /><span><b>{t("setup.privateAdmin")}</b>{t("setup.privateAdminHelp")}</span></div>
 
         <fieldset className="release-channel" disabled={deploying}>
           <legend>{t("setup.channel.title")}</legend>

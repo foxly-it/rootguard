@@ -495,32 +495,38 @@
 }
 
 .endpoint-preview > p {
-  margin: 5px 0 17px;
+  margin: 5px 0 0;
   color: var(--text-muted);
   font-size: 0.7rem;
   line-height: 1.5;
 }
 
-.endpoint-preview > div {
+/* Was inside .endpoint-preview itself; moved below the whole grid so it
+   reads as a note about the network step in general (it isn't really
+   specific to the endpoint-preview card), and so its height no longer
+   inflates the right column past the left column's much shorter field
+   list, which had been leaving a bare empty gap in the shorter column. */
+.network-card-footnote {
   display: flex;
   gap: 9px;
-  padding-top: 13px;
+  margin-top: 20px;
+  padding-top: 16px;
   border-top: 1px solid var(--border-subtle);
   color: var(--success);
 }
 
-.endpoint-preview > div span,
-.endpoint-preview > div b {
+.network-card-footnote span,
+.network-card-footnote b {
   display: block;
 }
 
-.endpoint-preview > div b {
+.network-card-footnote b {
   margin-bottom: 2px;
   color: var(--success);
   font-size: 0.7rem;
 }
 
-.endpoint-preview > div span {
+.network-card-footnote span {
   color: var(--text-muted);
   font-size: 0.65rem;
   line-height: 1.45;
