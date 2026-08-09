@@ -67,6 +67,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("POST /api/router-import/fritzbox/discover", fritzBoxDiscoverHandler)
 	apiMux.HandleFunc("GET /api/adguard/status", getAdGuardStatusHandler(deps.AdGuard))
 	apiMux.HandleFunc("GET /api/adguard/filter-report", getAdGuardFilterReportHandler(deps.AdGuard))
+	apiMux.HandleFunc("POST /api/adguard/filtering", setAdGuardFilteringHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/bootstrap", bootstrapAdGuardHandler(deps.AdGuard, deps.Installer))
 	apiMux.Handle("/api/adguard/ui/", deps.AdGuard.UIHandler())
 
@@ -233,6 +234,26 @@ func getAdGuardFilterReportHandler(manager *adguard.Manager) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, report)
+	}
+}
+
+func setAdGuardFilteringHandler(manager *adguard.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input struct {
+			Enabled bool `json:"enabled"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		status, err := manager.SetFiltering(r.Context(), input.Enabled)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
 	}
 }
 

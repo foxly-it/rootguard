@@ -33,6 +33,9 @@ type Status struct {
 	Blocked            uint64  `json:"blocked"`
 	AverageResponse    float64 `json:"average_response_seconds"`
 	BestPracticesReady bool    `json:"best_practices_ready"`
+	FilteringEnabled   bool    `json:"filtering_enabled"`
+	ActiveFilterLists  int     `json:"active_filter_lists"`
+	TotalFilterLists   int     `json:"total_filter_lists"`
 }
 
 type FilterCheck struct {
@@ -158,7 +161,55 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		status.Blocked = stats.Blocked
 		status.AverageResponse = stats.AverageResponse
 	}
+	if filtering, err := m.filteringStatus(ctx, &credentials); err == nil {
+		status.FilteringEnabled = filtering.Enabled
+		status.TotalFilterLists = len(filtering.Filters)
+		for _, list := range filtering.Filters {
+			if list.Enabled {
+				status.ActiveFilterLists++
+			}
+		}
+	}
 	return status, nil
+}
+
+type filteringStatusResponse struct {
+	Enabled  bool `json:"enabled"`
+	Interval int  `json:"interval"`
+	Filters  []struct {
+		Enabled bool `json:"enabled"`
+	} `json:"filters"`
+}
+
+func (m *Manager) filteringStatus(ctx context.Context, credentials *Credentials) (filteringStatusResponse, error) {
+	var response filteringStatusResponse
+	if err := m.request(ctx, http.MethodGet, m.apiURL+"/control/filtering/status", nil, &response, credentials); err != nil {
+		return filteringStatusResponse{}, fmt.Errorf("adguard filtering status: %w", err)
+	}
+	return response, nil
+}
+
+// SetFiltering toggles AdGuard's master filtering switch. The interval is
+// read back from AdGuard first and resubmitted unchanged - the endpoint
+// requires both fields together, and this call has no business changing
+// the update interval the operator configured natively.
+func (m *Manager) SetFiltering(ctx context.Context, enabled bool) (Status, error) {
+	credentials, err := m.loadCredentials()
+	if err != nil {
+		return Status{}, err
+	}
+	current, err := m.filteringStatus(ctx, &credentials)
+	if err != nil {
+		return Status{}, err
+	}
+	body := struct {
+		Enabled  bool `json:"enabled"`
+		Interval int  `json:"interval"`
+	}{Enabled: enabled, Interval: current.Interval}
+	if err := m.request(ctx, http.MethodPost, m.apiURL+"/control/filtering/config", body, nil, &credentials); err != nil {
+		return Status{}, fmt.Errorf("adguard set filtering: %w", err)
+	}
+	return m.Status(ctx)
 }
 
 func (m *Manager) Bootstrap(ctx context.Context, blockPageIP string) (Status, error) {

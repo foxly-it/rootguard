@@ -119,7 +119,8 @@
 
 .adguard-status-list > div {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
   gap: 3px 11px;
   padding: 13px 0;
   border-bottom: 1px solid var(--border-subtle);
@@ -143,24 +144,47 @@
 }
 
 .adguard-status-list strong {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  grid-column: 2;
+  grid-row: 1;
   font-size: 0.82rem;
 }
 
-.adguard-contextual-link {
-  display: inline-flex;
+.adguard-status-list small {
+  grid-column: 2;
+  grid-row: 2;
   color: var(--text-muted);
+  font-size: 0.72rem;
 }
 
-.adguard-contextual-link:hover {
+/* Explicit grid-column on every child above and here, not left to
+   auto-placement: without it, this row-spanning item (needing two free
+   rows in the same column) got auto-placed *before* .small in source
+   order, since grid's row-first auto-flow fills column 3 row 1 ahead of
+   column 2 row 2 - the button rendered to the left of the label text it
+   was meant to sit at the right of. */
+.adguard-contextual-button {
+  display: inline-flex;
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 650;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.adguard-contextual-button:hover {
+  border-color: var(--rg-accent);
   color: var(--rg-accent);
 }
 
-.adguard-status-list small {
-  color: var(--text-muted);
-  font-size: 0.72rem;
+.adguard-contextual-button svg {
+  flex: 0 0 auto;
 }
 
 .adguard-upstream {
@@ -183,74 +207,6 @@
   margin-top: 22px;
 }
 
-.managed-steps {
-  display: grid;
-  gap: 8px;
-  margin-top: 17px;
-}
-
-.managed-steps article {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 13px;
-  padding: 13px 0;
-}
-
-.managed-step-icon {
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  color: var(--info);
-  background: var(--info-soft);
-}
-
-.managed-step-icon svg {
-  width: 18px;
-}
-
-.managed-steps small,
-.managed-steps strong {
-  display: block;
-}
-
-.managed-steps small {
-  color: var(--info);
-  font-size: 0.62rem;
-  font-weight: 800;
-}
-
-.managed-steps strong {
-  margin-top: 3px;
-  font-size: 0.82rem;
-}
-
-.managed-steps p {
-  margin: 5px 0 0;
-  color: var(--text-muted);
-  font-size: 0.73rem;
-  line-height: 1.5;
-}
-
-.adguard-security-note {
-  display: flex;
-  gap: 14px;
-  margin-top: 18px;
-  padding: 19px 22px;
-  border: 1px solid var(--success-soft);
-  border-radius: 14px;
-  color: var(--success);
-  background: var(--success-soft);
-}
-
-.adguard-security-note p {
-  margin: 5px 0 0;
-  color: var(--text-muted);
-  font-size: 0.78rem;
-  line-height: 1.55;
-}
-
 .adguard-feedback {
   margin-top: 18px;
   padding: 13px 16px;
@@ -267,20 +223,36 @@
   background: var(--danger-soft);
 }
 
-.adguard-aio-panel {
-  margin-top: 18px;
+.adguard-filtering-toggle {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  cursor: pointer;
 }
 
-.adguard-aio-panel .managed-steps {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+.adguard-filtering-toggle strong {
+  display: block;
+  font-size: 0.8rem;
 }
 
-.adguard-aio-panel .managed-steps article {
-  padding: 16px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 13px;
-  background: var(--surface-soft);
+.adguard-filtering-toggle small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.adguard-filtering-toggle input {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--rg-accent);
 }
 
 .adguard-filter-launcher {
@@ -464,10 +436,6 @@
   }
 
   .adguard-filter-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .adguard-aio-panel .managed-steps {
     grid-template-columns: 1fr;
   }
 }
