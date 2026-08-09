@@ -252,7 +252,7 @@ The detailed ownership and directive plan lives in
 - [x] Prefetch-key and aggressive NSEC controls with compatibility guidance
 - [x] EDNS buffer size with safe default `1232` and validation
 - [x] Privacy-safe logging level and temporary diagnostic logging
-- [ ] Expand Local DNS into a zone-centred host inventory: create a zone once,
+- [x] Expand Local DNS into a zone-centred host inventory: create a zone once,
       then add, rename, remove, and bulk-edit devices and servers by hostname
       plus IPv4/IPv6 address, with optional forward-confirmed PTR generation.
       The typed backend model landed first: `LocalZone`/`LocalHost` in
@@ -261,12 +261,17 @@ The detailed ownership and directive plan lives in
       and reserved-address checks, one PTR claim per address across zones)
       and rendered as `local-zone`/`local-data`/`local-data-ptr` directives
       through the existing `Preview`/`Apply`/`History`/`Restore` lifecycle
-      unchanged - no new activation path. Still missing: the guided-zones
-      frontend (`UnboundGuidedZones.tsx`) still manages its own generic
-      A/AAAA/CNAME records as JSON-in-a-comment inside the custom expert
-      config instead of this typed model
+      unchanged - no new activation path
       ([rootguard#129](https://github.com/foxly-it/rootguard/pull/129), closes
-      [#127](https://github.com/foxly-it/rootguard/issues/127))
+      [#127](https://github.com/foxly-it/rootguard/issues/127)). The
+      guided-zones frontend (`UnboundGuidedZones.tsx`) is now migrated onto
+      this typed model instead of its old JSON-in-a-comment scheme inside
+      the custom expert config - per the decision in
+      [#131](https://github.com/foxly-it/rootguard/issues/131), CNAME
+      records and per-host TTL are dropped from the guided UI entirely (the
+      typed model was never scoped to support them; the rare CNAME/TTL case
+      routes to the unrestricted expert editor instead)
+      ([rootguard#167](https://github.com/foxly-it/rootguard/pull/167))
 - [ ] Import local hosts through bounded `in-addr.arpa`/`ip6.arpa` discovery and
       optional router adapters, beginning with the documented FRITZ!Box TR-064
       host list; keep router credentials server-side and never persist them in
@@ -294,10 +299,9 @@ The detailed ownership and directive plan lives in
       discovered name for), and selection merges into a named zone through
       the same preview → validate → activate lifecycle as every other
       guided Unbound setting. Duplicate-hostname detection is scoped to the
-      target zone itself for now, not yet cross-checked against
-      `UnboundGuidedZones.tsx`'s separate, older custom-config-based
-      records - that cross-system check depends on the still-open frontend
-      migration (#131)
+      target zone itself; the cross-system gap against
+      `UnboundGuidedZones.tsx`'s own records no longer exists now that both
+      surfaces write the same typed `local_zones` field (#131, below)
       ([rootguard#137](https://github.com/foxly-it/rootguard/pull/137))
 
 ### Fixed secure base

@@ -80,31 +80,43 @@ reverse data in the same visible, reversible configuration lifecycle.
 AdGuard Home's separate private reverse-resolver routing remains part of the
 later cross-service integration instead of being reimplemented in RootGuard.
 
-### Zone-centred host inventory and router import — planned
+### Zone-centred host inventory — delivered
 
-The delivered local-zone assistant already owns guided A, AAAA, CNAME, and
-optional PTR records. Its next iteration should present these records as hosts
-or devices grouped below a zone, so an operator can create `home.lab.` once and
+The guided local-zone assistant (`UnboundGuidedZones.tsx`) presents named
+hosts grouped below a zone, so an operator can create `home.lab.` once and
 manage named clients, servers, gateways, access points, printers, and similar
-local systems without editing individual Unbound directives.
+local systems without editing individual Unbound directives. It's backed by
+the typed `LocalZone`/`LocalHost` model (`rootguard-core/internal/unbound/
+settings.go`), not custom-config text.
 
 - Add, rename, remove, and bulk-edit hosts with IPv4 and/or IPv6 addresses.
-- Generate PTR records only after the existing uniqueness and reverse-zone
-  checks pass; preserve forward-confirmed reverse-DNS consistency.
+- Generate PTR records only after the shared uniqueness and reverse-zone
+  checks pass - duplicate PTR claims across any zone are a hard validation
+  error, not a silently suppressed one.
 - Keep the term *client* for AdGuard Home policy ownership. Unbound entries are
   local DNS hosts and do not represent end-client access rules.
-- Support bounded discovery from `in-addr.arpa` and `ip6.arpa` plus optional
-  router adapters. The first vendor adapter may use FRITZ!Box's documented
-  TR-064 host-list interface; adapters for other routers must implement the
-  same normalized import contract.
-- Treat all discovered data as an untrusted draft. Show source, hostname,
-  address, proposed zone, conflicts, and skipped entries before selection.
-- Keep router credentials in bounded server-side request handling only. Never
-  place them in browser storage, logs, history, generated configuration, or
+- Apply changes only through the shared preview, effective `unbound-checkconf`,
+  version history, activation health check, and rollback path.
+
+CNAME records and per-host TTL are deliberately out of scope for this guided
+surface (see [issue #131](https://github.com/foxly-it/rootguard/issues/131)):
+the typed model was never scoped to support them, and the rare CNAME/TTL case
+routes to the unrestricted expert editor instead.
+
+### Router import — partially delivered
+
+- Bounded discovery from an optional router adapter: the FRITZ!Box adapter
+  (`rootguard-core/internal/routerimport`) speaks the documented TR-064
+  host-list interface and lands discovered hosts as an untrusted draft -
+  source, hostname, address, and conflicts shown before selection, applied
+  only through the same typed model and preview/activate lifecycle as the
+  host inventory above.
+- Router credentials stay in bounded server-side request handling only -
+  never browser storage, logs, history, generated configuration, or
   diagnostic responses.
-- Apply selected records only through the shared preview, effective
-  `unbound-checkconf`, version history, activation health check, and rollback
-  path.
+- Still planned: bounded discovery from `in-addr.arpa`/`ip6.arpa` without a
+  router, and adapters for vendors beyond FRITZ!Box (same normalized import
+  contract).
 
 ### Existing-configuration import — planned
 

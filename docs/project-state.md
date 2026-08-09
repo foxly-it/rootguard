@@ -178,10 +178,7 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   parsed. Reuses the existing `Preview`/`Apply`/`History`/`Restore` lifecycle
   and the expert-config conflict check unchanged; no new activation path or API
   route was needed since Core's settings endpoints already decode the whole
-  `Settings` struct. This does not yet replace `UnboundGuidedZones.tsx`, which
-  still manages its own generic A/AAAA/CNAME records as JSON embedded in a
-  comment inside the custom expert config - that frontend migration is
-  tracked separately
+  `Settings` struct
   ([rootguard#129](https://github.com/foxly-it/rootguard/pull/129), closes
   [#127](https://github.com/foxly-it/rootguard/issues/127)).
 - FRITZ!Box TR-064 host discovery adapter (`rootguard-core/internal/routerimport`):
@@ -212,9 +209,23 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   frontend `UnboundSettings` type never got `local_zones` added when #129
   shipped (backend-only scope at the time) - added here along with
   `UnboundLocalZone`/`UnboundLocalHost`. Duplicate-hostname detection is
-  scoped to the target zone itself, not yet cross-checked against
-  `UnboundGuidedZones.tsx`'s separate, older custom-config-based records
+  scoped to the target zone itself
   ([rootguard#137](https://github.com/foxly-it/rootguard/pull/137)).
+- `UnboundGuidedZones.tsx` migrated off its old JSON-in-a-comment scheme
+  (parsed out of a marker block inside the custom expert config) onto the
+  same typed `LocalZone`/`LocalHost` model and `fetchUnboundSettings`/
+  `previewUnboundSettings`/`updateUnboundSettings` lifecycle as router
+  import - both guided surfaces now write the same field, so the
+  cross-system duplicate-hostname gap noted above no longer exists. Per
+  the decision in
+  [issue #131](https://github.com/foxly-it/rootguard/issues/131), CNAME
+  records and per-host TTL are dropped from the guided UI entirely - the
+  typed model was never scoped to support them; that rare case routes to
+  the unrestricted expert editor instead. Live-verified end to end:
+  created a zone with an IPv4+IPv6 PTR-enabled host through the wizard,
+  previewed, activated, and confirmed real `dig` resolution for the A,
+  AAAA, and both PTR records against the running resolver
+  ([rootguard#167](https://github.com/foxly-it/rootguard/pull/167)).
 - Guided resolver protocol mode defaults to IPv4 and offers dual-stack or
   IPv6-only operation only after the running Unbound container reaches an
   authoritative root server over IPv6. Core repeats this decision server-side
@@ -716,13 +727,13 @@ Entwicklung" without re-deriving what's next.
 
 Milestone completion snapshot:
 
-- **0.2 Unbound administration** - 8 items open: guided-zones frontend
-  migration to the typed `LocalZone`/`LocalHost` model
-  ([#131](https://github.com/foxly-it/rootguard/issues/131)), host-discovery
-  beyond the FRITZ!Box adapter, read-only fixed-base display, the shared
-  draft→preview→activate workflow generalisation, cross-setting conflict
-  detection, resolver config import/export, hand-written `unbound.conf`
-  import, and scenario tests.
+- **0.2 Unbound administration** - 6 items open, in top-to-bottom roadmap
+  order: shared draft→preview→activate workflow abstraction, cross-setting
+  conflict detection (cross-zone hostname uniqueness, access rules), resolver
+  config import/export, hand-written `unbound.conf` import, scenario tests,
+  and host-discovery beyond the FRITZ!Box adapter. The guided-zones frontend
+  migration ([#131](https://github.com/foxly-it/rootguard/issues/131)) and
+  the read-only fixed-base display are both done now.
 - **0.3 AdGuard integration** - **complete**. The last item, cross-service
   Client → AdGuard → Unbound → DNSSEC diagnostics, landed as a second "Path
   diagnostics" card on the Unbound Overview tab
@@ -743,35 +754,35 @@ Milestone completion snapshot:
   destructive-action rate limits/audit beyond the authentication surface,
   a full keyboard/screen-reader workflow re-verification, and a WCAG
   labels/errors review.
-- **0.6 beta release engineering** - not started, all 10 items open. This is
-  the actual gate to cut `0.6.0-beta.1`; per the roadmap's own rule, it
-  shouldn't start in earnest while 0.2-0.5 safety gates remain open.
+- **0.6 beta release engineering** - 9 of 10 items open (issue templates
+  landed as a stale-checkbox fix). This is the actual gate to cut
+  `0.6.0-beta.1`.
 
-Recommended next sequence (closest-to-done first, so 0.1-0.5 gates keep
-closing before 0.6's release-engineering surface opens):
+**Working order: top-to-bottom through the roadmap document**, per explicit
+user direction (2026-08-09) - not "closest-to-done first" as this section
+previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **Close 0.5** - one milestone left with open items closest to done: WCAG
-   labels/errors review, the full keyboard/screen-reader workflow audit,
-   then destructive-action rate limits/audit (Unbound activation, service
-   updates/rollbacks, AdGuard bootstrap).
-2. **0.2's remaining substance** - the largest pre-beta product surface, and
-   partially in flight already. Guided-zones frontend migration (#131) first,
-   since the router-import UI and typed backend model already assume it;
-   then fixed-base display, the shared workflow generalisation, conflict
-   detection, import/export, `unbound.conf` import, scenario tests, and
-   additional host-discovery adapters.
-3. **0.4 backup/recovery** - the whole milestone is still open, and beta
-   shouldn't ship without a tested restore path. Retention and cleanup
-   preview first (builds directly on the shipped cleanup-safety work), then
+1. **0.2 Unbound administration** (current) - work the remaining 6 items in
+   the order they appear in `ROADMAP.md`: shared draft→preview→activate
+   workflow abstraction, conflict detection (cross-zone hostname uniqueness,
+   access rules), resolver config import/export, hand-written `unbound.conf`
+   import, scenario tests, then host-discovery beyond FRITZ!Box.
+2. **0.4 operations/backup/recovery** - the whole milestone is still open,
+   in document order: configurable retention, manual cleanup preview,
    encrypted export, full restore, pre-update snapshot verification,
-   power-loss tests, and the DR runbook.
-4. **0.6 release engineering** - start once 0.2/0.4/0.5 are closed (0.3 is
-   already done). Versioning automation and signed multi-arch manifests
-   first, since later 0.6 items (compatibility matrix, upgrade tests,
-   migration framework) depend on them existing.
+   power-loss tests, the DR runbook.
+3. **0.5 security/HTTPS/accessibility** - 3 items open, in document order:
+   destructive-action rate limits/audit, the full keyboard/screen-reader
+   workflow audit, WCAG labels/errors review.
+4. **0.6 release engineering** - 9 items open, in document order: automated
+   semantic versioning, signed multi-arch manifest digests (property already
+   holds, automating the update after each release is the open part), SBOM/
+   provenance, image signing/verification, compatibility matrix, upgrade
+   tests, migration framework, changelog generation, website/Wiki CI check.
 
-**Immediate next item when resuming:** 0.5's WCAG labels/errors review -
-smallest remaining scope in the closest-to-done open milestone.
+**Immediate next item when resuming:** 0.2's shared guided workflow
+abstraction (draft→preview→activate) - the next unchecked item in document
+order, now that the guided-zones frontend migration is done.
 
 ## Tracked editor follow-ups
 
