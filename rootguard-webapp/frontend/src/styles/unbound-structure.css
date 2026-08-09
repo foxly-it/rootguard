@@ -209,15 +209,21 @@
 
   .unbound-section-nav a {
     position: static;
-    width: auto;
-    /* Flex items default to min-width: auto, i.e. they refuse to shrink
-       below their content's intrinsic width - for a nowrap label that
-       means the *unclipped* text width, blowing the widget out past its
-       130px column regardless of the label's own overflow/ellipsis rules
-       below. Without this, longer German labels (e.g. "Hosts vom Router
-       importieren") pushed the widget wide enough to overlap the content
-       card next to it; only reproduced with real long labels, not the
-       shorter English ones used while first building this. */
+    /* min-width: 0 alone (kept below) only fixes the *label's* ellipsis
+       shrinking - it doesn't fix the anchor's own width. The anchor is
+       itself a nested flex container (icon + label row), and a flex item
+       that's also a flex container doesn't reliably get width-constrained
+       by the parent's align-items: stretch alone: its cross size can still
+       resolve from its own children's max-content width instead (measured
+       live at 204.609px - the unclipped width of the longest label, "Import
+       hosts from your router" - regardless of width: auto/min-width: 0 on
+       this element). That let every row, active or not, render past the
+       130px column and overhang the card. box-sizing: border-box +
+       an explicit width: 100% force the stretch outside-in instead of
+       leaving it to derive from content. */
+    width: 100%;
+    box-sizing: border-box;
+    align-self: stretch;
     min-width: 0;
     height: auto;
     padding: 6px 7px;
