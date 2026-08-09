@@ -23,10 +23,17 @@ var attestationPolicies = map[string]attestationPolicy{
 		repository:  "foxly-it/rootguard",
 		identity:    `^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$`,
 	},
+	// Stale until now: this still pointed at the archived, read-only
+	// per-component repo and its build.yml, both gone since the monorepo
+	// migration - webapp is published by release-alpha.yml in
+	// foxly-it/rootguard now, the same as core. A real, validly signed
+	// release image would have failed this policy's repository/workflow
+	// check, since cosign's actual certificate identity names the
+	// monorepo, not the archived repo this used to require.
 	"webapp": {
 		imagePrefix: "ghcr.io/foxly-it/rootguard-webapp",
-		repository:  "foxly-it/rootguard-webapp",
-		identity:    `^https://github\.com/foxly-it/rootguard-webapp/\.github/workflows/build\.yml@refs/(tags/v[^/]+|heads/main)$`,
+		repository:  "foxly-it/rootguard",
+		identity:    `^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$`,
 	},
 }
 

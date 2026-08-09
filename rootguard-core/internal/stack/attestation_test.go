@@ -44,6 +44,36 @@ func TestReleaseAttestationPinsSignerPolicy(t *testing.T) {
 	}
 }
 
+// TestReleaseAttestationPinsWebappSignerPolicy guards against the policy
+// silently drifting back to the archived per-component repo/workflow -
+// TestReleaseAttestationPinsSignerPolicy only ever exercised "core", so
+// webapp's stale policy (foxly-it/rootguard-webapp's build.yml, gone since
+// the monorepo migration) went unnoticed until reported live.
+func TestReleaseAttestationPinsWebappSignerPolicy(t *testing.T) {
+	resetAttestationCache()
+	var arguments []string
+	run := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "cosign" {
+			t.Fatalf("unexpected command %s", name)
+		}
+		arguments = args
+		return []byte(`{"verified":true}`), nil
+	}
+	status, checked := verifyReleaseAttestationWith(context.Background(), "webapp", "ghcr.io/foxly-it/rootguard-webapp:v1@sha256:abc", run, func() time.Time { return time.Unix(1, 0) })
+	joined := strings.Join(arguments, " ")
+	if status != "verified" || checked == "" {
+		t.Fatalf("unexpected verification result: %s %s", status, checked)
+	}
+	for _, expected := range []string{"--type https://slsa.dev/provenance/v1", "foxly-it/rootguard", "release-alpha"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("missing policy %q in %s", expected, joined)
+		}
+	}
+	if strings.Contains(joined, "rootguard-webapp/.github") {
+		t.Fatalf("policy still references the archived per-component repo: %s", joined)
+	}
+}
+
 func TestReleaseAttestationCachesResultByDigestReference(t *testing.T) {
 	resetAttestationCache()
 	calls := 0
