@@ -10,6 +10,17 @@ FROM ghcr.io/sigstore/cosign/cosign:v3.0.6@sha256:de9c65609e6bde17e6b48de485ee78
 
 FROM docker:29-cli
 
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG CREATED=unknown
+LABEL org.opencontainers.image.title="RootGuard Core" \
+      org.opencontainers.image.description="Privileged orchestration and configuration for RootGuard" \
+      org.opencontainers.image.source="https://github.com/foxly-it/rootguard" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.created="${CREATED}"
+
 RUN apk add --no-cache docker-cli-compose \
     && mkdir -p /var/lib/rootguard/unbound
 

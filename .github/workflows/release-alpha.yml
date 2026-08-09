@@ -105,6 +105,9 @@ jobs:
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
+      - name: Determine build timestamp
+        id: build-time
+        run: echo "value=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v7
         id: push
         if: steps.existing.outputs.exists != 'true'
@@ -118,6 +121,7 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ needs.version.outputs.value }}
+            org.opencontainers.image.created=${{ steps.build-time.outputs.value }}
           build-args: |
             VERSION=${{ needs.version.outputs.value }}
             COMMIT=${{ github.sha }}
