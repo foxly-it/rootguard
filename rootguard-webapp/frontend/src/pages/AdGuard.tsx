@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
-import { ArrowRight, Check, CheckCircle2, CircleAlert, ExternalLink, Filter, KeyRound, LockKeyhole, Network, RefreshCw, ShieldCheck } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, CircleAlert, ExternalLink, Filter, RefreshCw, ShieldCheck } from "lucide-react";
 import {
   bootstrapAdGuard,
   fetchAdGuardFilterReport,
   fetchAdGuardStatus,
   fetchInstallationStatus,
+  setAdGuardFiltering,
   type AdGuardFilterCheck,
   type AdGuardFilterReport,
   type AdGuardStatus,
@@ -27,6 +28,7 @@ export default function AdGuard() {
   const [testingFilters, setTestingFilters] = useState(false);
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [filterError, setFilterError] = useState("");
+  const [filteringBusy, setFilteringBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -84,6 +86,19 @@ export default function AdGuard() {
     void testFilters();
   }
 
+  async function toggleFiltering() {
+    if (filteringBusy || !status) return;
+    setFilteringBusy(true);
+    setError("");
+    try {
+      setStatus(await setAdGuardFiltering(!status.filtering_enabled));
+    } catch (cause) {
+      setError(errorMessage(cause, t("adguard.filteringToggleError")));
+    } finally {
+      setFilteringBusy(false);
+    }
+  }
+
   const ready = status?.configured && status.healthy && status.upstream_ready;
 
   return (
@@ -122,9 +137,15 @@ export default function AdGuard() {
           </div>
           <div className="adguard-status-list">
             <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} adguardHash="#settings" adguardHashLabel={t("adguard.openSettings")} />
-            <StatusRow label={t("adguard.service")} active={Boolean(status?.healthy)} activeText={t("adguard.reachable")} inactiveText={t("adguard.unreachable")} />
-            <StatusRow label={t("adguard.upstream")} active={Boolean(status?.upstream_ready)} activeText={t("adguard.validated")} inactiveText={t("adguard.pending")} />
             <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} adguardHash="#dns" adguardHashLabel={t("adguard.openDnsSettings")} />
+            <StatusRow
+              label={t("adguard.filterLists")}
+              active={Boolean(status?.filtering_enabled)}
+              activeText={t("adguard.filterListsActive", { active: status?.active_filter_lists ?? 0, total: status?.total_filter_lists ?? 0 })}
+              inactiveText={t("adguard.filterListsInactive")}
+              adguardHash="#filters"
+              adguardHashLabel={t("adguard.openFilterLists")}
+            />
           </div>
           <div className="adguard-upstream">
             <span>{t("adguard.activeUpstream")}</span>
@@ -158,6 +179,15 @@ export default function AdGuard() {
             <button className="rg-button rg-button-primary" type="button" disabled={testingFilters} onClick={openFilterTest}>
               <RefreshCw size={16} /> {t("adguard.filterTestRun")}
             </button>
+            {status && (
+              <label className="adguard-filtering-toggle">
+                <div>
+                  <strong>{t("adguard.filteringToggleLabel")}</strong>
+                  <small>{t("adguard.filteringToggleHelp")}</small>
+                </div>
+                <input type="checkbox" checked={status.filtering_enabled} disabled={filteringBusy} onChange={() => void toggleFiltering()} aria-label={t("adguard.filteringToggleLabel")} />
+              </label>
+            )}
           </section>
         ) : (
           <section className="adguard-panel adguard-filter-launcher unavailable">
@@ -170,17 +200,6 @@ export default function AdGuard() {
           </section>
         )}
       </div>
-
-      <section className="adguard-panel adguard-aio-panel">
-          <div className="adguard-panel-heading">
-            <div><span className="adguard-eyebrow">ROOTGUARD AIO</span><h2>{t("adguard.automatic")}</h2></div>
-          </div>
-          <div className="managed-steps">
-            <ManagedStep icon={<Network />} number="01" title={t("adguard.privateNetwork")} text={t("adguard.privateNetworkText")} />
-            <ManagedStep icon={<KeyRound />} number="02" title={t("adguard.credentials")} text={t("adguard.credentialsText")} />
-            <ManagedStep icon={<Filter />} number="03" title={t("adguard.secureUpstream")} text={t("adguard.secureUpstreamText")} />
-          </div>
-      </section>
 
       <ContentModal open={filterModalOpen} size="medium" title={t("adguard.filterTestTitle")} eyebrow={t("adguard.filterTestEyebrow")} closeLabel={t("common.close")} onClose={() => setFilterModalOpen(false)}>
         <div className="adguard-filter-modal">
@@ -210,14 +229,6 @@ export default function AdGuard() {
           )}
         </div>
       </ContentModal>
-
-      <section className="adguard-security-note">
-        <LockKeyhole size={20} />
-        <div>
-          <strong>{t("adguard.why")}</strong>
-          <p>{t("adguard.whyText")}</p>
-        </div>
-      </section>
     </div>
   );
 }
@@ -270,33 +281,17 @@ function StatusRow({ label, active, activeText, inactiveText, adguardHash, adgua
   return (
     <div>
       <span className={active ? "status-check active" : "status-check"}>{active ? <Check size={14} /> : "!"}</span>
-      <strong>
-        {label}
-        {adguardHash && (
-          <a className="adguard-contextual-link" href={`/adguard-ui/${adguardHash}`} target="_blank" rel="noreferrer" title={adguardHashLabel}>
-            <ExternalLink size={13} aria-hidden="true" />
-            <span className="sr-only">{adguardHashLabel}</span>
-          </a>
-        )}
-      </strong>
+      <strong>{label}</strong>
       <small>{active ? activeText : inactiveText}</small>
+      {adguardHash && (
+        <a className="adguard-contextual-button" href={`/adguard-ui/${adguardHash}`} target="_blank" rel="noreferrer">
+          {adguardHashLabel} <ExternalLink size={13} aria-hidden="true" />
+        </a>
+      )}
     </div>
   );
 }
 
-function ManagedStep({ icon, number, title, text }: {
-  icon: React.ReactNode;
-  number: string;
-  title: string;
-  text: string;
-}) {
-  return (
-    <article>
-      <span className="managed-step-icon">{icon}</span>
-      <div><small>{number}</small><strong>{title}</strong><p>{text}</p></div>
-    </article>
-  );
-}
 
 function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;

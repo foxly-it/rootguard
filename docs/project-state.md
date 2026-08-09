@@ -118,10 +118,14 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
 - WebApp text actions now share explicit primary, secondary, and destructive
   button variants across Dashboard, Setup, Stack, Unbound, and AdGuard while
   tabs, selectable cards, completion entries, and icon-only controls retain
-  their interaction-specific styling. The AdGuard overview prioritises the
-  persistent RootGuard AIO operating context; its on-demand local filter check
+  their interaction-specific styling. The AdGuard overview reduces its status
+  list to the three checks an operator actually acts on (configuration, DNS
+  baseline, active filter lists), each with a right-aligned button deep-linking
+  into the matching native AdGuard Home page; its on-demand local filter check
   opens immediately in a focused, scroll-safe dialog with progress, retry,
-  error, summary, and per-host results.
+  error, summary, and per-host results, and now also carries a master
+  filtering on/off toggle so disabling filtering doesn't require a separate
+  AdGuard admin session.
 - On-demand AdGuard filtering diagnostics use the local authenticated
   `check_host` API for advertising and tracking probes without opening test
   websites. Legitimate services and AMTSO/Wicar portals remain explicitly

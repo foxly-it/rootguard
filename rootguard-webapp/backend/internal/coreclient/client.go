@@ -256,6 +256,9 @@ type AdGuardStatus struct {
 	Blocked            uint64  `json:"blocked"`
 	AverageResponse    float64 `json:"average_response_seconds"`
 	BestPracticesReady bool    `json:"best_practices_ready"`
+	FilteringEnabled   bool    `json:"filtering_enabled"`
+	ActiveFilterLists  int     `json:"active_filter_lists"`
+	TotalFilterLists   int     `json:"total_filter_lists"`
 }
 
 type AdGuardFilterCheck struct {
@@ -530,6 +533,15 @@ func (c *Client) UnboundDirectives(ctx context.Context) ([]UnboundDirectiveRefer
 func (c *Client) AdGuardStatus(ctx context.Context) (AdGuardStatus, error) {
 	var result AdGuardStatus
 	err := c.do(ctx, http.MethodGet, "/api/adguard/status", nil, &result)
+	return result, err
+}
+
+func (c *Client) SetAdGuardFiltering(ctx context.Context, enabled bool) (AdGuardStatus, error) {
+	var result AdGuardStatus
+	body := struct {
+		Enabled bool `json:"enabled"`
+	}{Enabled: enabled}
+	err := c.do(ctx, http.MethodPost, "/api/adguard/filtering", body, &result)
 	return result, err
 }
 

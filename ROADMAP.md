@@ -391,6 +391,14 @@ Product boundary:
       general settings, DNS settings, and the blocklist page, placed next
       to the status rows and filter-test results they're each relevant to
       ([rootguard#150](https://github.com/foxly-it/rootguard/pull/150))
+- [x] Master filtering on/off toggle surfaced directly in RootGuard, next to
+      the Live-Filterprüfung diagnostic that exercises it - a deliberate,
+      explicit exception to the "AdGuard remains the primary interface"
+      boundary above, made so operators don't need a second admin surface
+      for the single most common toggle; every other filtering concern
+      (list management, allow/deny rules, per-client policy) still routes
+      through native AdGuard Home via the contextual links above
+      ([rootguard#155](https://github.com/foxly-it/rootguard/pull/155))
 - [x] Document backup and restore ownership for AdGuard configuration, work
       data, query history, and filter state (`docs/architecture.md`): the
       two dedicated volumes (`rootguard-adguard-config`,

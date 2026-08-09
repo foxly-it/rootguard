@@ -229,6 +229,63 @@ func TestBootstrapRejectsBrokenUpstream(t *testing.T) {
 	}
 }
 
+func TestSetFilteringTogglesAndPreservesInterval(t *testing.T) {
+	var mu sync.Mutex
+	enabled := true
+	var lastConfigBody map[string]any
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/control/filtering/status":
+			mu.Lock()
+			defer mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"enabled":  enabled,
+				"interval": 24,
+				"filters": []map[string]any{
+					{"enabled": true}, {"enabled": false},
+				},
+			})
+		case "/control/filtering/config":
+			if err := json.NewDecoder(r.Body).Decode(&lastConfigBody); err != nil {
+				t.Fatal(err)
+			}
+			mu.Lock()
+			enabled, _ = lastConfigBody["enabled"].(bool)
+			mu.Unlock()
+			w.WriteHeader(http.StatusOK)
+		case "/control/status":
+			_ = json.NewEncoder(w).Encode(map[string]any{})
+		case "/control/dns_info":
+			_ = json.NewEncoder(w).Encode(map[string]any{"upstream_dns": []string{}, "fallback_dns": []string{}})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	dir := t.TempDir()
+	if err := writeCredentials(dir+"/credentials.json", Credentials{Username: "rootguard", Password: "secret"}); err != nil {
+		t.Fatal(err)
+	}
+	manager := newTestManagerWithDir(handler, dir, t.TempDir())
+
+	status, err := manager.SetFiltering(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.FilteringEnabled {
+		t.Fatalf("expected filtering to be reported disabled after SetFiltering(false), got %+v", status)
+	}
+	if status.ActiveFilterLists != 1 || status.TotalFilterLists != 2 {
+		t.Fatalf("expected 1 of 2 filter lists active, got %+v", status)
+	}
+	if lastConfigBody["interval"].(float64) != 24 {
+		t.Fatalf("expected the existing interval (24) to be preserved, got %v", lastConfigBody["interval"])
+	}
+	if lastConfigBody["enabled"] != false {
+		t.Fatalf("expected enabled:false to be sent, got %v", lastConfigBody["enabled"])
+	}
+}
+
 func TestFilterReportClassifiesExpectedAndInformationalHosts(t *testing.T) {
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/control/filtering/check_host" {

@@ -295,6 +295,14 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleGetAdGuardFilterReport(w, r, core)
 	})
 
+	mux.HandleFunc("/api/adguard/filtering", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		api.HandleSetAdGuardFiltering(w, r, core)
+	})
+
 	mux.Handle("/adguard-ui/", core.AdGuardUIHandler())
 
 	// ==================================================
