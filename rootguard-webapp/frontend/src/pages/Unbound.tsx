@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
+  fetchUnboundPathDiagnostics,
   fetchUnboundDiagnosticLoggingStatus,
   fetchUnboundHistory,
   fetchUnboundAdvice,
@@ -49,6 +50,7 @@ export default function Unbound() {
   const [history, setHistory] = useState<UnboundHistoryEntry[]>([]);
   const [preview, setPreview] = useState<UnboundPreview | null>(null);
   const [diagnostics, setDiagnostics] = useState<UnboundDiagnosticReport | null>(null);
+  const [pathDiagnostics, setPathDiagnostics] = useState<UnboundDiagnosticReport | null>(null);
   const [diagnosticLogging, setDiagnosticLogging] = useState<UnboundDiagnosticLoggingStatus | null>(null);
   const [presets, setPresets] = useState<UnboundPreset[]>([]);
   const [advice, setAdvice] = useState<UnboundAdvice | null>(null);
@@ -234,6 +236,19 @@ export default function Unbound() {
     }
   }
 
+  async function runPathDiagnostics() {
+    if (busy) return;
+    setBusy(true);
+    clearFeedback();
+    try {
+      setPathDiagnostics(await fetchUnboundPathDiagnostics());
+    } catch (err) {
+      setError(errorMessage(err, t("unbound.pathDiagnosticError")));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function toggleDiagnosticLogging() {
     if (busy) return;
     setBusy(true);
@@ -310,6 +325,17 @@ export default function Unbound() {
             </button>
           </div>
           {diagnostics && <div className="diagnostic-results"><div className={`overall-status ${diagnostics.healthy ? "healthy" : "failed"}`}>{diagnostics.healthy ? t("unbound.allPassed") : t("unbound.someFailed")}</div>{diagnostics.checks.map((check) => <DiagnosticRow key={check.name} {...check} label={fieldLabel(check.name, t)} />)}<small className="timestamp">{t("unbound.checked", { date: formatDate(diagnostics.checked_at) })}</small></div>}
+        </section>
+        <section id="unbound-section-overview-path-diagnostics" className="glass-card compact overview-diagnostics" tabIndex={-1}>
+          <div>
+            <p className="unbound-eyebrow">{t("unbound.overviewHealth")}</p>
+            <h2>{t("unbound.pathDiagnostics")}</h2>
+            <p className="muted-copy">{t("unbound.pathDiagnosticsHelp")}</p>
+          </div>
+          <button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy} onClick={runPathDiagnostics}>
+            {busy ? t("unbound.wait") : t("unbound.diagnose")}
+          </button>
+          {pathDiagnostics && <div className="diagnostic-results"><div className={`overall-status ${pathDiagnostics.healthy ? "healthy" : "failed"}`}>{pathDiagnostics.healthy ? t("unbound.allPassed") : t("unbound.someFailed")}</div>{pathDiagnostics.checks.map((check) => <DiagnosticRow key={check.name} {...check} label={fieldLabel(check.name, t)} />)}<small className="timestamp">{t("unbound.checked", { date: formatDate(pathDiagnostics.checked_at) })}</small></div>}
         </section>
       </section>
 
@@ -665,7 +691,7 @@ function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolea
 }
 
 function fieldLabel(field: string, t: (key: string) => string) {
-  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", prefetch_key: t("unbound.prefetchKey"), aggressive_nsec: t("unbound.aggressiveNsec"), edns_buffer_size: t("unbound.ednsBufferSize"), log_verbosity: t("unbound.operationalLogging"), serve_expired: "Serve Expired", serve_expired_ttl: t("unbound.expiredTtl"), serve_expired_client_timeout: t("unbound.expiredTimeout"), cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC" };
+  const labels: Record<string, string> = { qname_minimisation: t("unbound.qname"), prefetch: "Prefetch", prefetch_key: t("unbound.prefetchKey"), aggressive_nsec: t("unbound.aggressiveNsec"), edns_buffer_size: t("unbound.ednsBufferSize"), log_verbosity: t("unbound.operationalLogging"), serve_expired: "Serve Expired", serve_expired_ttl: t("unbound.expiredTtl"), serve_expired_client_timeout: t("unbound.expiredTimeout"), cache_min_ttl: "Minimum TTL", cache_max_ttl: "Maximum TTL", threads: t("unbound.threads"), resource_profile: t("unbound.resourceProfile"), network_mode: t("network.title"), forward_zones: t("forward.title"), private_domains: t("private.title"), reverse_zones: t("private.reverseTitle"), configuration: t("unbound.field.configuration"), resolution: t("unbound.field.resolution"), dnssec: "DNSSEC", "adguard-resolution": t("unbound.field.adguardResolution"), "adguard-dnssec": t("unbound.field.adguardDnssec") };
   return labels[field] ?? field;
 }
 

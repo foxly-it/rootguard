@@ -89,6 +89,15 @@ func HandleUnboundDiagnostics(w http.ResponseWriter, r *http.Request, core *core
 	writeJSON(w, http.StatusOK, report)
 }
 
+func HandleUnboundPathDiagnostics(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	report, err := core.UnboundPathDiagnostics(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
 func HandleUnboundDiagnosticLoggingStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	status, err := core.UnboundDiagnosticLoggingStatus(r.Context())
 	if err != nil {

@@ -443,6 +443,15 @@ func (c *Client) UnboundDiagnostics(ctx context.Context) (UnboundDiagnosticRepor
 	return result, err
 }
 
+// UnboundPathDiagnostics reuses UnboundDiagnosticReport/UnboundDiagnosticCheck
+// - same shape, different checks (resolution and DNSSEC rejection through
+// AdGuard's own listener rather than Unbound's).
+func (c *Client) UnboundPathDiagnostics(ctx context.Context) (UnboundDiagnosticReport, error) {
+	var result UnboundDiagnosticReport
+	err := c.do(ctx, http.MethodGet, "/api/unbound/path-diagnostics", nil, &result)
+	return result, err
+}
+
 func (c *Client) UnboundDiagnosticLoggingStatus(ctx context.Context) (UnboundDiagnosticLoggingStatus, error) {
 	var result UnboundDiagnosticLoggingStatus
 	err := c.do(ctx, http.MethodGet, "/api/unbound/diagnostic-logging", nil, &result)

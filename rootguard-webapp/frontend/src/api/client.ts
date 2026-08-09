@@ -310,6 +310,10 @@ export async function fetchUnboundDiagnostics(): Promise<UnboundDiagnosticReport
   return request<UnboundDiagnosticReport>("/api/unbound/diagnostics");
 }
 
+export async function fetchUnboundPathDiagnostics(): Promise<UnboundDiagnosticReport> {
+  return request<UnboundDiagnosticReport>("/api/unbound/path-diagnostics");
+}
+
 export interface UnboundDiagnosticLoggingStatus {
   active: boolean;
   expires_at?: string;

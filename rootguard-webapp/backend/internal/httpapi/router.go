@@ -227,6 +227,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 	mux.HandleFunc("GET /api/unbound/diagnostics", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundDiagnostics(w, r, core)
 	})
+	mux.HandleFunc("GET /api/unbound/path-diagnostics", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleUnboundPathDiagnostics(w, r, core)
+	})
 	mux.HandleFunc("GET /api/unbound/diagnostic-logging", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundDiagnosticLoggingStatus(w, r, core)
 	})

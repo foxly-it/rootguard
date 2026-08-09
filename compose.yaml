@@ -31,6 +31,7 @@ services:
       ADGUARD_API_URL: http://rootguard-adguard:80
       ADGUARD_DATA_DIR: /var/lib/rootguard/adguard
       ADGUARD_UPSTREAM: 172.29.53.2:5335
+      ADGUARD_DNS_ADDRESS: rootguard-adguard:53
       ROOTGUARD_BLOCKPAGE_AUTH_DIR: /var/lib/rootguard/adguard-auth
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
