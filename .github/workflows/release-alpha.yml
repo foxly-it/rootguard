@@ -183,13 +183,16 @@ jobs:
           VERSION: ${{ needs.version.outputs.value }}
           OWNER: ${{ github.repository_owner }}
         run: |
+          set -euo pipefail
           for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound; do
             digest="$(cat "/tmp/digests/${image}.digest")"
+            test -n "$digest"
             sed -i -E "s#(ghcr\.io/${OWNER}/${image}:)[^@\"]+(@sha256:[0-9a-f]+)?#\1${VERSION}@${digest}#g" compose.alpha.yaml
           done
 
       - name: Commit updated pins
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet -- compose.alpha.yaml; then
