@@ -177,11 +177,14 @@
    dependency on its parent's own box height entirely. Below the breakpoint
    the horizontal, in-flow sticky bar above stays the only layout that
    reliably fits. Lives in that left gutter (positioned by JS in
-   Unbound.tsx, which centers it in the gutter's actual measured width)
-   rather than floating alone past the content's right edge - reads as part
-   of the navigation area instead of a lone rail in open space. Narrow by
-   design: sized, with padding+border, to leave a real margin either side
-   even at the breakpoint's low end, not just at wider viewports. */
+   Unbound.tsx, which centers it in the gutter's actual measured width, and
+   aligns its top edge with .unbound-tabs so it reads as belonging to that
+   navigation) rather than floating alone past the content's right edge.
+   150px, not the gutter's full 172px low-end width: German section labels
+   ("Resolver-Einstellungen", "RootGuard Advisor") still don't fully fit
+   even at this width and get ellipsis-truncated (full text is available via
+   the link's title attribute) - the remaining ~22px of slack at 1600px is
+   the deliberate margin, not more room to grow the column into. */
 @media (min-width: 1600px) {
   .unbound-section-nav {
     position: fixed;
@@ -190,7 +193,7 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    width: 130px;
+    width: 150px;
     margin: 0;
     padding: 8px;
     transform: none;
