@@ -133,6 +133,75 @@ jobs:
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
 
+      # Runs unconditionally, not just on a fresh push - steps.push.outputs.digest
+      # is only set when the build actually ran (see "Check for an immutable
+      # existing release image" above), so a re-run against an already-published
+      # version falls back to looking the digest up directly from the registry.
+      # compose.alpha.yaml's pins need a real digest either way.
+      - name: Record published digest
+        id: digest
+        if: matrix.component != 'blockpage'
+        env:
+          RELEASE_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.value }}
+        run: |
+          if [ -n "${{ steps.push.outputs.digest }}" ]; then
+            digest="${{ steps.push.outputs.digest }}"
+          else
+            digest="$(docker buildx imagetools inspect "$RELEASE_IMAGE" --format '{{.Manifest.Digest}}')"
+          fi
+          mkdir -p /tmp/digests
+          printf '%s' "$digest" > "/tmp/digests/${{ matrix.image }}.digest"
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.component != 'blockpage'
+        with:
+          name: digest-${{ matrix.component }}
+          path: /tmp/digests/${{ matrix.image }}.digest
+
+  # compose.alpha.yaml is the pinned, no-build public alpha model - its
+  # default image references need to track whatever publish just pushed, or
+  # every fresh clone silently keeps running the *previous* release's
+  # digests forever. blockpage is excluded: it isn't referenced in
+  # compose.alpha.yaml at all (Core provisions it dynamically), so there's
+  # nothing here to update for it.
+  update-alpha-pins:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: /tmp/digests
+          merge-multiple: true
+
+      - name: Update compose.alpha.yaml digest pins
+        env:
+          VERSION: ${{ needs.version.outputs.value }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound; do
+            digest="$(cat "/tmp/digests/${image}.digest")"
+            sed -i -E "s#(ghcr\.io/${OWNER}/${image}:)[^@\"]+(@sha256:[0-9a-f]+)?#\1${VERSION}@${digest}#g" compose.alpha.yaml
+          done
+
+      - name: Commit updated pins
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- compose.alpha.yaml; then
+            echo "compose.alpha.yaml already pins the published digests, nothing to commit"
+            exit 0
+          fi
+          git add compose.alpha.yaml
+          git commit -m "ci: pin compose.alpha.yaml to ${{ needs.version.outputs.value }} image digests [skip ci]"
+          git fetch origin main
+          git rebase origin/main
+          git push origin HEAD:main
+
   smoke-test:
     needs: [version, publish]
     runs-on: ubuntu-latest
