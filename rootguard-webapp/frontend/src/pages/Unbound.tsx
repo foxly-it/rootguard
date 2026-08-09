@@ -575,6 +575,15 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
       const widgetWidth = nav!.getBoundingClientRect().width;
       nav.style.left = `${Math.round(gutterStart + (gutterEnd - gutterStart - widgetWidth) / 2)}px`;
       nav.style.right = "auto";
+      // Align the top edge with .unbound-tabs (the main Overview/Resolver/...
+      // tab strip) instead of a fixed pixel guess below the app header -
+      // reads as belonging to that navigation rather than floating next to
+      // the hero above it, and stays correct regardless of how tall the
+      // hero card happens to be on a given page state.
+      const tabs = document.querySelector<HTMLElement>(".unbound-tabs");
+      if (tabs) {
+        nav.style.top = `${Math.round(tabs.getBoundingClientRect().top)}px`;
+      }
     }
 
     position();
@@ -582,6 +591,8 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
     const observer = new ResizeObserver(position);
     observer.observe(page);
     observer.observe(sidebar);
+    const tabs = document.querySelector<HTMLElement>(".unbound-tabs");
+    if (tabs) observer.observe(tabs);
     return () => {
       window.removeEventListener("resize", position);
       observer.disconnect();
@@ -658,6 +669,7 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
           key={entry.id}
           href={`#${entry.id}`}
           className={activeId === entry.id ? "active" : ""}
+          title={entry.label}
           onClick={(event) => { event.preventDefault(); jumpToSection(entry.id); setActiveId(entry.id); }}
         >
           {entry.icon}
