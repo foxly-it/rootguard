@@ -1,14 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronRight, CirclePlus, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, CirclePlus, MapPin, Pencil, Plus, Trash2 } from "lucide-react";
 import {
-  fetchUnboundSettings,
-  previewUnboundSettings,
-  updateUnboundSettings,
   type UnboundLocalHost,
   type UnboundLocalZone,
-  type UnboundPreview,
-  type UnboundSettings,
 } from "../api/client";
+import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftWorkflow";
+import GuidedFlowSteps from "./GuidedFlowSteps";
 import "../styles/unbound-guided.css";
 import { useI18n } from "../i18n";
 
@@ -39,37 +36,30 @@ export default function UnboundGuidedZones({
   onActivated: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [source, setSource] = useState<UnboundSettings | null>(null);
   const [zones, setZones] = useState<UnboundLocalZone[]>([]);
   const [draft, setDraft] = useState<DraftZone>(emptyZone);
   const [editing, setEditing] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<UnboundPreview | null>(null);
-  const [candidate, setCandidate] = useState<UnboundSettings | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    const settings = await fetchUnboundSettings();
-    setSource(settings);
-    setZones(structuredClone(settings.local_zones ?? []));
-    setPreview(null);
-    setCandidate(null);
-    setError("");
-  }, []);
-
-  useEffect(() => {
-    load().catch((cause: unknown) => setError(errorMessage(cause, t("zones.loadError"))));
-  }, [load, t, version]);
+  const workflow = useUnboundDraftWorkflow({
+    version,
+    onActivated,
+    loadErrorMessage: t("zones.loadError"),
+    concurrentMessage: t("zones.concurrent"),
+    previewRejectedMessage: t("zones.previewRejected"),
+    confirmActivateMessage: t("zones.confirmActivate"),
+    activateErrorMessage: t("zones.activateError"),
+    sameSettings: (a, b) => JSON.stringify(a.local_zones ?? []) === JSON.stringify(b.local_zones ?? []),
+    onLoad: (settings) => setZones(structuredClone(settings.local_zones ?? [])),
+  });
 
   const dirty = useMemo(
-    () => source !== null && JSON.stringify(zones) !== JSON.stringify(source.local_zones ?? []),
-    [zones, source],
+    () => workflow.source !== null && JSON.stringify(zones) !== JSON.stringify(workflow.source.local_zones ?? []),
+    [zones, workflow.source],
   );
 
   function saveDraft() {
-    setError("");
+    workflow.setError("");
     try {
       const normalized = normalizeDraftZone(draft, t);
       const duplicate = zones.some((zone, index) => zone.name === normalized.name && index !== editing);
@@ -82,11 +72,10 @@ export default function UnboundGuidedZones({
       setDraft(emptyZone());
       setEditing(null);
       setOpen(false);
-      setPreview(null);
-      setCandidate(null);
-      setMessage(t("zones.draftAdded"));
+      workflow.resetPreview();
+      workflow.setMessage(t("zones.draftAdded"));
     } catch (cause) {
-      setError(errorMessage(cause, t("zones.invalid")));
+      workflow.setError(errorMessage(cause, t("zones.invalid")));
     }
   }
 
@@ -98,18 +87,16 @@ export default function UnboundGuidedZones({
     });
     setEditing(index);
     setOpen(true);
-    setPreview(null);
-    setCandidate(null);
-    setMessage("");
-    setError("");
+    workflow.resetPreview();
+    workflow.setMessage("");
+    workflow.setError("");
   }
 
   function removeZone(index: number) {
     if (!window.confirm(t("zones.confirmRemove", { name: zones[index].name }))) return;
     setZones((current) => current.filter((_, zoneIndex) => zoneIndex !== index));
-    setPreview(null);
-    setCandidate(null);
-    setMessage(t("zones.removed"));
+    workflow.resetPreview();
+    workflow.setMessage(t("zones.removed"));
   }
 
   function updateHost(index: number, patch: Partial<DraftHost>) {
@@ -120,44 +107,12 @@ export default function UnboundGuidedZones({
   }
 
   async function createPreview() {
-    if (!source || busy) return;
-    setBusy(true);
-    setMessage("");
-    setError("");
-    try {
-      const active = await fetchUnboundSettings();
-      if (!sameZones(active.local_zones, source.local_zones)) throw new Error(t("zones.concurrent"));
-      const proposed = { ...active, local_zones: zones };
-      const result = await previewUnboundSettings(proposed);
-      setCandidate(proposed);
-      setPreview(result);
-      setMessage(t("zones.previewAccepted"));
-    } catch (cause) {
-      setPreview(null);
-      setCandidate(null);
-      setError(errorMessage(cause, t("zones.previewRejected")));
-    } finally {
-      setBusy(false);
-    }
+    const result = await workflow.createPreview((active) => ({ ...active, local_zones: zones }));
+    if (result) workflow.setMessage(t("zones.previewAccepted"));
   }
 
   async function activate() {
-    if (!source || !candidate || !preview?.changed || busy) return;
-    if (!window.confirm(t("zones.confirmActivate"))) return;
-    setBusy(true);
-    setError("");
-    try {
-      const active = await fetchUnboundSettings();
-      if (!sameZones(active.local_zones, source.local_zones)) throw new Error(t("zones.concurrent"));
-      await updateUnboundSettings(candidate);
-      await onActivated();
-      await load();
-      setMessage(t("zones.activated"));
-    } catch (cause) {
-      setError(errorMessage(cause, t("zones.activateError")));
-    } finally {
-      setBusy(false);
-    }
+    if (await workflow.activate()) workflow.setMessage(t("zones.activated"));
   }
 
   return (
@@ -168,26 +123,24 @@ export default function UnboundGuidedZones({
           <h2>{t("zones.title")}</h2>
           <p className="muted-copy">{t("zones.intro")}</p>
         </div>
-        <button className="rg-button rg-button-secondary secondary-action" type="button" disabled={busy} onClick={() => {
+        <button className="rg-button rg-button-secondary secondary-action" type="button" disabled={workflow.busy} onClick={() => {
           setDraft(emptyZone());
           setEditing(null);
           setOpen(!open);
-          setError("");
+          workflow.setError("");
         }}>
           <Plus size={15} /> {open ? t("zones.close") : t("zones.add")}
         </button>
       </div>
 
-      <div className="guided-flow">
-        <FlowStep number="1" label={t("zones.step1")} active={open} />
-        <ChevronRight size={16} />
-        <FlowStep number="2" label={t("zones.step2")} active={Boolean(preview)} />
-        <ChevronRight size={16} />
-        <FlowStep number="3" label={t("zones.step3")} active={false} />
-      </div>
+      <GuidedFlowSteps steps={[
+        { label: t("zones.step1"), active: !workflow.preview },
+        { label: t("zones.step2"), active: Boolean(workflow.preview) },
+        { label: t("zones.step3"), active: false },
+      ]} />
 
-      {message && <div className="feedback success">{message}</div>}
-      {error && <div className="feedback error" role="alert">{error}</div>}
+      {workflow.message && <div className="feedback success">{workflow.message}</div>}
+      {workflow.error && <div className="feedback error" role="alert">{workflow.error}</div>}
 
       {open && (
         <div className="zone-wizard">
@@ -234,26 +187,22 @@ export default function UnboundGuidedZones({
       {dirty && !open && (
         <div className="guided-review">
           <div><strong>{t("zones.draftReady")}</strong><small>{t("zones.notActive")}</small></div>
-          <button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={createPreview}>{busy ? t("zones.validating") : t("zones.validate")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={workflow.busy} onClick={createPreview}>{workflow.busy ? t("zones.validating") : t("zones.validate")}</button>
         </div>
       )}
 
-      {preview && (
+      {workflow.preview && (
         <div className="guided-preview" aria-live="polite">
           <div className="guided-preview-state"><Check size={16} /><strong>{t("zones.valid")}</strong></div>
           <details open>
             <summary>{t("zones.showGenerated")}</summary>
-            <pre tabIndex={0} aria-label={t("zones.showGenerated")}>{localZoneSection(preview.rendered_config)}</pre>
+            <pre tabIndex={0} aria-label={t("zones.showGenerated")}>{localZoneSection(workflow.preview.rendered_config)}</pre>
           </details>
-          <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("zones.activating") : preview.changed ? t("zones.activate") : t("zones.alreadyActive")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={workflow.busy || !workflow.preview.changed} onClick={activate}>{workflow.busy ? t("zones.activating") : workflow.preview.changed ? t("zones.activate") : t("zones.alreadyActive")}</button>
         </div>
       )}
     </section>
   );
-}
-
-function FlowStep({ number, label, active }: { number: string; label: string; active: boolean }) {
-  return <span className={active ? "active" : ""}><i>{number}</i>{label}</span>;
 }
 
 function normalizeDraftZone(zone: DraftZone, t: (key: string, values?: Record<string, string | number>) => string): UnboundLocalZone {
@@ -313,10 +262,6 @@ function validIPv6(value: string) {
   return value.includes(":") && /^[0-9a-f:]+$/i.test(value) && value.length <= 45;
 }
 
-function sameZones(left?: UnboundLocalZone[], right?: UnboundLocalZone[]): boolean {
-  return JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
-}
-
 function localZoneSection(config: string): string {
   const lines = config.split("\n").filter((line) =>
     line.includes("# Local host inventory:") ||
@@ -325,8 +270,4 @@ function localZoneSection(config: string): string {
     line.trimStart().startsWith("local-data-ptr:"),
   );
   return lines.length > 0 ? `server:\n${lines.join("\n")}` : "# No local-zone directives.";
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
 }

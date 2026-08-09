@@ -345,15 +345,24 @@ The detailed ownership and directive plan lives in
       the same allowlisted five-service inventory; a healthy full stack now
       shows `5 / 5` instead of a stale `5 / 2`
       ([rootguard-webapp#50](https://github.com/foxly-it/rootguard-webapp/pull/50))
-- [ ] Shared guided workflow: draft → explanation → preview → validate → activate -
-      the workflow itself is already the de-facto standard, independently
-      implemented in five places (main settings, guided zones, private
-      domains, forward zones, router import), each with its own
-      preview/activate pair and local busy/message/error state; only guided
-      zones shows a visible step indicator. What's actually missing is the
-      shared abstraction (no `hooks/` directory, no extracted component) and
-      a consistent step indicator across all five - not the workflow
-      behaviour itself
+- [x] Shared guided workflow: draft → explanation → preview → validate → activate -
+      extracted `useUnboundDraftWorkflow` (`rootguard-webapp/frontend/src/
+      hooks/`) and a shared `GuidedFlowSteps` component, and migrated guided
+      zones, router import, private domains, and forward zones onto both -
+      four of the five places this pattern was independently implemented.
+      The hook owns the fetch/reload lifecycle, the concurrency-checked
+      preview/activate calls, and busy/message/error state, while staying
+      generic over what each consumer edits: a pluggable comparator handles
+      private domains' and forward zones' whole-object concurrency check
+      vs. guided zones' and router import's field-scoped one, and an
+      `onPreviewStart` hook point preserves forward zones' parallel
+      reachability probe. All four now show the same step indicator that
+      previously only guided zones had. The main settings form (the fifth
+      place) is deliberately not migrated - it edits the whole settings
+      object as its own draft with no separate source/candidate/concurrency
+      check or confirm-before-activate step, a genuinely different shape
+      that would have forced the abstraction rather than fit it
+      ([rootguard#168](https://github.com/foxly-it/rootguard/pull/168))
 - [x] Add a fullscreen mode to the expert configuration editor, and show the
       immutable base configuration's already-active directives inline
       (greyed out, read-only) instead of only in a separate popup, so expert

@@ -727,13 +727,16 @@ Entwicklung" without re-deriving what's next.
 
 Milestone completion snapshot:
 
-- **0.2 Unbound administration** - 6 items open, in top-to-bottom roadmap
-  order: shared draft→preview→activate workflow abstraction, cross-setting
-  conflict detection (cross-zone hostname uniqueness, access rules), resolver
-  config import/export, hand-written `unbound.conf` import, scenario tests,
-  and host-discovery beyond the FRITZ!Box adapter. The guided-zones frontend
-  migration ([#131](https://github.com/foxly-it/rootguard/issues/131)) and
-  the read-only fixed-base display are both done now.
+- **0.2 Unbound administration** - 5 items open, in top-to-bottom roadmap
+  order: cross-setting conflict detection (cross-zone hostname uniqueness,
+  access rules), resolver config import/export, hand-written `unbound.conf`
+  import, scenario tests, and host-discovery beyond the FRITZ!Box adapter.
+  The guided-zones frontend migration
+  ([#131](https://github.com/foxly-it/rootguard/issues/131)), the read-only
+  fixed-base display, and the shared draft→preview→activate workflow
+  abstraction (`useUnboundDraftWorkflow`, migrated onto by four of the five
+  places that pattern existed - main settings stays separate, a genuinely
+  different shape) are all done now.
 - **0.3 AdGuard integration** - **complete**. The last item, cross-service
   Client → AdGuard → Unbound → DNSSEC diagnostics, landed as a second "Path
   diagnostics" card on the Unbound Overview tab
@@ -762,11 +765,11 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.2 Unbound administration** (current) - work the remaining 6 items in
-   the order they appear in `ROADMAP.md`: shared draft→preview→activate
-   workflow abstraction, conflict detection (cross-zone hostname uniqueness,
-   access rules), resolver config import/export, hand-written `unbound.conf`
-   import, scenario tests, then host-discovery beyond FRITZ!Box.
+1. **0.2 Unbound administration** (current) - work the remaining 5 items in
+   the order they appear in `ROADMAP.md`: conflict detection (cross-zone
+   hostname uniqueness, access rules), resolver config import/export,
+   hand-written `unbound.conf` import, scenario tests, then host-discovery
+   beyond FRITZ!Box.
 2. **0.4 operations/backup/recovery** - the whole milestone is still open,
    in document order: configurable retention, manual cleanup preview,
    encrypted export, full restore, pre-update snapshot verification,
@@ -780,9 +783,11 @@ previously recommended. 0.1 and 0.3 are fully closed, so the order is:
    provenance, image signing/verification, compatibility matrix, upgrade
    tests, migration framework, changelog generation, website/Wiki CI check.
 
-**Immediate next item when resuming:** 0.2's shared guided workflow
-abstraction (draft→preview→activate) - the next unchecked item in document
-order, now that the guided-zones frontend migration is done.
+**Immediate next item when resuming:** 0.2's conflict detection - the next
+unchecked item in document order, now that the shared guided workflow
+abstraction is done. Cross-zone hostname uniqueness (currently only scoped
+within a single zone, see `settings.go`'s `validateLocalHost`) and a guided
+surface for access rules (currently expert-only) are the two concrete gaps.
 
 ## Tracked editor follow-ups
 
