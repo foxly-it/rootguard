@@ -293,6 +293,11 @@
 .overview-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.75fr);
+  /* Without this, grid's default stretch forces the shorter flow-diagram
+     card to match the taller five-service list card's height, leaving a
+     visible empty band inside its own border at the bottom - fit-content
+     the row instead so each card sizes to what it actually contains. */
+  align-items: start;
   gap: 18px;
   margin-top: 18px;
 }
