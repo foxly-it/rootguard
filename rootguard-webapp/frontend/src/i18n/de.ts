@@ -647,6 +647,7 @@ export const de: LocaleDefinition = {
     "zones.validation.zoneName": "Bitte einen gültigen DNS-Zonennamen wie home.arpa eintragen.",
     "zones.validation.duplicateZone": "Die Zone {name} ist bereits vorhanden.",
     "zones.validation.duplicateHostname": "Der Host {name} ist in dieser Zone bereits vorhanden.",
+    "zones.validation.duplicateHostnameZone": "Der Host {name} wird bereits in einer anderen Zone verwendet.",
     "zones.validation.addressRequired": "{name}: Bitte mindestens eine IPv4- oder IPv6-Adresse eintragen.",
     "zones.validation.ipv4": "{name}: Bitte eine gültige IPv4-Adresse eintragen.",
     "zones.validation.ipv6": "{name}: Bitte eine gültige IPv6-Adresse eintragen.",

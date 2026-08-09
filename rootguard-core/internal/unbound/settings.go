@@ -288,6 +288,7 @@ func validateLocalZones(zones []LocalZone) error {
 	names := make(map[string]struct{}, len(zones))
 	totalHosts := 0
 	ptrAddresses := make(map[netip.Addr]struct{})
+	hostnames := make(map[string]struct{})
 	for zoneIndex, zone := range zones {
 		if err := validateCanonicalZoneName(zone.Name); err != nil {
 			return fmt.Errorf("%w: local_zones[%d].name: %v", ErrInvalidSettings, zoneIndex, err)
@@ -303,7 +304,6 @@ func validateLocalZones(zones []LocalZone) error {
 		if totalHosts > maxLocalHostsTotal {
 			return fmt.Errorf("%w: local_zones must contain at most %d total hosts", ErrInvalidSettings, maxLocalHostsTotal)
 		}
-		hostnames := make(map[string]struct{}, len(zone.Hosts))
 		for hostIndex, host := range zone.Hosts {
 			if err := validateLocalHost(host, hostnames, ptrAddresses); err != nil {
 				return fmt.Errorf("%w: local_zones[%d].hosts[%d].%v", ErrInvalidSettings, zoneIndex, hostIndex, err)

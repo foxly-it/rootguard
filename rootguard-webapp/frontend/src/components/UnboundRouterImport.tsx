@@ -108,7 +108,7 @@ export default function UnboundRouterImport({
         + selected.length;
       if (totalAfter > maxHostsPerImport) throw new Error(t("routerImport.tooManyHosts", { count: maxHostsPerImport }));
 
-      const existingHostnames = new Set(existingIndex >= 0 ? zones[existingIndex].hosts.map((host) => host.hostname) : []);
+      const existingHostnames = new Set(zones.flatMap((zone) => zone.hosts.map((host) => host.hostname)));
       const seen = new Set<string>();
       const newHosts: UnboundLocalHost[] = [];
       for (const draft of selected) {
