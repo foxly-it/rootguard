@@ -8,13 +8,15 @@ FROM ${NGINX_IMAGE}
 
 ARG VERSION=dev
 ARG COMMIT=unknown
+ARG CREATED=unknown
 
 LABEL org.opencontainers.image.title="RootGuard Blockpage" \
       org.opencontainers.image.description="RootGuard-branded landing page for AdGuard Home's custom IP for blocked hosts" \
       org.opencontainers.image.source="https://github.com/foxly-it/rootguard" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.version="${VERSION}" \
-      org.opencontainers.image.revision="${COMMIT}"
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.created="${CREATED}"
 
 RUN rm -f /etc/nginx/conf.d/default.conf
 # Deliberately NOT under /etc/nginx/templates/: the stock image's own

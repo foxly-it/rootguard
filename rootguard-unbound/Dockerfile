@@ -58,12 +58,20 @@ FROM ${DEBIAN_IMAGE}
 ARG UNBOUND_VERSION
 ARG UNBOUND_SHA256
 ARG DEBIAN_FRONTEND=noninteractive
+# COMMIT/CREATED default to a placeholder for local `docker build` (the
+# release pipeline always passes real values) rather than staying unset -
+# an empty label reads as "field missing" to the Stack Center's metadata
+# completeness check the same way an absent one does.
+ARG COMMIT=unknown
+ARG CREATED=unknown
 
 LABEL org.opencontainers.image.title="RootGuard Unbound" \
       org.opencontainers.image.description="DNSSEC-validating Unbound resolver built reproducibly from verified upstream source" \
-      org.opencontainers.image.source="https://github.com/foxly-it/rootguard-unbound" \
+      org.opencontainers.image.source="https://github.com/foxly-it/rootguard" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.version="${UNBOUND_VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}" \
+      org.opencontainers.image.created="${CREATED}" \
       io.rootguard.unbound.source="https://nlnetlabs.nl/downloads/unbound/unbound-${UNBOUND_VERSION}.tar.gz" \
       io.rootguard.unbound.source.sha256="${UNBOUND_SHA256}" \
       io.rootguard.base.digest="sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd"
