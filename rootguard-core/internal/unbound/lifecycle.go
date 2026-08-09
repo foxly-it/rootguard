@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
@@ -248,8 +249,10 @@ func (m *Manager) diagnosticCommand(ctx context.Context, name string, args ...st
 	return DiagnosticCheck{Name: name, Passed: err == nil, Detail: detail}
 }
 
+const digTimeout = "+time=5"
+
 func (m *Manager) diagnosticResolution(ctx context.Context) DiagnosticCheck {
-	check := m.diagnosticCommand(ctx, "resolution", "dig", "+short", "+time=5", "+tries=1", "@127.0.0.1", "-p", "5335", "example.com", "A")
+	check := m.diagnosticCommand(ctx, "resolution", "dig", "+short", digTimeout, "+tries=1", "@127.0.0.1", "-p", "5335", "example.com", "A")
 	check.Passed = check.Passed && strings.TrimSpace(check.Detail) != "" && check.Detail != "OK"
 	if !check.Passed && check.Detail == "OK" {
 		check.Detail = "resolver returned no address"
@@ -258,10 +261,58 @@ func (m *Manager) diagnosticResolution(ctx context.Context) DiagnosticCheck {
 }
 
 func (m *Manager) diagnosticDNSSEC(ctx context.Context) DiagnosticCheck {
-	check := m.diagnosticCommand(ctx, "dnssec", "dig", "+dnssec", "+time=5", "+tries=1", "@127.0.0.1", "-p", "5335", "dnssec-failed.org", "A")
+	check := m.diagnosticCommand(ctx, "dnssec", "dig", "+dnssec", digTimeout, "+tries=1", "@127.0.0.1", "-p", "5335", "dnssec-failed.org", "A")
 	check.Passed = check.Passed && strings.Contains(check.Detail, "status: SERVFAIL")
 	if !check.Passed && !strings.Contains(check.Detail, "SERVFAIL") {
 		check.Detail = "invalid DNSSEC response was not rejected: " + check.Detail
+	}
+	return check
+}
+
+// DiagnosePath verifies the DNS path a real client actually uses - through
+// AdGuard's own listener, not Unbound's - resolves and rejects invalid
+// DNSSEC the same way Diagnose verifies Unbound's own port in isolation.
+// Both checks still run as dig inside rootguard-unbound: it's the only
+// container in the stack with both DNS tooling and network line-of-sight to
+// AdGuard, and Core itself has no DNS client of its own (see adguard.Manager,
+// which only ever speaks AdGuard's HTTP control API). Querying AdGuard's
+// container-internal port 53 directly, not the host-published bind address,
+// keeps this a control-plane health check independent of whatever DNS port
+// the operator configured for their LAN.
+func (m *Manager) DiagnosePath(ctx context.Context, adguardAddress string) DiagnosticReport {
+	checks := []DiagnosticCheck{
+		m.diagnosticPathResolution(ctx, adguardAddress),
+		m.diagnosticPathDNSSEC(ctx, adguardAddress),
+	}
+	healthy := true
+	for _, check := range checks {
+		healthy = healthy && check.Passed
+	}
+	return DiagnosticReport{Healthy: healthy, CheckedAt: m.now().UTC(), Checks: checks}
+}
+
+func (m *Manager) diagnosticPathResolution(ctx context.Context, adguardAddress string) DiagnosticCheck {
+	host, port, err := net.SplitHostPort(adguardAddress)
+	if err != nil {
+		return DiagnosticCheck{Name: "adguard-resolution", Passed: false, Detail: fmt.Sprintf("invalid AdGuard DNS address %q: %v", adguardAddress, err)}
+	}
+	check := m.diagnosticCommand(ctx, "adguard-resolution", "dig", "+short", digTimeout, "+tries=2", "@"+host, "-p", port, "example.com", "A")
+	check.Passed = check.Passed && strings.TrimSpace(check.Detail) != "" && check.Detail != "OK"
+	if !check.Passed && check.Detail == "OK" {
+		check.Detail = "AdGuard returned no address"
+	}
+	return check
+}
+
+func (m *Manager) diagnosticPathDNSSEC(ctx context.Context, adguardAddress string) DiagnosticCheck {
+	host, port, err := net.SplitHostPort(adguardAddress)
+	if err != nil {
+		return DiagnosticCheck{Name: "adguard-dnssec", Passed: false, Detail: fmt.Sprintf("invalid AdGuard DNS address %q: %v", adguardAddress, err)}
+	}
+	check := m.diagnosticCommand(ctx, "adguard-dnssec", "dig", "+dnssec", digTimeout, "+tries=2", "@"+host, "-p", port, "dnssec-failed.org", "A")
+	check.Passed = check.Passed && strings.Contains(check.Detail, "status: SERVFAIL")
+	if !check.Passed && !strings.Contains(check.Detail, "SERVFAIL") {
+		check.Detail = "invalid DNSSEC response was not rejected via AdGuard: " + check.Detail
 	}
 	return check
 }

@@ -723,13 +723,16 @@ Milestone completion snapshot:
   draft→preview→activate workflow generalisation, cross-setting conflict
   detection, resolver config import/export, hand-written `unbound.conf`
   import, and scenario tests.
-- **0.3 AdGuard integration** - 1 item open: cross-service Client → AdGuard
-  → Unbound → DNSSEC diagnostics, blocked on verifying the AdGuard/Unbound
-  container network topology first. Compatibility tests against both
-  supported AdGuard channels (stable, beta) landed as `ci-adguard-compat.yml`
-  ([rootguard#158](https://github.com/foxly-it/rootguard/pull/158));
-  everything else in 0.3, including the blockpage's real per-request block
-  reason, is delivered.
+- **0.3 AdGuard integration** - **complete**. The last item, cross-service
+  Client → AdGuard → Unbound → DNSSEC diagnostics, landed as a second "Path
+  diagnostics" card on the Unbound Overview tab
+  ([rootguard#160](https://github.com/foxly-it/rootguard/pull/160)): AdGuard
+  has no static IP but is reachable by container name (`rootguard-adguard`)
+  on the `rootguard-dns` network, and only `rootguard-unbound`'s own
+  container has both DNS tooling and network line-of-sight to it, so the
+  check reuses that container the same way Unbound's own resolution/DNSSEC
+  checks already do - just targeting `rootguard-adguard:53` instead of
+  Unbound's own port.
 - **0.4 operations/backup/recovery** - barely started, 7 of 9 items open:
   configurable retention, manual cleanup preview, encrypted export, full
   restore into a clean install, pre-update snapshot/restore verification,
@@ -747,31 +750,28 @@ Milestone completion snapshot:
 Recommended next sequence (closest-to-done first, so 0.1-0.5 gates keep
 closing before 0.6's release-engineering surface opens):
 
-1. **Close 0.3** - one item left. Verify the AdGuard↔Unbound container
-   network topology, then build cross-service Client → AdGuard → Unbound →
-   DNSSEC diagnostics on top of it.
-2. **Close 0.5** - WCAG labels/errors review, the full keyboard/screen-reader
-   workflow audit, then destructive-action rate limits/audit (Unbound
-   activation, service updates/rollbacks, AdGuard bootstrap).
-3. **0.2's remaining substance** - the largest pre-beta product surface, and
+1. **Close 0.5** - one milestone left with open items closest to done: WCAG
+   labels/errors review, the full keyboard/screen-reader workflow audit,
+   then destructive-action rate limits/audit (Unbound activation, service
+   updates/rollbacks, AdGuard bootstrap).
+2. **0.2's remaining substance** - the largest pre-beta product surface, and
    partially in flight already. Guided-zones frontend migration (#131) first,
    since the router-import UI and typed backend model already assume it;
    then fixed-base display, the shared workflow generalisation, conflict
    detection, import/export, `unbound.conf` import, scenario tests, and
    additional host-discovery adapters.
-4. **0.4 backup/recovery** - the whole milestone is still open, and beta
+3. **0.4 backup/recovery** - the whole milestone is still open, and beta
    shouldn't ship without a tested restore path. Retention and cleanup
    preview first (builds directly on the shipped cleanup-safety work), then
    encrypted export, full restore, pre-update snapshot verification,
    power-loss tests, and the DR runbook.
-5. **0.6 release engineering** - start once 0.2-0.5 are closed. Versioning
-   automation and signed multi-arch manifests first, since later 0.6 items
-   (compatibility matrix, upgrade tests, migration framework) depend on them
-   existing.
+4. **0.6 release engineering** - start once 0.2/0.4/0.5 are closed (0.3 is
+   already done). Versioning automation and signed multi-arch manifests
+   first, since later 0.6 items (compatibility matrix, upgrade tests,
+   migration framework) depend on them existing.
 
-**Immediate next item when resuming:** verify the AdGuard↔Unbound container
-network topology, then implement 0.3's cross-service Client → AdGuard →
-Unbound → DNSSEC diagnostics on top of it - the last item in 0.3.
+**Immediate next item when resuming:** 0.5's WCAG labels/errors review -
+smallest remaining scope in the closest-to-done open milestone.
 
 ## Tracked editor follow-ups
 

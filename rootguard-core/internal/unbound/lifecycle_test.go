@@ -180,6 +180,48 @@ func TestDiagnosticsChecksConfigurationResolutionAndDNSSEC(t *testing.T) {
 	}
 }
 
+func TestDiagnosePathChecksResolutionAndDNSSECThroughAdGuard(t *testing.T) {
+	manager := newTestManager(t)
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		if !strings.Contains(joined, "@rootguard-adguard") || !strings.Contains(joined, "-p 53") {
+			t.Fatalf("expected the check to target AdGuard's container address, got: %s", joined)
+		}
+		switch {
+		case strings.Contains(joined, "example.com"):
+			return []byte("93.184.216.34\n"), nil
+		case strings.Contains(joined, "dnssec-failed.org"):
+			return []byte(";; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 1"), nil
+		default:
+			return nil, errors.New("unexpected command")
+		}
+	}
+	report := manager.DiagnosePath(context.Background(), "rootguard-adguard:53")
+	if !report.Healthy || len(report.Checks) != 2 {
+		t.Fatalf("unexpected path diagnostic report: %+v", report)
+	}
+	if report.Checks[0].Name != "adguard-resolution" || report.Checks[1].Name != "adguard-dnssec" {
+		t.Fatalf("unexpected check names: %+v", report.Checks)
+	}
+}
+
+func TestDiagnosePathFailsOpenOnInvalidAddress(t *testing.T) {
+	manager := newTestManager(t)
+	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+		t.Fatal("dig should not run for an unparsable address")
+		return nil, nil
+	}
+	report := manager.DiagnosePath(context.Background(), "not-a-valid-address")
+	if report.Healthy {
+		t.Fatalf("expected an unhealthy report for an invalid address, got: %+v", report)
+	}
+	for _, check := range report.Checks {
+		if check.Passed {
+			t.Fatalf("expected every check to fail closed: %+v", check)
+		}
+	}
+}
+
 func TestRestoreRejectsTraversal(t *testing.T) {
 	manager := newTestManager(t)
 	if _, err := manager.Restore(context.Background(), "../settings"); !errors.Is(err, ErrVersionNotFound) {

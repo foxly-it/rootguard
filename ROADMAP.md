@@ -380,11 +380,17 @@ Product boundary:
       protected upstream, and gateway reachability were already shown in
       the AdGuard status panel; AdGuard's own reported version (previously
       discarded from `/control/status`) is now surfaced there too
-- [ ] Cross-service diagnostics showing Client → AdGuard → Unbound → DNSSEC -
-      Unbound's own diagnostics already verify resolution and DNSSEC
-      rejection directly against Unbound's port; extending that same check
-      through AdGuard's DNS port needs the container network topology
-      between AdGuard and Unbound verified first, not yet done
+- [x] Cross-service diagnostics showing Client → AdGuard → Unbound → DNSSEC -
+      verified the container network topology first: AdGuard has no static
+      IP but is reachable by container name (`rootguard-adguard`) on the
+      `rootguard-dns` network, and only `rootguard-unbound`'s container has
+      both DNS tooling (`dig`) and network line-of-sight to it, so the new
+      "Path diagnostics" check reuses that same container - same pattern as
+      Unbound's own resolution/DNSSEC checks, just targeting AdGuard's
+      listener (`rootguard-adguard:53`) instead of Unbound's own port.
+      Surfaced as a second card on the Unbound Overview tab, next to the
+      existing "Live diagnostics"
+      ([rootguard#160](https://github.com/foxly-it/rootguard/pull/160))
 - [x] Contextual links from RootGuard guidance to the relevant native AdGuard
       page without exposing its administration port: deep-links through the
       existing protected `/adguard-ui/` proxy (never the raw admin port) to

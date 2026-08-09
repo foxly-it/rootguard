@@ -112,12 +112,13 @@ func main() {
 	reconcileCancel()
 
 	handler := api.RegisterRoutes(api.Dependencies{
-		Token:        token,
-		Unbound:      manager,
-		AdGuard:      adguardManager,
-		Installer:    installationManager,
-		Updater:      updateManager,
-		ControlPlane: controlPlaneClient,
+		Token:             token,
+		Unbound:           manager,
+		AdGuard:           adguardManager,
+		Installer:         installationManager,
+		Updater:           updateManager,
+		ControlPlane:      controlPlaneClient,
+		AdGuardDNSAddress: envOrDefault("ADGUARD_DNS_ADDRESS", "rootguard-adguard:53"),
 	})
 
 	server := &http.Server{

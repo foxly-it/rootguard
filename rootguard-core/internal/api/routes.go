@@ -20,12 +20,13 @@ import (
 )
 
 type Dependencies struct {
-	Token        string
-	Unbound      *unbound.Manager
-	AdGuard      *adguard.Manager
-	Installer    *installer.Manager
-	Updater      *updater.Manager
-	ControlPlane *controlplane.Client
+	Token             string
+	Unbound           *unbound.Manager
+	AdGuard           *adguard.Manager
+	Installer         *installer.Manager
+	Updater           *updater.Manager
+	ControlPlane      *controlplane.Client
+	AdGuardDNSAddress string
 }
 
 func RegisterRoutes(deps Dependencies) http.Handler {
@@ -53,6 +54,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/unbound/history", unboundHistoryHandler(deps.Unbound))
 	apiMux.HandleFunc("POST /api/unbound/history/{id}/restore", restoreUnboundVersionHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/diagnostics", unboundDiagnosticsHandler(deps.Unbound))
+	apiMux.HandleFunc("GET /api/unbound/path-diagnostics", unboundPathDiagnosticsHandler(deps.Unbound, deps.AdGuardDNSAddress))
 	apiMux.HandleFunc("GET /api/unbound/diagnostic-logging", unboundDiagnosticLoggingStatusHandler(deps.Unbound))
 	apiMux.HandleFunc("POST /api/unbound/diagnostic-logging", startUnboundDiagnosticLoggingHandler(deps.Unbound))
 	apiMux.HandleFunc("DELETE /api/unbound/diagnostic-logging", stopUnboundDiagnosticLoggingHandler(deps.Unbound))
@@ -535,6 +537,12 @@ func restoreUnboundVersionHandler(manager *unbound.Manager) http.HandlerFunc {
 func unboundDiagnosticsHandler(manager *unbound.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, manager.Diagnose(r.Context()))
+	}
+}
+
+func unboundPathDiagnosticsHandler(manager *unbound.Manager, adguardAddress string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, manager.DiagnosePath(r.Context(), adguardAddress))
 	}
 }
 
