@@ -159,7 +159,7 @@
 
 .guided-record {
   display: grid;
-  grid-template-columns: minmax(110px, 0.7fr) 90px minmax(180px, 1.35fr) 100px minmax(125px, 0.55fr) 36px;
+  grid-template-columns: minmax(130px, 0.9fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) minmax(110px, 0.5fr) 36px;
   gap: 9px;
   align-items: end;
   padding: 12px;
@@ -369,9 +369,6 @@
   .guided-record {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  .guided-record .record-value {
-    grid-column: 1 / -1;
-  }
   .guided-zone-list article {
     grid-template-columns: 1fr;
   }
@@ -393,8 +390,5 @@
   }
   .guided-record {
     grid-template-columns: 1fr;
-  }
-  .guided-record .record-value {
-    grid-column: auto;
   }
 }
