@@ -438,7 +438,7 @@ Product boundary:
       accessibility audit had each verified their own surface but neither
       had scanned this component
       ([rootguard#112](https://github.com/foxly-it/rootguard/pull/112))
-- [ ] The "why blocked" reasons on the landing page are currently a static,
+- [x] The "why blocked" reasons on the landing page were a static,
       always-all-checked list - not tied to what actually matched for this
       request. Three-part fix: (1) a narrow, rate-limited nginx proxy on the
       blockpage itself (`/api/reason`) that asks AdGuard's own `check_host`

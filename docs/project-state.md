@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -707,18 +707,68 @@ visible no-op instead of widening its scope.
 
 ## Remaining production milestones
 
-1. Add richer cross-service health details to the Stack Center; five-service
-   runtime, immutable metadata, and signed Core/WebApp release-attestation
-   verification are delivered.
-2. Harden backup retention, export/restore, and immutable release digests.
-3. DNS security advisor and production preflight checks.
-4. Native AdGuard integration, contextual guidance, cross-service diagnostics,
-   and compatibility testing without duplicating filter, client, or query-log
-   management.
-5. Custom diagnostics and cache tools.
-6. Runtime-provider abstraction for Docker and future bare-metal/systemd.
-7. HTTPS for the appliance UI, sessions, roles, backup/restore, and installer
-   hardening.
+Cross-referenced against `ROADMAP.md` on 2026-08-09 (supersedes the previous
+narrative version of this section, which had drifted from the actual
+per-item roadmap state). Read `ROADMAP.md` itself for full item text and PR
+references - this is the sequencing/prioritisation layer on top of it, kept
+here specifically so a session can resume with "Mache weiter mit der
+Entwicklung" without re-deriving what's next.
+
+Milestone completion snapshot:
+
+- **0.2 Unbound administration** - 8 items open: guided-zones frontend
+  migration to the typed `LocalZone`/`LocalHost` model
+  ([#131](https://github.com/foxly-it/rootguard/issues/131)), host-discovery
+  beyond the FRITZ!Box adapter, read-only fixed-base display, the shared
+  draft→preview→activate workflow generalisation, cross-setting conflict
+  detection, resolver config import/export, hand-written `unbound.conf`
+  import, and scenario tests.
+- **0.3 AdGuard integration** - 2 items open: cross-service Client → AdGuard
+  → Unbound → DNSSEC diagnostics (blocked on verifying the AdGuard/Unbound
+  container network topology first) and compatibility tests against every
+  supported AdGuard Home release. Everything else in 0.3, including the
+  blockpage's real per-request block reason, is delivered.
+- **0.4 operations/backup/recovery** - barely started, 7 of 9 items open:
+  configurable retention, manual cleanup preview, encrypted export, full
+  restore into a clean install, pre-update snapshot/restore verification,
+  power-loss/interrupted-write tests, and a disaster-recovery runbook. Only
+  logging/versioning/history and the automatic cleanup-safety work below
+  have landed.
+- **0.5 security/HTTPS/accessibility** - 3 items open, all close to done:
+  destructive-action rate limits/audit beyond the authentication surface,
+  a full keyboard/screen-reader workflow re-verification, and a WCAG
+  labels/errors review.
+- **0.6 beta release engineering** - not started, all 10 items open. This is
+  the actual gate to cut `0.6.0-beta.1`; per the roadmap's own rule, it
+  shouldn't start in earnest while 0.2-0.5 safety gates remain open.
+
+Recommended next sequence (closest-to-done first, so 0.1-0.5 gates keep
+closing before 0.6's release-engineering surface opens):
+
+1. **Close 0.3** - smallest remaining surface. AdGuard compatibility tests
+   first (no prerequisites), then cross-service diagnostics once the
+   AdGuard↔Unbound network topology is confirmed.
+2. **Close 0.5** - WCAG labels/errors review, the full keyboard/screen-reader
+   workflow audit, then destructive-action rate limits/audit (Unbound
+   activation, service updates/rollbacks, AdGuard bootstrap).
+3. **0.2's remaining substance** - the largest pre-beta product surface, and
+   partially in flight already. Guided-zones frontend migration (#131) first,
+   since the router-import UI and typed backend model already assume it;
+   then fixed-base display, the shared workflow generalisation, conflict
+   detection, import/export, `unbound.conf` import, scenario tests, and
+   additional host-discovery adapters.
+4. **0.4 backup/recovery** - the whole milestone is still open, and beta
+   shouldn't ship without a tested restore path. Retention and cleanup
+   preview first (builds directly on the shipped cleanup-safety work), then
+   encrypted export, full restore, pre-update snapshot verification,
+   power-loss tests, and the DR runbook.
+5. **0.6 release engineering** - start once 0.2-0.5 are closed. Versioning
+   automation and signed multi-arch manifests first, since later 0.6 items
+   (compatibility matrix, upgrade tests, migration framework) depend on them
+   existing.
+
+**Immediate next item when resuming:** 0.3's AdGuard compatibility tests -
+smallest scope, no architectural prerequisites, and it closes a milestone.
 
 ## Tracked editor follow-ups
 
