@@ -396,16 +396,23 @@
   padding-right: 17px;
 }
 
-/* .toggle-row already carries its own margin: 0 -12px / padding: 17px
-   12px pair (unbound-polish.css) so its :hover highlight can bleed
-   slightly past its content without touching the card edge - that pair
-   nets to zero, so the rule above alone would still leave it flush.
-   Stacking the same 17px on top of the existing 12px (29px total),
-   rather than replacing it, adds the inset while keeping the hover
-   bleed intact. */
+/* .toggle-row's own margin: 0 -12px (unbound-polish.css) shifts its
+   border-box - and therefore its :hover background - 12px past whatever
+   padding says, since margin positions the border-box relative to the
+   parent regardless of padding; padding only moves the *content* within
+   that already-placed box. Stacking padding on top (as a previous version
+   of this rule did, 17px + 12px = 29px) kept the text aligned with
+   .number-grid's siblings but left the hover highlight overhanging past
+   the card's rounded corner, since nothing here touched the margin that
+   actually caused it. Cancelling the margin back to 0 and using a flat
+   17px inset - matching every other direct child - keeps the same text
+   alignment with a hover background that stays flush inside the card.
+   */
 .advanced-settings > .toggle-row {
-  padding-left: 29px;
-  padding-right: 29px;
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 17px;
+  padding-right: 17px;
 }
 
 .advanced-settings .number-grid {
