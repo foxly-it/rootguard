@@ -1,15 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Check, CirclePlus, Network, Pencil, Plus, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 import {
   checkUnboundForwardTargets,
-  fetchUnboundSettings,
-  previewUnboundSettings,
-  updateUnboundSettings,
   type UnboundForwardTargetCheck,
   type UnboundForwardZone,
-  type UnboundPreview,
   type UnboundSettings,
 } from "../api/client";
+import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftWorkflow";
+import GuidedFlowSteps from "./GuidedFlowSteps";
 import { useI18n } from "../i18n";
 import "../styles/unbound-forwarding.css";
 
@@ -35,40 +33,35 @@ export default function UnboundForwardZones({
   onActivated: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [source, setSource] = useState<UnboundSettings | null>(null);
   const [zones, setZones] = useState<UnboundForwardZone[]>([]);
   const [draft, setDraft] = useState<UnboundForwardZone>(emptyZone);
   const [editing, setEditing] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
-  const [preview, setPreview] = useState<UnboundPreview | null>(null);
-  const [candidate, setCandidate] = useState<UnboundSettings | null>(null);
   const [checks, setChecks] = useState<UnboundForwardTargetCheck[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    const settings = normalizeSettings(await fetchUnboundSettings());
-    setSource(settings);
-    setZones(structuredClone(settings.forward_zones));
-    setPreview(null);
-    setCandidate(null);
-    setChecks([]);
-    setError("");
-  }, []);
-
-  useEffect(() => {
-    load().catch((cause: unknown) => setError(errorMessage(cause, t("forward.loadError"))));
-  }, [load, t, version]);
+  const workflow = useUnboundDraftWorkflow({
+    version,
+    onActivated,
+    loadErrorMessage: t("forward.loadError"),
+    concurrentMessage: t("forward.concurrent"),
+    previewRejectedMessage: t("forward.previewRejected"),
+    confirmActivateMessage: t("forward.confirmActivate"),
+    activateErrorMessage: t("forward.activateError"),
+    normalize: normalizeSettings,
+    onLoad: (settings) => {
+      setZones(structuredClone(settings.forward_zones));
+      setChecks([]);
+    },
+  });
 
   const dirty = useMemo(
-    () => source !== null && JSON.stringify(zones) !== JSON.stringify(source.forward_zones),
-    [source, zones],
+    () => workflow.source !== null && JSON.stringify(zones) !== JSON.stringify(workflow.source.forward_zones),
+    [workflow.source, zones],
   );
   const allReachable = checks.every((check) => check.reachable);
 
   function saveDraft() {
-    setError("");
+    workflow.setError("");
     try {
       const normalized = normalizeForwardZone(draft, t);
       if (zones.some((zone, index) => zone.name === normalized.name && index !== editing)) {
@@ -83,9 +76,9 @@ export default function UnboundForwardZones({
       setEditing(null);
       setOpen(false);
       resetPreview();
-      setMessage(t("forward.draftSaved"));
+      workflow.setMessage(t("forward.draftSaved"));
     } catch (cause) {
-      setError(errorMessage(cause, t("forward.invalid")));
+      workflow.setError(errorMessage(cause, t("forward.invalid")));
     }
   }
 
@@ -94,15 +87,15 @@ export default function UnboundForwardZones({
     setEditing(index);
     setOpen(true);
     resetPreview();
-    setMessage("");
-    setError("");
+    workflow.setMessage("");
+    workflow.setError("");
   }
 
   function removeZone(index: number) {
     if (!window.confirm(t("forward.confirmRemove", { name: zones[index].name }))) return;
     setZones((current) => current.filter((_, zoneIndex) => zoneIndex !== index));
     resetPreview();
-    setMessage(t("forward.removed"));
+    workflow.setMessage(t("forward.removed"));
   }
 
   function updateServer(index: number, value: string) {
@@ -123,55 +116,32 @@ export default function UnboundForwardZones({
   }
 
   async function createPreview() {
-    if (!source || busy) return;
-    setBusy(true);
-    setError("");
-    setMessage("");
     try {
       validateLimits(zones, t);
-      const active = normalizeSettings(await fetchUnboundSettings());
-      if (!sameSettings(active, source)) throw new Error(t("forward.concurrent"));
-      const proposed = { ...active, forward_zones: zones };
-      const [configurationPreview, targetChecks] = await Promise.all([
-        previewUnboundSettings(proposed),
-        checkUnboundForwardTargets(zones),
-      ]);
-      setCandidate(proposed);
-      setPreview(configurationPreview);
-      setChecks(targetChecks);
-      setMessage(targetChecks.every((check) => check.reachable)
+    } catch (cause) {
+      workflow.setError(errorMessage(cause, t("forward.previewRejected")));
+      return;
+    }
+    let targetChecks: UnboundForwardTargetCheck[] = [];
+    const result = await workflow.createPreview(
+      (active) => ({ ...active, forward_zones: zones }),
+      async () => { targetChecks = await checkUnboundForwardTargets(zones); },
+    );
+    setChecks(targetChecks);
+    if (result) {
+      workflow.setMessage(targetChecks.every((check) => check.reachable)
         ? t("forward.previewAccepted")
         : t("forward.previewUnreachable"));
-    } catch (cause) {
-      resetPreview();
-      setError(errorMessage(cause, t("forward.previewRejected")));
-    } finally {
-      setBusy(false);
     }
   }
 
   async function activate() {
-    if (!source || !candidate || !preview?.changed || !allReachable || busy) return;
-    if (!window.confirm(t("forward.confirmActivate"))) return;
-    setBusy(true);
-    setError("");
-    try {
-      const active = normalizeSettings(await fetchUnboundSettings());
-      if (!sameSettings(active, source)) throw new Error(t("forward.concurrent"));
-      await updateUnboundSettings(candidate);
-      await onActivated();
-      await load();
-      setMessage(t("forward.activated"));
-    } catch (cause) {
-      setError(errorMessage(cause, t("forward.activateError")));
-    } finally {
-      setBusy(false);
-    }
+    if (!allReachable) return;
+    if (await workflow.activate()) workflow.setMessage(t("forward.activated"));
   }
 
   function resetPreview() {
-    setPreview(null);
-    setCandidate(null);
+    workflow.resetPreview();
     setChecks([]);
   }
 
@@ -183,18 +153,24 @@ export default function UnboundForwardZones({
           <h2>{t("forward.title")}</h2>
           <p className="muted-copy">{t("forward.intro")}</p>
         </div>
-        <button className="rg-button rg-button-secondary secondary-action unbound-action" type="button" disabled={busy || (!open && zones.length >= maxZones)} onClick={() => {
+        <button className="rg-button rg-button-secondary secondary-action unbound-action" type="button" disabled={workflow.busy || (!open && zones.length >= maxZones)} onClick={() => {
           setDraft(emptyZone());
           setEditing(null);
           setOpen(!open);
-          setError("");
+          workflow.setError("");
         }}>
           <Plus size={15} /> <span>{open ? t("common.close") : t("forward.add")}</span>
         </button>
       </div>
 
-      {message && <div className={`feedback ${checks.length > 0 && !allReachable ? "error" : "success"}`}>{message}</div>}
-      {error && <div className="feedback error" role="alert">{error}</div>}
+      <GuidedFlowSteps steps={[
+        { label: t("forward.step1"), active: !workflow.preview },
+        { label: t("forward.step2"), active: Boolean(workflow.preview) },
+        { label: t("forward.step3"), active: false },
+      ]} />
+
+      {workflow.message && <div className={`feedback ${checks.length > 0 && !allReachable ? "error" : "success"}`}>{workflow.message}</div>}
+      {workflow.error && <div className="feedback error" role="alert">{workflow.error}</div>}
 
       {open && (
         <div className="forward-wizard">
@@ -260,11 +236,11 @@ export default function UnboundForwardZones({
       {dirty && !open && (
         <div className="guided-review">
           <div><strong>{t("forward.draftReady")}</strong><small>{t("forward.notActive")}</small></div>
-          <button className="rg-button rg-button-primary" type="button" disabled={busy} onClick={createPreview}>{busy ? t("forward.checking") : t("forward.review")}</button>
+          <button className="rg-button rg-button-primary" type="button" disabled={workflow.busy} onClick={createPreview}>{workflow.busy ? t("forward.checking") : t("forward.review")}</button>
         </div>
       )}
 
-      {preview && (
+      {workflow.preview && (
         <div className="forward-preview" aria-live="polite">
           <div className="forward-check-list">
             {checks.map((check) => (
@@ -274,8 +250,8 @@ export default function UnboundForwardZones({
               </div>
             ))}
           </div>
-          <details><summary>{t("forward.showGenerated")}</summary><pre tabIndex={0} aria-label={t("forward.showGenerated")}>{forwardingSection(preview.rendered_config) || t("forward.removalPreview")}</pre></details>
-          <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed || !allReachable} onClick={activate}>{busy ? t("forward.activating") : allReachable ? t("forward.activate") : t("forward.fixTargets")}</button>
+          <details><summary>{t("forward.showGenerated")}</summary><pre tabIndex={0} aria-label={t("forward.showGenerated")}>{forwardingSection(workflow.preview.rendered_config) || t("forward.removalPreview")}</pre></details>
+          <button className="rg-button rg-button-primary" type="button" disabled={workflow.busy || !workflow.preview.changed || !allReachable} onClick={activate}>{workflow.busy ? t("forward.activating") : allReachable ? t("forward.activate") : t("forward.fixTargets")}</button>
         </div>
       )}
     </section>
@@ -291,10 +267,6 @@ function normalizeSettings(settings: UnboundSettings): UnboundSettings {
       allow_private_addresses: zone.allow_private_addresses ?? false,
     })),
   };
-}
-
-function sameSettings(left: UnboundSettings, right: UnboundSettings) {
-  return JSON.stringify(normalizeSettings(left)) === JSON.stringify(normalizeSettings(right));
 }
 
 function normalizeForwardZone(zone: UnboundForwardZone, t: (key: string, values?: Record<string, string | number>) => string): UnboundForwardZone {
@@ -395,8 +367,4 @@ function forwardingSection(config: string) {
     );
   const serverPolicy = serverPolicyLines.length > 0 ? `server:\n${serverPolicyLines.join("\n")}\n\n` : "";
   return serverPolicy + config.slice(forwardStart);
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }

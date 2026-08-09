@@ -1,16 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, Loader2, Plus, Router, RotateCcw, Trash2, Wifi, WifiOff } from "lucide-react";
 import {
   discoverFritzBoxHosts,
-  fetchUnboundSettings,
-  previewUnboundSettings,
-  updateUnboundSettings,
   type DiscoveredHost,
   type UnboundLocalHost,
   type UnboundLocalZone,
-  type UnboundPreview,
-  type UnboundSettings,
 } from "../api/client";
+import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftWorkflow";
+import GuidedFlowSteps from "./GuidedFlowSteps";
 import { useI18n } from "../i18n";
 import "../styles/unbound-router-import.css";
 
@@ -35,7 +32,6 @@ export default function UnboundRouterImport({
   onActivated: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [source, setSource] = useState<UnboundSettings | null>(null);
   const [zones, setZones] = useState<UnboundLocalZone[]>([]);
   const [zoneName, setZoneName] = useState(defaultZoneName);
 
@@ -46,28 +42,21 @@ export default function UnboundRouterImport({
   const [discovered, setDiscovered] = useState<DraftHost[]>([]);
   const [truncated, setTruncated] = useState(false);
 
-  const [preview, setPreview] = useState<UnboundPreview | null>(null);
-  const [candidate, setCandidate] = useState<UnboundSettings | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    const settings = await fetchUnboundSettings();
-    setSource(settings);
-    setZones(structuredClone(settings.local_zones ?? []));
-    setPreview(null);
-    setCandidate(null);
-    setError("");
-  }, []);
-
-  useEffect(() => {
-    load().catch((cause: unknown) => setError(errorMessage(cause, t("routerImport.loadError"))));
-  }, [load, t, version]);
+  const workflow = useUnboundDraftWorkflow({
+    version,
+    onActivated,
+    loadErrorMessage: t("routerImport.loadError"),
+    concurrentMessage: t("routerImport.concurrent"),
+    previewRejectedMessage: t("routerImport.previewRejected"),
+    confirmActivateMessage: t("routerImport.confirmActivate"),
+    activateErrorMessage: t("routerImport.activateError"),
+    sameSettings: (a, b) => JSON.stringify(a.local_zones ?? []) === JSON.stringify(b.local_zones ?? []),
+    onLoad: (settings) => setZones(structuredClone(settings.local_zones ?? [])),
+  });
 
   const dirty = useMemo(
-    () => source !== null && JSON.stringify(zones) !== JSON.stringify(source.local_zones ?? []),
-    [zones, source],
+    () => workflow.source !== null && JSON.stringify(zones) !== JSON.stringify(workflow.source.local_zones ?? []),
+    [zones, workflow.source],
   );
 
   const selectedCount = useMemo(() => discovered.filter((host) => host.selected).length, [discovered]);
@@ -75,8 +64,8 @@ export default function UnboundRouterImport({
   async function discover() {
     if (discovering || !address.trim()) return;
     setDiscovering(true);
-    setMessage("");
-    setError("");
+    workflow.setMessage("");
+    workflow.setError("");
     try {
       const result = await discoverFritzBoxHosts(address.trim(), username, password);
       setTruncated(result.truncated);
@@ -86,10 +75,10 @@ export default function UnboundRouterImport({
         hostname: suggestHostname(host.hostname, index),
         selected: false,
       })));
-      setMessage(result.hosts.length > 0 ? t("routerImport.discovered", { count: result.hosts.length }) : t("routerImport.noHosts"));
+      workflow.setMessage(result.hosts.length > 0 ? t("routerImport.discovered", { count: result.hosts.length }) : t("routerImport.noHosts"));
     } catch (cause) {
       setDiscovered([]);
-      setError(errorMessage(cause, t("routerImport.discoverError")));
+      workflow.setError(errorMessage(cause, t("routerImport.discoverError")));
     } finally {
       setDiscovering(false);
     }
@@ -104,11 +93,11 @@ export default function UnboundRouterImport({
   }
 
   function addSelectedToZone() {
-    setError("");
-    setMessage("");
+    workflow.setError("");
+    workflow.setMessage("");
     const selected = discovered.filter((host) => host.selected);
     if (selected.length === 0) {
-      setError(t("routerImport.selectAtLeastOne"));
+      workflow.setError(t("routerImport.selectAtLeastOne"));
       return;
     }
     try {
@@ -135,11 +124,10 @@ export default function UnboundRouterImport({
         ? zones.map((zone, index) => (index === existingIndex ? { ...zone, hosts: [...zone.hosts, ...newHosts] } : zone))
         : [...zones, { name: canonicalZone, hosts: newHosts }]);
       setDiscovered((current) => current.filter((host) => !host.selected));
-      setPreview(null);
-      setCandidate(null);
-      setMessage(t("routerImport.added", { count: newHosts.length }));
+      workflow.resetPreview();
+      workflow.setMessage(t("routerImport.added", { count: newHosts.length }));
     } catch (cause) {
-      setError(errorMessage(cause, t("routerImport.invalidHostname")));
+      workflow.setError(errorMessage(cause, t("routerImport.invalidHostname")));
     }
   }
 
@@ -148,49 +136,16 @@ export default function UnboundRouterImport({
     setZones((current) => current
       .map((zone) => (zone.name === zoneNameValue ? { ...zone, hosts: zone.hosts.filter((host) => host.hostname !== hostname) } : zone))
       .filter((zone) => zone.hosts.length > 0));
-    setPreview(null);
-    setCandidate(null);
+    workflow.resetPreview();
   }
 
   async function createPreview() {
-    if (!source || busy) return;
-    setBusy(true);
-    setMessage("");
-    setError("");
-    try {
-      const active = await fetchUnboundSettings();
-      if (!sameZones(active.local_zones, source.local_zones)) throw new Error(t("routerImport.concurrent"));
-      const proposed = { ...active, local_zones: zones };
-      const result = await previewUnboundSettings(proposed);
-      setCandidate(proposed);
-      setPreview(result);
-      setMessage(t("routerImport.previewAccepted"));
-    } catch (cause) {
-      setPreview(null);
-      setCandidate(null);
-      setError(errorMessage(cause, t("routerImport.previewRejected")));
-    } finally {
-      setBusy(false);
-    }
+    const result = await workflow.createPreview((active) => ({ ...active, local_zones: zones }));
+    if (result) workflow.setMessage(t("routerImport.previewAccepted"));
   }
 
   async function activate() {
-    if (!source || !candidate || !preview?.changed || busy) return;
-    if (!window.confirm(t("routerImport.confirmActivate"))) return;
-    setBusy(true);
-    setError("");
-    try {
-      const active = await fetchUnboundSettings();
-      if (!sameZones(active.local_zones, source.local_zones)) throw new Error(t("routerImport.concurrent"));
-      await updateUnboundSettings(candidate);
-      await onActivated();
-      await load();
-      setMessage(t("routerImport.activated"));
-    } catch (cause) {
-      setError(errorMessage(cause, t("routerImport.activateError")));
-    } finally {
-      setBusy(false);
-    }
+    if (await workflow.activate()) workflow.setMessage(t("routerImport.activated"));
   }
 
   return (
@@ -203,8 +158,14 @@ export default function UnboundRouterImport({
         </div>
       </div>
 
-      {message && <div className="feedback success">{message}</div>}
-      {error && <div className="feedback error" role="alert">{error}</div>}
+      <GuidedFlowSteps steps={[
+        { label: t("routerImport.step1"), active: !workflow.preview },
+        { label: t("routerImport.step2"), active: Boolean(workflow.preview) },
+        { label: t("routerImport.step3"), active: false },
+      ]} />
+
+      {workflow.message && <div className="feedback success">{workflow.message}</div>}
+      {workflow.error && <div className="feedback error" role="alert">{workflow.error}</div>}
 
       <div className="router-import-connect">
         <label>
@@ -290,7 +251,7 @@ export default function UnboundRouterImport({
 
       <div className="router-import-zones-heading">
         <div><strong>{t("routerImport.importedTitle")}</strong><small>{t("routerImport.importedHelp")}</small></div>
-        <button className="icon-action" type="button" disabled={busy} onClick={() => load().catch((cause: unknown) => setError(errorMessage(cause, t("routerImport.loadError"))))} aria-label={t("common.refresh")} title={t("common.refresh")}>
+        <button className="icon-action" type="button" disabled={workflow.busy} onClick={() => workflow.load().catch((cause: unknown) => workflow.setError(errorMessage(cause, t("routerImport.loadError"))))} aria-label={t("common.refresh")} title={t("common.refresh")}>
           <RotateCcw size={17} />
         </button>
       </div>
@@ -323,21 +284,21 @@ export default function UnboundRouterImport({
       {dirty && (
         <div className="guided-review">
           <div><strong>{t("routerImport.draftReady")}</strong><small>{t("routerImport.notActive")}</small></div>
-          <button className="rg-button rg-button-primary unbound-action primary" type="button" disabled={busy} onClick={createPreview}>
-            <Check size={15} /><span>{busy ? t("routerImport.validating") : t("routerImport.review")}</span>
+          <button className="rg-button rg-button-primary unbound-action primary" type="button" disabled={workflow.busy} onClick={createPreview}>
+            <Check size={15} /><span>{workflow.busy ? t("routerImport.validating") : t("routerImport.review")}</span>
           </button>
         </div>
       )}
 
-      {preview && (
+      {workflow.preview && (
         <div className="router-import-preview" aria-live="polite">
           <div><Check size={16} /><strong>{t("routerImport.valid")}</strong></div>
           <details open>
             <summary>{t("routerImport.showGenerated")}</summary>
-            <pre tabIndex={0} aria-label={t("routerImport.showGenerated")}>{localZoneSection(preview.rendered_config)}</pre>
+            <pre tabIndex={0} aria-label={t("routerImport.showGenerated")}>{localZoneSection(workflow.preview.rendered_config)}</pre>
           </details>
-          <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed} onClick={activate}>
-            {busy ? t("routerImport.activating") : t("routerImport.activate")}
+          <button className="rg-button rg-button-primary" type="button" disabled={workflow.busy || !workflow.preview.changed} onClick={activate}>
+            {workflow.busy ? t("routerImport.activating") : t("routerImport.activate")}
           </button>
         </div>
       )}
@@ -372,10 +333,6 @@ function normalizeZoneName(value: string, t: (key: string) => string): string {
   return normalized;
 }
 
-function sameZones(left?: UnboundLocalZone[], right?: UnboundLocalZone[]): boolean {
-  return JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
-}
-
 function localZoneSection(config: string): string {
   const lines = config.split("\n").filter((line) =>
     line.includes("# Local host inventory:") ||
@@ -384,8 +341,4 @@ function localZoneSection(config: string): string {
     line.trimStart().startsWith("local-data-ptr:"),
   );
   return lines.length > 0 ? `server:\n${lines.join("\n")}` : "# No local-zone directives.";
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
 }

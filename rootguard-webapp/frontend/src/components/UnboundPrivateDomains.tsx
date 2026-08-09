@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, GlobeLock, Plus, RotateCcw, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 import {
-  fetchUnboundSettings,
-  previewUnboundSettings,
-  updateUnboundSettings,
-  type UnboundPreview,
   type UnboundReverseZonePolicy,
   type UnboundSettings,
 } from "../api/client";
+import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftWorkflow";
+import GuidedFlowSteps from "./GuidedFlowSteps";
 import { useI18n } from "../i18n";
 import "../styles/unbound-private.css";
 
@@ -28,106 +26,65 @@ export default function UnboundPrivateDomains({
   onActivated: () => Promise<void>;
 }) {
   const { t } = useI18n();
-  const [source, setSource] = useState<UnboundSettings | null>(null);
   const [domains, setDomains] = useState<string[]>([]);
   const [reverseZones, setReverseZones] = useState<UnboundReverseZonePolicy[]>(defaultReverseZones);
   const [draft, setDraft] = useState("home.arpa.");
-  const [preview, setPreview] = useState<UnboundPreview | null>(null);
-  const [candidate, setCandidate] = useState<UnboundSettings | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
-    const settings = normalizeSettings(await fetchUnboundSettings());
-    setSource(settings);
-    setDomains(structuredClone(settings.private_domains));
-    setReverseZones(structuredClone(settings.reverse_zones));
-    setPreview(null);
-    setCandidate(null);
-    setError("");
-  }, []);
+  const workflow = useUnboundDraftWorkflow({
+    version,
+    onActivated,
+    loadErrorMessage: t("private.loadError"),
+    concurrentMessage: t("private.concurrent"),
+    previewRejectedMessage: t("private.previewRejected"),
+    confirmActivateMessage: t("private.confirmActivate"),
+    activateErrorMessage: t("private.activateError"),
+    normalize: normalizeSettings,
+    onLoad: (settings) => {
+      setDomains(structuredClone(settings.private_domains));
+      setReverseZones(structuredClone(settings.reverse_zones));
+    },
+  });
 
-  useEffect(() => {
-    load().catch((cause: unknown) => setError(errorMessage(cause, t("private.loadError"))));
-  }, [load, t, version]);
-
-  const dirty = useMemo(() => source !== null && (
-    JSON.stringify(domains) !== JSON.stringify(source.private_domains) ||
-    JSON.stringify(reverseZones) !== JSON.stringify(source.reverse_zones)
-  ), [domains, reverseZones, source]);
+  const dirty = useMemo(() => workflow.source !== null && (
+    JSON.stringify(domains) !== JSON.stringify(workflow.source.private_domains) ||
+    JSON.stringify(reverseZones) !== JSON.stringify(workflow.source.reverse_zones)
+  ), [domains, reverseZones, workflow.source]);
 
   function addDomain() {
-    setError("");
+    workflow.setError("");
     try {
       const domain = normalizeDomain(draft, t);
       if (domains.includes(domain)) throw new Error(t("private.duplicate", { name: domain }));
       if (domains.length >= maxPrivateDomains) throw new Error(t("private.limit", { count: maxPrivateDomains }));
       setDomains([...domains, domain]);
       setDraft("");
-      resetPreview();
-      setMessage(t("private.draftSaved"));
+      workflow.resetPreview();
+      workflow.setMessage(t("private.draftSaved"));
     } catch (cause) {
-      setError(errorMessage(cause, t("private.invalid")));
+      workflow.setError(errorMessage(cause, t("private.invalid")));
     }
   }
 
   function removeDomain(domain: string) {
     if (!window.confirm(t("private.confirmRemove", { name: domain }))) return;
     setDomains((current) => current.filter((item) => item !== domain));
-    resetPreview();
-    setMessage(t("private.removed"));
+    workflow.resetPreview();
+    workflow.setMessage(t("private.removed"));
   }
 
   function setReverseMode(network: UnboundReverseZonePolicy["network"], mode: UnboundReverseZonePolicy["mode"]) {
     setReverseZones((current) => current.map((policy) => policy.network === network ? { ...policy, mode } : policy));
-    resetPreview();
-    setMessage("");
+    workflow.resetPreview();
+    workflow.setMessage("");
   }
 
   async function createPreview() {
-    if (!source || busy) return;
-    setBusy(true);
-    setMessage("");
-    setError("");
-    try {
-      const active = normalizeSettings(await fetchUnboundSettings());
-      if (!sameSettings(active, source)) throw new Error(t("private.concurrent"));
-      const proposed = { ...active, private_domains: domains, reverse_zones: reverseZones };
-      const result = await previewUnboundSettings(proposed);
-      setCandidate(proposed);
-      setPreview(result);
-      setMessage(t("private.previewAccepted"));
-    } catch (cause) {
-      resetPreview();
-      setError(errorMessage(cause, t("private.previewRejected")));
-    } finally {
-      setBusy(false);
-    }
+    const result = await workflow.createPreview((active) => ({ ...active, private_domains: domains, reverse_zones: reverseZones }));
+    if (result) workflow.setMessage(t("private.previewAccepted"));
   }
 
   async function activate() {
-    if (!source || !candidate || !preview?.changed || busy) return;
-    if (!window.confirm(t("private.confirmActivate"))) return;
-    setBusy(true);
-    setError("");
-    try {
-      const active = normalizeSettings(await fetchUnboundSettings());
-      if (!sameSettings(active, source)) throw new Error(t("private.concurrent"));
-      await updateUnboundSettings(candidate);
-      await onActivated();
-      await load();
-      setMessage(t("private.activated"));
-    } catch (cause) {
-      setError(errorMessage(cause, t("private.activateError")));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function resetPreview() {
-    setPreview(null);
-    setCandidate(null);
+    if (await workflow.activate()) workflow.setMessage(t("private.activated"));
   }
 
   return (
@@ -141,8 +98,14 @@ export default function UnboundPrivateDomains({
         <span className="private-protection"><ShieldCheck size={15} /> {t("private.scoped")}</span>
       </div>
 
-      {message && <div className="feedback success">{message}</div>}
-      {error && <div className="feedback error" role="alert">{error}</div>}
+      <GuidedFlowSteps steps={[
+        { label: t("private.step1"), active: !workflow.preview },
+        { label: t("private.step2"), active: Boolean(workflow.preview) },
+        { label: t("private.step3"), active: false },
+      ]} />
+
+      {workflow.message && <div className="feedback success">{workflow.message}</div>}
+      {workflow.error && <div className="feedback error" role="alert">{workflow.error}</div>}
 
       <div className="private-domain-editor">
         <div>
@@ -174,7 +137,7 @@ export default function UnboundPrivateDomains({
 
       <div className="reverse-heading">
         <div><strong>{t("private.reverseTitle")}</strong><small>{t("private.reverseHelp")}</small></div>
-        <button className="icon-action" type="button" disabled={busy} onClick={() => load().catch((cause: unknown) => setError(errorMessage(cause, t("private.loadError"))))} aria-label={t("common.refresh")} title={t("common.refresh")}><RotateCcw size={17} /></button>
+        <button className="icon-action" type="button" disabled={workflow.busy} onClick={() => workflow.load().catch((cause: unknown) => workflow.setError(errorMessage(cause, t("private.loadError"))))} aria-label={t("common.refresh")} title={t("common.refresh")}><RotateCcw size={17} /></button>
       </div>
       <div className="reverse-policy-list">
         {reverseZones.map((policy) => (
@@ -201,15 +164,15 @@ export default function UnboundPrivateDomains({
       {dirty && (
         <div className="guided-review">
           <div><strong>{t("private.draftReady")}</strong><small>{t("private.notActive")}</small></div>
-          <button className="rg-button rg-button-primary unbound-action primary" type="button" disabled={busy} onClick={createPreview}><Check size={15} /><span>{busy ? t("private.validating") : t("private.review")}</span></button>
+          <button className="rg-button rg-button-primary unbound-action primary" type="button" disabled={workflow.busy} onClick={createPreview}><Check size={15} /><span>{workflow.busy ? t("private.validating") : t("private.review")}</span></button>
         </div>
       )}
 
-      {preview && (
+      {workflow.preview && (
         <div className="private-preview" aria-live="polite">
           <div><Check size={16} /><strong>{t("private.valid")}</strong></div>
-          <details open><summary>{t("private.showGenerated")}</summary><pre tabIndex={0} aria-label={t("private.showGenerated")}>{privateSection(preview.rendered_config)}</pre></details>
-          <button className="rg-button rg-button-primary" type="button" disabled={busy || !preview.changed} onClick={activate}>{busy ? t("private.activating") : t("private.activate")}</button>
+          <details open><summary>{t("private.showGenerated")}</summary><pre tabIndex={0} aria-label={t("private.showGenerated")}>{privateSection(workflow.preview.rendered_config)}</pre></details>
+          <button className="rg-button rg-button-primary" type="button" disabled={workflow.busy || !workflow.preview.changed} onClick={activate}>{workflow.busy ? t("private.activating") : t("private.activate")}</button>
         </div>
       )}
     </section>
@@ -230,10 +193,6 @@ function normalizeSettings(settings: UnboundSettings): UnboundSettings {
   };
 }
 
-function sameSettings(left: UnboundSettings, right: UnboundSettings) {
-  return JSON.stringify(normalizeSettings(left)) === JSON.stringify(normalizeSettings(right));
-}
-
 function normalizeDomain(value: string, t: (key: string) => string) {
   const normalized = value.trim().toLowerCase().replace(/\.*$/, "") + ".";
   if (normalized === ".") throw new Error(t("private.validation.root"));
@@ -252,8 +211,4 @@ function privateSection(config: string) {
     line.trimStart().startsWith("local-zone:")
   );
   return lines.length > 0 ? `server:\n${lines.join("\n")}` : "# No private-domain directives.";
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }
