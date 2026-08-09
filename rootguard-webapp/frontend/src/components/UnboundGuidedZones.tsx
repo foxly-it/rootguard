@@ -228,7 +228,7 @@ function validateHostnameUniqueness(zones: UnboundLocalZone[], t: (key: string, 
   const seen = new Set<string>();
   for (const zone of zones) {
     for (const host of zone.hosts) {
-      if (seen.has(host.hostname)) throw new Error(t("zones.validation.duplicateHostname", { name: host.hostname }));
+      if (seen.has(host.hostname)) throw new Error(t("zones.validation.duplicateHostnameZone", { name: host.hostname }));
       seen.add(host.hostname);
     }
   }
