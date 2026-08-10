@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"runtime"
 	"strings"
@@ -53,6 +54,9 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("POST /api/unbound/preview", previewUnboundSettingsHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/history", unboundHistoryHandler(deps.Unbound))
 	apiMux.HandleFunc("POST /api/unbound/history/{id}/restore", restoreUnboundVersionHandler(deps.Unbound))
+	apiMux.HandleFunc("GET /api/unbound/export", getUnboundExportHandler(deps.Unbound))
+	apiMux.HandleFunc("POST /api/unbound/import/preview", previewUnboundImportHandler(deps.Unbound))
+	apiMux.HandleFunc("POST /api/unbound/import", applyUnboundImportHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/diagnostics", unboundDiagnosticsHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/path-diagnostics", unboundPathDiagnosticsHandler(deps.Unbound, deps.AdGuardDNSAddress))
 	apiMux.HandleFunc("GET /api/unbound/diagnostic-logging", unboundDiagnosticLoggingStatusHandler(deps.Unbound))
@@ -532,6 +536,71 @@ func restoreUnboundVersionHandler(manager *unbound.Manager) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, settings)
 	}
+}
+
+func getUnboundExportHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		bundle, err := manager.Export()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, bundle)
+	}
+}
+
+func previewUnboundImportHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		bundle, ok := decodeUnboundBundle(w, r)
+		if !ok {
+			return
+		}
+		preview, err := manager.PreviewBundle(r.Context(), bundle.Settings, bundle.CustomConfig)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, unbound.ErrInvalidSettings) || errors.Is(err, unbound.ErrInvalidCustomConfig) {
+				status = http.StatusBadRequest
+			}
+			writeError(w, status, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, preview)
+	}
+}
+
+func applyUnboundImportHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		bundle, ok := decodeUnboundBundle(w, r)
+		if !ok {
+			return
+		}
+		if err := manager.ApplyBundle(r.Context(), bundle.Settings, bundle.CustomConfig); err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, unbound.ErrInvalidSettings) || errors.Is(err, unbound.ErrInvalidCustomConfig) {
+				status = http.StatusBadRequest
+			}
+			writeError(w, status, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, bundle.Settings)
+	}
+}
+
+func decodeUnboundBundle(w http.ResponseWriter, r *http.Request) (unbound.ConfigBundle, bool) {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, int64(unbound.MaxCustomConfigBytes)+64<<10))
+	decoder.DisallowUnknownFields()
+	var bundle unbound.ConfigBundle
+	if err := decoder.Decode(&bundle); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return unbound.ConfigBundle{}, false
+	}
+	if bundle.SchemaVersion != unbound.BundleSchemaVersion {
+		err := fmt.Errorf("%w: got schema version %d, this RootGuard release supports %d", unbound.ErrIncompatibleBundle, bundle.SchemaVersion, unbound.BundleSchemaVersion)
+		writeError(w, http.StatusBadRequest, err)
+		return unbound.ConfigBundle{}, false
+	}
+	return bundle, true
 }
 
 func unboundDiagnosticsHandler(manager *unbound.Manager) http.HandlerFunc {

@@ -727,12 +727,14 @@ Entwicklung" without re-deriving what's next.
 
 Milestone completion snapshot:
 
-- **0.2 Unbound administration** - 5 items open, in top-to-bottom roadmap
+- **0.2 Unbound administration** - 4 items open, in top-to-bottom roadmap
   order: cross-setting conflict detection (the cross-zone hostname-uniqueness
   gap is closed; access rules have no guided surface to conflict-check
-  against yet, tracked separately below), resolver config import/export,
-  hand-written `unbound.conf` import, scenario tests, and host-discovery
-  beyond the FRITZ!Box adapter. The guided-zones frontend migration
+  against yet, tracked separately below), hand-written `unbound.conf`
+  import, scenario tests, and host-discovery beyond the FRITZ!Box adapter.
+  Import/export of the complete logical resolver configuration is done
+  (`UnboundConfigTransfer.tsx`, `/api/unbound/export`+`/api/unbound/import*`).
+  The guided-zones frontend migration
   ([#131](https://github.com/foxly-it/rootguard/issues/131)), the read-only
   fixed-base display, and the shared draft→preview→activate workflow
   abstraction (`useUnboundDraftWorkflow`, migrated onto by four of the five
@@ -766,12 +768,12 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.2 Unbound administration** (current) - work the remaining 5 items in
+1. **0.2 Unbound administration** (current) - work the remaining 4 items in
    the order they appear in `ROADMAP.md`: conflict detection (still open only
    pending the untracked guided access-rules surface - see "Tracked editor
-   follow-ups" below), resolver config import/export, hand-written
-   `unbound.conf` import, scenario tests, then host-discovery beyond
-   FRITZ!Box.
+   follow-ups" below), hand-written `unbound.conf` import, scenario tests,
+   then host-discovery beyond FRITZ!Box. Resolver config import/export is
+   done.
 2. **0.4 operations/backup/recovery** - the whole milestone is still open,
    in document order: configurable retention, manual cleanup preview,
    encrypted export, full restore, pre-update snapshot verification,
@@ -790,8 +792,9 @@ stays unchecked, but the only concrete gap left under it is a guided surface
 for access rules (currently expert-only) - a separate, larger feature (see
 "Tracked editor follow-ups" below), not a conflict-detection bug. Cross-zone
 hostname uniqueness is now enforced (mirrors the existing PTR-address
-check). Move on to **resolver config import/export**, the next unchecked
-0.2 item in document order.
+check). Resolver config import/export is also done now
+(`UnboundConfigTransfer.tsx`). Move on to **importing a hand-written
+`unbound.conf`**, the next unchecked 0.2 item in document order.
 
 ## Tracked editor follow-ups
 
