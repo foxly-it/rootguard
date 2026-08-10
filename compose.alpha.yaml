@@ -1,6 +1,6 @@
 name: rootguard
 
-# RootGuard 0.1.0-alpha.6 public evaluation stack.
+# RootGuard 0.1.0-alpha.7 public evaluation stack.
 # Every release image is pinned to its verified multi-architecture manifest.
 # Copy .env.alpha.example to .env and replace all placeholder secrets.
 

@@ -189,6 +189,12 @@ jobs:
             test -n "$digest"
             sed -i -E "s#(ghcr\.io/${OWNER}/${image}:)[^@\"]+(@sha256:[0-9a-f]+)?#\1${VERSION}@${digest}#g" compose.alpha.yaml
           done
+          # Keep the descriptive header comment's version number in sync too -
+          # left stale after alpha.7 since only the image pins were automated.
+          # Delimiter is | rather than the usual # since # is both the sed
+          # delimiter convention used above and a literal character in the
+          # comment line itself being matched here.
+          sed -i -E "s|^(# RootGuard )[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+( public evaluation stack\.)|\1${VERSION}\2|" compose.alpha.yaml
 
       - name: Commit updated pins
         run: |
