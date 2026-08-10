@@ -399,6 +399,73 @@ pre[tabindex]:focus-visible {
   border-radius: 4px;
 }
 
+.nav-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Sub-items for the currently active nav entry (e.g. Unbound's per-tab
+   sections) - registered via SidebarSubNav.tsx instead of the page
+   rendering its own floating/sticky "on this page" widget, which never
+   worked well below very wide viewports. Hidden on the mobile top-bar
+   layout below regardless of the collapsed state, since that layout has
+   no room for a nested list. */
+.nav-subitems {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 4px 20px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.nav-subitem {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.nav-subitem:hover {
+  background: var(--border-subtle);
+  color: var(--text);
+}
+
+.nav-subitem.active {
+  color: var(--text);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.nav-subitem:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.nav-subitem-icon {
+  display: grid;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  place-items: center;
+}
+
+.nav-subitem-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.nav-subitem-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
   .layout {
     width: 100%;
@@ -428,6 +495,10 @@ pre[tabindex]:focus-visible {
   }
 
   .sidebar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .nav-subitems {
     display: none;
   }
 

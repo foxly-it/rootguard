@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import {
   Activity, Code2, Expand, MapPinned, SlidersHorizontal,
@@ -45,6 +44,7 @@ import UnboundGuidedZones from "../components/UnboundGuidedZones";
 import UnboundPrivateDomains from "../components/UnboundPrivateDomains";
 import ContentModal from "../components/ContentModal";
 import { useI18n } from "../i18n";
+import { useSidebarSubNav, type SidebarSubNavItem } from "../layout/SidebarSubNav";
 
 export default function Unbound() {
   const { t, formatDate } = useI18n();
@@ -524,98 +524,6 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
   const sections = useMemo(() => sectionsFor(section, t), [section, t]);
   const requestedId = hash.slice(1);
   const [activeId, setActiveId] = useState("");
-  const [isRailMode, setIsRailMode] = useState(false);
-  const navRef = useRef<HTMLElement>(null);
-
-  // Tracks the rail breakpoint (see the media query in unbound-structure.css).
-  // 1600px, not 1440px: the widget now lives in the *left* gutter next to
-  // the main sidebar (see the positioning effect below), and that gutter is
-  // narrower than the right-hand one at any given viewport width - measured
-  // live at 92px at 1440px, only reaching a comfortable ~172px at 1600px.
-  useEffect(() => {
-    const rail = window.matchMedia("(min-width: 1600px)");
-    const update = () => setIsRailMode(rail.matches);
-    update();
-    rail.addEventListener("change", update);
-    return () => rail.removeEventListener("change", update);
-  }, []);
-
-  // In rail mode the nav is a fixed-position element portaled straight to
-  // <body> (see the render below) - .unbound-page permanently carries a
-  // non-"none" transform from its own entrance animation (fill-mode: both
-  // leaves transform: translateY(0) applied forever, and any transform
-  // other than the literal keyword "none" makes an element the containing
-  // block for its position: fixed descendants, per spec). Left in place,
-  // that silently repositions the rail relative to the content box instead
-  // of the viewport - miles off on a wide monitor where the centered,
-  // max-width content sits nowhere near the screen's actual edge. Portaling
-  // to <body> (which has no such transform) sidesteps the problem entirely,
-  // the same way the sidebar's own tooltip already does (see rg-nav-tooltip
-  // in SidebarLayout.tsx) - so this positioning effect only needs to track
-  // the real edges of .sidebar and .unbound-page, never fight a
-  // containing-block surprise.
-  useEffect(() => {
-    const nav = navRef.current;
-    if (!nav) return;
-    if (!isRailMode) {
-      nav.style.left = "";
-      nav.style.right = "";
-      return;
-    }
-    const sidebar = document.querySelector<HTMLElement>(".sidebar");
-    const page = document.querySelector<HTMLElement>(".unbound-page");
-    if (!sidebar || !page) return;
-
-    function position() {
-      if (!nav) return;
-      // Center the widget in the gutter between the main sidebar and the
-      // content column, rather than pinning it to one edge - the gutter's
-      // width varies with viewport (see the breakpoint comment above), so
-      // a fixed offset from either edge would drift off-center on wider
-      // monitors. CSS's fallback right: auto (see the media query) must
-      // stay cleared once left is set - position: fixed with both left and
-      // right active at once makes width: auto stretch to fill the gap
-      // instead of shrinking to the widget's actual content width.
-      const gutterStart = sidebar!.getBoundingClientRect().right;
-      const gutterEnd = page!.getBoundingClientRect().left;
-      const widgetWidth = nav!.getBoundingClientRect().width;
-      // When the gutter is narrower than the widget (e.g. sidebar expanded
-      // at a viewport width just above the rail-mode breakpoint), the
-      // centering offset goes negative and pushes the widget left of
-      // gutterStart, overlapping the sidebar - clamp it to never go there.
-      const centered = gutterStart + (gutterEnd - gutterStart - widgetWidth) / 2;
-      nav.style.left = `${Math.round(Math.max(gutterStart, centered))}px`;
-      nav.style.right = "auto";
-      // Align the top edge with .unbound-tabs (the main Overview/Resolver/...
-      // tab strip) instead of a fixed pixel guess below the app header -
-      // reads as belonging to that navigation rather than floating next to
-      // the hero above it, and stays correct regardless of how tall the
-      // hero card happens to be on a given page state.
-      const tabs = document.querySelector<HTMLElement>(".unbound-tabs");
-      if (tabs) {
-        nav.style.top = `${Math.round(tabs.getBoundingClientRect().top)}px`;
-      }
-    }
-
-    position();
-    window.addEventListener("resize", position);
-    const observer = new ResizeObserver(position);
-    observer.observe(page);
-    observer.observe(sidebar);
-    const tabs = document.querySelector<HTMLElement>(".unbound-tabs");
-    if (tabs) observer.observe(tabs);
-    return () => {
-      window.removeEventListener("resize", position);
-      observer.disconnect();
-    };
-    // sections.length, not just isRailMode: the <nav> itself only exists
-    // once a tab has 2+ registered sections (see the early return below),
-    // so a plain [isRailMode] dependency misses every case where isRailMode
-    // was already true *before* switching from a single-section tab (e.g.
-    // Overview) to a multi-section one (e.g. Advanced) - the effect never
-    // reruns on that switch since isRailMode itself didn't change, so the
-    // freshly-mounted nav is left unpositioned until the next resize.
-  }, [isRailMode, sections.length > 1]);
 
   useEffect(() => {
     if (sections.length === 0) { setActiveId(""); return; }
@@ -666,31 +574,24 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
     };
   }, [sections, requestedId]);
 
-  if (sections.length < 2) return null;
-
-  const navElement = (
-    <nav ref={navRef} className="unbound-section-nav" aria-label={t("unbound.sectionNav")}>
-      {/* Only visible in rail/widget mode (see the media query) - the
-          nav's own aria-label already identifies its purpose to assistive
-          tech, so this is a purely visual heading for sighted rail-mode
-          users and shouldn't be announced a second time. */}
-      <span className="unbound-section-nav-heading" aria-hidden="true">{t("unbound.sectionNav.heading")}</span>
-      {sections.map((entry) => (
-        <a
-          key={entry.id}
-          href={`#${entry.id}`}
-          className={activeId === entry.id ? "active" : ""}
-          title={entry.label}
-          onClick={(event) => { event.preventDefault(); jumpToSection(entry.id); setActiveId(entry.id); }}
-        >
-          {entry.icon}
-          <span className="unbound-section-nav-label">{entry.label}</span>
-        </a>
-      ))}
-    </nav>
+  // Registers these entries as nested items under the "Unbound settings"
+  // sidebar entry (see SidebarSubNav.tsx) instead of rendering an in-page
+  // widget - a floating rail and a sticky horizontal bar both worked out
+  // poorly on real-world viewports (overlap with the sidebar on some
+  // widths, cramped wrapping chips on a 13" laptop).
+  const items = useMemo<SidebarSubNavItem[]>(
+    () => sections.length < 2 ? [] : sections.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      icon: entry.icon,
+      active: activeId === entry.id,
+      onSelect: () => { jumpToSection(entry.id); setActiveId(entry.id); },
+    })),
+    [sections, activeId],
   );
+  useSidebarSubNav("/unbound", items);
 
-  return isRailMode ? createPortal(navElement, document.body) : navElement;
+  return null;
 }
 
 function SummaryCard({ label, value, detail, state = "neutral" }: { label: string; value: string; detail: string; state?: "healthy" | "neutral" }) {

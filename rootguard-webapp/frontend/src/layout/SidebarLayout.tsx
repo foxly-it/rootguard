@@ -3,7 +3,7 @@
 // Purpose: Layout with Sidebar Navigation
 // =====================================================
 
-import { useEffect, useState, type FocusEvent, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type FocusEvent, type MouseEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { NavLink } from "react-router";
 import {
@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Header from "./Header";
 import { useI18n } from "../i18n";
+import { SidebarSubNavContext, type SidebarSubNavItem } from "./SidebarSubNav";
 
 interface Props {
   children: ReactNode;
@@ -33,10 +34,19 @@ export default function SidebarLayout({ children }: Props) {
     return window.innerWidth >= 760;
   });
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
+  const [subNav, setSubNavState] = useState<{ path: string; items: SidebarSubNavItem[] } | null>(null);
 
   useEffect(() => {
     if (!collapsed) setTooltip(null);
   }, [collapsed]);
+
+  const setSubNav = useCallback((path: string, items: SidebarSubNavItem[]) => {
+    setSubNavState({ path, items });
+  }, []);
+  const clearSubNav = useCallback((path: string) => {
+    setSubNavState((current) => (current?.path === path ? null : current));
+  }, []);
+  const subNavContextValue = useMemo(() => ({ setSubNav, clearSubNav }), [setSubNav, clearSubNav]);
 
   function showTooltip(event: MouseEvent<HTMLElement> | FocusEvent<HTMLElement>, label: string) {
     if (!collapsed || window.innerWidth < 760) return;
@@ -78,21 +88,40 @@ export default function SidebarLayout({ children }: Props) {
             stays reachable without scrolling the page. */}
         <nav className="sidebar" aria-label={t("accessibility.mainNavigation")}>
           <div className="sidebar-nav">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}
-                aria-label={collapsed ? item.label : undefined}
-                onMouseEnter={(event) => showTooltip(event, item.label)}
-                onMouseLeave={hideTooltip}
-                onFocus={(event) => showTooltip(event, item.label)}
-                onBlur={hideTooltip}
-              >
-                <span className="nav-item-icon">{item.icon}</span>
-                <span className="nav-item-label">{item.label}</span>
-              </NavLink>
-            ))}
+            {navigation.map((item) => {
+              const nested = !collapsed && subNav?.path === item.to ? subNav.items : null;
+              return (
+                <div key={item.to} className="nav-group">
+                  <NavLink
+                    to={item.to}
+                    className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}
+                    aria-label={collapsed ? item.label : undefined}
+                    onMouseEnter={(event) => showTooltip(event, item.label)}
+                    onMouseLeave={hideTooltip}
+                    onFocus={(event) => showTooltip(event, item.label)}
+                    onBlur={hideTooltip}
+                  >
+                    <span className="nav-item-icon">{item.icon}</span>
+                    <span className="nav-item-label">{item.label}</span>
+                  </NavLink>
+                  {nested && (
+                    <nav className="nav-subitems" aria-label={t("unbound.sectionNav")}>
+                      {nested.map((sub) => (
+                        <a
+                          key={sub.id}
+                          href={`#${sub.id}`}
+                          className={sub.active ? "nav-subitem active" : "nav-subitem"}
+                          onClick={(event) => { event.preventDefault(); sub.onSelect(); }}
+                        >
+                          <span className="nav-subitem-icon">{sub.icon}</span>
+                          <span className="nav-subitem-label">{sub.label}</span>
+                        </a>
+                      ))}
+                    </nav>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <button
@@ -117,7 +146,9 @@ export default function SidebarLayout({ children }: Props) {
 
         {/* ================= Main ================= */}
         <main className="main" id="main-content" tabIndex={-1}>
-          {children}
+          <SidebarSubNavContext.Provider value={subNavContextValue}>
+            {children}
+          </SidebarSubNavContext.Provider>
         </main>
 
       </div>
