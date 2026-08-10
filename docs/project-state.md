@@ -727,15 +727,18 @@ Entwicklung" without re-deriving what's next.
 
 Milestone completion snapshot:
 
-- **0.2 Unbound administration** - 4 items open, in top-to-bottom roadmap
+- **0.2 Unbound administration** - 3 items open, in top-to-bottom roadmap
   order: cross-setting conflict detection (the cross-zone hostname-uniqueness
   gap is closed; access rules have no guided surface to conflict-check
-  against yet, tracked separately below), hand-written `unbound.conf`
-  import (partially delivered - classification/scalar-guided/expert-adoption
-  works, see below; zone-shaped guided reverse-mapping is the open part),
-  scenario tests, and host-discovery beyond the FRITZ!Box adapter.
-  Import/export of the complete logical resolver configuration is done
-  (`UnboundConfigTransfer.tsx`, `/api/unbound/export`+`/api/unbound/import*`).
+  against yet, tracked separately below), scenario tests, and
+  host-discovery beyond the FRITZ!Box adapter. Import/export of the complete
+  logical resolver configuration is done (`UnboundConfigTransfer.tsx`,
+  `/api/unbound/export`+`/api/unbound/import*`). Hand-written `unbound.conf`
+  import is done at full roadmap scope (`UnboundConfImport.tsx`, `import.go`'s
+  classifier): fixed-base filtering/conflict detection, all scalar guided
+  settings, forward-zone/local-zone/RFC1918-reverse-zone-policy/network-mode/
+  resource-profile reverse-mapping, and expert-config adoption for everything
+  else all work end to end.
   The guided-zones frontend migration
   ([#131](https://github.com/foxly-it/rootguard/issues/131)), the read-only
   fixed-base display, and the shared draft→preview→activate workflow
@@ -770,12 +773,12 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.2 Unbound administration** (current) - work the remaining 4 items in
+1. **0.2 Unbound administration** (current) - work the remaining 3 items in
    the order they appear in `ROADMAP.md`: conflict detection (still open only
    pending the untracked guided access-rules surface - see "Tracked editor
-   follow-ups" below), hand-written `unbound.conf` import, scenario tests,
-   then host-discovery beyond FRITZ!Box. Resolver config import/export is
-   done.
+   follow-ups" below), scenario tests, then host-discovery beyond FRITZ!Box.
+   Resolver config import/export and hand-written `unbound.conf` import are
+   both done.
 2. **0.4 operations/backup/recovery** - the whole milestone is still open,
    in document order: configurable retention, manual cleanup preview,
    encrypted export, full restore, pre-update snapshot verification,
@@ -794,23 +797,18 @@ stays unchecked, but the only concrete gap left under it is a guided surface
 for access rules (currently expert-only) - a separate, larger feature (see
 "Tracked editor follow-ups" below), not a conflict-detection bug. Cross-zone
 hostname uniqueness is now enforced (mirrors the existing PTR-address
-check). Resolver config import/export is also done now
-(`UnboundConfigTransfer.tsx`). Hand-written `unbound.conf` import is
-partially delivered (`UnboundConfImport.tsx`, `import.go`'s classifier) -
-per-directive classification, the ~12 scalar guided settings, and
-`forward-zone` reverse-mapping (a clean fit becomes a guided `ForwardZone`,
-including the zone-scoped `domain-insecure`/`private-domain` opt-ins; an
-unclean fit falls back to expert adoption), and `local-zone "static"`
-reverse-mapping (a clean group of `local-data`/`local-data-ptr` lines
-becomes a guided host-inventory zone; CNAME records, a mismatched PTR, a
-non-`static` type, or one of RootGuard's own RFC1918 reverse-zone names
-fall back to expert adoption) all work end to end, plus expert-config
-adoption of everything else. Still open: RFC1918 reverse-zone policy and
-resource-profile inference onto their guided *structures* instead of
-expert-adopting them verbatim - the checkbox stays unchecked until that's
-done, per explicit user direction (2026-08-10) to build this item at full
-roadmap scope rather than ship the leaner
-classify-only version as "done." Continue there, or move on to **scenario
+check). Resolver config import/export is done
+(`UnboundConfigTransfer.tsx`). Hand-written `unbound.conf` import is now
+also done at full roadmap scope (`UnboundConfImport.tsx`, `import.go`'s
+classifier), landed across PRs #171/#173/#174/#175 per explicit user
+direction (2026-08-10) to build it completely rather than ship a leaner
+classify-only version: fixed-base filtering/conflict detection, all scalar
+guided settings, `forward-zone` (including the zone-scoped
+`domain-insecure`/`private-domain` opt-ins), `local-zone "static"` host
+inventory (CNAME/mismatched-PTR/non-static/RFC1918-name all correctly fall
+back to expert adoption instead of guessing), RFC1918 reverse-zone policy,
+network mode, and resource-profile reverse-mapping, plus expert-config
+adoption for everything else, all work end to end. Move on to **scenario
 tests**, the next unchecked 0.2 item in document order.
 
 ## Tracked editor follow-ups

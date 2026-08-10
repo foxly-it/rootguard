@@ -93,19 +93,20 @@ var fixedBaseStructural = map[string]struct{}{
 	"trust-anchor-file":      {},
 }
 
-// guidedNotYetMapped are directives that DO belong to a guided setting but
-// that this importer doesn't reverse-map yet (network mode is a three-
-// directive combination, forward/local zones are block-shaped). Classified
-// as blocked rather than expert so they don't silently duplicate a guided
-// concept in the custom config, where they'd be rejected anyway by
-// blockedDirectives - the point is an accurate up-front finding, not a
-// deferred failure.
+// guidedNotYetMapped is the fallback for directives that DO belong to a
+// guided setting but that extractNetworkMode/extractResourceProfile above
+// couldn't cleanly resolve (a missing/duplicated directive in the trio or
+// pair, or a combination/cache-size pair that doesn't match a known
+// RootGuard preset). Classified as blocked rather than expert so they don't
+// silently duplicate a guided concept in the custom config, where they'd be
+// rejected anyway by blockedDirectives - the point is an accurate up-front
+// finding, not a deferred failure.
 var guidedNotYetMapped = map[string]string{
-	"do-ip4":           "maps to the guided network mode, not yet supported by this importer - set it directly in the guided form",
-	"do-ip6":           "maps to the guided network mode, not yet supported by this importer - set it directly in the guided form",
-	"prefer-ip6":       "maps to the guided network mode, not yet supported by this importer - set it directly in the guided form",
-	"rrset-cache-size": "maps to the guided resource profile, not yet supported by this importer - set it directly in the guided form",
-	"msg-cache-size":   "maps to the guided resource profile, not yet supported by this importer - set it directly in the guided form",
+	"do-ip4":           "part of the guided network mode, but do-ip4/do-ip6/prefer-ip6 must all be present with a consistent combination for this importer to apply it - set it directly in the guided form",
+	"do-ip6":           "part of the guided network mode, but do-ip4/do-ip6/prefer-ip6 must all be present with a consistent combination for this importer to apply it - set it directly in the guided form",
+	"prefer-ip6":       "part of the guided network mode, but do-ip4/do-ip6/prefer-ip6 must all be present with a consistent combination for this importer to apply it - set it directly in the guided form",
+	"rrset-cache-size": "part of the guided resource profile, but the cache sizes don't match a known RootGuard profile (small/medium/large) - set it directly in the guided form",
+	"msg-cache-size":   "part of the guided resource profile, but the cache sizes don't match a known RootGuard profile (small/medium/large) - set it directly in the guided form",
 }
 
 // ImportUnboundConf parses content as an unbound.conf and classifies every
@@ -134,6 +135,23 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 	// LocalZone, so the main loop below can skip just those lines.
 	localZones, consumedDirectives, localZoneFindings := extractLocalZones(blocks)
 	findings = append(findings, localZoneFindings...)
+
+	// RFC1918 reverse-zone policy, network mode, and resource profile are
+	// each either a fixed set of local-zone lines or a small directive
+	// combination - all-or-nothing the same way network mode's three
+	// directives are: partial or inconsistent input isn't guessed at, it
+	// falls through to guidedNotYetMapped's blocked fallback below.
+	reversePolicies, reverseConsumed, reverseFindings := extractReverseZonePolicies(blocks)
+	findings = append(findings, reverseFindings...)
+	mergeConsumedDirectives(consumedDirectives, reverseConsumed)
+
+	networkMode, networkModeConsumed, networkModeFindings := extractNetworkMode(blocks)
+	findings = append(findings, networkModeFindings...)
+	mergeConsumedDirectives(consumedDirectives, networkModeConsumed)
+
+	resourceProfile, resourceProfileConsumed, resourceProfileFindings := extractResourceProfile(blocks)
+	findings = append(findings, resourceProfileFindings...)
+	mergeConsumedDirectives(consumedDirectives, resourceProfileConsumed)
 
 	var privateDomains []string
 	for blockIndex, block := range blocks {
@@ -193,6 +211,17 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 	}
 	if len(privateDomains) > 0 {
 		candidate.PrivateDomains = append(append([]string{}, candidate.PrivateDomains...), privateDomains...)
+	}
+	for i := range candidate.ReverseZones {
+		if mode, ok := reversePolicies[candidate.ReverseZones[i].Network]; ok {
+			candidate.ReverseZones[i].Mode = mode
+		}
+	}
+	if networkMode != "" {
+		candidate.NetworkMode = networkMode
+	}
+	if resourceProfile != "" {
+		candidate.ResourceProfile = resourceProfile
 	}
 
 	adopted := strings.TrimSpace(currentCustom)
@@ -424,6 +453,216 @@ func parseLocalZoneValue(value string) (name, zoneType string, ok bool) {
 		return "", "", false
 	}
 	return name, zoneType, true
+}
+
+// mergeConsumedDirectives folds src's consumed directive indexes into dst.
+func mergeConsumedDirectives(dst, src map[int]map[int]bool) {
+	for blockIndex, indexes := range src {
+		if dst[blockIndex] == nil {
+			dst[blockIndex] = map[int]bool{}
+		}
+		for index := range indexes {
+			dst[blockIndex][index] = true
+		}
+	}
+}
+
+// extractReverseZonePolicies reverse-maps the RFC1918 reverse-zone local-zone
+// lines Settings.Render() itself generates (rfc1918ReverseZones) onto the
+// three ReverseZonePolicy entries every Settings already carries. A network
+// only maps cleanly when EVERY one of its reverse-zone names appears exactly
+// once, all with the same local-zone type ("static" or "transparent",
+// reverseZoneType's own vocabulary) - a partial set, a duplicate, an
+// inconsistent type, or an unrecognized type keyword all leave those lines
+// unconsumed rather than guessing at a policy that wasn't actually stated
+// cleanly.
+func extractReverseZonePolicies(blocks []parsedBlock) (policies map[string]string, consumed map[int]map[int]bool, findings []ImportFinding) {
+	policies = map[string]string{}
+	consumed = map[int]map[int]bool{}
+
+	type hit struct {
+		blockIndex, directiveIndex, line int
+		zoneType                         string
+	}
+	zoneNameToNetwork := map[string]string{}
+	for network, names := range rfc1918ReverseZones {
+		for _, name := range names {
+			zoneNameToNetwork[name] = network
+		}
+	}
+	hitsByNetworkAndName := map[string]map[string][]hit{}
+	for blockIndex, block := range blocks {
+		if block.section != "server" {
+			continue
+		}
+		for directiveIndex, d := range block.directives {
+			if d.key != "local-zone" {
+				continue
+			}
+			name, zoneType, ok := parseLocalZoneValue(d.value)
+			if !ok {
+				continue
+			}
+			network, isReserved := zoneNameToNetwork[name]
+			if !isReserved {
+				continue
+			}
+			if hitsByNetworkAndName[network] == nil {
+				hitsByNetworkAndName[network] = map[string][]hit{}
+			}
+			hitsByNetworkAndName[network][name] = append(hitsByNetworkAndName[network][name], hit{blockIndex, directiveIndex, d.line, zoneType})
+		}
+	}
+
+	for network, expectedNames := range rfc1918ReverseZones {
+		byName := hitsByNetworkAndName[network]
+		if len(byName) != len(expectedNames) {
+			continue
+		}
+		var matched []hit
+		var zoneType string
+		clean := true
+		for _, name := range expectedNames {
+			occurrences, ok := byName[name]
+			if !ok || len(occurrences) != 1 {
+				clean = false
+				break
+			}
+			if zoneType == "" {
+				zoneType = occurrences[0].zoneType
+			} else if occurrences[0].zoneType != zoneType {
+				clean = false
+				break
+			}
+			matched = append(matched, occurrences[0])
+		}
+		var mode string
+		switch {
+		case !clean:
+			continue
+		case zoneType == "static":
+			mode = reverseModeNXDOMAIN
+		case zoneType == "transparent":
+			mode = reverseModeTransparent
+		default:
+			continue
+		}
+		policies[network] = mode
+		for _, h := range matched {
+			if consumed[h.blockIndex] == nil {
+				consumed[h.blockIndex] = map[int]bool{}
+			}
+			consumed[h.blockIndex][h.directiveIndex] = true
+			findings = append(findings, ImportFinding{
+				Section: "server", Line: h.line, Directive: "local-zone", Value: network,
+				Disposition: ImportGuided,
+				Detail:      fmt.Sprintf("applied as part of the guided RFC1918 reverse-zone policy for %s (%s)", network, mode),
+			})
+		}
+	}
+	return policies, consumed, findings
+}
+
+// extractNetworkMode reverse-maps do-ip4/do-ip6/prefer-ip6 onto NetworkMode
+// only when all three appear exactly once with one of the three combinations
+// Settings.Render() itself produces - any other combination (missing,
+// duplicated, or simply not a combination Render() would generate) is left
+// for guidedNotYetMapped's blocked fallback rather than guessed at.
+func extractNetworkMode(blocks []parsedBlock) (mode string, consumed map[int]map[int]bool, findings []ImportFinding) {
+	consumed = map[int]map[int]bool{}
+	type hit struct {
+		blockIndex, directiveIndex, line int
+		value                            string
+	}
+	hits := map[string][]hit{}
+	for blockIndex, block := range blocks {
+		if block.section != "server" {
+			continue
+		}
+		for directiveIndex, d := range block.directives {
+			if d.key == "do-ip4" || d.key == "do-ip6" || d.key == "prefer-ip6" {
+				hits[d.key] = append(hits[d.key], hit{blockIndex, directiveIndex, d.line, strings.ToLower(d.value)})
+			}
+		}
+	}
+	if len(hits["do-ip4"]) != 1 || len(hits["do-ip6"]) != 1 || len(hits["prefer-ip6"]) != 1 {
+		return "", consumed, nil
+	}
+	ip4, ip6, prefer6 := hits["do-ip4"][0], hits["do-ip6"][0], hits["prefer-ip6"][0]
+	switch {
+	case ip4.value == "yes" && ip6.value == "no" && prefer6.value == "no":
+		mode = networkModeIPv4
+	case ip4.value == "yes" && ip6.value == "yes" && prefer6.value == "no":
+		mode = networkModeDual
+	case ip4.value == "no" && ip6.value == "yes" && prefer6.value == "yes":
+		mode = networkModeIPv6
+	default:
+		return "", consumed, nil
+	}
+	for _, item := range []struct {
+		key string
+		h   hit
+	}{{"do-ip4", ip4}, {"do-ip6", ip6}, {"prefer-ip6", prefer6}} {
+		if consumed[item.h.blockIndex] == nil {
+			consumed[item.h.blockIndex] = map[int]bool{}
+		}
+		consumed[item.h.blockIndex][item.h.directiveIndex] = true
+		findings = append(findings, ImportFinding{
+			Section: "server", Line: item.h.line, Directive: item.key, Value: item.h.value,
+			Disposition: ImportGuided, Detail: fmt.Sprintf("applied as part of the guided network mode (%s)", mode),
+		})
+	}
+	return mode, consumed, findings
+}
+
+// extractResourceProfile reverse-maps rrset-cache-size/msg-cache-size onto
+// ResourceProfile only when both appear exactly once and match one of
+// RootGuard's three preset size pairs (resourceProfileCacheSizes) exactly -
+// any other pairing is left for guidedNotYetMapped's blocked fallback.
+func extractResourceProfile(blocks []parsedBlock) (profile string, consumed map[int]map[int]bool, findings []ImportFinding) {
+	consumed = map[int]map[int]bool{}
+	type hit struct {
+		blockIndex, directiveIndex, line int
+		value                            string
+	}
+	hits := map[string][]hit{}
+	for blockIndex, block := range blocks {
+		if block.section != "server" {
+			continue
+		}
+		for directiveIndex, d := range block.directives {
+			if d.key == "rrset-cache-size" || d.key == "msg-cache-size" {
+				hits[d.key] = append(hits[d.key], hit{blockIndex, directiveIndex, d.line, d.value})
+			}
+		}
+	}
+	if len(hits["rrset-cache-size"]) != 1 || len(hits["msg-cache-size"]) != 1 {
+		return "", consumed, nil
+	}
+	rrset, msg := hits["rrset-cache-size"][0], hits["msg-cache-size"][0]
+	for name, sizes := range resourceProfileCacheSizes {
+		if sizes.RRSet == rrset.value && sizes.Message == msg.value {
+			profile = name
+			break
+		}
+	}
+	if profile == "" {
+		return "", consumed, nil
+	}
+	for _, item := range []struct {
+		key string
+		h   hit
+	}{{"rrset-cache-size", rrset}, {"msg-cache-size", msg}} {
+		if consumed[item.h.blockIndex] == nil {
+			consumed[item.h.blockIndex] = map[int]bool{}
+		}
+		consumed[item.h.blockIndex][item.h.directiveIndex] = true
+		findings = append(findings, ImportFinding{
+			Section: "server", Line: item.h.line, Directive: item.key, Value: item.h.value,
+			Disposition: ImportGuided, Detail: fmt.Sprintf("applied as the guided resource profile (%s)", profile),
+		})
+	}
+	return profile, consumed, findings
 }
 
 // classifyZoneScopedDirective resolves the ambiguity that domain-insecure
