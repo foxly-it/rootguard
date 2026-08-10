@@ -127,6 +127,14 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 	zones, zoneNames, mappedBlocks, zoneFindings := extractForwardZones(blocks)
 	findings = append(findings, zoneFindings...)
 
+	// Local host-inventory zones (local-zone "static" + their local-data/
+	// local-data-ptr lines) are extracted the same way, independently of
+	// forward zones - consumedDirectives marks exactly which directive
+	// indexes within each server: block were absorbed into a guided
+	// LocalZone, so the main loop below can skip just those lines.
+	localZones, consumedDirectives, localZoneFindings := extractLocalZones(blocks)
+	findings = append(findings, localZoneFindings...)
+
 	var privateDomains []string
 	for blockIndex, block := range blocks {
 		if mappedBlocks[blockIndex] {
@@ -140,10 +148,10 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 			continue
 		}
 		if block.section != "server" {
-			// No guided mapping yet for this clause (local-zone, stub-zone,
-			// view, ... - or a forward-zone that didn't map cleanly) - offer
-			// it for expert adoption as a whole, exactly as if it had been
-			// pasted into the expert editor by hand.
+			// No guided mapping yet for this clause (stub-zone, view, ... -
+			// or a forward-zone that didn't map cleanly) - offer it for
+			// expert adoption as a whole, exactly as if it had been pasted
+			// into the expert editor by hand.
 			findings = append(findings, ImportFinding{
 				Section: block.section, Line: block.lineStart, Directive: block.section,
 				Disposition: ImportExpert,
@@ -155,7 +163,10 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 			}
 			continue
 		}
-		for _, d := range block.directives {
+		for directiveIndex, d := range block.directives {
+			if consumedDirectives[blockIndex][directiveIndex] {
+				continue
+			}
 			if d.key == "domain-insecure" || d.key == "private-domain" {
 				finding, appendedDomain := classifyZoneScopedDirective(zones, zoneNames, d)
 				findings = append(findings, finding)
@@ -176,6 +187,9 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 	}
 	if len(zones) > 0 {
 		candidate.ForwardZones = append(append([]ForwardZone{}, candidate.ForwardZones...), zones...)
+	}
+	if len(localZones) > 0 {
+		candidate.LocalZones = append(append([]LocalZone{}, candidate.LocalZones...), localZones...)
 	}
 	if len(privateDomains) > 0 {
 		candidate.PrivateDomains = append(append([]string{}, candidate.PrivateDomains...), privateDomains...)
@@ -235,6 +249,181 @@ func extractForwardZones(blocks []parsedBlock) (zones []ForwardZone, zoneNames m
 		})
 	}
 	return zones, zoneNames, mappedBlocks, findings
+}
+
+// reservedReverseZoneNames returns every RFC1918 reverse-zone name RootGuard
+// itself can already generate (see rfc1918ReverseZones) - these must never be
+// reverse-mapped as local host-inventory zones, since they're RootGuard's own
+// reverse-DNS policy zones (a different guided concept this importer doesn't
+// reverse-map yet) and typically carry no host data at all, which would
+// otherwise produce an empty, invalid LocalZone.
+func reservedReverseZoneNames() map[string]struct{} {
+	reserved := map[string]struct{}{}
+	for _, zones := range rfc1918ReverseZones {
+		for _, zone := range zones {
+			reserved[zone] = struct{}{}
+		}
+	}
+	return reserved
+}
+
+// extractLocalZones reverse-maps local-zone "static" clauses (plus their
+// local-data/local-data-ptr lines) onto the guided host-inventory model. A
+// group is a local-zone line followed immediately by zero or more
+// local-data/local-data-ptr lines - exactly the contiguous shape
+// Settings.Render() itself produces, which keeps export/import round-trips
+// lossless. Any other server: directive interleaved between groups simply
+// closes the current group without disturbing it.
+//
+// A group only maps cleanly if: the zone isn't one of RootGuard's own
+// RFC1918 reverse zones, every local-data line is an A/AAAA record whose
+// name is <hostname>.<zone> (CNAME and any other record type has no guided
+// equivalent - see issue #131), and every local-data-ptr line's target and
+// address match a host already established by a local-data line in the same
+// group. A group that doesn't map cleanly is left entirely unconsumed, so
+// the caller's main loop offers each of its lines for expert adoption
+// individually instead of silently dropping anything.
+func extractLocalZones(blocks []parsedBlock) (zones []LocalZone, consumed map[int]map[int]bool, findings []ImportFinding) {
+	consumed = map[int]map[int]bool{}
+	reserved := reservedReverseZoneNames()
+	for blockIndex, block := range blocks {
+		if block.section != "server" {
+			continue
+		}
+		directives := block.directives
+		for i := 0; i < len(directives); i++ {
+			d := directives[i]
+			if d.key != "local-zone" {
+				continue
+			}
+			name, zoneType, ok := parseLocalZoneValue(d.value)
+			groupStart := i
+			groupEnd := i + 1
+			for groupEnd < len(directives) && (directives[groupEnd].key == "local-data" || directives[groupEnd].key == "local-data-ptr") {
+				groupEnd++
+			}
+			i = groupEnd - 1 // outer loop's i++ resumes right after the group
+
+			if !ok || zoneType != "static" {
+				continue
+			}
+			if _, isReserved := reserved[name]; isReserved {
+				continue
+			}
+			zone, usedIndexes, clean := buildLocalZoneCandidate(name, directives[groupStart:groupEnd], groupStart)
+			if !clean {
+				continue
+			}
+			zones = append(zones, zone)
+			if consumed[blockIndex] == nil {
+				consumed[blockIndex] = map[int]bool{}
+			}
+			for _, idx := range usedIndexes {
+				consumed[blockIndex][idx] = true
+			}
+			findings = append(findings, ImportFinding{
+				Section: "server", Line: d.line, Directive: "local-zone", Value: name,
+				Disposition: ImportGuided, Detail: "applied as a guided local host inventory zone",
+			})
+		}
+	}
+	return zones, consumed, findings
+}
+
+// buildLocalZoneCandidate turns one local-zone group (group[0] is the
+// local-zone line itself) into a LocalZone. groupStart is group[0]'s index
+// within its block's directive list, used to report which indexes were
+// consumed.
+func buildLocalZoneCandidate(zoneName string, group []parsedDirective, groupStart int) (LocalZone, []int, bool) {
+	type hostState struct {
+		hostname   string
+		ipv4, ipv6 string
+		ptr        bool
+	}
+	var order []string
+	hosts := map[string]*hostState{}
+	usedIndexes := []int{groupStart}
+	dataSuffix := "." + zoneName
+	ptrSuffix := "." + strings.TrimSuffix(zoneName, ".")
+
+	for offset, d := range group[1:] {
+		idx := groupStart + 1 + offset
+		switch d.key {
+		case "local-data":
+			fields := strings.Fields(d.value)
+			if len(fields) != 4 || !strings.EqualFold(fields[1], "IN") || !strings.HasSuffix(fields[0], dataSuffix) {
+				return LocalZone{}, nil, false
+			}
+			hostname := strings.TrimSuffix(fields[0], dataSuffix)
+			if hostname == "" {
+				return LocalZone{}, nil, false
+			}
+			state, exists := hosts[hostname]
+			if !exists {
+				state = &hostState{hostname: hostname}
+				hosts[hostname] = state
+				order = append(order, hostname)
+			}
+			switch address := fields[3]; strings.ToUpper(fields[2]) {
+			case "A":
+				if state.ipv4 != "" {
+					return LocalZone{}, nil, false
+				}
+				state.ipv4 = address
+			case "AAAA":
+				if state.ipv6 != "" {
+					return LocalZone{}, nil, false
+				}
+				state.ipv6 = address
+			default:
+				// CNAME or anything else has no guided equivalent (#131).
+				return LocalZone{}, nil, false
+			}
+			usedIndexes = append(usedIndexes, idx)
+		case "local-data-ptr":
+			fields := strings.Fields(d.value)
+			if len(fields) != 2 || !strings.HasSuffix(fields[1], ptrSuffix) {
+				return LocalZone{}, nil, false
+			}
+			address := fields[0]
+			hostname := strings.TrimSuffix(fields[1], ptrSuffix)
+			state, exists := hosts[hostname]
+			if !exists || (state.ipv4 != address && state.ipv6 != address) {
+				return LocalZone{}, nil, false
+			}
+			state.ptr = true
+			usedIndexes = append(usedIndexes, idx)
+		}
+	}
+
+	if len(order) == 0 {
+		return LocalZone{}, nil, false
+	}
+	zone := LocalZone{Name: zoneName}
+	for _, hostname := range order {
+		state := hosts[hostname]
+		zone.Hosts = append(zone.Hosts, LocalHost{Hostname: state.hostname, IPv4: state.ipv4, IPv6: state.ipv6, PTR: state.ptr})
+	}
+	return zone, usedIndexes, true
+}
+
+// parseLocalZoneValue splits a local-zone directive's raw value - a quoted
+// zone name followed by an unquoted type keyword, e.g. `"home.lab." static`
+// - which unquoteDirectiveValue (a single-token unquoter) leaves untouched.
+func parseLocalZoneValue(value string) (name, zoneType string, ok bool) {
+	if !strings.HasPrefix(value, `"`) {
+		return "", "", false
+	}
+	closeIdx := strings.Index(value[1:], `"`)
+	if closeIdx < 0 {
+		return "", "", false
+	}
+	name = value[1 : 1+closeIdx]
+	zoneType = strings.TrimSpace(value[1+closeIdx+1:])
+	if zoneType == "" {
+		return "", "", false
+	}
+	return name, zoneType, true
 }
 
 // classifyZoneScopedDirective resolves the ambiguity that domain-insecure

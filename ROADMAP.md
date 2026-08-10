@@ -426,13 +426,22 @@ The detailed ownership and directive plan lives in
       `AllowUnsigned`/`AllowPrivateAddresses`, a `private-domain` matching no
       zone joins the global guided list instead, and a `domain-insecure`
       matching no zone (meaningless outside that context) is offered for
-      expert adoption. New `UnboundConfImport.tsx` (Unbound Advanced tab)
-      drives paste-or-upload → classify → the existing bundle preview/
-      activate lifecycle from the import/export feature above. Still open,
-      and why this stays unchecked: `local-zone`/`local-data`/
-      `local-data-ptr` into the typed host inventory, RFC1918 reverse-zone
-      policy, and resource-profile inference from cache-size values
-      (`do-ip4`/`do-ip6`/`prefer-ip6` and `rrset-cache-size`/
+      expert adoption. `local-zone "static"` clauses (plus their contiguous
+      `local-data`/`local-data-ptr` lines, matching exactly the shape
+      `Settings.Render()` itself produces) now reverse-map onto the typed
+      host inventory too when they're a clean fit: every `local-data` line
+      is an A/AAAA record shaped `<hostname>.<zone>`, and every
+      `local-data-ptr` line's address and target match a host already
+      established in the same group. CNAME records (out of scope for the
+      guided model, see #131), a mismatched PTR, a non-`static` type, or one
+      of RootGuard's own RFC1918 reverse-zone names (which would otherwise
+      produce an empty, invalid zone) all fall back to per-line expert
+      adoption instead of guessing wrong. New `UnboundConfImport.tsx`
+      (Unbound Advanced tab) drives paste-or-upload → classify → the
+      existing bundle preview/activate lifecycle from the import/export
+      feature above. Still open, and why this stays unchecked: RFC1918
+      reverse-zone policy and resource-profile inference from cache-size
+      values (`do-ip4`/`do-ip6`/`prefer-ip6` and `rrset-cache-size`/
       `msg-cache-size` are explicitly classified as blocked-pending-support
       today, not silently mishandled)
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,

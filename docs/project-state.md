@@ -800,9 +800,12 @@ partially delivered (`UnboundConfImport.tsx`, `import.go`'s classifier) -
 per-directive classification, the ~12 scalar guided settings, and
 `forward-zone` reverse-mapping (a clean fit becomes a guided `ForwardZone`,
 including the zone-scoped `domain-insecure`/`private-domain` opt-ins; an
-unclean fit falls back to expert adoption) all work end to end, plus
-expert-config adoption of everything else. Still open: reverse-mapping
-`local-zone`/`local-data`/`local-data-ptr`, RFC1918 reverse-zone policy, and
+unclean fit falls back to expert adoption), and `local-zone "static"`
+reverse-mapping (a clean group of `local-data`/`local-data-ptr` lines
+becomes a guided host-inventory zone; CNAME records, a mismatched PTR, a
+non-`static` type, or one of RootGuard's own RFC1918 reverse-zone names
+fall back to expert adoption) all work end to end, plus expert-config
+adoption of everything else. Still open: RFC1918 reverse-zone policy and
 resource-profile inference onto their guided *structures* instead of
 expert-adopting them verbatim - the checkbox stays unchecked until that's
 done, per explicit user direction (2026-08-10) to build this item at full

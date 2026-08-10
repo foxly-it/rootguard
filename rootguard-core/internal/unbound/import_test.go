@@ -338,3 +338,123 @@ func TestImportOffersUnmatchedDomainInsecureForExpertAdoption(t *testing.T) {
 		t.Fatalf("expected domain-insecure adopted verbatim, got %q", result.CustomAdopted)
 	}
 }
+
+func TestImportAppliesCleanLocalZoneAsGuided(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"printer.home.lab. IN A 192.168.1.20\"\n" +
+		"    local-data: \"printer.home.lab. IN AAAA fd00::20\"\n" +
+		"    local-data-ptr: \"192.168.1.20 printer.home.lab\"\n" +
+		"    local-data: \"router.home.lab. IN A 192.168.1.1\"\n"
+
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finding := findingFor(t, result.Findings, "local-zone")
+	if finding.Disposition != ImportGuided || finding.Value != "home.lab." {
+		t.Fatalf("expected local-zone to be guided, got %+v", finding)
+	}
+	if len(result.Settings.LocalZones) != 1 {
+		t.Fatalf("expected 1 guided local zone, got %+v", result.Settings.LocalZones)
+	}
+	zone := result.Settings.LocalZones[0]
+	if zone.Name != "home.lab." || len(zone.Hosts) != 2 {
+		t.Fatalf("unexpected zone: %+v", zone)
+	}
+	printer := zone.Hosts[0]
+	if printer.Hostname != "printer" || printer.IPv4 != "192.168.1.20" || printer.IPv6 != "fd00::20" || !printer.PTR {
+		t.Fatalf("unexpected first host: %+v", printer)
+	}
+	router := zone.Hosts[1]
+	if router.Hostname != "router" || router.IPv4 != "192.168.1.1" || router.PTR {
+		t.Fatalf("unexpected second host: %+v", router)
+	}
+	if result.CustomAdopted != "" {
+		t.Fatalf("a clean local zone must not also be offered for expert adoption, got %q", result.CustomAdopted)
+	}
+}
+
+func TestImportHandlesMultipleLocalZonesInOrder(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"printer.home.lab. IN A 192.168.1.20\"\n" +
+		"    local-zone: \"guests.lab.\" static\n" +
+		"    local-data: \"tablet.guests.lab. IN A 192.168.2.20\"\n"
+
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 2 {
+		t.Fatalf("expected 2 guided local zones, got %+v", result.Settings.LocalZones)
+	}
+	if result.Settings.LocalZones[0].Name != "home.lab." || result.Settings.LocalZones[1].Name != "guests.lab." {
+		t.Fatalf("unexpected zone order: %+v", result.Settings.LocalZones)
+	}
+}
+
+func TestImportSkipsReservedRFC1918ReverseZoneNames(t *testing.T) {
+	content := "server:\n    local-zone: \"10.in-addr.arpa.\" static\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 0 {
+		t.Fatalf("expected RFC1918 reverse zone not to be treated as a host inventory zone, got %+v", result.Settings.LocalZones)
+	}
+	finding := findingFor(t, result.Findings, "local-zone")
+	if finding.Disposition != ImportExpert {
+		t.Fatalf("expected the reserved zone name to fall back to expert adoption, got %+v", finding)
+	}
+}
+
+func TestImportFallsBackToExpertForCNAMERecords(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"alias.home.lab. IN CNAME target.example.\"\n"
+
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 0 {
+		t.Fatalf("expected CNAME group not to be guided-mapped, got %+v", result.Settings.LocalZones)
+	}
+	if !strings.Contains(result.CustomAdopted, `local-zone: "home.lab." static`) || !strings.Contains(result.CustomAdopted, "CNAME") {
+		t.Fatalf("expected the whole group preserved for expert adoption, got %q", result.CustomAdopted)
+	}
+}
+
+func TestImportFallsBackToExpertForMismatchedPTR(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"printer.home.lab. IN A 192.168.1.20\"\n" +
+		"    local-data-ptr: \"192.168.1.99 printer.home.lab\"\n"
+
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 0 {
+		t.Fatalf("expected a mismatched PTR to prevent guided mapping, got %+v", result.Settings.LocalZones)
+	}
+	if !strings.Contains(result.CustomAdopted, "local-data-ptr") {
+		t.Fatalf("expected the whole group preserved for expert adoption, got %q", result.CustomAdopted)
+	}
+}
+
+func TestImportFallsBackToExpertForNonStaticLocalZoneType(t *testing.T) {
+	content := "server:\n    local-zone: \"custom.example.\" transparent\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 0 {
+		t.Fatalf("expected a non-static local-zone type not to be guided-mapped, got %+v", result.Settings.LocalZones)
+	}
+	finding := findingFor(t, result.Findings, "local-zone")
+	if finding.Disposition != ImportExpert {
+		t.Fatalf("expected expert adoption, got %+v", finding)
+	}
+}
