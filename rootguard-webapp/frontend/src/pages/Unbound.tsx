@@ -579,7 +579,12 @@ function UnboundSectionNav({ section, hash, t }: { section: UnboundSection; hash
       const gutterStart = sidebar!.getBoundingClientRect().right;
       const gutterEnd = page!.getBoundingClientRect().left;
       const widgetWidth = nav!.getBoundingClientRect().width;
-      nav.style.left = `${Math.round(gutterStart + (gutterEnd - gutterStart - widgetWidth) / 2)}px`;
+      // When the gutter is narrower than the widget (e.g. sidebar expanded
+      // at a viewport width just above the rail-mode breakpoint), the
+      // centering offset goes negative and pushes the widget left of
+      // gutterStart, overlapping the sidebar - clamp it to never go there.
+      const centered = gutterStart + (gutterEnd - gutterStart - widgetWidth) / 2;
+      nav.style.left = `${Math.round(Math.max(gutterStart, centered))}px`;
       nav.style.right = "auto";
       // Align the top edge with .unbound-tabs (the main Overview/Resolver/...
       // tab strip) instead of a fixed pixel guess below the app header -
