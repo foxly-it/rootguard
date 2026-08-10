@@ -149,22 +149,35 @@ adoption.
   that isn't a clean fit (missing a name/target, or containing a directive
   this importer doesn't reverse-map, e.g. `forward-tls-upstream`) falls back
   to whole-block expert adoption rather than silently dropping what doesn't
-  fit. **Still open** for the remaining block-shaped or multi-directive
-  guided settings: `local-zone`/`local-data`/`local-data-ptr` → the typed
-  host inventory, RFC1918 reverse-zone policy, and resource-profile
-  inference from `rrset-cache-size`/`msg-cache-size` - these are explicitly
-  classified as blocked-pending-support today (not silently mishandled),
-  and `do-ip4`/`do-ip6`/`prefer-ip6` the same pending network-mode
+  fit. **Also delivered for `local-zone "static"` clauses**: a group is one
+  `local-zone` line plus its contiguous `local-data`/`local-data-ptr` lines,
+  the exact shape `Settings.Render()` itself produces (round-trip lossless
+  for anything RootGuard exported). It maps cleanly when every `local-data`
+  line is an A/AAAA record shaped `<hostname>.<zone>` and every
+  `local-data-ptr` line's address and target match a host already
+  established in the group; CNAME records (out of scope for the guided
+  model, see #131), a mismatched PTR, a non-`static` type, or one of
+  RootGuard's own RFC1918 reverse-zone names (which would otherwise produce
+  an empty, invalid zone - excluded via `reservedReverseZoneNames`) all fall
+  back to per-line expert adoption instead of guessing wrong. **Still open**
+  for the remaining block-shaped or multi-directive guided settings: RFC1918
+  reverse-zone policy and resource-profile inference from
+  `rrset-cache-size`/`msg-cache-size` - these are explicitly classified as
+  blocked-pending-support today (not silently mishandled), and
+  `do-ip4`/`do-ip6`/`prefer-ip6` the same pending network-mode
   reverse-mapping.
 - Remaining directives that have no guided equivalent but pass the same
   expert allowlist as manual expert input are offered for adoption into
   `90-rootguard-custom.conf`, preserving whole clause blocks (e.g. a
   `forward-zone:` block that isn't a clean guided fit, reconstructed
-  verbatim) rather than individual lines; anything on the permanently
-  blocked list, or that opens a control surface (`remote-control`, `python`,
-  `dynlib`, `dnstap`), is reported as unsupported, never silently accepted.
-  **Delivered** - this is also today's path for the block-shaped guided
-  directives above that don't have their own reverse-mapping yet.
+  verbatim) rather than individual lines - an unclean `local-zone` group
+  falls back to the same per-line adoption every other unmapped `server:`
+  directive uses, since it isn't its own clause the way `forward-zone` is;
+  anything on the permanently blocked list, or that opens a control surface
+  (`remote-control`, `python`, `dynlib`, `dnstap`), is reported as
+  unsupported, never silently accepted. **Delivered** - this is also
+  today's path for the block-shaped guided directives above that don't have
+  their own reverse-mapping yet.
 - The imported file is treated as an untrusted draft, matching the
   router-import pattern above: classification is a pure, read-only step:
   applying it reuses the same `ConfigBundle` preview/activate lifecycle as
