@@ -727,13 +727,16 @@ Exit: documented security review has no unresolved critical or high finding.
 Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
 
 - [ ] Automated semantic versioning across all component repositories
-- [ ] Multi-architecture GHCR manifest lists pinned by digest - the property
-      itself already holds (`release-alpha.yml` publishes proper
-      `linux/amd64,linux/arm64` manifest lists for all 5 components, and
-      `compose.alpha.yaml` references every one of them, including
-      third-party AdGuard, by digest), but the pins are maintained by hand -
-      no CI step updates `compose.alpha.yaml` after a release publishes new
-      digests. Stays open until that update is automated, not just present
+- [x] Multi-architecture GHCR manifest lists pinned by digest -
+      `release-alpha.yml` publishes proper `linux/amd64,linux/arm64`
+      manifest lists for all 5 components, and `compose.alpha.yaml`
+      references every one of them, including third-party AdGuard, by
+      digest. The `update-alpha-pins` job (added in #165) now updates those
+      pins automatically after every release instead of by hand - proven in
+      production for the first time with the `v0.1.0-alpha.7` release: all
+      four RootGuard image pins landed correctly in a `[skip ci]` commit
+      pushed straight to `main`, verified against the actual published
+      digests before the tag was cut
 - [ ] SBOM and provenance for every image
 - [ ] Image signing and signature verification in the release/update path
 - [ ] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions

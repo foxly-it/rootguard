@@ -765,9 +765,10 @@ Milestone completion snapshot:
   destructive-action rate limits/audit beyond the authentication surface,
   a full keyboard/screen-reader workflow re-verification, and a WCAG
   labels/errors review.
-- **0.6 beta release engineering** - 9 of 10 items open (issue templates
-  landed as a stale-checkbox fix). This is the actual gate to cut
-  `0.6.0-beta.1`.
+- **0.6 beta release engineering** - 8 of 10 items open (issue templates
+  landed as a stale-checkbox fix; the digest-pin automation from #165 is
+  now also checked off, proven in production by the `v0.1.0-alpha.7`
+  release on 2026-08-10). This is the actual gate to cut `0.6.0-beta.1`.
 
 **Working order: top-to-bottom through the roadmap document**, per explicit
 user direction (2026-08-09) - not "closest-to-done first" as this section
