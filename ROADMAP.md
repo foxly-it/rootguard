@@ -403,11 +403,30 @@ The detailed ownership and directive plan lives in
       on-disk value - otherwise an import resolving an existing
       guided/expert conflict by changing both sides at once would be
       spuriously rejected
-- [ ] Import an existing hand-written `unbound.conf`: classify each directive
-      against the fixed base, guided settings, expert allowlist, and blocked
-      list, filter out anything RootGuard already owns so nothing gets
-      silently duplicated or overridden, and offer only the remainder for
-      preview-gated adoption (see `docs/unbound-configuration-roadmap.md`)
+- [ ] Import an existing hand-written `unbound.conf` - partially delivered.
+      `ImportUnboundConf` (`rootguard-core/internal/unbound/import.go`) parses
+      an arbitrary unbound.conf into clauses and classifies every directive:
+      fixed-base directives are filtered (or rejected as a conflict if the
+      imported value differs, e.g. `hide-version: no`), the ~12 flat
+      `server:` scalars with an existing guided setting (qname-minimisation,
+      prefetch(-key), aggressive-nsec, serve-expired(-ttl/-client-timeout),
+      cache-min/max-ttl, num-threads, edns-buffer-size, verbosity) are applied
+      to a candidate `Settings`, dangerous clauses (`remote-control`,
+      `python`, `dynlib`, `dnstap`) are blocked outright, and everything else
+      allowed for manual expert input is offered for expert-config adoption -
+      including whole `forward-zone`/`local-zone`/etc. blocks, which is
+      already exactly what pasting them into the expert editor by hand does
+      today. New `UnboundConfImport.tsx` (Unbound Advanced tab) drives
+      paste-or-upload → classify → the existing bundle preview/activate
+      lifecycle from the import/export feature above. Still open, and why
+      this stays unchecked: reverse-mapping directives onto their guided
+      *structure* rather than expert text - `forward-zone` blocks into
+      guided `ForwardZone`s, `local-zone`/`local-data`/`local-data-ptr` into
+      the typed host inventory, `private-domain`, RFC1918 reverse-zone
+      policy, and resource-profile inference from cache-size values
+      (`do-ip4`/`do-ip6`/`prefer-ip6` and `rrset-cache-size`/
+      `msg-cache-size` are explicitly classified as blocked-pending-support
+      today, not silently mishandled)
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
       broken upstreams, and DNSSEC failures - 2 of 6 partially, incidentally
       covered rather than as named scenarios: DNSSEC failures are verified

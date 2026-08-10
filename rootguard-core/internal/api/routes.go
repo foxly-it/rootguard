@@ -57,6 +57,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/unbound/export", getUnboundExportHandler(deps.Unbound))
 	apiMux.HandleFunc("POST /api/unbound/import/preview", previewUnboundImportHandler(deps.Unbound))
 	apiMux.HandleFunc("POST /api/unbound/import", applyUnboundImportHandler(deps.Unbound))
+	apiMux.HandleFunc("POST /api/unbound/import-conf", classifyUnboundImportConfHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/diagnostics", unboundDiagnosticsHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/path-diagnostics", unboundPathDiagnosticsHandler(deps.Unbound, deps.AdGuardDNSAddress))
 	apiMux.HandleFunc("GET /api/unbound/diagnostic-logging", unboundDiagnosticLoggingStatusHandler(deps.Unbound))
@@ -601,6 +602,33 @@ func decodeUnboundBundle(w http.ResponseWriter, r *http.Request) (unbound.Config
 		return unbound.ConfigBundle{}, false
 	}
 	return bundle, true
+}
+
+type importConfRequest struct {
+	Content string `json:"content"`
+}
+
+func classifyUnboundImportConfHandler(manager *unbound.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, int64(unbound.MaxCustomConfigBytes)+1024))
+		decoder.DisallowUnknownFields()
+		var request importConfRequest
+		if err := decoder.Decode(&request); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		result, err := manager.ClassifyImport(request.Content)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, unbound.ErrInvalidCustomConfig) {
+				status = http.StatusBadRequest
+			}
+			writeError(w, status, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
+	}
 }
 
 func unboundDiagnosticsHandler(manager *unbound.Manager) http.HandlerFunc {

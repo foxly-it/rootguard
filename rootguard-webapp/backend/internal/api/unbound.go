@@ -263,6 +263,19 @@ func decodeUnboundBundle(w http.ResponseWriter, r *http.Request) (coreclient.Unb
 	return bundle, true
 }
 
+func HandleClassifyUnboundImportConf(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	request, ok := decodeCustomConfig(w, r)
+	if !ok {
+		return
+	}
+	result, err := core.ClassifyUnboundImportConf(r.Context(), request.Content)
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func HandleUnboundDirectives(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	directives, err := core.UnboundDirectives(r.Context())
 	if err != nil {

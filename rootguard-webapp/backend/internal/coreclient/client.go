@@ -251,6 +251,21 @@ type UnboundBundlePreview struct {
 	RenderedConfig string          `json:"rendered_config"`
 }
 
+type UnboundImportFinding struct {
+	Section     string `json:"section"`
+	Line        int    `json:"line"`
+	Directive   string `json:"directive"`
+	Value       string `json:"value,omitempty"`
+	Disposition string `json:"disposition"`
+	Detail      string `json:"detail"`
+}
+
+type UnboundImportResult struct {
+	Findings      []UnboundImportFinding `json:"findings"`
+	Settings      UnboundSettings        `json:"settings"`
+	CustomAdopted string                 `json:"custom_adopted"`
+}
+
 type UnboundDirectiveReference struct {
 	Name        string `json:"name"`
 	Section     string `json:"section"`
@@ -562,6 +577,12 @@ func (c *Client) PreviewUnboundImport(ctx context.Context, bundle UnboundConfigB
 func (c *Client) ApplyUnboundImport(ctx context.Context, bundle UnboundConfigBundle) (UnboundSettings, error) {
 	var result UnboundSettings
 	err := c.do(ctx, http.MethodPost, "/api/unbound/import", bundle, &result)
+	return result, err
+}
+
+func (c *Client) ClassifyUnboundImportConf(ctx context.Context, content string) (UnboundImportResult, error) {
+	var result UnboundImportResult
+	err := c.do(ctx, http.MethodPost, "/api/unbound/import-conf", map[string]string{"content": content}, &result)
 	return result, err
 }
 

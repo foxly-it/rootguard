@@ -731,7 +731,9 @@ Milestone completion snapshot:
   order: cross-setting conflict detection (the cross-zone hostname-uniqueness
   gap is closed; access rules have no guided surface to conflict-check
   against yet, tracked separately below), hand-written `unbound.conf`
-  import, scenario tests, and host-discovery beyond the FRITZ!Box adapter.
+  import (partially delivered - classification/scalar-guided/expert-adoption
+  works, see below; zone-shaped guided reverse-mapping is the open part),
+  scenario tests, and host-discovery beyond the FRITZ!Box adapter.
   Import/export of the complete logical resolver configuration is done
   (`UnboundConfigTransfer.tsx`, `/api/unbound/export`+`/api/unbound/import*`).
   The guided-zones frontend migration
@@ -793,8 +795,18 @@ for access rules (currently expert-only) - a separate, larger feature (see
 "Tracked editor follow-ups" below), not a conflict-detection bug. Cross-zone
 hostname uniqueness is now enforced (mirrors the existing PTR-address
 check). Resolver config import/export is also done now
-(`UnboundConfigTransfer.tsx`). Move on to **importing a hand-written
-`unbound.conf`**, the next unchecked 0.2 item in document order.
+(`UnboundConfigTransfer.tsx`). Hand-written `unbound.conf` import is
+partially delivered (`UnboundConfImport.tsx`, `import.go`'s classifier) -
+per-directive classification, the ~12 scalar guided settings, and
+expert-config adoption of everything else (including whole zone blocks,
+as-is) all work end to end. Still open: reverse-mapping `forward-zone`,
+`local-zone`/`local-data`/`local-data-ptr`, `private-domain`, RFC1918
+reverse-zone policy, and resource-profile inference onto their guided
+*structures* instead of expert-adopting them verbatim - the checkbox stays
+unchecked until that's done, per explicit user direction (2026-08-10) to
+build this item at full roadmap scope rather than ship the leaner
+classify-only version as "done." Continue there, or move on to **scenario
+tests**, the next unchecked 0.2 item in document order.
 
 ## Tracked editor follow-ups
 

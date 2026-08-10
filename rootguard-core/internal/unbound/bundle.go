@@ -86,6 +86,23 @@ func (m *Manager) PreviewBundle(ctx context.Context, settings Settings, custom s
 	}, nil
 }
 
+// ClassifyImport parses content as an unbound.conf and classifies its
+// directives against the currently active settings and custom config - a
+// read-only preview step. The caller turns the result into a ConfigBundle
+// and runs it through PreviewBundle/ApplyBundle like any other import,
+// which is where real unbound-checkconf validation happens.
+func (m *Manager) ClassifyImport(content string) (ImportResult, error) {
+	settings, err := m.Load()
+	if err != nil {
+		return ImportResult{}, err
+	}
+	custom, err := m.LoadCustom()
+	if err != nil {
+		return ImportResult{}, err
+	}
+	return ImportUnboundConf(settings, custom.Content, content)
+}
+
 func (m *Manager) ApplyBundle(ctx context.Context, settings Settings, custom string) error {
 	normalized, err := normalizeCustom(custom)
 	if err != nil {
