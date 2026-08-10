@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -132,5 +133,35 @@ func TestBundleRejectsInvalidSettings(t *testing.T) {
 	}
 	if err := manager.ApplyBundle(context.Background(), settings, ""); !errors.Is(err, ErrInvalidSettings) {
 		t.Fatalf("expected invalid settings rejection, got %v", err)
+	}
+}
+
+// Regression test: re-classifying an unbound.conf after its expert-adoptable
+// content was already activated once used to append a second copy on top of
+// the first, since ClassifyImport passed the currently active custom config
+// in as ImportUnboundConf's starting point. The imported file represents a
+// complete desired configuration, not a patch, so classification must
+// always start from an empty custom config regardless of what's active.
+func TestClassifyImportDoesNotAccumulateOntoActiveCustomConfig(t *testing.T) {
+	manager := newTestManager(t)
+	content := "server:\n    so-reuseport: yes\n"
+
+	first, err := manager.ClassifyImport(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.ApplyBundle(context.Background(), first.Settings, first.CustomAdopted); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := manager.ClassifyImport(content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(second.CustomAdopted, "so-reuseport: yes") != 1 {
+		t.Fatalf("expected re-classifying the same file not to duplicate already-active content, got %q", second.CustomAdopted)
+	}
+	if second.CustomAdopted != first.CustomAdopted {
+		t.Fatalf("expected re-classifying the same file to produce the same result, got %q vs %q", second.CustomAdopted, first.CustomAdopted)
 	}
 }

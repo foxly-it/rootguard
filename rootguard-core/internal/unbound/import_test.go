@@ -683,3 +683,25 @@ func TestImportRejectsLocalZoneWithMalformedHostAddress(t *testing.T) {
 		t.Fatalf("expected an invalid IPv4 address not to be guided-mapped, got %+v", result.Settings.LocalZones)
 	}
 }
+
+// Regression test: a hand-written unbound.conf is free to keep the trailing
+// dot on a local-data-ptr target ("host.zone." rather than Render()'s own
+// "host.zone") - both are valid, equivalent DNS names. Reported live: a
+// real 11-host zone with trailing-dot PTR targets fell back to expert
+// adoption entirely, even though every record was perfectly clean data.
+func TestImportAcceptsPTRTargetWithTrailingDot(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"printer.home.lab. IN A 192.168.1.20\"\n" +
+		"    local-data-ptr: \"192.168.1.20 printer.home.lab.\"\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 1 {
+		t.Fatalf("expected the zone to be guided-mapped despite the trailing dot, got %+v", result.Settings.LocalZones)
+	}
+	if host := result.Settings.LocalZones[0].Hosts[0]; !host.PTR {
+		t.Fatalf("expected PTR to be recognized, got %+v", host)
+	}
+}

@@ -464,11 +464,20 @@ func buildLocalZoneCandidate(zoneName string, group []parsedDirective, groupStar
 			usedIndexes = append(usedIndexes, idx)
 		case "local-data-ptr":
 			fields := strings.Fields(d.value)
-			if len(fields) != 2 || !strings.HasSuffix(fields[1], ptrSuffix) {
+			if len(fields) != 2 {
+				return LocalZone{}, nil, false
+			}
+			// Render() always writes the PTR target without a trailing dot,
+			// but a hand-written file is free to keep it (both are valid,
+			// equivalent DNS names) - normalize before comparing so a
+			// perfectly clean group doesn't fail just because of that
+			// formatting choice.
+			target := strings.TrimSuffix(fields[1], ".")
+			if !strings.HasSuffix(target, ptrSuffix) {
 				return LocalZone{}, nil, false
 			}
 			address := fields[0]
-			hostname := strings.TrimSuffix(fields[1], ptrSuffix)
+			hostname := strings.TrimSuffix(target, ptrSuffix)
 			state, exists := hosts[hostname]
 			if !exists || (state.ipv4 != address && state.ipv6 != address) {
 				return LocalZone{}, nil, false

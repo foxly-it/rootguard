@@ -87,20 +87,29 @@ func (m *Manager) PreviewBundle(ctx context.Context, settings Settings, custom s
 }
 
 // ClassifyImport parses content as an unbound.conf and classifies its
-// directives against the currently active settings and custom config - a
-// read-only preview step. The caller turns the result into a ConfigBundle
-// and runs it through PreviewBundle/ApplyBundle like any other import,
-// which is where real unbound-checkconf validation happens.
+// directives against the currently active settings - a read-only preview
+// step. The caller turns the result into a ConfigBundle and runs it through
+// PreviewBundle/ApplyBundle like any other import, which is where real
+// unbound-checkconf validation happens.
+//
+// The expert-adoptable portion is always computed against an EMPTY starting
+// custom config, not whatever's currently active: the imported file is
+// meant to represent a complete desired configuration, not a patch to layer
+// onto the existing one. Starting from the active custom config instead
+// would make re-classifying the same (or an overlapping) file after an
+// earlier activation silently double every already-adopted directive - and
+// since a reconstructed clause block like forward-zone: doesn't get a
+// trailing clause header to close it, unbound's context-carries-until-the-
+// next-header grammar can turn the second copy's server: directives into a
+// genuine syntax error inside that clause. Guided settings still build on
+// top of the currently active Settings (see ImportUnboundConf) - only the
+// custom-config side is reset per classification.
 func (m *Manager) ClassifyImport(content string) (ImportResult, error) {
 	settings, err := m.Load()
 	if err != nil {
 		return ImportResult{}, err
 	}
-	custom, err := m.LoadCustom()
-	if err != nil {
-		return ImportResult{}, err
-	}
-	return ImportUnboundConf(settings, custom.Content, content)
+	return ImportUnboundConf(settings, "", content)
 }
 
 func (m *Manager) ApplyBundle(ctx context.Context, settings Settings, custom string) error {
