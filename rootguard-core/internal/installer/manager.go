@@ -155,7 +155,11 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	if status.State != StateInstalled {
 		return nil
 	}
-	output, err := m.run(ctx, "network", "connect", "rootguard-dns", m.coreContainer)
+	address, err := coreAddress(m.dnsNetworkCIDR)
+	if err != nil {
+		return err
+	}
+	output, err := m.run(ctx, "network", "connect", "--ip", address, "rootguard-dns", m.coreContainer)
 	if err == nil || strings.Contains(strings.ToLower(string(output)), "already exists") {
 		return nil
 	}
@@ -294,7 +298,12 @@ func (m *Manager) deploy(config Config) {
 	_ = m.setStep("start", "done", "DNS containers were created")
 
 	_ = m.setStep("connect", "running", "Connecting the controller to the private DNS network")
-	if output, err := m.run(ctx, "network", "connect", "rootguard-dns", m.coreContainer); err != nil &&
+	coreIP, err := coreAddress(m.dnsNetworkCIDR)
+	if err != nil {
+		m.fail("connect", err)
+		return
+	}
+	if output, err := m.run(ctx, "network", "connect", "--ip", coreIP, "rootguard-dns", m.coreContainer); err != nil &&
 		!strings.Contains(strings.ToLower(string(output)), "already exists") {
 		m.fail("connect", fmt.Errorf("connect RootGuard controller to DNS network: %w: %s", err, strings.TrimSpace(string(output))))
 		return
@@ -385,6 +394,10 @@ func renderCompose(config Config, unboundImage, adGuardImage, blockpageImage, ne
 	if err != nil {
 		return "", err
 	}
+	adGuardAddress, err := adguardAddress(networkCIDR)
+	if err != nil {
+		return "", err
+	}
 	var blockpageService string
 	if config.BlockpageEnabled {
 		blockpageIP, err := blockpageAddress(networkCIDR)
@@ -459,7 +472,8 @@ services:
       - rootguard-adguard-work:/opt/adguardhome/work
       - rootguard-adguard-config:/opt/adguardhome/conf
     networks:
-      - dns
+      dns:
+        ipv4_address: %s
 %s
 networks:
   dns:
@@ -480,7 +494,7 @@ volumes:
   rootguard-adguard-config:
     name: rootguard-adguard-config
 `, unboundImage, resolverAddress, adGuardImage, config.DNSBindAddress, config.DNSPort,
-		config.DNSBindAddress, config.DNSPort, blockpageService, networkCIDR), nil
+		config.DNSBindAddress, config.DNSPort, adGuardAddress, blockpageService, networkCIDR), nil
 }
 
 func resolverAddress(networkCIDR string) (string, error) {
@@ -489,6 +503,23 @@ func resolverAddress(networkCIDR string) (string, error) {
 
 func blockpageAddress(networkCIDR string) (string, error) {
 	return networkAddress(networkCIDR, 3)
+}
+
+func adguardAddress(networkCIDR string) (string, error) {
+	return networkAddress(networkCIDR, 4)
+}
+
+// coreAddress is the controller's own pinned address on the DNS network -
+// it isn't a compose-managed service (it joins via a plain "docker network
+// connect" in Reconcile/Deploy below, not a networks: block in the
+// rendered compose file), but it still needs a fixed slot outside the ones
+// reserved for unbound/blockpage/adguard: an unpinned connect lets Docker
+// hand out whatever address is free at that moment, including one of
+// those three services' own reserved addresses if that service happens to
+// be down when the controller (re)connects - permanently blocking that
+// service from reclaiming its own static IP afterwards.
+func coreAddress(networkCIDR string) (string, error) {
+	return networkAddress(networkCIDR, 5)
 }
 
 func networkAddress(networkCIDR string, offset byte) (string, error) {

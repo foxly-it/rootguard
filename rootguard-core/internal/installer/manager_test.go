@@ -176,6 +176,12 @@ func TestRenderedComposeKeepsAdministrationPrivate(t *testing.T) {
 		`"192.168.1.2:53:53/udp"`,
 		`io.rootguard.managed: "true"`,
 		`external: true`,
+		// AdGuard needs its own pinned address, not a dynamically assigned
+		// one - unpinned, it can grab unbound's reserved 172.29.53.2 slot
+		// whenever that happens to be free (e.g. while unbound is being
+		// recreated during an update), permanently blocking unbound from
+		// reclaiming its own statically configured address.
+		"ipv4_address: 172.29.53.4",
 	} {
 		if !strings.Contains(content, expected) {
 			t.Fatalf("rendered compose is missing %q", expected)
@@ -273,13 +279,65 @@ func TestDeploymentPersistsCompletedState(t *testing.T) {
 	mu.Lock()
 	allCommands := strings.Join(commands, "\n")
 	mu.Unlock()
-	for _, expected := range []string{"compose version", "compose --project-name rootguard-dns", "network connect", "inspect --format"} {
+	for _, expected := range []string{
+		"compose version", "compose --project-name rootguard-dns", "inspect --format",
+		// Pinned, not a bare "network connect" - an unpinned connect lets
+		// Docker hand the controller whatever address happens to be free,
+		// including unbound's or blockpage's own reserved slot if that
+		// service is down at the moment the controller (re)connects.
+		"network connect --ip 172.29.53.5 rootguard-dns",
+	} {
 		if !strings.Contains(allCommands, expected) {
 			t.Fatalf("expected command containing %q in:\n%s", expected, allCommands)
 		}
 	}
 	if strings.Contains(allCommands, "rootguard-blockpage") {
 		t.Fatalf("expected no blockpage config reload when the blockpage is disabled:\n%s", allCommands)
+	}
+}
+
+func TestReconcilePinsControllerNetworkAddress(t *testing.T) {
+	dataDir := t.TempDir()
+	var mu sync.Mutex
+	var commands []string
+	manager := NewManager(Options{
+		DataDir:        dataDir,
+		CoreContainer:  "rootguard-core",
+		UnboundImage:   "rootguard-unbound:test",
+		AdGuardImage:   "adguard:test",
+		DNSNetworkCIDR: "172.29.53.0/24",
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			mu.Lock()
+			commands = append(commands, strings.Join(arguments, " "))
+			mu.Unlock()
+			if arguments[0] == "inspect" {
+				return []byte("healthy\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	if _, err := manager.Start(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	mu.Lock()
+	commands = nil
+	mu.Unlock()
+
+	if err := manager.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	allCommands := strings.Join(commands, "\n")
+	mu.Unlock()
+	if !strings.Contains(allCommands, "network connect --ip 172.29.53.5 rootguard-dns rootguard-core") {
+		t.Fatalf("expected Reconcile to reconnect with a pinned address, got:\n%s", allCommands)
 	}
 }
 

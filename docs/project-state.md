@@ -749,18 +749,27 @@ Milestone completion snapshot:
   Client → AdGuard → Unbound → DNSSEC diagnostics, landed as a second "Path
   diagnostics" card on the Unbound Overview tab
   ([rootguard#160](https://github.com/foxly-it/rootguard/pull/160)): AdGuard
-  has no static IP but is reachable by container name (`rootguard-adguard`)
-  on the `rootguard-dns` network, and only `rootguard-unbound`'s own
-  container has both DNS tooling and network line-of-sight to it, so the
-  check reuses that container the same way Unbound's own resolution/DNSSEC
-  checks already do - just targeting `rootguard-adguard:53` instead of
-  Unbound's own port.
-- **0.4 operations/backup/recovery** - barely started, 7 of 9 items open:
-  configurable retention, manual cleanup preview, encrypted export, full
-  restore into a clean install, pre-update snapshot/restore verification,
-  power-loss/interrupted-write tests, and a disaster-recovery runbook. Only
-  logging/versioning/history and the automatic cleanup-safety work below
-  have landed.
+  is reachable by container name (`rootguard-adguard`) on the
+  `rootguard-dns` network, and only `rootguard-unbound`'s own container has
+  both DNS tooling and network line-of-sight to it, so the check reuses that
+  container the same way Unbound's own resolution/DNSSEC checks already do -
+  just targeting `rootguard-adguard:53` instead of Unbound's own port.
+  AdGuard being unpinned on that network at the time was later found to be a
+  real bug - see the 0.4 network-addressing fix below.
+- **0.4 operations/backup/recovery** - 7 of 14 items open: configurable
+  retention, manual cleanup preview, encrypted export, full restore into a
+  clean install, pre-update snapshot/restore verification,
+  power-loss/interrupted-write tests, and a disaster-recovery runbook.
+  Logging/versioning/history, the automatic cleanup-safety work, and a
+  network-addressing fix ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
+  have landed - AdGuard had no pinned address on the internal `rootguard-dns`
+  network (an intentional choice at the time, see the 0.3 note above), which
+  let it grab Unbound's reserved static address whenever that happened to be
+  free; an Unbound image update could then fail with "Address already in
+  use" *and* have its automatic rollback fail with the exact same error,
+  leaving Unbound down until manually repaired. The controller's own
+  `docker network connect` to that network had the identical gap. Both now
+  get pinned, non-conflicting addresses.
 - **0.5 security/HTTPS/accessibility** - 3 items open, all close to done:
   destructive-action rate limits/audit beyond the authentication surface,
   a full keyboard/screen-reader workflow re-verification, and a WCAG

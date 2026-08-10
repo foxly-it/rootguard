@@ -506,16 +506,19 @@ Product boundary:
       the AdGuard status panel; AdGuard's own reported version (previously
       discarded from `/control/status`) is now surfaced there too
 - [x] Cross-service diagnostics showing Client → AdGuard → Unbound → DNSSEC -
-      verified the container network topology first: AdGuard has no static
-      IP but is reachable by container name (`rootguard-adguard`) on the
-      `rootguard-dns` network, and only `rootguard-unbound`'s container has
-      both DNS tooling (`dig`) and network line-of-sight to it, so the new
-      "Path diagnostics" check reuses that same container - same pattern as
-      Unbound's own resolution/DNSSEC checks, just targeting AdGuard's
-      listener (`rootguard-adguard:53`) instead of Unbound's own port.
-      Surfaced as a second card on the Unbound Overview tab, next to the
-      existing "Live diagnostics"
-      ([rootguard#160](https://github.com/foxly-it/rootguard/pull/160))
+      verified the container network topology first: AdGuard was reachable by
+      container name (`rootguard-adguard`) on the `rootguard-dns` network,
+      and only `rootguard-unbound`'s container has both DNS tooling (`dig`)
+      and network line-of-sight to it, so the new "Path diagnostics" check
+      reuses that same container - same pattern as Unbound's own
+      resolution/DNSSEC checks, just targeting AdGuard's listener
+      (`rootguard-adguard:53`) instead of Unbound's own port. Surfaced as a
+      second card on the Unbound Overview tab, next to the existing "Live
+      diagnostics"
+      ([rootguard#160](https://github.com/foxly-it/rootguard/pull/160)).
+      AdGuard being unpinned on that network at the time turned out to be a
+      real bug, not just an implementation detail - fixed in the 0.4 entry
+      below
 - [x] Contextual links from RootGuard guidance to the relevant native AdGuard
       page without exposing its administration port: deep-links through the
       existing protected `/adguard-ui/` proxy (never the raw admin port) to
@@ -627,6 +630,19 @@ manual Docker forensics.
 - [x] Bounded and redacted logs for every managed component
 - [x] Real component versions, image digests, uptime, and health reasons
 - [x] Persistent, bounded update and rollback history for data and control plane
+- [x] Fixed a real production failure mode where an Unbound image update -
+      and its automatic rollback - could both fail with "Address already in
+      use", leaving Unbound down: AdGuard was deliberately unpinned on the
+      `rootguard-dns` network (see the 0.3 cross-service diagnostics entry
+      below), which let it grab Unbound's reserved static address whenever
+      that address happened to be free (e.g. mid-update, or if AdGuard's own
+      container was recreated while Unbound was down for any reason) -
+      permanently blocking Unbound from reclaiming its own address until
+      manually repaired. The controller's own `docker network connect` to
+      that network had the identical gap. Both AdGuard and the controller
+      now get their own pinned, non-conflicting addresses, matching Unbound
+      and the blockpage
+      ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
 - [ ] Configurable backup retention with storage-usage visibility
 - [x] Safe automatic post-update cleanup:
       retain the active and previous successful image, prune only older image
