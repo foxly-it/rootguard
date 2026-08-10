@@ -630,6 +630,8 @@ export const de: LocaleDefinition = {
     "importConf.fixedBaseCount": "{count} bereits durch die Basis-Konfiguration abgedeckt",
     "importConf.blockedCount": "{count} nicht unterstützt",
     "importConf.showFindings": "Alle klassifizierten Direktiven anzeigen",
+    "importConf.showFindingsFiltered": "Gefiltert nach: {disposition}",
+    "importConf.clearFilter": "Alle anzeigen",
     "importConf.disposition.guided": "Geführt",
     "importConf.disposition.fixed_base": "Basis-Konfiguration",
     "importConf.disposition.expert": "Experte",

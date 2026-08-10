@@ -7,6 +7,7 @@ import {
   previewUnboundImport,
   type UnboundBundlePreview,
   type UnboundConfigBundle,
+  type UnboundImportDisposition,
   type UnboundImportResult,
 } from "../api/client";
 import { useI18n } from "../i18n";
@@ -39,6 +40,8 @@ export default function UnboundConfImport({ id, onActivated }: { id?: string; on
   const [result, setResult] = useState<UnboundImportResult | null>(null);
   const [bundle, setBundle] = useState<UnboundConfigBundle | null>(null);
   const [preview, setPreview] = useState<UnboundBundlePreview | null>(null);
+  const [findingsFilter, setFindingsFilter] = useState<UnboundImportDisposition | null>(null);
+  const [findingsOpen, setFindingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -50,6 +53,13 @@ export default function UnboundConfImport({ id, onActivated }: { id?: string; on
     setPreview(null);
     setMessage("");
     setError("");
+    setFindingsFilter(null);
+    setFindingsOpen(false);
+  }
+
+  function toggleFindingsFilter(disposition: UnboundImportDisposition) {
+    setFindingsOpen(true);
+    setFindingsFilter((current) => (current === disposition ? null : disposition));
   }
 
   async function chooseFile() {
@@ -119,7 +129,7 @@ export default function UnboundConfImport({ id, onActivated }: { id?: string; on
   const adoptable = result ? result.findings.some((f) => f.disposition === "guided" || f.disposition === "expert") : false;
 
   return (
-    <section id={id} className="glass-card" tabIndex={-1}>
+    <section id={id} className="glass-card import-conf-panel" tabIndex={-1}>
       <div className="panel-heading">
         <div><p className="unbound-eyebrow">{t("importConf.eyebrow")}</p><h2>{t("importConf.title")}</h2></div>
       </div>
@@ -153,21 +163,38 @@ export default function UnboundConfImport({ id, onActivated }: { id?: string; on
       </div>
       {result && counts && (
         <div className="custom-preview">
-          <div className="custom-advice">
-            <article className={`advice-item ${dispositionClass.guided}`}><strong>{t("importConf.guidedCount", { count: counts.guided })}</strong></article>
-            <article className={`advice-item ${dispositionClass.expert}`}><strong>{t("importConf.expertCount", { count: counts.expert })}</strong></article>
-            <article className={`advice-item ${dispositionClass.fixed_base}`}><strong>{t("importConf.fixedBaseCount", { count: counts.fixed_base })}</strong></article>
-            <article className={`advice-item ${dispositionClass.blocked}`}><strong>{t("importConf.blockedCount", { count: counts.blocked })}</strong></article>
+          <div className="custom-advice import-conf-filters">
+            {(["guided", "expert", "fixed_base", "blocked"] as const).map((disposition) => (
+              <button
+                key={disposition}
+                type="button"
+                className={`advice-item advice-item-button ${dispositionClass[disposition]}${findingsFilter === disposition ? " active" : ""}`}
+                aria-pressed={findingsFilter === disposition}
+                disabled={counts[disposition] === 0}
+                onClick={() => toggleFindingsFilter(disposition)}
+              >
+                <strong>{t(`importConf.${disposition === "fixed_base" ? "fixedBaseCount" : `${disposition}Count`}`, { count: counts[disposition] })}</strong>
+              </button>
+            ))}
           </div>
-          <details>
-            <summary>{t("importConf.showFindings")}</summary>
+          <details open={findingsOpen}>
+            <summary onClick={(event) => { event.preventDefault(); setFindingsOpen(!findingsOpen); }}>
+              {findingsFilter ? t("importConf.showFindingsFiltered", { disposition: t(`importConf.disposition.${findingsFilter}`) }) : t("importConf.showFindings")}
+              {findingsFilter && (
+                <button type="button" className="import-conf-clear-filter" onClick={(event) => { event.stopPropagation(); setFindingsFilter(null); }}>
+                  {t("importConf.clearFilter")}
+                </button>
+              )}
+            </summary>
             <ul className="import-conf-findings">
-              {result.findings.map((finding, index) => (
-                <li key={`${finding.section}-${finding.line}-${index}`} className={`finding-${finding.disposition}`}>
-                  <code>{finding.section !== "server" && finding.section !== finding.directive ? `${finding.section}.` : ""}{finding.directive}{finding.value ? `: ${finding.value}` : ""}</code>
-                  <small>{t(`importConf.disposition.${finding.disposition}`)} · {finding.detail}</small>
-                </li>
-              ))}
+              {result.findings
+                .filter((finding) => !findingsFilter || finding.disposition === findingsFilter)
+                .map((finding, index) => (
+                  <li key={`${finding.section}-${finding.line}-${index}`} className={`finding-${finding.disposition}`}>
+                    <code>{finding.section !== "server" && finding.section !== finding.directive ? `${finding.section}.` : ""}{finding.directive}{finding.value ? `: ${finding.value}` : ""}</code>
+                    <small>{t(`importConf.disposition.${finding.disposition}`)} · {finding.detail}</small>
+                  </li>
+                ))}
             </ul>
           </details>
           {adoptable && !preview && (

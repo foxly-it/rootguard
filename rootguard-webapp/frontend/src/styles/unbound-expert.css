@@ -1,6 +1,7 @@
 .expert-panel { box-sizing: border-box; margin-top: 22px; }
 .expert-heading { margin-bottom: 8px; }
 .expert-heading-actions { display: flex; gap: 8px; align-items: center; }
+.transfer-panel, .import-conf-panel { margin-top: 22px; }
 .transfer-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 .import-conf-textarea {
   width: 100%;
@@ -13,6 +14,27 @@
   color: var(--text);
   font: 13px/1.5 var(--font-mono, monospace);
   resize: vertical;
+}
+.import-conf-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.advice-item-button {
+  border: 1px solid transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+.advice-item-button:hover:not(:disabled) { transform: translateY(-1px); }
+.advice-item-button.active { border-color: var(--rg-accent); box-shadow: inset 0 0 0 1px var(--rg-accent); }
+.advice-item-button:disabled { cursor: not-allowed; opacity: 0.45; }
+.import-conf-clear-filter {
+  margin-left: 10px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rg-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
 }
 .import-conf-findings { display: flex; flex-direction: column; gap: 6px; margin: 12px 0; padding: 0; list-style: none; }
 .import-conf-findings li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-soft); }
