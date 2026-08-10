@@ -51,8 +51,10 @@ export default function UnboundConfigTransfer({ id, onActivated }: { id?: string
       const link = document.createElement("a");
       link.href = url;
       link.download = `rootguard-unbound-config-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage(t("transfer.exported"));
     } catch (cause) {
       setError(errorMessage(cause, t("transfer.exportError")));
