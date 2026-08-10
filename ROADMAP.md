@@ -389,7 +389,20 @@ The detailed ownership and directive plan lives in
       so there is nothing for this item to conflict-check yet - building
       that guided surface is a separate, currently untracked feature, not
       part of conflict detection itself
-- [ ] Import/export of the complete logical resolver configuration
+- [x] Import/export of the complete logical resolver configuration - guided
+      settings and expert custom config bundled together as a single
+      downloadable/uploadable JSON file (`GET /api/unbound/export`,
+      `POST /api/unbound/import/preview`, `POST /api/unbound/import`), with
+      a new "Import / export configuration" card on the Advanced tab
+      (`UnboundConfigTransfer.tsx`). Distinct from the existing per-version
+      history, which is for in-place rollback, not for taking a
+      configuration to another instance or a backup. The import path
+      validates settings and custom config as the *pair* they'll become
+      (`Manager.PreviewBundle`/`ApplyBundle`, reusing the existing atomic
+      `applyStateLocked`) rather than each against the other's stale
+      on-disk value - otherwise an import resolving an existing
+      guided/expert conflict by changing both sides at once would be
+      spuriously rejected
 - [ ] Import an existing hand-written `unbound.conf`: classify each directive
       against the fixed base, guided settings, expert allowlist, and blocked
       list, filter out anything RootGuard already owns so nothing gets

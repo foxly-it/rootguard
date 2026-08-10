@@ -1,6 +1,7 @@
 .expert-panel { box-sizing: border-box; margin-top: 22px; }
 .expert-heading { margin-bottom: 8px; }
 .expert-heading-actions { display: flex; gap: 8px; align-items: center; }
+.transfer-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 /* Always visible, not a click-to-expand disclosure: a power user should
    see what the immutable base already sets at a glance, without leaving
    the editor or expanding anything. Height-capped with its own scroll so

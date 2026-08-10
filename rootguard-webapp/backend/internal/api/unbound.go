@@ -216,6 +216,53 @@ func HandlePutUnboundCustom(w http.ResponseWriter, r *http.Request, core *corecl
 	writeJSON(w, http.StatusOK, document)
 }
 
+func HandleGetUnboundExport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	bundle, err := core.UnboundExport(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, bundle)
+}
+
+func HandlePreviewUnboundImport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	bundle, ok := decodeUnboundBundle(w, r)
+	if !ok {
+		return
+	}
+	preview, err := core.PreviewUnboundImport(r.Context(), bundle)
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func HandleApplyUnboundImport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	bundle, ok := decodeUnboundBundle(w, r)
+	if !ok {
+		return
+	}
+	settings, err := core.ApplyUnboundImport(r.Context(), bundle)
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func decodeUnboundBundle(w http.ResponseWriter, r *http.Request) (coreclient.UnboundConfigBundle, bool) {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 130<<10))
+	decoder.DisallowUnknownFields()
+	var bundle coreclient.UnboundConfigBundle
+	if err := decoder.Decode(&bundle); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return coreclient.UnboundConfigBundle{}, false
+	}
+	return bundle, true
+}
+
 func HandleUnboundDirectives(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	directives, err := core.UnboundDirectives(r.Context())
 	if err != nil {

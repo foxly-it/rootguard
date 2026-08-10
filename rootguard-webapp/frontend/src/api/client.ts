@@ -296,6 +296,38 @@ export async function previewUnboundSettings(settings: UnboundSettings): Promise
   });
 }
 
+export interface UnboundConfigBundle {
+  schema_version: number;
+  exported_at: string;
+  settings: UnboundSettings;
+  custom_config: string;
+}
+
+export interface UnboundBundlePreview {
+  changed: boolean;
+  changes: UnboundChange[];
+  custom_changed: boolean;
+  rendered_config: string;
+}
+
+export async function fetchUnboundExport(): Promise<UnboundConfigBundle> {
+  return request<UnboundConfigBundle>("/api/unbound/export");
+}
+
+export async function previewUnboundImport(bundle: UnboundConfigBundle): Promise<UnboundBundlePreview> {
+  return request<UnboundBundlePreview>("/api/unbound/import/preview", {
+    method: "POST",
+    body: JSON.stringify(bundle),
+  });
+}
+
+export async function applyUnboundImport(bundle: UnboundConfigBundle): Promise<UnboundSettings> {
+  return request<UnboundSettings>("/api/unbound/import", {
+    method: "POST",
+    body: JSON.stringify(bundle),
+  });
+}
+
 export async function fetchUnboundHistory(): Promise<UnboundHistoryEntry[]> {
   return request<UnboundHistoryEntry[]>("/api/unbound/history");
 }

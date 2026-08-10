@@ -274,6 +274,18 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleUnboundDirectives(w, r, core)
 	})
 
+	mux.HandleFunc("GET /api/unbound/export", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleGetUnboundExport(w, r, core)
+	})
+
+	mux.HandleFunc("POST /api/unbound/import/preview", func(w http.ResponseWriter, r *http.Request) {
+		api.HandlePreviewUnboundImport(w, r, core)
+	})
+
+	mux.HandleFunc("POST /api/unbound/import", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleApplyUnboundImport(w, r, core)
+	})
+
 	mux.HandleFunc("/api/adguard/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
