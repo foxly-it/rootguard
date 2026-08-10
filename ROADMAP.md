@@ -468,14 +468,30 @@ The detailed ownership and directive plan lives in
       an inline chip row to a proper Hostname/IPv4/IPv6/PTR table
       (`UnboundGuidedZones.tsx`), since the same real-world zone made an
       11-row wrapped chip list hard to scan
-- [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
-      broken upstreams, and DNSSEC failures - 2 of 6 partially, incidentally
-      covered rather than as named scenarios: DNSSEC failures are verified
-      in CI on both architectures (`ci-unbound.yml`, `dnssec-failed.org` →
-      `SERVFAIL`), and broken upstreams have unit coverage for unreachable/
-      erroring forward targets (`forwarding_test.go`) but not end-to-end
-      resolver behaviour. Home network, VLANs, split DNS, and IPv6-only
-      local records have no coverage at all
+- [x] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
+      broken upstreams, and DNSSEC failures - all 6 now covered as named,
+      end-to-end tests (`rootguard-core/internal/unbound/
+      scenario_integration_test.go`, build-tag-gated so `go test ./...`
+      stays Docker-free) that construct real `Settings` values exactly the
+      way a user's guided WebGUI configuration would, render them through
+      the actual production `Settings.Render()`, apply them to a real
+      running `rootguard-unbound` container, and verify with real `dig`
+      queries - not string-matching rendered config. Wired into CI as a new
+      `scenario-tests` job in `ci-unbound.yml`, gating image publishing
+      alongside the existing fixed-base checks. Two design corrections
+      found only by testing against the real resolver rather than reasoning
+      about it: an `AllowUnsigned`/split-DNS check that initially relied on
+      a real third-party domain's DNSSEC status turned out to test the
+      wrong thing (`dnssec-failed.org` is deliberately signed-with-broken-
+      signatures, not unsigned, so `domain-insecure` never applied to it
+      regardless) and was redesigned around forwarding behavior instead;
+      and the broken-upstream scenario originally expected a fast SERVFAIL,
+      but a forward target that's silently dropped rather than actively
+      refused turns out to have no effective timeout in Unbound's default
+      retry behavior at all (still pending after 5 minutes in manual
+      testing) - redesigned to verify what actually matters operationally,
+      that one stuck forward zone doesn't block unrelated queries, instead
+      ([rootguard#183](https://github.com/foxly-it/rootguard/pull/183))
 
 Exit: normal resolver administration no longer depends on raw Unbound syntax.
 

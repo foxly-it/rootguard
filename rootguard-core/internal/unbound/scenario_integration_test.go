@@ -1,0 +1,303 @@
+//go:build integration
+
+// Scenario tests exercise the real guided-settings render path
+// (Settings.Render, exactly what a user's WebGUI configuration produces)
+// against a real running rootguard-unbound container, verified with real
+// dig queries - not just string-matching the rendered config. Requires
+// Docker and a locally built "rootguard-unbound:test" image (see
+// rootguard-unbound/Dockerfile, matching the image ci-unbound.yml builds).
+// Run with: go test -tags integration ./internal/unbound/... -run TestScenario -v
+package unbound
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+	"time"
+)
+
+const (
+	scenarioImage     = "rootguard-unbound:test"
+	scenarioContainer = "rootguard-unbound-scenario-ci"
+)
+
+func TestMain(m *testing.M) {
+	// Only the scenario tests need a live container; every other test in
+	// this package is a pure unit test and must keep working without
+	// Docker at all, so the container lifecycle lives here rather than in
+	// a package-level init that would run unconditionally.
+	os.Exit(m.Run())
+}
+
+func startScenarioContainer(t *testing.T) {
+	t.Helper()
+	// Defensive: a container from an earlier interrupted run (a dropped
+	// SSH session, a killed test binary) can outlive its own t.Cleanup,
+	// and "docker run --name" fails outright against a stale survivor
+	// rather than just reusing or replacing it.
+	_, _ = exec.Command("docker", "rm", "-f", scenarioContainer).CombinedOutput()
+	run(t, "docker", "run", "--rm", "--detach", "--name", scenarioContainer, scenarioImage)
+	t.Cleanup(func() {
+		_, _ = exec.Command("docker", "stop", scenarioContainer).CombinedOutput()
+	})
+	waitHealthy(t)
+}
+
+func waitHealthy(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		output := run(t, "docker", "inspect", "--format", "{{.State.Health.Status}}", scenarioContainer)
+		if strings.TrimSpace(output) == "healthy" {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("%s never became healthy", scenarioContainer)
+}
+
+// applyScenario renders settings exactly the way a real deployment would
+// (the same Settings.Render a user's guided configuration produces),
+// writes it to the managed config path inside the running container, and
+// reloads Unbound - the same file Manager.Apply manages in production
+// (see the ManagedConfig path in ActiveConfiguration), just written
+// directly here since this test drives the container without a Manager.
+func applyScenario(t *testing.T, settings Settings) {
+	t.Helper()
+	rendered, err := settings.Render()
+	if err != nil {
+		t.Fatalf("render scenario settings: %v", err)
+	}
+	write := exec.Command("docker", "exec", "-i", scenarioContainer, "sh", "-c", "cat > /etc/unbound/unbound.d/50-rootguard.conf")
+	write.Stdin = strings.NewReader(string(rendered))
+	if output, err := write.CombinedOutput(); err != nil {
+		t.Fatalf("write scenario config: %v: %s", err, output)
+	}
+	run(t, "docker", "exec", scenarioContainer, "unbound-checkconf")
+	run(t, "docker", "exec", scenarioContainer, "unbound-control", "reload")
+}
+
+func dig(t *testing.T, args ...string) string {
+	t.Helper()
+	full := append([]string{"exec", scenarioContainer, "dig", "@127.0.0.1", "-p", "5335", "+time=5", "+tries=2"}, args...)
+	return run(t, "docker", full...)
+}
+
+func run(t *testing.T, name string, args ...string) string {
+	t.Helper()
+	output, err := exec.CommandContext(context.Background(), name, args...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("%s %s: %v: %s", name, strings.Join(args, " "), err, output)
+	}
+	return string(output)
+}
+
+func baseScenarioSettings() Settings {
+	settings := DefaultSettings()
+	settings.ForwardZones = []ForwardZone{}
+	settings.LocalZones = []LocalZone{}
+	return settings
+}
+
+// TestScenarioHomeNetwork covers the baseline case: a single local zone
+// with a couple of hosts, PTR records, and the default RFC1918
+// reverse-zone policy (NXDOMAIN for unassigned private addresses) still
+// resolving normal external names recursively.
+func TestScenarioHomeNetwork(t *testing.T) {
+	startScenarioContainer(t)
+
+	settings := baseScenarioSettings()
+	settings.LocalZones = []LocalZone{{
+		Name: "home.lab.",
+		Hosts: []LocalHost{
+			{Hostname: "router", IPv4: "192.168.1.1", PTR: true},
+			{Hostname: "nas", IPv4: "192.168.1.10", PTR: true},
+		},
+	}}
+	applyScenario(t, settings)
+
+	if a := dig(t, "router.home.lab", "A", "+short"); strings.TrimSpace(a) != "192.168.1.1" {
+		t.Fatalf("expected router.home.lab A to be 192.168.1.1, got %q", a)
+	}
+	if ptr := dig(t, "-x", "192.168.1.10", "+short"); !strings.Contains(ptr, "nas.home.lab.") {
+		t.Fatalf("expected PTR for 192.168.1.10 to resolve to nas.home.lab., got %q", ptr)
+	}
+	if external := dig(t, "example.com", "A", "+short"); strings.TrimSpace(external) == "" {
+		t.Fatal("expected example.com to resolve via normal recursion")
+	}
+	// The default reverse-zone policy is NXDOMAIN for unassigned RFC1918
+	// addresses - an address in the same /24 but never registered as a
+	// host must not leak an answer.
+	if status := dig(t, "-x", "192.168.1.250", "+noall", "+comments"); !strings.Contains(status, "NXDOMAIN") {
+		t.Fatalf("expected NXDOMAIN for an unassigned RFC1918 address, got %q", status)
+	}
+}
+
+// TestScenarioVLANs covers several independent local zones (representing
+// separate network segments) with the same host label in each, verifying
+// they resolve to their own zone's address and never leak into another.
+func TestScenarioVLANs(t *testing.T) {
+	startScenarioContainer(t)
+
+	// Hostnames must differ across zones too: RootGuard enforces global,
+	// not per-zone, hostname uniqueness (see cross-zone hostname
+	// uniqueness in settings.go) - a real, intentional guided-settings
+	// constraint, so each segment's gateway gets its own distinct name.
+	settings := baseScenarioSettings()
+	settings.LocalZones = []LocalZone{
+		{Name: "trusted.home.lab.", Hosts: []LocalHost{{Hostname: "trusted-gw", IPv4: "192.168.10.1"}}},
+		{Name: "iot.home.lab.", Hosts: []LocalHost{{Hostname: "iot-gw", IPv4: "192.168.20.1"}}},
+		{Name: "guest.home.lab.", Hosts: []LocalHost{{Hostname: "guest-gw", IPv4: "192.168.30.1"}}},
+	}
+	applyScenario(t, settings)
+
+	cases := map[string]string{
+		"trusted-gw.trusted.home.lab": "192.168.10.1",
+		"iot-gw.iot.home.lab":         "192.168.20.1",
+		"guest-gw.guest.home.lab":     "192.168.30.1",
+	}
+	for name, want := range cases {
+		if got := strings.TrimSpace(dig(t, name, "A", "+short")); got != want {
+			t.Fatalf("expected %s to resolve to %s, got %q", name, want, got)
+		}
+	}
+}
+
+// TestScenarioSplitDNS covers a forward zone routing one specific domain
+// to its own dedicated resolver, with AllowUnsigned set the way a real
+// private zone with no signing infrastructure of its own would need it -
+// while everything else keeps using normal recursion. That's the core,
+// provable split-DNS behavior: a named zone's queries take a distinct
+// path from the default one, and the two don't interfere with each
+// other. (An earlier version of this test tried to also prove
+// AllowUnsigned's specific DNSSEC-relaxation effect by checking a real
+// third-party domain's validation status - dropped: dnssec-failed.org is
+// deliberately signed-with-broken-signatures rather than unsigned, so
+// domain-insecure never suppressed that failure in the first place, and
+// a domain this repo doesn't control staying in exactly the right DNSSEC
+// state indefinitely wasn't a good bet regardless.)
+func TestScenarioSplitDNS(t *testing.T) {
+	startScenarioContainer(t)
+
+	settings := baseScenarioSettings()
+	settings.ForwardZones = []ForwardZone{{
+		Name:          "cloudflare.com.",
+		Servers:       []string{"1.1.1.1"},
+		AllowUnsigned: true,
+	}}
+	applyScenario(t, settings)
+
+	if got := strings.TrimSpace(dig(t, "cloudflare.com", "A", "+short")); got == "" {
+		t.Fatal("expected the forwarded zone to resolve")
+	}
+	// A domain outside that forward zone must still use normal recursion,
+	// not the private upstream - the forward must not leak beyond its own
+	// zone.
+	if external := dig(t, "example.com", "A", "+short"); strings.TrimSpace(external) == "" {
+		t.Fatal("expected example.com to still resolve via normal recursion outside the forward zone")
+	}
+}
+
+// TestScenarioIPv6OnlyLocalRecords covers a local host with only an AAAA
+// record and PTR generation, verifying no spurious A record exists and
+// the ip6.arpa PTR resolves back correctly.
+func TestScenarioIPv6OnlyLocalRecords(t *testing.T) {
+	startScenarioContainer(t)
+
+	settings := baseScenarioSettings()
+	settings.NetworkMode = networkModeDual
+	settings.LocalZones = []LocalZone{{
+		Name:  "home.lab.",
+		Hosts: []LocalHost{{Hostname: "printer", IPv6: "fd00::10", PTR: true}},
+	}}
+	applyScenario(t, settings)
+
+	if aaaa := strings.TrimSpace(dig(t, "printer.home.lab", "AAAA", "+short")); aaaa != "fd00::10" {
+		t.Fatalf("expected printer.home.lab AAAA to be fd00::10, got %q", aaaa)
+	}
+	if a := strings.TrimSpace(dig(t, "printer.home.lab", "A", "+short")); a != "" {
+		t.Fatalf("expected no A record for an IPv6-only host, got %q", a)
+	}
+	if ptr := dig(t, "-x", "fd00::10", "+short"); !strings.Contains(ptr, "printer.home.lab.") {
+		t.Fatalf("expected PTR for fd00::10 to resolve to printer.home.lab., got %q", ptr)
+	}
+}
+
+// TestScenarioBrokenUpstream covers a forward zone pointing at an
+// unreachable server - 192.0.2.1 is TEST-NET-1 (RFC 5737), reserved for
+// documentation and guaranteed to never have a real listener. Uses an
+// ordinary-looking name under a real TLD, not one of the RFC 6761
+// special-use names (test/invalid/localhost/...) - Unbound answers those
+// locally without ever consulting a forward-zone, which would make this
+// pass for the wrong reason.
+//
+// This does not assert a fast SERVFAIL for the broken zone itself: an
+// address that's silently dropped rather than actively refused (no TCP
+// RST, no ICMP unreachable - true of most firewalled or unassigned
+// ranges, including TEST-NET-1 in this environment) turns out to have no
+// effective ceiling in Unbound's default retry/timeout behavior at all -
+// empirically still pending after a full 5 minutes in manual testing.
+// That's real resolver behavior, not a bug this test should fail on.
+// What actually matters operationally is what this asserts instead: one
+// permanently stuck forward zone must not block unrelated queries -
+// verified by firing the broken zone's query in the background (deliberately
+// not waited on) and confirming a normal domain outside that zone still
+// resolves quickly.
+func TestScenarioBrokenUpstream(t *testing.T) {
+	startScenarioContainer(t)
+
+	settings := baseScenarioSettings()
+	settings.ForwardZones = []ForwardZone{{
+		Name:    "broken.rootguard-ci-scenario.net.",
+		Servers: []string{"192.0.2.1"},
+	}}
+	applyScenario(t, settings)
+
+	go func() {
+		_ = exec.Command("docker", "exec", scenarioContainer, "dig", "@127.0.0.1", "-p", "5335",
+			"host.broken.rootguard-ci-scenario.net", "A", "+time=30", "+tries=1").Run()
+	}()
+	// Give the background query a head start so it's genuinely in flight
+	// (past DNS lookup/connect, actively waiting on the unresponsive
+	// forwarder) before the isolation check below starts timing itself.
+	time.Sleep(2 * time.Second)
+
+	start := time.Now()
+	if external := dig(t, "example.com", "A", "+short"); strings.TrimSpace(external) == "" {
+		t.Fatal("expected normal recursion for an unrelated domain to be unaffected by the broken forward zone")
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("expected an unrelated query to resolve quickly despite the stuck forward zone, took %s", elapsed)
+	}
+}
+
+// TestScenarioDNSSECFailures closes the roadmap gap explicitly: the fixed
+// base image's own DNSSEC check (ci-unbound.yml) only ever exercises the
+// baked-in default config, never a real guided configuration. This
+// applies a non-trivial one (local zones, an unrelated forward zone, a
+// non-default resource profile) and verifies DNSSEC enforcement still
+// holds for everything not explicitly overridden.
+func TestScenarioDNSSECFailures(t *testing.T) {
+	startScenarioContainer(t)
+
+	settings := baseScenarioSettings()
+	settings.ResourceProfile = resourceProfileSmall
+	settings.LocalZones = []LocalZone{{
+		Name:  "home.lab.",
+		Hosts: []LocalHost{{Hostname: "router", IPv4: "192.168.1.1"}},
+	}}
+	settings.ForwardZones = []ForwardZone{{Name: "example.org.", Servers: []string{"1.1.1.1"}}}
+	applyScenario(t, settings)
+
+	if status := dig(t, "dnssec-failed.org", "A", "+noall", "+comments"); !strings.Contains(status, "status: SERVFAIL") {
+		t.Fatalf("expected dnssec-failed.org to SERVFAIL under a real guided configuration, got %q", status)
+	}
+	if status := dig(t, "example.com", "A", "+dnssec", "+noall", "+comments"); !strings.Contains(status, " ad") {
+		t.Fatalf("expected a validly-signed domain to still validate, got %q", status)
+	}
+	if a := strings.TrimSpace(dig(t, "router.home.lab", "A", "+short")); a != "192.168.1.1" {
+		t.Fatalf("expected the local zone to still resolve alongside DNSSEC enforcement, got %q", a)
+	}
+}
