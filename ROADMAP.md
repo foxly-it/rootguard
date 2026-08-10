@@ -403,7 +403,9 @@ The detailed ownership and directive plan lives in
       on-disk value - otherwise an import resolving an existing
       guided/expert conflict by changing both sides at once would be
       spuriously rejected
-- [ ] Import an existing hand-written `unbound.conf` - partially delivered.
+- [x] Import an existing hand-written `unbound.conf` - delivered at full
+      roadmap scope, per explicit user direction (2026-08-10) to build this
+      item completely rather than ship a leaner classify-only version.
       `ImportUnboundConf` (`rootguard-core/internal/unbound/import.go`) parses
       an arbitrary unbound.conf into clauses and classifies every directive:
       fixed-base directives are filtered (or rejected as a conflict if the
@@ -436,14 +438,25 @@ The detailed ownership and directive plan lives in
       guided model, see #131), a mismatched PTR, a non-`static` type, or one
       of RootGuard's own RFC1918 reverse-zone names (which would otherwise
       produce an empty, invalid zone) all fall back to per-line expert
-      adoption instead of guessing wrong. New `UnboundConfImport.tsx`
-      (Unbound Advanced tab) drives paste-or-upload → classify → the
-      existing bundle preview/activate lifecycle from the import/export
-      feature above. Still open, and why this stays unchecked: RFC1918
-      reverse-zone policy and resource-profile inference from cache-size
-      values (`do-ip4`/`do-ip6`/`prefer-ip6` and `rrset-cache-size`/
-      `msg-cache-size` are explicitly classified as blocked-pending-support
-      today, not silently mishandled)
+      adoption instead of guessing wrong. RFC1918 reverse-zone policy
+      reverse-maps too: a network's reverse-zone lines (one for
+      `10.0.0.0/8`, sixteen for `172.16.0.0/12`, one for `192.168.0.0/16`)
+      apply as that network's `ReverseZonePolicy` only when *every* expected
+      zone name is present exactly once with a consistent, recognized type
+      (`static`→nxdomain, `transparent`→transparent) - a partial set,
+      duplicate, or unrecognized type keyword leaves those lines unconsumed
+      rather than guessing. `do-ip4`/`do-ip6`/`prefer-ip6` reverse-map onto
+      `NetworkMode` only when all three appear exactly once in one of the
+      three combinations `Settings.Render()` itself produces.
+      `rrset-cache-size`/`msg-cache-size` reverse-map onto `ResourceProfile`
+      only when both appear exactly once and match one of RootGuard's three
+      preset size pairs exactly. Any incomplete or inconsistent set among
+      these three falls back to a blocked finding naming the specific
+      guided concept it belongs to, not silent expert adoption (which would
+      just be rejected downstream anyway) or a guess. New
+      `UnboundConfImport.tsx` (Unbound Advanced tab) drives paste-or-upload
+      → classify → the existing bundle preview/activate lifecycle from the
+      import/export feature above
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
       broken upstreams, and DNSSEC failures - 2 of 6 partially, incidentally
       covered rather than as named scenarios: DNSSEC failures are verified

@@ -118,7 +118,7 @@ routes to the unrestricted expert editor instead.
   router, and adapters for vendors beyond FRITZ!Box (same normalized import
   contract).
 
-### Existing-configuration import — partially delivered
+### Existing-configuration import — delivered
 
 Operators arriving with a hand-written `unbound.conf` from a prior manual
 setup should not have to retype it directive by directive to get useful
@@ -159,13 +159,23 @@ adoption.
   model, see #131), a mismatched PTR, a non-`static` type, or one of
   RootGuard's own RFC1918 reverse-zone names (which would otherwise produce
   an empty, invalid zone - excluded via `reservedReverseZoneNames`) all fall
-  back to per-line expert adoption instead of guessing wrong. **Still open**
-  for the remaining block-shaped or multi-directive guided settings: RFC1918
-  reverse-zone policy and resource-profile inference from
-  `rrset-cache-size`/`msg-cache-size` - these are explicitly classified as
-  blocked-pending-support today (not silently mishandled), and
-  `do-ip4`/`do-ip6`/`prefer-ip6` the same pending network-mode
-  reverse-mapping.
+  back to per-line expert adoption instead of guessing wrong. **Also
+  delivered for RFC1918 reverse-zone policy, network mode, and resource
+  profile** - each all-or-nothing over a fixed set of directives, matching
+  exactly what `Settings.Render()` would itself produce: a network's
+  reverse-zone lines (one for `10.0.0.0/8`, sixteen for `172.16.0.0/12`, one
+  for `192.168.0.0/16`, see `rfc1918ReverseZones`) apply as that network's
+  `ReverseZonePolicy` only when every expected zone name is present exactly
+  once with a consistent, recognized type (`static`→nxdomain,
+  `transparent`→transparent); `do-ip4`/`do-ip6`/`prefer-ip6` apply as
+  `NetworkMode` only when all three appear exactly once in one of the three
+  combinations Render() produces; `rrset-cache-size`/`msg-cache-size` apply
+  as `ResourceProfile` only when both appear exactly once and match one of
+  the three preset size pairs exactly. A partial set, duplicate, or
+  unrecognized value for any of these three leaves a blocked finding naming
+  the specific guided concept it belongs to (`guidedNotYetMapped`), rather
+  than a silent expert-config dump that would just be rejected downstream,
+  or a guess.
 - Remaining directives that have no guided equivalent but pass the same
   expert allowlist as manual expert input are offered for adoption into
   `90-rootguard-custom.conf`, preserving whole clause blocks (e.g. a

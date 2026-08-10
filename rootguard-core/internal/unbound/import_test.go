@@ -394,8 +394,12 @@ func TestImportHandlesMultipleLocalZonesInOrder(t *testing.T) {
 	}
 }
 
-func TestImportSkipsReservedRFC1918ReverseZoneNames(t *testing.T) {
-	content := "server:\n    local-zone: \"10.in-addr.arpa.\" static\n"
+func TestImportNeverTreatsReservedRFC1918NamesAsHostInventory(t *testing.T) {
+	// Only one of 172.16.0.0/12's 16 required reverse zones is present, so
+	// this is neither a complete reverse-zone policy nor a valid host
+	// inventory zone (it has no local-data at all) - it must fall back to
+	// expert adoption, not silently become an empty LocalZone.
+	content := "server:\n    local-zone: \"16.172.in-addr.arpa.\" static\n"
 	result, err := ImportUnboundConf(DefaultSettings(), "", content)
 	if err != nil {
 		t.Fatal(err)
@@ -405,7 +409,7 @@ func TestImportSkipsReservedRFC1918ReverseZoneNames(t *testing.T) {
 	}
 	finding := findingFor(t, result.Findings, "local-zone")
 	if finding.Disposition != ImportExpert {
-		t.Fatalf("expected the reserved zone name to fall back to expert adoption, got %+v", finding)
+		t.Fatalf("expected the incomplete reverse-zone set to fall back to expert adoption, got %+v", finding)
 	}
 }
 
@@ -456,5 +460,141 @@ func TestImportFallsBackToExpertForNonStaticLocalZoneType(t *testing.T) {
 	finding := findingFor(t, result.Findings, "local-zone")
 	if finding.Disposition != ImportExpert {
 		t.Fatalf("expected expert adoption, got %+v", finding)
+	}
+}
+
+func TestImportAppliesReverseZonePolicyForSingleZoneNetwork(t *testing.T) {
+	content := "server:\n    local-zone: \"10.in-addr.arpa.\" transparent\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finding := findingFor(t, result.Findings, "local-zone")
+	if finding.Disposition != ImportGuided || finding.Value != "10.0.0.0/8" {
+		t.Fatalf("expected the reverse-zone policy to be guided, got %+v", finding)
+	}
+	var got10, got172, got192 string
+	for _, policy := range result.Settings.ReverseZones {
+		switch policy.Network {
+		case "10.0.0.0/8":
+			got10 = policy.Mode
+		case "172.16.0.0/12":
+			got172 = policy.Mode
+		case "192.168.0.0/16":
+			got192 = policy.Mode
+		}
+	}
+	if got10 != reverseModeTransparent {
+		t.Fatalf("expected 10.0.0.0/8 to become transparent, got %q", got10)
+	}
+	if got172 != reverseModeNXDOMAIN || got192 != reverseModeNXDOMAIN {
+		t.Fatalf("expected the other networks to keep their default, got 172=%q 192=%q", got172, got192)
+	}
+	if result.CustomAdopted != "" {
+		t.Fatalf("a clean reverse-zone policy must not also be offered for expert adoption, got %q", result.CustomAdopted)
+	}
+}
+
+func TestImportAppliesReverseZonePolicyForMultiZoneNetwork(t *testing.T) {
+	var content strings.Builder
+	content.WriteString("server:\n")
+	for _, zone := range reverse172Zones() {
+		content.WriteString("    local-zone: \"" + zone + "\" static\n")
+	}
+	result, err := ImportUnboundConf(DefaultSettings(), "", content.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count := len(result.Findings); count != 16 {
+		t.Fatalf("expected one finding per reverse zone line, got %d", count)
+	}
+	for _, policy := range result.Settings.ReverseZones {
+		if policy.Network == "172.16.0.0/12" && policy.Mode != reverseModeNXDOMAIN {
+			t.Fatalf("expected 172.16.0.0/12 to become nxdomain, got %q", policy.Mode)
+		}
+	}
+}
+
+func TestImportRejectsInconsistentReverseZoneTypes(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"10.in-addr.arpa.\" static\n"
+	// Only a single-zone network can even be "inconsistent" by using an
+	// unrecognized type keyword - simulate that instead of a real type
+	// mismatch, which needs 2+ zones per network.
+	content = "server:\n    local-zone: \"10.in-addr.arpa.\" refuse\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, policy := range result.Settings.ReverseZones {
+		if policy.Network == "10.0.0.0/8" && policy.Mode != reverseModeNXDOMAIN {
+			t.Fatalf("expected the unrecognized type to leave the default policy untouched, got %q", policy.Mode)
+		}
+	}
+	finding := findingFor(t, result.Findings, "local-zone")
+	if finding.Disposition != ImportExpert {
+		t.Fatalf("expected an unrecognized local-zone type to fall back to expert adoption, got %+v", finding)
+	}
+}
+
+func TestImportAppliesNetworkModeWhenTheTripleIsConsistent(t *testing.T) {
+	content := "server:\n    do-ip4: no\n    do-ip6: yes\n    prefer-ip6: yes\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Settings.NetworkMode != networkModeIPv6 {
+		t.Fatalf("expected ipv6 network mode, got %q", result.Settings.NetworkMode)
+	}
+	for _, directive := range []string{"do-ip4", "do-ip6", "prefer-ip6"} {
+		if finding := findingFor(t, result.Findings, directive); finding.Disposition != ImportGuided {
+			t.Fatalf("expected %s to be guided, got %+v", directive, finding)
+		}
+	}
+}
+
+func TestImportLeavesNetworkModeUnmappedWhenIncomplete(t *testing.T) {
+	content := "server:\n    do-ip4: no\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Settings.NetworkMode != DefaultSettings().NetworkMode {
+		t.Fatalf("expected network mode to stay at the default, got %q", result.Settings.NetworkMode)
+	}
+	finding := findingFor(t, result.Findings, "do-ip4")
+	if finding.Disposition != ImportBlocked {
+		t.Fatalf("expected an incomplete triple to be blocked, got %+v", finding)
+	}
+}
+
+func TestImportAppliesResourceProfileWhenSizesMatchAPreset(t *testing.T) {
+	content := "server:\n    rrset-cache-size: 128m\n    msg-cache-size: 64m\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Settings.ResourceProfile != resourceProfileLarge {
+		t.Fatalf("expected the large resource profile, got %q", result.Settings.ResourceProfile)
+	}
+	for _, directive := range []string{"rrset-cache-size", "msg-cache-size"} {
+		if finding := findingFor(t, result.Findings, directive); finding.Disposition != ImportGuided {
+			t.Fatalf("expected %s to be guided, got %+v", directive, finding)
+		}
+	}
+}
+
+func TestImportLeavesResourceProfileUnmappedWhenSizesDontMatch(t *testing.T) {
+	content := "server:\n    rrset-cache-size: 999m\n    msg-cache-size: 64m\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Settings.ResourceProfile != DefaultSettings().ResourceProfile {
+		t.Fatalf("expected the resource profile to stay at the default, got %q", result.Settings.ResourceProfile)
+	}
+	finding := findingFor(t, result.Findings, "rrset-cache-size")
+	if finding.Disposition != ImportBlocked {
+		t.Fatalf("expected an unmatched size pair to be blocked, got %+v", finding)
 	}
 }
