@@ -798,13 +798,15 @@ check). Resolver config import/export is also done now
 (`UnboundConfigTransfer.tsx`). Hand-written `unbound.conf` import is
 partially delivered (`UnboundConfImport.tsx`, `import.go`'s classifier) -
 per-directive classification, the ~12 scalar guided settings, and
-expert-config adoption of everything else (including whole zone blocks,
-as-is) all work end to end. Still open: reverse-mapping `forward-zone`,
-`local-zone`/`local-data`/`local-data-ptr`, `private-domain`, RFC1918
-reverse-zone policy, and resource-profile inference onto their guided
-*structures* instead of expert-adopting them verbatim - the checkbox stays
-unchecked until that's done, per explicit user direction (2026-08-10) to
-build this item at full roadmap scope rather than ship the leaner
+`forward-zone` reverse-mapping (a clean fit becomes a guided `ForwardZone`,
+including the zone-scoped `domain-insecure`/`private-domain` opt-ins; an
+unclean fit falls back to expert adoption) all work end to end, plus
+expert-config adoption of everything else. Still open: reverse-mapping
+`local-zone`/`local-data`/`local-data-ptr`, RFC1918 reverse-zone policy, and
+resource-profile inference onto their guided *structures* instead of
+expert-adopting them verbatim - the checkbox stays unchecked until that's
+done, per explicit user direction (2026-08-10) to build this item at full
+roadmap scope rather than ship the leaner
 classify-only version as "done." Continue there, or move on to **scenario
 tests**, the next unchecked 0.2 item in document order.
 

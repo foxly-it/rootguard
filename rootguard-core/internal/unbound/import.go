@@ -115,11 +115,23 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 		return ImportResult{}, fmt.Errorf("%w: maximum size is %d bytes", ErrInvalidCustomConfig, MaxCustomConfigBytes)
 	}
 
+	blocks := parseUnboundConf(content)
 	candidate := current
 	var findings []ImportFinding
 	var expertLines []string
 
-	for _, block := range parseUnboundConf(content) {
+	// Forward zones are extracted first: domain-insecure/private-domain
+	// lines in the server: block only make sense once the set of zone names
+	// they might refer to is already known (see classifyServerDirective's
+	// callers below).
+	zones, zoneNames, mappedBlocks, zoneFindings := extractForwardZones(blocks)
+	findings = append(findings, zoneFindings...)
+
+	var privateDomains []string
+	for blockIndex, block := range blocks {
+		if mappedBlocks[blockIndex] {
+			continue
+		}
 		if reason, blocked := blockedImportSections[block.section]; blocked {
 			findings = append(findings, ImportFinding{
 				Section: block.section, Line: block.lineStart, Directive: block.section,
@@ -128,9 +140,10 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 			continue
 		}
 		if block.section != "server" {
-			// No guided mapping yet for this clause (forward-zone, local-zone,
-			// stub-zone, view, ...) - offer it for expert adoption as a whole,
-			// exactly as if it had been pasted into the expert editor by hand.
+			// No guided mapping yet for this clause (local-zone, stub-zone,
+			// view, ... - or a forward-zone that didn't map cleanly) - offer
+			// it for expert adoption as a whole, exactly as if it had been
+			// pasted into the expert editor by hand.
 			findings = append(findings, ImportFinding{
 				Section: block.section, Line: block.lineStart, Directive: block.section,
 				Disposition: ImportExpert,
@@ -143,12 +156,29 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 			continue
 		}
 		for _, d := range block.directives {
+			if d.key == "domain-insecure" || d.key == "private-domain" {
+				finding, appendedDomain := classifyZoneScopedDirective(zones, zoneNames, d)
+				findings = append(findings, finding)
+				if appendedDomain != "" {
+					privateDomains = append(privateDomains, appendedDomain)
+				}
+				if finding.Disposition == ImportExpert {
+					expertLines = append(expertLines, d.raw)
+				}
+				continue
+			}
 			finding := classifyServerDirective(&candidate, d)
 			findings = append(findings, finding)
 			if finding.Disposition == ImportExpert {
 				expertLines = append(expertLines, d.raw)
 			}
 		}
+	}
+	if len(zones) > 0 {
+		candidate.ForwardZones = append(append([]ForwardZone{}, candidate.ForwardZones...), zones...)
+	}
+	if len(privateDomains) > 0 {
+		candidate.PrivateDomains = append(append([]string{}, candidate.PrivateDomains...), privateDomains...)
 	}
 
 	adopted := strings.TrimSpace(currentCustom)
@@ -159,6 +189,87 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 		adopted += strings.Join(expertLines, "\n") + "\n"
 	}
 	return ImportResult{Findings: findings, Settings: candidate, CustomAdopted: adopted}, nil
+}
+
+// extractForwardZones reverse-maps forward-zone blocks that map cleanly onto
+// the guided ForwardZone model: a name, at least one forward-addr, and
+// nothing else RootGuard doesn't already render (forward-first is fine;
+// anything else - forward-tls-upstream, a port-suffixed forward-addr, and so
+// on - means the block isn't a clean fit, so it's left unmapped and falls
+// through to whole-block expert adoption instead of silently dropping the
+// directives that don't fit). mappedBlocks marks which block indexes were
+// consumed here so the caller's main loop skips them.
+func extractForwardZones(blocks []parsedBlock) (zones []ForwardZone, zoneNames map[string]struct{}, mappedBlocks map[int]bool, findings []ImportFinding) {
+	zoneNames = map[string]struct{}{}
+	mappedBlocks = map[int]bool{}
+	for blockIndex, block := range blocks {
+		if block.section != "forward-zone" {
+			continue
+		}
+		zone := ForwardZone{}
+		clean := true
+		for _, d := range block.directives {
+			switch d.key {
+			case "name":
+				zone.Name = d.value
+			case "forward-addr":
+				zone.Servers = append(zone.Servers, d.value)
+			case "forward-first":
+				zone.ForwardFirst = strings.EqualFold(d.value, "yes")
+			default:
+				clean = false
+			}
+		}
+		if !clean || zone.Name == "" || len(zone.Servers) == 0 {
+			// Not left in mappedBlocks, so the caller's main loop falls back
+			// to its generic whole-block expert-adoption handling for this
+			// block - do not also emit a finding for it here.
+			continue
+		}
+		zones = append(zones, zone)
+		zoneNames[zone.Name] = struct{}{}
+		mappedBlocks[blockIndex] = true
+		findings = append(findings, ImportFinding{
+			Section: "forward-zone", Line: block.lineStart, Directive: "forward-zone", Value: zone.Name,
+			Disposition: ImportGuided, Detail: "applied as a guided conditional-forwarding zone",
+		})
+	}
+	return zones, zoneNames, mappedBlocks, findings
+}
+
+// classifyZoneScopedDirective resolves the ambiguity that domain-insecure
+// and private-domain share in RootGuard's own Render(): a private-domain
+// line is a global guided private domain UNLESS its value names one of the
+// forward zones just extracted, in which case both directives are that
+// zone's AllowUnsigned/AllowPrivateAddresses opt-in instead (see
+// Settings.Render()). A domain-insecure with no matching zone has no guided
+// meaning at all outside that context, so it's offered for expert adoption
+// rather than silently dropped.
+func classifyZoneScopedDirective(zones []ForwardZone, zoneNames map[string]struct{}, d parsedDirective) (finding ImportFinding, appendedPrivateDomain string) {
+	base := ImportFinding{Section: "server", Line: d.line, Directive: d.key, Value: d.value}
+	if _, isZone := zoneNames[d.value]; isZone {
+		for i := range zones {
+			if zones[i].Name != d.value {
+				continue
+			}
+			if d.key == "domain-insecure" {
+				zones[i].AllowUnsigned = true
+			} else {
+				zones[i].AllowPrivateAddresses = true
+			}
+		}
+		base.Disposition = ImportGuided
+		base.Detail = fmt.Sprintf("applied as an opt-in for the %q forwarding zone", d.value)
+		return base, ""
+	}
+	if d.key == "private-domain" {
+		base.Disposition = ImportGuided
+		base.Detail = "applied to the guided private-domain list"
+		return base, d.value
+	}
+	base.Disposition = ImportExpert
+	base.Detail = "does not match an imported forwarding zone - no guided equivalent, offered for expert adoption"
+	return base, ""
 }
 
 func classifyServerDirective(candidate *Settings, d parsedDirective) ImportFinding {

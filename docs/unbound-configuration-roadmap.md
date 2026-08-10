@@ -138,23 +138,33 @@ adoption.
   a candidate `Settings` for review before activation. **Delivered for the
   ~12 flat `server:` scalars** (qname-minimisation, prefetch(-key),
   aggressive-nsec, serve-expired(-ttl/-client-timeout), cache-min/max-ttl,
-  num-threads, edns-buffer-size, verbosity). **Still open** for the
-  block-shaped or multi-directive guided settings: `forward-zone` →
-  `ForwardZone`, `local-zone`/`local-data`/`local-data-ptr` → the typed host
-  inventory, `private-domain`, RFC1918 reverse-zone policy, and
-  resource-profile inference from `rrset-cache-size`/`msg-cache-size` -
-  these are explicitly classified as blocked-pending-support today (not
-  silently mishandled), and `do-ip4`/`do-ip6`/`prefer-ip6` the same pending
-  network-mode reverse-mapping.
+  num-threads, edns-buffer-size, verbosity) **and for `forward-zone`
+  blocks**: a clean fit (a name, one or more `forward-addr`, optionally
+  `forward-first`) becomes a guided `ForwardZone`; the zone-scoped
+  `domain-insecure`/`private-domain` opt-ins are resolved against the zones
+  just extracted (a name match sets that zone's `AllowUnsigned`/
+  `AllowPrivateAddresses`; a `private-domain` matching no zone joins the
+  global guided list instead; a `domain-insecure` matching no zone has no
+  meaning outside that context and is offered for expert adoption). A block
+  that isn't a clean fit (missing a name/target, or containing a directive
+  this importer doesn't reverse-map, e.g. `forward-tls-upstream`) falls back
+  to whole-block expert adoption rather than silently dropping what doesn't
+  fit. **Still open** for the remaining block-shaped or multi-directive
+  guided settings: `local-zone`/`local-data`/`local-data-ptr` → the typed
+  host inventory, RFC1918 reverse-zone policy, and resource-profile
+  inference from `rrset-cache-size`/`msg-cache-size` - these are explicitly
+  classified as blocked-pending-support today (not silently mishandled),
+  and `do-ip4`/`do-ip6`/`prefer-ip6` the same pending network-mode
+  reverse-mapping.
 - Remaining directives that have no guided equivalent but pass the same
   expert allowlist as manual expert input are offered for adoption into
   `90-rootguard-custom.conf`, preserving whole clause blocks (e.g. a
-  `forward-zone:` block reconstructed verbatim) rather than individual
-  lines; anything on the permanently blocked list, or that opens a control
-  surface (`remote-control`, `python`, `dynlib`, `dnstap`), is reported as
-  unsupported, never silently accepted. **Delivered** - this is also today's
-  path for the block-shaped guided directives above, until they get their
-  own reverse-mapping.
+  `forward-zone:` block that isn't a clean guided fit, reconstructed
+  verbatim) rather than individual lines; anything on the permanently
+  blocked list, or that opens a control surface (`remote-control`, `python`,
+  `dynlib`, `dnstap`), is reported as unsupported, never silently accepted.
+  **Delivered** - this is also today's path for the block-shaped guided
+  directives above that don't have their own reverse-mapping yet.
 - The imported file is treated as an untrusted draft, matching the
   router-import pattern above: classification is a pure, read-only step:
   applying it reuses the same `ConfigBundle` preview/activate lifecycle as
