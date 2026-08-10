@@ -237,6 +237,20 @@ type UnboundCustomPreview struct {
 	Advice     []UnboundCustomAdvice `json:"advice"`
 }
 
+type UnboundConfigBundle struct {
+	SchemaVersion int             `json:"schema_version"`
+	ExportedAt    time.Time       `json:"exported_at"`
+	Settings      UnboundSettings `json:"settings"`
+	CustomConfig  string          `json:"custom_config"`
+}
+
+type UnboundBundlePreview struct {
+	Changed        bool            `json:"changed"`
+	Changes        []UnboundChange `json:"changes"`
+	CustomChanged  bool            `json:"custom_changed"`
+	RenderedConfig string          `json:"rendered_config"`
+}
+
 type UnboundDirectiveReference struct {
 	Name        string `json:"name"`
 	Section     string `json:"section"`
@@ -530,6 +544,24 @@ func (c *Client) PreviewUnboundCustom(ctx context.Context, content string) (Unbo
 func (c *Client) UpdateUnboundCustom(ctx context.Context, content string) (UnboundCustomDocument, error) {
 	var result UnboundCustomDocument
 	err := c.do(ctx, http.MethodPut, "/api/unbound/custom", map[string]string{"content": content}, &result)
+	return result, err
+}
+
+func (c *Client) UnboundExport(ctx context.Context) (UnboundConfigBundle, error) {
+	var result UnboundConfigBundle
+	err := c.do(ctx, http.MethodGet, "/api/unbound/export", nil, &result)
+	return result, err
+}
+
+func (c *Client) PreviewUnboundImport(ctx context.Context, bundle UnboundConfigBundle) (UnboundBundlePreview, error) {
+	var result UnboundBundlePreview
+	err := c.do(ctx, http.MethodPost, "/api/unbound/import/preview", bundle, &result)
+	return result, err
+}
+
+func (c *Client) ApplyUnboundImport(ctx context.Context, bundle UnboundConfigBundle) (UnboundSettings, error) {
+	var result UnboundSettings
+	err := c.do(ctx, http.MethodPost, "/api/unbound/import", bundle, &result)
 	return result, err
 }
 
