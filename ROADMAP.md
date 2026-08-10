@@ -414,15 +414,23 @@ The detailed ownership and directive plan lives in
       to a candidate `Settings`, dangerous clauses (`remote-control`,
       `python`, `dynlib`, `dnstap`) are blocked outright, and everything else
       allowed for manual expert input is offered for expert-config adoption -
-      including whole `forward-zone`/`local-zone`/etc. blocks, which is
-      already exactly what pasting them into the expert editor by hand does
-      today. New `UnboundConfImport.tsx` (Unbound Advanced tab) drives
-      paste-or-upload → classify → the existing bundle preview/activate
-      lifecycle from the import/export feature above. Still open, and why
-      this stays unchecked: reverse-mapping directives onto their guided
-      *structure* rather than expert text - `forward-zone` blocks into
-      guided `ForwardZone`s, `local-zone`/`local-data`/`local-data-ptr` into
-      the typed host inventory, `private-domain`, RFC1918 reverse-zone
+      including whole clause blocks that don't map cleanly onto a guided
+      structure, which is already exactly what pasting them into the expert
+      editor by hand does today. `forward-zone` blocks now DO reverse-map
+      onto guided `ForwardZone`s when they're a clean fit (a name, one or
+      more `forward-addr`, optionally `forward-first` - anything else, e.g.
+      `forward-tls-upstream`, keeps the whole block as expert-adoptable
+      instead of silently dropping what doesn't fit). The zone-scoped
+      `domain-insecure`/`private-domain` opt-ins are resolved against the
+      zones just extracted: matching a zone sets that zone's
+      `AllowUnsigned`/`AllowPrivateAddresses`, a `private-domain` matching no
+      zone joins the global guided list instead, and a `domain-insecure`
+      matching no zone (meaningless outside that context) is offered for
+      expert adoption. New `UnboundConfImport.tsx` (Unbound Advanced tab)
+      drives paste-or-upload → classify → the existing bundle preview/
+      activate lifecycle from the import/export feature above. Still open,
+      and why this stays unchecked: `local-zone`/`local-data`/
+      `local-data-ptr` into the typed host inventory, RFC1918 reverse-zone
       policy, and resource-profile inference from cache-size values
       (`do-ip4`/`do-ip6`/`prefer-ip6` and `rrset-cache-size`/
       `msg-cache-size` are explicitly classified as blocked-pending-support
