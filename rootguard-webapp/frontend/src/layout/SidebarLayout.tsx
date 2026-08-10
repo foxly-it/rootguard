@@ -89,7 +89,7 @@ export default function SidebarLayout({ children }: Props) {
         <nav className="sidebar" aria-label={t("accessibility.mainNavigation")}>
           <div className="sidebar-nav">
             {navigation.map((item) => {
-              const nested = !collapsed && subNav?.path === item.to ? subNav.items : null;
+              const nested = subNav?.path === item.to ? subNav.items : null;
               return (
                 <div key={item.to} className="nav-group">
                   <NavLink
@@ -112,6 +112,10 @@ export default function SidebarLayout({ children }: Props) {
                           href={`#${sub.id}`}
                           className={sub.active ? "nav-subitem active" : "nav-subitem"}
                           onClick={(event) => { event.preventDefault(); sub.onSelect(); }}
+                          onMouseEnter={(event) => showTooltip(event, sub.label)}
+                          onMouseLeave={hideTooltip}
+                          onFocus={(event) => showTooltip(event, sub.label)}
+                          onBlur={hideTooltip}
                         >
                           <span className="nav-subitem-icon">{sub.icon}</span>
                           <span className="nav-subitem-label">{sub.label}</span>
