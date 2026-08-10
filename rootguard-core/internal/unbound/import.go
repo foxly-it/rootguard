@@ -2,6 +2,7 @@ package unbound
 
 import (
 	"fmt"
+	"net/netip"
 	"strconv"
 	"strings"
 )
@@ -263,10 +264,20 @@ func extractForwardZones(blocks []parsedBlock) (zones []ForwardZone, zoneNames m
 				clean = false
 			}
 		}
-		if !clean || zone.Name == "" || len(zone.Servers) == 0 {
+		if !clean || zone.Name == "" || len(zone.Servers) == 0 || validateCanonicalZoneName(zone.Name) != nil {
 			// Not left in mappedBlocks, so the caller's main loop falls back
 			// to its generic whole-block expert-adoption handling for this
 			// block - do not also emit a finding for it here.
+			continue
+		}
+		targetsClean := true
+		for _, server := range zone.Servers {
+			if !validForwardTarget(server) {
+				targetsClean = false
+				break
+			}
+		}
+		if !targetsClean {
 			continue
 		}
 		zones = append(zones, zone)
@@ -278,6 +289,24 @@ func extractForwardZones(blocks []parsedBlock) (zones []ForwardZone, zoneNames m
 		})
 	}
 	return zones, zoneNames, mappedBlocks, findings
+}
+
+// validForwardTarget mirrors the forward_zones[].servers[] checks in
+// Settings.Validate() (canonical address, not unspecified/loopback/
+// multicast/link-local/RootGuard-internal) - checked up front so a
+// port-suffixed or otherwise malformed forward-addr value falls back to
+// whole-block expert adoption instead of a confusing deferred validation
+// error after the classifier already called it "guided".
+func validForwardTarget(value string) bool {
+	address, err := netip.ParseAddr(value)
+	if err != nil || address.String() != value {
+		return false
+	}
+	routedAddress := address.Unmap()
+	if routedAddress.IsUnspecified() || routedAddress.IsLoopback() || routedAddress.IsMulticast() || routedAddress.IsLinkLocalUnicast() || rootGuardDNSNetwork.Contains(routedAddress) {
+		return false
+	}
+	return true
 }
 
 // reservedReverseZoneNames returns every RFC1918 reverse-zone name RootGuard
@@ -333,7 +362,7 @@ func extractLocalZones(blocks []parsedBlock) (zones []LocalZone, consumed map[in
 			}
 			i = groupEnd - 1 // outer loop's i++ resumes right after the group
 
-			if !ok || zoneType != "static" {
+			if !ok || zoneType != "static" || validateCanonicalZoneName(name) != nil {
 				continue
 			}
 			if _, isReserved := reserved[name]; isReserved {
@@ -357,6 +386,30 @@ func extractLocalZones(blocks []parsedBlock) (zones []LocalZone, consumed map[in
 		}
 	}
 	return zones, consumed, findings
+}
+
+// validCanonicalLocalAddress mirrors the structural checks in
+// validateLocalHostAddress (canonical address, correct family, not
+// unspecified/loopback/multicast) - checked up front for the same reason as
+// validForwardTarget above. Cross-zone PTR-address uniqueness is a
+// candidate-wide concern already re-checked by the normal validate/preview
+// lifecycle once this result is submitted, so it's deliberately not
+// duplicated here.
+func validCanonicalLocalAddress(value string, wantIPv4 bool) bool {
+	address, err := netip.ParseAddr(value)
+	if err != nil || address.String() != value {
+		return false
+	}
+	if wantIPv4 && !address.Is4() {
+		return false
+	}
+	if !wantIPv4 && (address.Is4() || address.Is4In6()) {
+		return false
+	}
+	if address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() {
+		return false
+	}
+	return true
 }
 
 // buildLocalZoneCandidate turns one local-zone group (group[0] is the
@@ -384,7 +437,7 @@ func buildLocalZoneCandidate(zoneName string, group []parsedDirective, groupStar
 				return LocalZone{}, nil, false
 			}
 			hostname := strings.TrimSuffix(fields[0], dataSuffix)
-			if hostname == "" {
+			if hostname == "" || validateHostLabel(hostname) != nil {
 				return LocalZone{}, nil, false
 			}
 			state, exists := hosts[hostname]
@@ -395,12 +448,12 @@ func buildLocalZoneCandidate(zoneName string, group []parsedDirective, groupStar
 			}
 			switch address := fields[3]; strings.ToUpper(fields[2]) {
 			case "A":
-				if state.ipv4 != "" {
+				if state.ipv4 != "" || !validCanonicalLocalAddress(address, true) {
 					return LocalZone{}, nil, false
 				}
 				state.ipv4 = address
 			case "AAAA":
-				if state.ipv6 != "" {
+				if state.ipv6 != "" || !validCanonicalLocalAddress(address, false) {
 					return LocalZone{}, nil, false
 				}
 				state.ipv6 = address
