@@ -178,9 +178,32 @@ export default function UnboundGuidedZones({
         {zones.length === 0 && <div className="guided-empty"><MapPin size={22} /><div><strong>{t("zones.empty")}</strong><p>{t("zones.emptyHelp")}</p></div></div>}
         {zones.map((zone, index) => (
           <article key={zone.name}>
-            <div className="zone-name"><span><MapPin size={15} /></span><div><strong>{zone.name}</strong><small>{zone.hosts.length === 1 ? t("zones.oneHost") : t("zones.manyHosts", { count: zone.hosts.length })}</small></div></div>
-            <div className="zone-record-summary">{zone.hosts.map((host) => <code key={host.hostname}>{host.hostname} · {host.ipv4 || host.ipv6}{host.ptr ? " · PTR" : ""}</code>)}</div>
-            <div className="zone-actions"><button className="rg-button rg-button-secondary" type="button" onClick={() => editZone(index)}><Pencil size={14} /> {t("common.edit")}</button><button className="rg-button rg-button-danger" type="button" onClick={() => removeZone(index)}><Trash2 size={14} /> {t("common.remove")}</button></div>
+            <div className="zone-card-header">
+              <div className="zone-name"><span><MapPin size={15} /></span><div><strong>{zone.name}</strong><small>{zone.hosts.length === 1 ? t("zones.oneHost") : t("zones.manyHosts", { count: zone.hosts.length })}</small></div></div>
+              <div className="zone-actions"><button className="rg-button rg-button-secondary" type="button" onClick={() => editZone(index)}><Pencil size={14} /> {t("common.edit")}</button><button className="rg-button rg-button-danger" type="button" onClick={() => removeZone(index)}><Trash2 size={14} /> {t("common.remove")}</button></div>
+            </div>
+            <div className="zone-host-table-wrap">
+              <table className="zone-host-table">
+                <thead>
+                  <tr>
+                    <th>{t("zones.hostname")}</th>
+                    <th>{t("zones.ipv4")}</th>
+                    <th>{t("zones.ipv6")}</th>
+                    <th>PTR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zone.hosts.map((host) => (
+                    <tr key={host.hostname}>
+                      <td>{host.hostname}</td>
+                      <td className="zone-host-address">{host.ipv4 || "–"}</td>
+                      <td className="zone-host-address">{host.ipv6 || "–"}</td>
+                      <td className="zone-host-ptr">{host.ptr ? <Check size={14} aria-label={t("zones.ptrHelp")} /> : "–"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </article>
         ))}
       </div>
