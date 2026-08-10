@@ -808,8 +808,16 @@ guided settings, `forward-zone` (including the zone-scoped
 inventory (CNAME/mismatched-PTR/non-static/RFC1918-name all correctly fall
 back to expert adoption instead of guessing), RFC1918 reverse-zone policy,
 network mode, and resource-profile reverse-mapping, plus expert-config
-adoption for everything else, all work end to end. Move on to **scenario
-tests**, the next unchecked 0.2 item in document order.
+adoption for everything else, all work end to end. Hardened in PR #176/#177
+against a real hand-written config reported live: a PTR-target
+trailing-dot mismatch that silently misclassified a clean zone as expert,
+a custom-config accumulation bug causing a genuine `unbound-checkconf`
+syntax error on re-classification after activation, and a follow-on
+duplicate-zone error on re-import (zones now merge by name, so re-import
+is idempotent). PR #178 also moved the guided local-zone host list from an
+inline chip row to a proper table, since an 11-host real-world zone made
+the chip row hard to scan. Move on to **scenario tests**, the next
+unchecked 0.2 item in document order.
 
 ## Tracked editor follow-ups
 

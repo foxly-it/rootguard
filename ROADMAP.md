@@ -456,7 +456,18 @@ The detailed ownership and directive plan lives in
       just be rejected downstream anyway) or a guess. New
       `UnboundConfImport.tsx` (Unbound Advanced tab) drives paste-or-upload
       → classify → the existing bundle preview/activate lifecycle from the
-      import/export feature above
+      import/export feature above. Hardened against a real hand-written
+      config (11 hosts, private-address/access-control lines, a redirect
+      zone, a forward-zone, a remote-control block) reported live: fixed a
+      PTR-target trailing-dot mismatch that silently misclassified an
+      otherwise-clean zone as expert instead of guided, a custom-config
+      accumulation bug where re-classifying after an earlier activation
+      produced a genuine `unbound-checkconf` syntax error, and a follow-on
+      duplicate-zone error on re-import - zones now merge by name, making
+      re-import idempotent. The guided local-zone host list also moved from
+      an inline chip row to a proper Hostname/IPv4/IPv6/PTR table
+      (`UnboundGuidedZones.tsx`), since the same real-world zone made an
+      11-row wrapped chip list hard to scan
 - [ ] Scenario tests for home network, VLANs, split DNS, IPv6-only local records,
       broken upstreams, and DNSSEC failures - 2 of 6 partially, incidentally
       covered rather than as named scenarios: DNSSEC failures are verified
