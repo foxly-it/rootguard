@@ -727,18 +727,25 @@ Entwicklung" without re-deriving what's next.
 
 Milestone completion snapshot:
 
-- **0.2 Unbound administration** - 3 items open, in top-to-bottom roadmap
+- **0.2 Unbound administration** - 2 items open, in top-to-bottom roadmap
   order: cross-setting conflict detection (the cross-zone hostname-uniqueness
   gap is closed; access rules have no guided surface to conflict-check
-  against yet, tracked separately below), scenario tests, and
-  host-discovery beyond the FRITZ!Box adapter. Import/export of the complete
-  logical resolver configuration is done (`UnboundConfigTransfer.tsx`,
+  against yet, tracked separately below), and host-discovery beyond the
+  FRITZ!Box adapter. Import/export of the complete logical resolver
+  configuration is done (`UnboundConfigTransfer.tsx`,
   `/api/unbound/export`+`/api/unbound/import*`). Hand-written `unbound.conf`
   import is done at full roadmap scope (`UnboundConfImport.tsx`, `import.go`'s
   classifier): fixed-base filtering/conflict detection, all scalar guided
   settings, forward-zone/local-zone/RFC1918-reverse-zone-policy/network-mode/
   resource-profile reverse-mapping, and expert-config adoption for everything
-  else all work end to end.
+  else all work end to end. Scenario tests (home network, VLANs, split DNS,
+  IPv6-only local records, broken upstreams, DNSSEC failures) are done too -
+  a build-tag-gated Go integration suite
+  (`scenario_integration_test.go`) that renders real `Settings` values
+  through production `Settings.Render()` and verifies them against a live
+  `rootguard-unbound` container with real `dig` queries, wired into CI as a
+  new `scenario-tests` job in `ci-unbound.yml`
+  ([rootguard#183](https://github.com/foxly-it/rootguard/pull/183)).
   The guided-zones frontend migration
   ([#131](https://github.com/foxly-it/rootguard/issues/131)), the read-only
   fixed-base display, and the shared draft→preview→activate workflow
@@ -783,12 +790,12 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.2 Unbound administration** (current) - work the remaining 3 items in
+1. **0.2 Unbound administration** (current) - work the remaining 2 items in
    the order they appear in `ROADMAP.md`: conflict detection (still open only
    pending the untracked guided access-rules surface - see "Tracked editor
-   follow-ups" below), scenario tests, then host-discovery beyond FRITZ!Box.
-   Resolver config import/export and hand-written `unbound.conf` import are
-   both done.
+   follow-ups" below), then host-discovery beyond FRITZ!Box. Resolver config
+   import/export, hand-written `unbound.conf` import, and scenario tests are
+   all done.
 2. **0.4 operations/backup/recovery** - the whole milestone is still open,
    in document order: configurable retention, manual cleanup preview,
    encrypted export, full restore, pre-update snapshot verification,
@@ -826,8 +833,33 @@ syntax error on re-classification after activation, and a follow-on
 duplicate-zone error on re-import (zones now merge by name, so re-import
 is idempotent). PR #178 also moved the guided local-zone host list from an
 inline chip row to a proper table, since an 11-host real-world zone made
-the chip row hard to scan. Move on to **scenario tests**, the next
-unchecked 0.2 item in document order.
+the chip row hard to scan.
+
+Scenario tests (home network, VLANs, split DNS, IPv6-only local records,
+broken upstreams, DNSSEC failures) landed in PR #183: a build-tag-gated Go
+integration suite (`rootguard-core/internal/unbound/
+scenario_integration_test.go`, `//go:build integration`, so `go test ./...`
+stays Docker-free) that constructs real `Settings` values the way a user's
+guided WebGUI configuration would, renders them through production
+`Settings.Render()`, applies them to a live `rootguard-unbound` container,
+and verifies with real `dig` queries against a running resolver - not
+string-matching rendered config. Wired into `ci-unbound.yml` as a new
+`scenario-tests` job gating image publishing. Two design corrections only
+surfaced by testing against the real resolver: the split-DNS/`AllowUnsigned`
+check initially relied on a real third-party domain's DNSSEC status
+(`dnssec-failed.org`), which turned out to test the wrong thing entirely -
+that domain is deliberately signed-with-broken-signatures, not unsigned, so
+`domain-insecure` never applied to it regardless of the setting - redesigned
+around forwarding behavior instead; and the broken-upstream scenario
+originally expected a fast SERVFAIL, but a forward target that's silently
+dropped rather than actively refused (true of TEST-NET-1 in this
+environment) has no effective ceiling in Unbound's default retry behavior
+at all - still pending after a full 5 minutes in manual testing - so the
+test now verifies what actually matters operationally instead: one stuck
+forward zone must not block unrelated queries. Move on to
+**host-discovery beyond the FRITZ!Box adapter**, the next unchecked 0.2
+item in document order (conflict detection stays deliberately open, blocked
+on the untracked guided access-rules surface).
 
 ## Tracked editor follow-ups
 
