@@ -286,6 +286,10 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleApplyUnboundImport(w, r, core)
 	})
 
+	mux.HandleFunc("POST /api/unbound/import-conf", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleClassifyUnboundImportConf(w, r, core)
+	})
+
 	mux.HandleFunc("/api/adguard/status", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)

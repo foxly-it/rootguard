@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import {
   Activity, Code2, Expand, MapPinned, SlidersHorizontal,
   Sparkles, Settings2, Lightbulb, Home, Lock, Route, FileText, SquarePen, History as HistoryIcon,
-  Router as RouterIcon, ArrowLeftRight,
+  Router as RouterIcon, ArrowLeftRight, FileUp,
 } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
@@ -38,6 +38,7 @@ import "../styles/unbound-structure.css";
 import "../styles/unbound-actions.css";
 import UnboundExpertEditor from "../components/UnboundExpertEditor";
 import UnboundConfigTransfer from "../components/UnboundConfigTransfer";
+import UnboundConfImport from "../components/UnboundConfImport";
 import UnboundForwardZones from "../components/UnboundForwardZones";
 import UnboundRouterImport from "../components/UnboundRouterImport";
 import UnboundGuidedZones from "../components/UnboundGuidedZones";
@@ -439,6 +440,7 @@ export default function Unbound() {
         )}
         <UnboundExpertEditor id="unbound-section-advanced-expert" version={history[0]?.id} baseConfig={liveConfig?.base_config} onActivated={reload} />
         <UnboundConfigTransfer id="unbound-section-advanced-transfer" onActivated={reload} />
+        <UnboundConfImport id="unbound-section-advanced-import-conf" onActivated={reload} />
         <section id="unbound-section-advanced-history" className="glass-card history-panel" tabIndex={-1}>
           <details className="history-disclosure">
             <summary><span><span className="unbound-eyebrow">ROLLBACK</span><strong>{t("unbound.history")}</strong></span><em>{t("unbound.versions", { count: history.length })}</em></summary>
@@ -497,6 +499,7 @@ function sectionsFor(section: UnboundSection, t: (key: string) => string): Unbou
         { id: "unbound-section-advanced-live", label: t("unbound.liveTitle"), icon: <FileText aria-hidden="true" /> },
         { id: "unbound-section-advanced-expert", label: t("expert.title"), icon: <SquarePen aria-hidden="true" /> },
         { id: "unbound-section-advanced-transfer", label: t("transfer.title"), icon: <ArrowLeftRight aria-hidden="true" /> },
+        { id: "unbound-section-advanced-import-conf", label: t("importConf.title"), icon: <FileUp aria-hidden="true" /> },
         { id: "unbound-section-advanced-history", label: t("unbound.history"), icon: <HistoryIcon aria-hidden="true" /> },
       ];
     default:

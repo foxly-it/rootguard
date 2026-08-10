@@ -118,33 +118,49 @@ routes to the unrestricted expert editor instead.
   router, and adapters for vendors beyond FRITZ!Box (same normalized import
   contract).
 
-### Existing-configuration import — planned
+### Existing-configuration import — partially delivered
 
 Operators arriving with a hand-written `unbound.conf` from a prior manual
 setup should not have to retype it directive by directive to get useful
-guided coverage. A bounded importer accepts a pasted or uploaded existing
-configuration, parses its directives, and classifies each one against the
-ownership model above before offering anything for adoption.
+guided coverage. A bounded importer (`rootguard-core/internal/unbound/
+import.go`'s `ImportUnboundConf`, `UnboundConfImport.tsx`) accepts a pasted
+or uploaded existing configuration, parses its directives, and classifies
+each one against the ownership model above before offering anything for
+adoption.
 
-- Directives already covered by the fixed base (e.g. listeners, root hints,
-  trust anchor) or by an existing guided setting are filtered out and never
-  presented for import - the point is to fill gaps, not to let an imported
-  file silently duplicate, shadow, or override what RootGuard already owns
-  and secures. A directive whose imported value actually conflicts with the
-  fixed base is reported as rejected with the reason, not silently dropped.
-- Directives that map cleanly onto an existing guided setting (forwarding
-  zones, local records, cache sizing, and so on) are offered as pre-filled
-  guided values for review, not written through verbatim.
+- Directives already covered by the fixed base (e.g. `hide-identity`,
+  `hide-version`, `harden-*`, `unwanted-reply-threshold`, `root-hints`,
+  `auto-trust-anchor-file`) are filtered out and never presented for import.
+  A directive whose imported value actually conflicts with the fixed base
+  (compared exactly for the simple scalar ones) is reported as rejected with
+  the reason, not silently dropped. **Delivered.**
+- Directives that map cleanly onto an existing guided setting are applied to
+  a candidate `Settings` for review before activation. **Delivered for the
+  ~12 flat `server:` scalars** (qname-minimisation, prefetch(-key),
+  aggressive-nsec, serve-expired(-ttl/-client-timeout), cache-min/max-ttl,
+  num-threads, edns-buffer-size, verbosity). **Still open** for the
+  block-shaped or multi-directive guided settings: `forward-zone` →
+  `ForwardZone`, `local-zone`/`local-data`/`local-data-ptr` → the typed host
+  inventory, `private-domain`, RFC1918 reverse-zone policy, and
+  resource-profile inference from `rrset-cache-size`/`msg-cache-size` -
+  these are explicitly classified as blocked-pending-support today (not
+  silently mishandled), and `do-ip4`/`do-ip6`/`prefer-ip6` the same pending
+  network-mode reverse-mapping.
 - Remaining directives that have no guided equivalent but pass the same
   expert allowlist as manual expert input are offered for adoption into
-  `90-rootguard-custom.conf`; anything on the permanently blocked list is
-  reported as unsupported, never silently accepted.
-- Treat the imported file as an untrusted draft, matching the router-import
-  pattern above: show a preview of what will be adopted, what was filtered as
-  already-owned, and what was rejected, before anything is written. Apply
-  selected directives only through the shared preview, effective
-  `unbound-checkconf`, version history, activation health check, and
-  rollback path.
+  `90-rootguard-custom.conf`, preserving whole clause blocks (e.g. a
+  `forward-zone:` block reconstructed verbatim) rather than individual
+  lines; anything on the permanently blocked list, or that opens a control
+  surface (`remote-control`, `python`, `dynlib`, `dnstap`), is reported as
+  unsupported, never silently accepted. **Delivered** - this is also today's
+  path for the block-shaped guided directives above, until they get their
+  own reverse-mapping.
+- The imported file is treated as an untrusted draft, matching the
+  router-import pattern above: classification is a pure, read-only step:
+  applying it reuses the same `ConfigBundle` preview/activate lifecycle as
+  the complete-configuration import/export feature (shared `unbound-checkconf`,
+  version history, activation health check, and rollback path).
+  **Delivered.**
 
 ### Client access networks — fixed ownership
 

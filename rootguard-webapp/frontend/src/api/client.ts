@@ -328,6 +328,30 @@ export async function applyUnboundImport(bundle: UnboundConfigBundle): Promise<U
   });
 }
 
+export type UnboundImportDisposition = "guided" | "fixed_base" | "expert" | "blocked";
+
+export interface UnboundImportFinding {
+  section: string;
+  line: number;
+  directive: string;
+  value?: string;
+  disposition: UnboundImportDisposition;
+  detail: string;
+}
+
+export interface UnboundImportResult {
+  findings: UnboundImportFinding[];
+  settings: UnboundSettings;
+  custom_adopted: string;
+}
+
+export async function classifyUnboundImportConf(content: string): Promise<UnboundImportResult> {
+  return request<UnboundImportResult>("/api/unbound/import-conf", {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+}
+
 export async function fetchUnboundHistory(): Promise<UnboundHistoryEntry[]> {
   return request<UnboundHistoryEntry[]>("/api/unbound/history");
 }
