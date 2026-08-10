@@ -683,3 +683,80 @@ func TestImportRejectsLocalZoneWithMalformedHostAddress(t *testing.T) {
 		t.Fatalf("expected an invalid IPv4 address not to be guided-mapped, got %+v", result.Settings.LocalZones)
 	}
 }
+
+// Regression test: a hand-written unbound.conf is free to keep the trailing
+// dot on a local-data-ptr target ("host.zone." rather than Render()'s own
+// "host.zone") - both are valid, equivalent DNS names. Reported live: a
+// real 11-host zone with trailing-dot PTR targets fell back to expert
+// adoption entirely, even though every record was perfectly clean data.
+func TestImportAcceptsPTRTargetWithTrailingDot(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"printer.home.lab. IN A 192.168.1.20\"\n" +
+		"    local-data-ptr: \"192.168.1.20 printer.home.lab.\"\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 1 {
+		t.Fatalf("expected the zone to be guided-mapped despite the trailing dot, got %+v", result.Settings.LocalZones)
+	}
+	if host := result.Settings.LocalZones[0].Hosts[0]; !host.PTR {
+		t.Fatalf("expected PTR to be recognized, got %+v", host)
+	}
+}
+
+// Regression test: re-importing a file after its zones were already
+// activated used to blindly append a second copy, producing a "duplicates"
+// validation error on an otherwise unchanged re-import. A zone name that
+// already exists is now replaced in place instead - re-importing the same
+// file is idempotent, and re-importing an edited file updates the zone.
+func TestImportReplacesExistingZonesByNameInsteadOfDuplicating(t *testing.T) {
+	current := DefaultSettings()
+	current.LocalZones = []LocalZone{{
+		Name:  "home.lab.",
+		Hosts: []LocalHost{{Hostname: "printer", IPv4: "192.168.1.20", PTR: true}},
+	}}
+	current.ForwardZones = []ForwardZone{{Name: "corp.example.", Servers: []string{"192.0.2.53"}}}
+
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"router.home.lab. IN A 192.168.1.1\"\n" +
+		"forward-zone:\n" +
+		"    name: \"corp.example.\"\n" +
+		"    forward-addr: 192.0.2.54\n"
+
+	result, err := ImportUnboundConf(current, "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 1 {
+		t.Fatalf("expected the existing zone to be replaced, not duplicated, got %+v", result.Settings.LocalZones)
+	}
+	if hosts := result.Settings.LocalZones[0].Hosts; len(hosts) != 1 || hosts[0].Hostname != "router" {
+		t.Fatalf("expected the zone updated to the freshly imported content, got %+v", hosts)
+	}
+	if len(result.Settings.ForwardZones) != 1 || result.Settings.ForwardZones[0].Servers[0] != "192.0.2.54" {
+		t.Fatalf("expected the existing forward zone replaced, not duplicated, got %+v", result.Settings.ForwardZones)
+	}
+}
+
+// A genuinely repeated re-import (the exact same file, unchanged) must be a
+// true no-op: identical content in, identical settings out.
+func TestImportOfTheSameFileTwiceIsIdempotent(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"printer.home.lab. IN A 192.168.1.20\"\n"
+
+	first, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := ImportUnboundConf(first.Settings, "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Settings.LocalZones) != 1 {
+		t.Fatalf("expected re-importing the identical file to stay at 1 zone, got %+v", second.Settings.LocalZones)
+	}
+}
