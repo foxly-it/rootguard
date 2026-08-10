@@ -17,6 +17,9 @@
 }
 .import-conf-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .advice-item-button {
+  appearance: none;
+  -webkit-appearance: none;
+  color: inherit;
   border: 1px solid transparent;
   text-align: left;
   font: inherit;

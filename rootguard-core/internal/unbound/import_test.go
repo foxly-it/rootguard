@@ -598,3 +598,88 @@ func TestImportLeavesResourceProfileUnmappedWhenSizesDontMatch(t *testing.T) {
 		t.Fatalf("expected an unmatched size pair to be blocked, got %+v", finding)
 	}
 }
+
+// Regression test: a forward-zone block whose name isn't a canonical FQDN
+// (missing the trailing dot here) used to be accepted as a clean guided
+// match, only to fail much later with a raw Settings.Validate() error at
+// the "Validate with Unbound" step - confusing, since the classifier had
+// already called it "guided". It must fall back to expert adoption instead.
+func TestImportRejectsForwardZoneWithNonCanonicalName(t *testing.T) {
+	content := "forward-zone:\n" +
+		"    name: \"corp.example\"\n" +
+		"    forward-addr: 192.0.2.53\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.ForwardZones) != 0 {
+		t.Fatalf("expected a non-canonical zone name not to be guided-mapped, got %+v", result.Settings.ForwardZones)
+	}
+	finding := findingFor(t, result.Findings, "forward-zone")
+	if finding.Disposition != ImportExpert {
+		t.Fatalf("expected expert adoption, got %+v", finding)
+	}
+	if !strings.Contains(result.CustomAdopted, `name: "corp.example"`) {
+		t.Fatalf("expected the zone preserved verbatim for expert adoption, got %q", result.CustomAdopted)
+	}
+}
+
+func TestImportRejectsForwardZoneWithMalformedTarget(t *testing.T) {
+	content := "forward-zone:\n" +
+		"    name: \"corp.example.\"\n" +
+		"    forward-addr: 192.0.2.53@853\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.ForwardZones) != 0 {
+		t.Fatalf("expected a port-suffixed target not to be guided-mapped, got %+v", result.Settings.ForwardZones)
+	}
+	finding := findingFor(t, result.Findings, "forward-zone")
+	if finding.Disposition != ImportExpert {
+		t.Fatalf("expected expert adoption, got %+v", finding)
+	}
+}
+
+func TestImportRejectsForwardZoneTargetingRootGuardInternals(t *testing.T) {
+	content := "forward-zone:\n" +
+		"    name: \"corp.example.\"\n" +
+		"    forward-addr: 127.0.0.1\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.ForwardZones) != 0 {
+		t.Fatalf("expected a loopback target not to be guided-mapped, got %+v", result.Settings.ForwardZones)
+	}
+}
+
+func TestImportRejectsLocalZoneWithNonCanonicalName(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"Home.Lab.\" static\n" +
+		"    local-data: \"printer.Home.Lab. IN A 192.168.1.20\"\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 0 {
+		t.Fatalf("expected a non-canonical (mixed-case) zone name not to be guided-mapped, got %+v", result.Settings.LocalZones)
+	}
+	finding := findingFor(t, result.Findings, "local-zone")
+	if finding.Disposition != ImportExpert {
+		t.Fatalf("expected expert adoption, got %+v", finding)
+	}
+}
+
+func TestImportRejectsLocalZoneWithMalformedHostAddress(t *testing.T) {
+	content := "server:\n" +
+		"    local-zone: \"home.lab.\" static\n" +
+		"    local-data: \"printer.home.lab. IN A 300.168.1.20\"\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.LocalZones) != 0 {
+		t.Fatalf("expected an invalid IPv4 address not to be guided-mapped, got %+v", result.Settings.LocalZones)
+	}
+}
