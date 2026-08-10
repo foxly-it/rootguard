@@ -114,7 +114,7 @@ export default function UnboundConfigTransfer({ id, onActivated }: { id?: string
   }
 
   return (
-    <section id={id} className="glass-card" tabIndex={-1}>
+    <section id={id} className="glass-card transfer-panel" tabIndex={-1}>
       <div className="panel-heading">
         <div><p className="unbound-eyebrow">{t("transfer.eyebrow")}</p><h2>{t("transfer.title")}</h2></div>
       </div>

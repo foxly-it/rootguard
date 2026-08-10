@@ -119,7 +119,7 @@ export default function UnboundConfImport({ id, onActivated }: { id?: string; on
   const adoptable = result ? result.findings.some((f) => f.disposition === "guided" || f.disposition === "expert") : false;
 
   return (
-    <section id={id} className="glass-card" tabIndex={-1}>
+    <section id={id} className="glass-card import-conf-panel" tabIndex={-1}>
       <div className="panel-heading">
         <div><p className="unbound-eyebrow">{t("importConf.eyebrow")}</p><h2>{t("importConf.title")}</h2></div>
       </div>

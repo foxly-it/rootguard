@@ -1,6 +1,7 @@
 .expert-panel { box-sizing: border-box; margin-top: 22px; }
 .expert-heading { margin-bottom: 8px; }
 .expert-heading-actions { display: flex; gap: 8px; align-items: center; }
+.transfer-panel, .import-conf-panel { margin-top: 22px; }
 .transfer-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
 .import-conf-textarea {
   width: 100%;
