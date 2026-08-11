@@ -136,15 +136,16 @@ export default function AdGuard() {
             <span className={`adguard-state ${ready ? "healthy" : ""}`}>{loading ? t("common.checking") : ready ? t("adguard.ready") : t("adguard.incomplete")}</span>
           </div>
           <div className="adguard-status-list">
-            <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} adguardHash="#settings" adguardHashLabel={t("adguard.openSettings")} />
-            <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} adguardHash="#dns" adguardHashLabel={t("adguard.openDnsSettings")} />
+            <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} adguardHash="#settings" adguardHashLabel={t("adguard.openSettingsShort")} adguardHashAriaLabel={t("adguard.openSettings")} />
+            <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} adguardHash="#dns" adguardHashLabel={t("adguard.openDnsSettingsShort")} adguardHashAriaLabel={t("adguard.openDnsSettings")} />
             <StatusRow
               label={t("adguard.filterLists")}
               active={Boolean(status?.filtering_enabled)}
               activeText={t("adguard.filterListsActive", { active: status?.active_filter_lists ?? 0, total: status?.total_filter_lists ?? 0 })}
               inactiveText={t("adguard.filterListsInactive")}
               adguardHash="#filters"
-              adguardHashLabel={t("adguard.openFilterLists")}
+              adguardHashLabel={t("adguard.openFilterListsShort")}
+              adguardHashAriaLabel={t("adguard.openFilterLists")}
             />
           </div>
           <div className="adguard-upstream">
@@ -266,7 +267,7 @@ function categoryLabel(t: (key: string) => string, category: AdGuardFilterCheck[
   return t(keys[category]);
 }
 
-function StatusRow({ label, active, activeText, inactiveText, adguardHash, adguardHashLabel }: {
+function StatusRow({ label, active, activeText, inactiveText, adguardHash, adguardHashLabel, adguardHashAriaLabel }: {
   label: string;
   active: boolean;
   activeText: string;
@@ -277,6 +278,7 @@ function StatusRow({ label, active, activeText, inactiveText, adguardHash, adgua
   // AdGuard's own navigation first.
   adguardHash?: string;
   adguardHashLabel?: string;
+  adguardHashAriaLabel?: string;
 }) {
   return (
     <div>
@@ -284,8 +286,8 @@ function StatusRow({ label, active, activeText, inactiveText, adguardHash, adgua
       <strong>{label}</strong>
       <small>{active ? activeText : inactiveText}</small>
       {adguardHash && (
-        <a className="adguard-contextual-button" href={`/adguard-ui/${adguardHash}`} target="_blank" rel="noreferrer">
-          {adguardHashLabel} <ExternalLink size={13} aria-hidden="true" />
+        <a className="adguard-contextual-button" href={`/adguard-ui/${adguardHash}`} target="_blank" rel="noreferrer" aria-label={adguardHashAriaLabel} title={adguardHashAriaLabel}>
+          <span>{adguardHashLabel}</span> <ExternalLink size={12} aria-hidden="true" />
         </a>
       )}
     </div>
