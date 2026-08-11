@@ -103,6 +103,13 @@ surface (see [issue #131](https://github.com/foxly-it/rootguard/issues/131)):
 the typed model was never scoped to support them, and the rare CNAME/TTL case
 routes to the unrestricted expert editor instead.
 
+Access rules likewise remain expert-only through 1.0. Existing guided Unbound
+surfaces already conflict-check one another and expert text; a future guided
+access-rules surface is not a pre-1.0 requirement. It may become an official
+reference use case for the post-1.0 extension architecture, where equivalent
+conflict detection is mandatory for activation
+([issue #186](https://github.com/foxly-it/rootguard/issues/186)).
+
 ### Host discovery and import — delivered
 
 - Bounded discovery from an optional router adapter: the FRITZ!Box adapter

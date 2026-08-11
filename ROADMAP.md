@@ -379,7 +379,8 @@ The detailed ownership and directive plan lives in
       to the editor, not behind a click-to-expand disclosure
       ([rootguard-webapp#74](https://github.com/foxly-it/rootguard-webapp/pull/74),
       [rootguard#101](https://github.com/foxly-it/rootguard/issues/101))
-- [ ] Conflict detection across zones, forwarding, access rules, and expert text -
+- [x] Conflict detection across every currently guided Unbound surface and
+      expert text -
       more already ships than this line credited: `validateGuidedConflicts`
       (`rootguard-core/internal/unbound/custom.go`) cross-checks guided
       forward zones, private domains, and the RFC1918/local-zone inventory
@@ -392,11 +393,12 @@ The detailed ownership and directive plan lives in
       server-side (`validateLocalZones`) on every save/activation. The
       legacy `UnboundGuidedZones.tsx` JSON-in-comment scheme this line used
       to worry about no longer exists (migrated to the typed model in
-      #167). Still genuinely missing: access rules have no guided surface
-      at all (expert-only, advisor warning + high-risk catalog entry only),
-      so there is nothing for this item to conflict-check yet - building
-      that guided surface is a separate, currently untracked feature, not
-      part of conflict detection itself
+      #167). Access rules deliberately remain expert-only before 1.0, with
+      the existing advisor warning and high-risk catalog entry. A guided
+      access-rules surface is therefore not part of this pre-1.0 gate; it is
+      a possible reference extension for the post-1.0 architecture tracked
+      in [#186](https://github.com/foxly-it/rootguard/issues/186), where
+      conflict detection becomes an acceptance criterion of that extension
 - [x] Import/export of the complete logical resolver configuration - guided
       settings and expert custom config bundled together as a single
       downloadable/uploadable JSON file (`GET /api/unbound/export`,
@@ -827,7 +829,30 @@ RootGuard 1.0 ships when:
 - [ ] a tested rollback path from 1.0 to the previous stable state is documented.
 
 Post-1.0 candidates: bare-metal/systemd provider, multi-node management, high
-availability, external identity providers, and plugin APIs.
+availability, and external identity providers.
+
+---
+
+## Post-1.0 / Future — extensions
+
+Goal: let advanced operators add narrowly scoped integrations and guided
+features without weakening RootGuard's validation, recovery, or appliance
+security model. This work is explicitly deferred until after 1.0 and carries no
+current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
+
+- [ ] Define a versioned extension API, compatibility contract, capability
+      model, and explicit permission boundaries.
+- [ ] Provide constrained integration, configuration, and UI extension points;
+      RootGuard must retain ownership of preview, validation, activation,
+      history, rollback, audit, backup, and restore.
+- [ ] Define signing or explicit trust handling plus safe install, disable,
+      upgrade, failure-isolation, and removal semantics. Unrestricted Docker
+      socket access or arbitrary root scripts are not the default model.
+- [ ] Build an official reference extension after the platform contract is
+      stable. A guided access-rules extension is a candidate: professionals can
+      already use the expert editor today, while a future guided surface must
+      conflict-check zones, forwarding, and expert configuration before it can
+      activate.
 
 ## How we work with this roadmap
 
