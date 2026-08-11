@@ -47,16 +47,14 @@ export default function Stack() {
 
   const load = useCallback(async () => {
     try {
-      const [nextUpdates, nextControlPlane, nextServices, nextCleanup] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextServices] = await Promise.all([
         fetchUpdateStatus(),
         fetchControlPlaneUpdateStatus(),
         fetchServices(),
-        fetchCleanupPreview().catch(() => null),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setServices(nextServices);
-      if (nextCleanup) setCleanup(nextCleanup);
       setError("");
     } catch (cause) {
       setError(errorMessage(cause, "Stack-Status konnte nicht geladen werden."));
@@ -141,7 +139,7 @@ export default function Stack() {
     setError("");
     try {
       await runManualCleanup();
-      await load();
+      await Promise.all([load(), refreshCleanupPreview()]);
     } catch (cause) {
       setError(errorMessage(cause, t("stack.cleanupRunError")));
     } finally {
@@ -188,38 +186,6 @@ export default function Stack() {
         <Summary icon={<Archive />} label={t("stack.protection")} value={t("stack.backup")} />
         <Summary icon={<RotateCcw />} label={t("stack.failure")} value={t("stack.rollback")} />
       </section>
-
-      {cleanup && (
-        <section className="manual-cleanup-panel">
-          <div className="manual-cleanup-heading">
-            <span><Trash2 size={19} /></span>
-            <div>
-              <span className="stack-eyebrow">{t("stack.cleanupEyebrow")}</span>
-              <h2>{t("stack.cleanupTitle")}</h2>
-              <p>{t("stack.cleanupIntro")}</p>
-            </div>
-            <strong>{formatBytes(cleanup.estimated_bytes)}<small>{t("stack.cleanupEstimate")}</small></strong>
-          </div>
-          {cleanup.resources.length ? (
-            <div className="manual-cleanup-list">
-              {cleanup.resources.map((resource) => (
-                <article key={`${resource.kind}-${resource.id}`}>
-                  <span>{t(`stack.cleanupKind.${resource.kind}`)}</span>
-                  <code title={resource.id}>{resource.kind === "image" ? shortID(resource.id) : resource.id}</code>
-                  <strong>{formatBytes(resource.estimated_bytes)}</strong>
-                </article>
-              ))}
-            </div>
-          ) : <p className="manual-cleanup-empty">{t("stack.cleanupEmpty")}</p>}
-          {!!cleanup.skipped?.length && <p className="manual-cleanup-note">{t("stack.cleanupProtected", { count: cleanup.skipped.length })}</p>}
-          <div className="manual-cleanup-actions">
-            <button className="rg-button rg-button-secondary" type="button" disabled={busy || runningCleanup} onClick={refreshCleanupPreview}><RefreshCw size={15} /> {t("stack.cleanupRefresh")}</button>
-            <button className="rg-button rg-button-danger" type="button" disabled={busy || runningCleanup || !cleanup.resources.length} onClick={startManualCleanup}>
-              {runningCleanup ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />} {t("stack.cleanupRun")}
-            </button>
-          </div>
-        </section>
-      )}
 
       {controlPlane && (
         <section className="control-plane-panel">
@@ -303,7 +269,9 @@ export default function Stack() {
                 <div><dt>{t("stack.publishedPorts")}</dt><dd>{runtime?.ports?.length ? runtime.ports.join(", ") : t("stack.noPublishedPorts")}</dd></div>
               </dl>
 
-              <dl className="stack-image-data">
+              <details className="stack-technical-details">
+                <summary>{t("stack.technicalDetails")}</summary>
+                <dl className="stack-image-data">
                 <div><dt>{t("stack.runningImage")}</dt><dd>{runtime?.image || service.current_image || "–"}</dd></div>
                 <div><dt>{t("stack.target")}</dt><dd>{service.target_image}</dd></div>
                 <div><dt>{t("stack.imageId")}</dt><dd>{shortID(runtime?.imageId || service.current_id)}</dd></div>
@@ -313,7 +281,8 @@ export default function Stack() {
                 <div><dt>{t("stack.attestation")}</dt><dd><AttestationBadge service={runtime} t={t} /></dd></div>
                 {runtime?.attestedAt && <div><dt>{t("stack.attestationChecked")}</dt><dd>{formatDate(runtime.attestedAt)}</dd></div>}
                 <div><dt>{t("stack.lastCheck")}</dt><dd>{service.checked_at && !service.checked_at.startsWith("0001-") ? formatDate(service.checked_at) : t("stack.neverChecked")}</dd></div>
-              </dl>
+                </dl>
+              </details>
 
               {service.error && <p className="stack-service-error">{service.error}</p>}
 
@@ -349,6 +318,21 @@ export default function Stack() {
             ))}
           </div>
         ) : <p className="stack-history-empty">{t("stack.historyEmpty")}</p>}
+      </section>
+
+      <section className="manual-cleanup-panel maintenance-panel">
+        <div className="manual-cleanup-heading">
+          <span><Trash2 size={19} /></span>
+          <div><span className="stack-eyebrow">{t("stack.cleanupEyebrow")}</span><h2>{t("stack.cleanupTitle")}</h2><p>{t("stack.cleanupIntro")}</p></div>
+          {cleanup && <strong>{formatBytes(cleanup.estimated_bytes)}<small>{t("stack.cleanupEstimate")}</small></strong>}
+        </div>
+        {!cleanup ? (
+          <div className="maintenance-preview-closed"><p>{t("stack.cleanupOnDemand")}</p><button className="rg-button rg-button-secondary" type="button" disabled={busy} onClick={refreshCleanupPreview}><Trash2 size={15} /> {t("stack.cleanupPreview")}</button></div>
+        ) : <>
+          {cleanup.resources.length ? <div className="manual-cleanup-list">{cleanup.resources.map((resource) => <article key={`${resource.kind}-${resource.id}`}><span>{t(`stack.cleanupKind.${resource.kind}`)}</span><code title={resource.id}>{resource.kind === "image" ? shortID(resource.id) : resource.id}</code><strong>{formatBytes(resource.estimated_bytes)}</strong></article>)}</div> : <p className="manual-cleanup-empty">{t("stack.cleanupEmpty")}</p>}
+          {!!cleanup.skipped?.length && <p className="manual-cleanup-note">{t("stack.cleanupProtected", { count: cleanup.skipped.length })}</p>}
+          <div className="manual-cleanup-actions"><button className="rg-button rg-button-secondary" type="button" disabled={busy || runningCleanup} onClick={refreshCleanupPreview}><RefreshCw size={15} /> {t("stack.cleanupRefresh")}</button><button className="rg-button rg-button-danger" type="button" disabled={busy || runningCleanup || !cleanup.resources.length} onClick={startManualCleanup}>{runningCleanup ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />} {t("stack.cleanupRun")}</button></div>
+        </>}
       </section>
 
       <section className="stack-safety">
