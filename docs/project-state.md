@@ -756,7 +756,7 @@ excluding sessions, external environment secrets, update restore points, and
 temporary exports. Private plaintext staging is removed on every path and
 data-plane updates cannot overlap export creation. Clean-install restore and
 transactional snapshot verification remain the next separate 0.4 steps
-([rootguard#192](https://github.com/foxly-it/rootguard/issues/192)).
+([rootguard#193](https://github.com/foxly-it/rootguard/pull/193)).
 
 ## Remaining production milestones
 

@@ -705,7 +705,7 @@ manual Docker forensics.
       server-side, symlinks are rejected, plaintext staging uses a private Core
       directory and is removed on every exit, and data-plane updates are locked
       out while the artifact is created
-      ([rootguard#192](https://github.com/foxly-it/rootguard/issues/192))
+      ([rootguard#193](https://github.com/foxly-it/rootguard/pull/193))
 - [ ] Full restore into a clean RootGuard installation
 - [ ] Pre-update snapshot and post-update restore verification
 - [ ] Power-loss and interrupted-write tests for installation and updates
