@@ -653,9 +653,19 @@ coherent appliance lifecycle around it.
 Goal: an operator can understand failures and recover the appliance without
 manual Docker forensics.
 
-- [x] Bounded and redacted logs for every managed component
+- [x] Bounded and redacted logs for every managed component - the dedicated
+      Logs & Diagnostics page selects every allowlisted service, offers local
+      text/severity filters, optional refresh and a downloadable redacted
+      report, while Core retains the 30-minute, 100-line, and 64-KiB bounds
+      ([rootguard#201](https://github.com/foxly-it/rootguard/pull/201))
 - [x] Real component versions, image digests, uptime, and health reasons
 - [x] Persistent, bounded update and rollback history for data and control plane
+- [x] Keep the operations UI scannable as capabilities grow - import scope is
+      explicit on the Backups page and searchable down to each workflow; Stack
+      keeps routine health and actions visible, folds release metadata into
+      technical details, and loads Docker cleanup only on demand
+      ([rootguard#203](https://github.com/foxly-it/rootguard/pull/203),
+      [rootguard#206](https://github.com/foxly-it/rootguard/pull/206))
 - [x] Fixed a real production failure mode where an Unbound image update -
       and its automatic rollback - could both fail with "Address already in
       use", leaving Unbound down: AdGuard was deliberately unpinned on the

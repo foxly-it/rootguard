@@ -316,11 +316,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   therefore appears as a normally running service without a configured Docker
   healthcheck instead of producing a misleading operator warning; starting,
   unhealthy, stopped, and indeterminate states retain their warning severity.
-- Service diagnostics are loaded only after an explicit user action and are
-  limited to 100 lines from the previous 30 minutes and 64 KiB. Core removes
-  control characters and redacts common authorization, token, password,
-  secret, and API-key patterns. The WebGUI explains the window and reminds
-  operators to review diagnostic text before sharing it.
+- The dedicated Logs & Diagnostics sidebar page loads the selected allowlisted
+  service and offers local text/severity filters, optional ten-second refresh,
+  and a downloadable privacy-safe report. Every request remains limited to 100
+  lines from the previous 30 minutes and 64 KiB. Core removes control
+  characters and redacts common authorization, token, password, secret, and
+  API-key patterns; the browser cannot choose arbitrary containers or paths
+  ([rootguard#201](https://github.com/foxly-it/rootguard/pull/201)).
 - Separate internal control-plane updater for allowlisted Core and WebApp
   images. It remains alive while both containers are replaced as a pair,
   persists status outside either target, verifies exact image IDs and both
@@ -768,10 +770,18 @@ Backup retention and portable export have their own authenticated Backups page
 and sidebar entry; Stack & Updates remains focused on service lifecycle,
 updates, rollback status, and safe Docker cleanup
 ([rootguard#195](https://github.com/foxly-it/rootguard/pull/195)).
+The Backups page now distinguishes full encrypted recovery, RootGuard Unbound
+bundle transfer, and traditional `unbound.conf` import, linking and indexing
+each existing validation workflow directly
+([rootguard#203](https://github.com/foxly-it/rootguard/pull/203)). Stack keeps
+routine state and actions visible, collapses low-frequency release metadata,
+aligns service actions, places history before maintenance, and no longer loads
+the Docker cleanup inventory until requested
+([rootguard#206](https://github.com/foxly-it/rootguard/pull/206)).
 
 ## Remaining production milestones
 
-Cross-referenced against `ROADMAP.md` on 2026-08-09 (supersedes the previous
+Cross-referenced against `ROADMAP.md` on 2026-08-11 (supersedes the previous
 narrative version of this section, which had drifted from the actual
 per-item roadmap state). Read `ROADMAP.md` itself for full item text and PR
 references - this is the sequencing/prioritisation layer on top of it, kept
@@ -827,7 +837,6 @@ Milestone completion snapshot:
   use" *and* have its automatic rollback fail with the exact same error,
   leaving Unbound down until manually repaired. The controller's own
   `docker network connect` to that network had the identical gap. Both now
-  get pinned, non-conflicting addresses.
 - **0.5 security/HTTPS/accessibility** - 3 items open, all close to done:
   destructive-action rate limits/audit beyond the authentication surface,
   a full keyboard/screen-reader workflow re-verification, and a WCAG
