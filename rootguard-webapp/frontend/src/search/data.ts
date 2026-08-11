@@ -24,6 +24,7 @@ export const searchIndex: SearchEntry[] = [
   { id: "page-setup", labelKey: "nav.setup", categoryKey: "search.category.pages", route: "/setup" },
   { id: "page-stack", labelKey: "nav.stack", categoryKey: "search.category.pages", route: "/stack" },
   { id: "page-backups", labelKey: "nav.backups", categoryKey: "search.category.pages", route: "/backups" },
+  { id: "page-logs", labelKey: "nav.logs", categoryKey: "search.category.pages", route: "/logs", keywords: ["logs", "diagnostics", "events"] },
   { id: "page-unbound", labelKey: "nav.unbound", categoryKey: "search.category.pages", route: "/unbound" },
   { id: "page-adguard", labelKey: "nav.adguard", categoryKey: "search.category.pages", route: "/adguard" },
 

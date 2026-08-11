@@ -6,6 +6,7 @@ import AdGuard from "./pages/AdGuard";
 import Setup from "./pages/Setup";
 import Stack from "./pages/Stack";
 import Backups from "./pages/Backups";
+import Logs from "./pages/Logs";
 import Login from "./pages/Login";
 import { useAuth } from "./auth";
 
@@ -46,6 +47,7 @@ function App() {
         <Route path="/setup" element={<Setup />} />
         <Route path="/stack" element={<Stack />} />
         <Route path="/backups" element={<Backups />} />
+        <Route path="/logs" element={<Logs />} />
       </Routes>
     </SidebarLayout>
   );

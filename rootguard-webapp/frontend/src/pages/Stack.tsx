@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
   Archive,
   CheckCircle2,
@@ -19,14 +20,12 @@ import {
   fetchControlPlaneUpdateStatus,
   fetchCleanupPreview,
   fetchServices,
-  fetchServiceLogs,
   fetchUpdateStatus,
   installServiceUpdate,
   installControlPlaneUpdates,
   runManualCleanup,
   serviceAction,
   type ServiceInfo,
-  type ServiceLogs,
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
@@ -35,7 +34,6 @@ import {
 } from "../api/client";
 import "../styles/stack.css";
 import { useI18n } from "../i18n";
-import ContentModal from "../components/ContentModal";
 import { formatBytes } from "../utils/format";
 
 export default function Stack() {
@@ -45,16 +43,7 @@ export default function Stack() {
   const [cleanup, setCleanup] = useState<CleanupPreview | null>(null);
   const [runningCleanup, setRunningCleanup] = useState(false);
   const [services, setServices] = useState<ServiceInfo[]>([]);
-  const [serviceLogs, setServiceLogs] = useState<Partial<Record<ServiceInfo["name"], ServiceLogs>>>({});
-  const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
-  const [openLogs, setOpenLogs] = useState<ServiceInfo["name"] | "">("");
   const [error, setError] = useState("");
-  // toggleLogs disables its trigger button while it fetches (first open per
-  // service), which blurs it to <body> before the modal ever mounts -
-  // ContentModal's own document.activeElement auto-capture would then
-  // restore focus to nothing. Capture the real trigger synchronously in the
-  // click handler instead, before any of that async/disabled state kicks in.
-  const logsTriggerRef = useRef<HTMLElement | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -167,24 +156,6 @@ export default function Stack() {
       await load();
     } catch (cause) {
       setError(errorMessage(cause, "Dienstaktion fehlgeschlagen."));
-    }
-  }
-
-  async function toggleLogs(name: ServiceInfo["name"]) {
-    if (serviceLogs[name]) {
-      setOpenLogs(name);
-      return;
-    }
-    setLoadingLogs(name);
-    setError("");
-    try {
-      const logs = await fetchServiceLogs(name);
-      setServiceLogs((current) => ({ ...current, [name]: logs }));
-      setOpenLogs(name);
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.logsError")));
-    } finally {
-      setLoadingLogs("");
     }
   }
 
@@ -354,23 +325,15 @@ export default function Stack() {
                 <button type="button" className="rg-button rg-button-secondary quiet" disabled={busy} onClick={() => control(service.name, runtime?.status === "running" ? "stop" : "start")}>
                   {runtime?.status === "running" ? t("common.stop") : t("common.start")}
                 </button>
-                <button type="button" className="rg-button rg-button-secondary quiet" disabled={loadingLogs === service.name} onClick={(event) => { logsTriggerRef.current = event.currentTarget; toggleLogs(service.name); }}>
-                  {loadingLogs === service.name ? <LoaderCircle className="spin" size={15} /> : <FileText size={15} />}
+                <Link className="rg-button rg-button-secondary quiet" to={`/logs?service=${service.name}`}>
+                  <FileText size={15} />
                   {t("stack.showLogs")}
-                </button>
+                </Link>
               </div>
             </article>
           );
         })}
       </section>
-      <ContentModal open={openLogs !== ""} eyebrow={t("stack.logsWindow")} title={t("stack.logsTitle")} closeLabel={t("common.close")} onClose={() => setOpenLogs("")} returnFocusTo={logsTriggerRef}>
-        <div className="stack-log-modal">
-          <p>{t("stack.logsPrivacy")}</p>
-          <pre tabIndex={0} aria-label={t("stack.logsTitle")}>{openLogs && serviceLogs[openLogs]?.lines.length ? serviceLogs[openLogs]?.lines.join("\n") : t("stack.logsEmpty")}</pre>
-          {openLogs && serviceLogs[openLogs]?.truncated && <small>{t("stack.logsTruncated")}</small>}
-        </div>
-      </ContentModal>
-
       <section className="stack-history">
         <div className="stack-history-heading">
           <div>
