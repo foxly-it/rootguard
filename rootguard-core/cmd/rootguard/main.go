@@ -13,6 +13,7 @@ import (
 
 	"github.com/foxly-it/rootguard-core/internal/adguard"
 	"github.com/foxly-it/rootguard-core/internal/api"
+	"github.com/foxly-it/rootguard-core/internal/backupexport"
 	"github.com/foxly-it/rootguard-core/internal/controlplane"
 	"github.com/foxly-it/rootguard-core/internal/installer"
 	"github.com/foxly-it/rootguard-core/internal/unbound"
@@ -105,6 +106,20 @@ func main() {
 		envOrDefault("ROOTGUARD_CONTROL_PLANE_UPDATER_URL", "http://rootguard-updater:8082"),
 		envOrDefault("ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN", token),
 	)
+	backupExporter := backupexport.New(backupexport.Options{
+		DataDir: envOrDefault("ROOTGUARD_EXPORT_DIR", "/var/lib/rootguard/exports"),
+		LocalSources: []backupexport.Source{
+			{ArchivePath: "rootguard/unbound", Path: envOrDefault("UNBOUND_CONFIG_DIR", "/var/lib/rootguard/unbound")},
+			{ArchivePath: "rootguard/adguard", Path: envOrDefault("ADGUARD_DATA_DIR", "/var/lib/rootguard/adguard")},
+			{ArchivePath: "rootguard/adguard-auth", Path: envOrDefault("ROOTGUARD_BLOCKPAGE_AUTH_DIR", "/var/lib/rootguard/adguard-auth")},
+			{ArchivePath: "rootguard/installation", Path: envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation")},
+		},
+		ContainerSources: []backupexport.ContainerSource{
+			{ArchivePath: "services/adguard/config", Container: "rootguard-adguard", Path: "/opt/adguardhome/conf"},
+			{ArchivePath: "services/adguard/work", Container: "rootguard-adguard", Path: "/opt/adguardhome/work"},
+			{ArchivePath: "services/unbound/state", Container: "rootguard-unbound", Path: "/var/lib/unbound"},
+		},
+	})
 	reconcileContext, reconcileCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	if err := installationManager.Reconcile(reconcileContext); err != nil {
 		log.Printf("RootGuard installation reconciliation warning: %v", err)
@@ -119,6 +134,7 @@ func main() {
 		Updater:           updateManager,
 		ControlPlane:      controlPlaneClient,
 		AdGuardDNSAddress: envOrDefault("ADGUARD_DNS_ADDRESS", "rootguard-adguard:53"),
+		BackupExporter:    backupExporter,
 	})
 
 	server := &http.Server{
@@ -126,7 +142,7 @@ func main() {
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      10 * time.Minute,
 		IdleTimeout:       60 * time.Second,
 	}
 

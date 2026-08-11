@@ -696,7 +696,16 @@ manual Docker forensics.
       records the result in bounded history; unverifiable resources remain
       protected and global prune commands remain prohibited
       ([rootguard#191](https://github.com/foxly-it/rootguard/pull/191))
-- [ ] Encrypted or explicitly protected backup export
+- [x] Encrypted or explicitly protected backup export - the Stack Center now
+      creates a portable, passphrase-protected age-v1 archive containing a
+      versioned, checksummed manifest, RootGuard configuration state, live
+      AdGuard Home config/work data, and Unbound runtime state. Browser
+      sessions, update-restore history, temporary exports, and external `.env`
+      secrets are excluded. Source paths and container names are fixed
+      server-side, symlinks are rejected, plaintext staging uses a private Core
+      directory and is removed on every exit, and data-plane updates are locked
+      out while the artifact is created
+      ([rootguard#193](https://github.com/foxly-it/rootguard/pull/193))
 - [ ] Full restore into a clean RootGuard installation
 - [ ] Pre-update snapshot and post-update restore verification
 - [ ] Power-loss and interrupted-write tests for installation and updates

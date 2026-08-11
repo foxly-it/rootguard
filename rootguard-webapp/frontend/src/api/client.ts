@@ -706,6 +706,18 @@ export async function runManualCleanup(): Promise<UpdateCleanupResult> {
   return request<UpdateCleanupResult>("/api/cleanup", { method: "POST" });
 }
 
+export async function exportEncryptedBackup(passphrase: string): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch("/api/backups/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ passphrase }),
+  });
+  if (!response.ok) throw new Error((await response.text()) || "backup_export_failed");
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "rootguard-backup.tar.gz.age";
+  return { blob: await response.blob(), filename };
+}
+
 export async function fetchUpdateStatus(): Promise<UpdateStatus> {
   return request<UpdateStatus>("/api/updates");
 }

@@ -1,3 +1,14 @@
+vulnerabilities:
+  - id: GO-2026-5932
+    paths:
+      - "rootguard-core/go.mod"
+    expired_at: 2026-11-11
+    statement: >-
+      RootGuard uses x/crypto through age but does not import the affected,
+      unmaintained openpgp package. govulncheck and the complete Go dependency
+      graph confirm that no vulnerable code is reachable. Recheck this scoped
+      exception when age or x/crypto is updated.
+
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so

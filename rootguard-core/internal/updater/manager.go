@@ -167,6 +167,33 @@ func (m *Manager) Status() Status {
 	return cloneStatus(m.status)
 }
 
+func (m *Manager) RunExclusive(message string, operation func() error) error {
+	m.mu.Lock()
+	if m.busyLocked() {
+		m.mu.Unlock()
+		return ErrBusy
+	}
+	m.status.State = StateUpdating
+	m.status.ActiveService = ""
+	m.status.Message = message
+	m.status.UpdatedAt = time.Now().UTC()
+	_ = m.persistLocked()
+	m.mu.Unlock()
+
+	err := operation()
+	m.mu.Lock()
+	m.status.State = StateIdle
+	m.status.Message = "Geschützte Operation abgeschlossen."
+	if err != nil {
+		m.status.State = StateFailed
+		m.status.Message = "Geschützte Operation fehlgeschlagen: " + err.Error()
+	}
+	m.status.UpdatedAt = time.Now().UTC()
+	_ = m.persistLocked()
+	m.mu.Unlock()
+	return err
+}
+
 func (m *Manager) StartCheck() (Status, error) {
 	m.mu.Lock()
 	if m.busyLocked() {

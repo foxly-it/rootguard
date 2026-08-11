@@ -175,18 +175,18 @@ und dem erlaubten Dienst zugeordnete Verzeichnisse. Unbekannte Dateien,
 Verzeichnisse und Symlinks werden separat als nicht verwalteter Speicher
 angezeigt und niemals gelöscht.
 
-Für Datensicherung über den reinen Update-Schutz hinaus - etwa vor einem
-größeren manuellen Eingriff über die native AdGuard-Oberfläche, oder als
-eigenständige Sicherung unabhängig vom RootGuard-Update-Zyklus - liegt die
-Verantwortung aktuell beim Betreiber: Die beiden genannten Docker-Volumes
-lassen sich mit Standard-Docker-Bordmitteln sichern
-(z.B. `docker run --rm -v rootguard-adguard-config:/data -v
-$(pwd):/backup alpine tar czf /backup/adguard-config.tar.gz -C /data .`,
-analog für `rootguard-adguard-work`), bei gestopptem AdGuard-Container für
-einen konsistenten Snapshot. Ein RootGuard-natives, geführtes
-Backup-Export/-Import (verschlüsselt und für eine Neuinstallation
-wiederherstellbar) ist in ROADMAP.md 0.4 weiterhin offen; die konfigurierbare
-Aufbewahrung hier betrifft ausschließlich interne Update-Restore-Punkte.
+Für Datensicherung über den reinen Update-Schutz hinaus erzeugt das Stack
+Center ein portables, passwortverschlüsseltes age-v1-Archiv. Es enthält
+RootGuards Unbound-/AdGuard-/Installationszustand, AdGuards live Konfigurations-
+und Arbeitsdaten sowie Unbounds Laufzeitstatus. Browser-Sitzungen, externe
+`.env`-Geheimnisse, interne Update-Restore-Punkte und temporäre Exportdaten
+bleiben ausgeschlossen. Ein versioniertes Manifest erfasst jede reguläre Datei
+mit Größe und SHA-256-Prüfsumme. Sämtliche Quellpfade und Container sind fest in
+Core definiert; Symlinks werden abgelehnt. Docker-Kopien liegen nur während der
+Erstellung in einem privaten `0700`-Verzeichnis im geschützten Core-Volume und
+werden auf jedem Erfolgs-/Fehlerpfad entfernt. Der Download wird direkt durch
+age/scrypt verschlüsselt und blockiert parallel laufende Daten-Updates. Der
+geführte Restore dieses Artefakts bleibt der unmittelbar folgende 0.4-Punkt.
 
 ## Unbound-Konfigurationszyklus
 

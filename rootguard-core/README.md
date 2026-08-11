@@ -27,6 +27,7 @@ updates with automatic rollback.
 - Generates, previews, validates, versions, and restores Unbound configuration.
 - Verifies DNS resolution, DNSSEC rejection, and the protected AdGuard upstream.
 - Creates backups before service updates and rolls back failed replacements.
+- Streams passphrase-encrypted, checksummed age-v1 full backup archives.
 - Coordinates atomic Core/WebApp updates through the independent updater path.
 - Keeps images, mounts, Compose content, and executable commands out of browser
   input.
