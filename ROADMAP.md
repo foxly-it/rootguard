@@ -696,7 +696,7 @@ manual Docker forensics.
       records the result in bounded history; unverifiable resources remain
       protected and global prune commands remain prohibited
       ([rootguard#191](https://github.com/foxly-it/rootguard/pull/191))
-- [x] Encrypted or explicitly protected backup export - the Stack Center now
+- [x] Encrypted or explicitly protected backup export - the dedicated Backups page now
       creates a portable, passphrase-protected age-v1 archive containing a
       versioned, checksummed manifest, RootGuard configuration state, live
       AdGuard Home config/work data, and Unbound runtime state. Browser

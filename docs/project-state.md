@@ -758,6 +758,11 @@ data-plane updates cannot overlap export creation. Clean-install restore and
 transactional snapshot verification remain the next separate 0.4 steps
 ([rootguard#193](https://github.com/foxly-it/rootguard/pull/193)).
 
+Backup retention and portable export have their own authenticated Backups page
+and sidebar entry; Stack & Updates remains focused on service lifecycle,
+updates, rollback status, and safe Docker cleanup
+([rootguard#195](https://github.com/foxly-it/rootguard/pull/195)).
+
 ## Remaining production milestones
 
 Cross-referenced against `ROADMAP.md` on 2026-08-09 (supersedes the previous

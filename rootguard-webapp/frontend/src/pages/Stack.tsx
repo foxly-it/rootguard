@@ -5,7 +5,6 @@ import {
   Cpu,
   Download,
   FileText,
-  HardDrive,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
@@ -13,48 +12,38 @@ import {
   ShieldCheck,
   PanelsTopLeft,
   Trash2,
-  KeyRound,
 } from "lucide-react";
 import {
   checkControlPlaneUpdates,
   checkUpdates,
   fetchControlPlaneUpdateStatus,
-  fetchBackupStatus,
   fetchCleanupPreview,
   fetchServices,
   fetchServiceLogs,
   fetchUpdateStatus,
   installServiceUpdate,
   installControlPlaneUpdates,
-  setBackupRetention,
   runManualCleanup,
-  exportEncryptedBackup,
   serviceAction,
   type ServiceInfo,
   type ServiceLogs,
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
-  type BackupStatus,
   type CleanupPreview,
   type UpdateHistoryEntry,
 } from "../api/client";
 import "../styles/stack.css";
 import { useI18n } from "../i18n";
 import ContentModal from "../components/ContentModal";
+import { formatBytes } from "../utils/format";
 
 export default function Stack() {
   const { t, formatDate } = useI18n();
   const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [controlPlane, setControlPlane] = useState<ControlPlaneUpdateStatus | null>(null);
-  const [backups, setBackups] = useState<BackupStatus | null>(null);
   const [cleanup, setCleanup] = useState<CleanupPreview | null>(null);
-  const [retentionDraft, setRetentionDraft] = useState<number | null>(null);
-  const [savingRetention, setSavingRetention] = useState(false);
   const [runningCleanup, setRunningCleanup] = useState(false);
-  const [exportingBackup, setExportingBackup] = useState(false);
-  const [backupPassphrase, setBackupPassphrase] = useState("");
-  const [backupPassphraseConfirm, setBackupPassphraseConfirm] = useState("");
   const [services, setServices] = useState<ServiceInfo[]>([]);
   const [serviceLogs, setServiceLogs] = useState<Partial<Record<ServiceInfo["name"], ServiceLogs>>>({});
   const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
@@ -69,19 +58,16 @@ export default function Stack() {
 
   const load = useCallback(async () => {
     try {
-      const [nextUpdates, nextControlPlane, nextServices, nextBackups, nextCleanup] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextServices, nextCleanup] = await Promise.all([
         fetchUpdateStatus(),
         fetchControlPlaneUpdateStatus(),
         fetchServices(),
-        fetchBackupStatus(),
         fetchCleanupPreview().catch(() => null),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setServices(nextServices);
-      setBackups(nextBackups);
       if (nextCleanup) setCleanup(nextCleanup);
-      setRetentionDraft((current) => current ?? nextBackups.settings.retention_per_service);
       setError("");
     } catch (cause) {
       setError(errorMessage(cause, "Stack-Status konnte nicht geladen werden."));
@@ -94,7 +80,7 @@ export default function Stack() {
   }, [load]);
 
   const busy = updates?.state === "checking" || updates?.state === "updating"
-    || controlPlane?.state === "checking" || controlPlane?.state === "updating" || runningCleanup || exportingBackup;
+    || controlPlane?.state === "checking" || controlPlane?.state === "updating" || runningCleanup;
   useEffect(() => {
     const timer = window.setInterval(load, busy ? 1500 : 10_000);
     return () => window.clearInterval(timer);
@@ -151,20 +137,6 @@ export default function Stack() {
     }
   }
 
-  async function saveBackupRetention() {
-    if (!backups || retentionDraft === null || retentionDraft < 2 || retentionDraft > 50) return;
-    if (retentionDraft < backups.settings.retention_per_service && !window.confirm(t("stack.backupRetentionConfirm"))) return;
-    setSavingRetention(true);
-    setError("");
-    try {
-      setBackups(await setBackupRetention(retentionDraft));
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.backupRetentionError")));
-    } finally {
-      setSavingRetention(false);
-    }
-  }
-
   async function refreshCleanupPreview() {
     setError("");
     try {
@@ -185,29 +157,6 @@ export default function Stack() {
       setError(errorMessage(cause, t("stack.cleanupRunError")));
     } finally {
       setRunningCleanup(false);
-    }
-  }
-
-  async function startBackupExport() {
-    if (backupPassphrase.length < 12 || backupPassphrase !== backupPassphraseConfirm) return;
-    setExportingBackup(true);
-    setError("");
-    try {
-      const exported = await exportEncryptedBackup(backupPassphrase);
-      const url = URL.createObjectURL(exported.blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = exported.filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.exportError")));
-    } finally {
-      setBackupPassphrase("");
-      setBackupPassphraseConfirm("");
-      setExportingBackup(false);
     }
   }
 
@@ -269,42 +218,6 @@ export default function Stack() {
         <Summary icon={<RotateCcw />} label={t("stack.failure")} value={t("stack.rollback")} />
       </section>
 
-      {backups && (
-        <section className="backup-retention-panel">
-          <div className="backup-retention-heading">
-            <span><HardDrive size={19} /></span>
-            <div>
-              <span className="stack-eyebrow">{t("stack.backupEyebrow")}</span>
-              <h2>{t("stack.backupTitle")}</h2>
-              <p>{t("stack.backupIntro")}</p>
-            </div>
-          </div>
-          <div className="backup-usage-grid">
-            <article><strong>{formatBytes(backups.managed_bytes)}</strong><span>{t("stack.backupManaged", { count: backups.count })}</span></article>
-            {backups.services.map((service) => (
-              <article key={service.service}>
-                <strong>{formatBytes(service.bytes)}</strong>
-                <span>{t(`stack.backupService.${service.service}`, { count: service.count })}</span>
-                <small>{service.newest_at ? t("stack.backupNewest", { date: formatDate(service.newest_at) }) : t("stack.backupNone")}</small>
-              </article>
-            ))}
-          </div>
-          {backups.unmanaged_bytes > 0 && <p className="backup-retention-warning">{t("stack.backupUnmanaged", { size: formatBytes(backups.unmanaged_bytes) })}</p>}
-          {backups.last_error && <p className="backup-retention-warning">{t("stack.backupPruneError", { error: backups.last_error })}</p>}
-          <div className="backup-retention-control">
-            <label>
-              <span>{t("stack.backupRetention")}</span>
-              <input type="number" min={2} max={50} value={retentionDraft ?? ""} onChange={(event) => setRetentionDraft(Number.isNaN(event.target.valueAsNumber) ? null : event.target.valueAsNumber)} />
-              <small>{t("stack.backupRetentionHelp")}</small>
-            </label>
-            <button className="rg-button rg-button-secondary" type="button" disabled={busy || savingRetention || retentionDraft === null || retentionDraft < 2 || retentionDraft > 50 || retentionDraft === backups.settings.retention_per_service} onClick={saveBackupRetention}>
-              {savingRetention ? <LoaderCircle className="spin" size={15} /> : <Archive size={15} />}
-              {t("stack.backupRetentionSave")}
-            </button>
-          </div>
-        </section>
-      )}
-
       {cleanup && (
         <section className="manual-cleanup-panel">
           <div className="manual-cleanup-heading">
@@ -336,24 +249,6 @@ export default function Stack() {
           </div>
         </section>
       )}
-
-      <section className="encrypted-export-panel">
-        <div className="encrypted-export-heading">
-          <span><KeyRound size={19} /></span>
-          <div><span className="stack-eyebrow">{t("stack.exportEyebrow")}</span><h2>{t("stack.exportTitle")}</h2><p>{t("stack.exportIntro")}</p></div>
-        </div>
-        {!window.isSecureContext && <p className="encrypted-export-warning">{t("stack.exportTransportWarning")}</p>}
-        <div className="encrypted-export-fields">
-          <label><span>{t("stack.exportPassphrase")}</span><input type="password" autoComplete="new-password" value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} minLength={12} maxLength={1024} /><small>{t("stack.exportPassphraseHelp")}</small></label>
-          <label><span>{t("stack.exportPassphraseConfirm")}</span><input type="password" autoComplete="new-password" value={backupPassphraseConfirm} onChange={(event) => setBackupPassphraseConfirm(event.target.value)} minLength={12} maxLength={1024} /><small>{backupPassphraseConfirm && backupPassphrase !== backupPassphraseConfirm ? t("stack.exportMismatch") : t("stack.exportLossWarning")}</small></label>
-        </div>
-        <div className="encrypted-export-actions">
-          <p>{t("stack.exportFormat")}</p>
-          <button className="rg-button rg-button-primary" type="button" disabled={busy || exportingBackup || backupPassphrase.length < 12 || backupPassphrase !== backupPassphraseConfirm} onClick={startBackupExport}>
-            {exportingBackup ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />} {exportingBackup ? t("stack.exporting") : t("stack.exportButton")}
-          </button>
-        </div>
-      </section>
 
       {controlPlane && (
         <section className="control-plane-panel">
@@ -632,18 +527,6 @@ function imageVersion(image?: string) {
   const slash = image.lastIndexOf("/");
   const colon = image.lastIndexOf(":");
   return colon > slash ? image.slice(colon + 1) : "latest";
-}
-
-function formatBytes(value: number) {
-  if (value < 1024) return `${value} B`;
-  const units = ["KiB", "MiB", "GiB", "TiB"];
-  let amount = value;
-  let unit = -1;
-  do {
-    amount /= 1024;
-    unit++;
-  } while (amount >= 1024 && unit < units.length - 1);
-  return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${units[unit]}`;
 }
 
 function errorMessage(error: unknown, fallback: string) {

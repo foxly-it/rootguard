@@ -122,6 +122,7 @@ export default function Header() {
 function pageTitle(pathname: string, t: (key: string) => string) {
   if (pathname.startsWith("/setup")) return t("nav.setup");
   if (pathname.startsWith("/stack")) return t("nav.stack");
+  if (pathname.startsWith("/backups")) return t("nav.backups");
   if (pathname.startsWith("/unbound")) return t("nav.unbound");
   if (pathname.startsWith("/adguard")) return t("nav.adguard");
   return t("nav.overview");
