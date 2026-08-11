@@ -761,7 +761,7 @@ transactional snapshot verification remain the next separate 0.4 steps
 Backup retention and portable export have their own authenticated Backups page
 and sidebar entry; Stack & Updates remains focused on service lifecycle,
 updates, rollback status, and safe Docker cleanup
-([rootguard#194](https://github.com/foxly-it/rootguard/issues/194)).
+([rootguard#195](https://github.com/foxly-it/rootguard/pull/195)).
 
 ## Remaining production milestones
 
