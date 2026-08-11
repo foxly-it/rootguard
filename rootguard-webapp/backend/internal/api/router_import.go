@@ -29,3 +29,24 @@ func HandleFritzBoxDiscover(w http.ResponseWriter, r *http.Request, core *corecl
 	}
 	writeJSON(w, http.StatusOK, result)
 }
+
+type reverseDNSDiscoverRequest struct {
+	Networks []string `json:"networks"`
+}
+
+func HandleReverseDNSDiscover(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	decoder.DisallowUnknownFields()
+	var request reverseDNSDiscoverRequest
+	if err := decoder.Decode(&request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	result, err := core.DiscoverReverseDNSHosts(r.Context(), request.Networks)
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}

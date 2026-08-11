@@ -72,6 +72,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("PUT /api/unbound/custom", putUnboundCustomHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/directives", unboundDirectivesHandler)
 	apiMux.HandleFunc("POST /api/router-import/fritzbox/discover", fritzBoxDiscoverHandler)
+	apiMux.HandleFunc("POST /api/router-import/reverse-dns/discover", reverseDNSDiscoverHandler)
 	apiMux.HandleFunc("GET /api/adguard/status", getAdGuardStatusHandler(deps.AdGuard))
 	apiMux.HandleFunc("GET /api/adguard/filter-report", getAdGuardFilterReportHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/filtering", setAdGuardFilteringHandler(deps.AdGuard))
@@ -715,6 +716,31 @@ func fritzBoxDiscoverHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, routerimport.ErrRouterDiscovery) {
+			status = http.StatusBadRequest
+		}
+		writeError(w, status, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+type reverseDNSDiscoverRequest struct {
+	Networks []string `json:"networks"`
+}
+
+func reverseDNSDiscoverHandler(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	decoder.DisallowUnknownFields()
+	var request reverseDNSDiscoverRequest
+	if err := decoder.Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	result, err := routerimport.NewReverseDNSDiscoverer().Discover(r.Context(), request.Networks)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, routerimport.ErrReverseDNSDiscovery) {
 			status = http.StatusBadRequest
 		}
 		writeError(w, status, err)

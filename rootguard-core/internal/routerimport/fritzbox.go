@@ -39,6 +39,7 @@ type Credentials struct {
 type DiscoveredHost struct {
 	Hostname string `json:"hostname"`
 	IPv4     string `json:"ipv4"`
+	IPv6     string `json:"ipv6,omitempty"`
 	MAC      string `json:"mac,omitempty"`
 	Active   bool   `json:"active"`
 	Source   string `json:"source"`
@@ -47,6 +48,8 @@ type DiscoveredHost struct {
 type DiscoveryResult struct {
 	Hosts     []DiscoveredHost `json:"hosts"`
 	Truncated bool             `json:"truncated"`
+	Scanned   int              `json:"scanned,omitempty"`
+	Failed    int              `json:"failed,omitempty"`
 }
 
 // FritzBoxClient speaks the standard (non-AVM-proprietary) TR-064 Hosts:1

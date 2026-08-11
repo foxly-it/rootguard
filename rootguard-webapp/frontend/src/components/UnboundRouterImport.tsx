@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, Loader2, Plus, Router, RotateCcw, Trash2, Wifi, WifiOff } from "lucide-react";
 import {
   discoverFritzBoxHosts,
+  discoverReverseDNSHosts,
   type DiscoveredHost,
   type UnboundLocalHost,
   type UnboundLocalZone,
@@ -36,11 +37,14 @@ export default function UnboundRouterImport({
   const [zoneName, setZoneName] = useState(defaultZoneName);
 
   const [address, setAddress] = useState("");
+  const [method, setMethod] = useState<"fritzbox" | "reverse-dns">("fritzbox");
+  const [networks, setNetworks] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [discovering, setDiscovering] = useState(false);
   const [discovered, setDiscovered] = useState<DraftHost[]>([]);
   const [truncated, setTruncated] = useState(false);
+  const [failed, setFailed] = useState(0);
 
   const workflow = useUnboundDraftWorkflow({
     version,
@@ -62,15 +66,18 @@ export default function UnboundRouterImport({
   const selectedCount = useMemo(() => discovered.filter((host) => host.selected).length, [discovered]);
 
   async function discover() {
-    if (discovering || !address.trim()) return;
+    if (discovering || (method === "fritzbox" ? !address.trim() : !networks.trim())) return;
     setDiscovering(true);
     workflow.setMessage("");
     workflow.setError("");
     try {
-      const result = await discoverFritzBoxHosts(address.trim(), username, password);
+      const result = method === "fritzbox"
+        ? await discoverFritzBoxHosts(address.trim(), username, password)
+        : await discoverReverseDNSHosts(networks.split(/[\s,]+/).filter(Boolean));
       setTruncated(result.truncated);
+      setFailed(result.failed ?? 0);
       setDiscovered(result.hosts.map((host, index) => ({
-        key: `${host.mac || host.ipv4}-${index}`,
+        key: `${host.mac || host.ipv4 || host.ipv6}-${index}`,
         source: host,
         hostname: suggestHostname(host.hostname, index),
         selected: false,
@@ -78,6 +85,7 @@ export default function UnboundRouterImport({
       workflow.setMessage(result.hosts.length > 0 ? t("routerImport.discovered", { count: result.hosts.length }) : t("routerImport.noHosts"));
     } catch (cause) {
       setDiscovered([]);
+      setFailed(0);
       workflow.setError(errorMessage(cause, t("routerImport.discoverError")));
     } finally {
       setDiscovering(false);
@@ -117,7 +125,7 @@ export default function UnboundRouterImport({
           throw new Error(t("routerImport.duplicateHostname", { name: hostname }));
         }
         seen.add(hostname);
-        newHosts.push({ hostname, ipv4: draft.source.ipv4, ptr: false });
+        newHosts.push({ hostname, ipv4: draft.source.ipv4, ipv6: draft.source.ipv6, ptr: false });
       }
 
       setZones(existingIndex >= 0
@@ -168,43 +176,54 @@ export default function UnboundRouterImport({
       {workflow.error && <div className="feedback error" role="alert">{workflow.error}</div>}
 
       <div className="router-import-connect">
-        <label>
-          <span>{t("routerImport.address")}</span>
-          <input
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            placeholder="192.168.178.1"
-            autoCapitalize="none"
-            spellCheck={false}
-            onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); discover(); } }}
-          />
-        </label>
+        <div className="router-import-method" role="group" aria-label={t("routerImport.method")}>
+          <button className={method === "fritzbox" ? "active" : ""} type="button" onClick={() => setMethod("fritzbox")}>{t("routerImport.methodFritzBox")}</button>
+          <button className={method === "reverse-dns" ? "active" : ""} type="button" onClick={() => setMethod("reverse-dns")}>{t("routerImport.methodReverseDNS")}</button>
+        </div>
+        {method === "fritzbox" ? <>
+          <label>
+            <span>{t("routerImport.address")}</span>
+            <input
+              value={address}
+              onChange={(event) => setAddress(event.target.value)}
+              placeholder="192.168.178.1"
+              autoCapitalize="none"
+              spellCheck={false}
+              onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); discover(); } }}
+            />
+          </label>
+          <details className="router-import-credentials">
+            <summary>{t("routerImport.showCredentials")}</summary>
+            <p className="muted-copy">{t("routerImport.credentialsHelp")}</p>
+            <div>
+              <label>
+                <span>{t("routerImport.username")}</span>
+                <input value={username} onChange={(event) => setUsername(event.target.value)} autoCapitalize="none" spellCheck={false} />
+              </label>
+              <label>
+                <span>{t("routerImport.password")}</span>
+                <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="off" />
+              </label>
+            </div>
+          </details>
+        </> : <label className="router-import-networks">
+          <span>{t("routerImport.networks")}</span>
+          <textarea value={networks} onChange={(event) => setNetworks(event.target.value)} placeholder={"192.168.178.0/24\nfd00:1234::/120"} rows={3} autoCapitalize="none" spellCheck={false} />
+          <small>{t("routerImport.networksHelp")}</small>
+        </label>}
         <button
           className="rg-button rg-button-secondary unbound-action"
           type="button"
-          disabled={discovering || !address.trim()}
+          disabled={discovering || (method === "fritzbox" ? !address.trim() : !networks.trim())}
           onClick={discover}
         >
           {discovering ? <Loader2 size={15} className="spin" /> : <Router size={15} />}
           <span>{discovering ? t("routerImport.discovering") : t("routerImport.discover")}</span>
         </button>
-        <details className="router-import-credentials">
-          <summary>{t("routerImport.showCredentials")}</summary>
-          <p className="muted-copy">{t("routerImport.credentialsHelp")}</p>
-          <div>
-            <label>
-              <span>{t("routerImport.username")}</span>
-              <input value={username} onChange={(event) => setUsername(event.target.value)} autoCapitalize="none" spellCheck={false} />
-            </label>
-            <label>
-              <span>{t("routerImport.password")}</span>
-              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="off" />
-            </label>
-          </div>
-        </details>
       </div>
 
       {truncated && <div className="router-import-truncated">{t("routerImport.truncated", { count: maxHostsPerImport })}</div>}
+      {failed > 0 && <div className="router-import-truncated">{t("routerImport.failed", { count: failed })}</div>}
 
       {discovered.length > 0 && (
         <div className="router-import-results">
@@ -216,7 +235,7 @@ export default function UnboundRouterImport({
             {discovered.map((host) => (
               <li key={host.key} className={host.selected ? "selected" : ""}>
                 <label className="router-import-checkbox">
-                  <span className="sr-only">{t("routerImport.selectHost", { name: host.source.hostname || host.source.ipv4 })}</span>
+                  <span className="sr-only">{t("routerImport.selectHost", { name: host.source.hostname || host.source.ipv4 || host.source.ipv6 || "" })}</span>
                   <input type="checkbox" checked={host.selected} onChange={() => toggleSelected(host.key)} />
                 </label>
                 <span className={`router-import-status ${host.source.active ? "active" : "inactive"}`}>
@@ -231,8 +250,8 @@ export default function UnboundRouterImport({
                     spellCheck={false}
                   />
                 </label>
-                <code>{host.source.ipv4}</code>
-                <small>{host.source.mac}</small>
+                <code title={host.source.ipv4 || host.source.ipv6}>{host.source.ipv4 || host.source.ipv6}</code>
+                <small title={host.source.mac}>{host.source.mac}</small>
               </li>
             ))}
           </ul>
@@ -307,7 +326,7 @@ export default function UnboundRouterImport({
 }
 
 function suggestHostname(raw: string, index: number): string {
-  const sanitized = raw
+  const sanitized = raw.split(".")[0]
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()

@@ -1,9 +1,11 @@
 .router-import-panel{display:grid;gap:20px;margin-top:20px}
 
 .router-import-connect{display:grid;grid-template-columns:minmax(200px,.6fr) auto;align-items:end;gap:12px;padding:18px;border:1px solid var(--info-soft);border-radius:16px;background:var(--info-soft)}
+.router-import-method{grid-column:1/-1;display:flex;gap:8px}.router-import-method button{padding:8px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-muted);font:inherit;font-size:.8rem;font-weight:700}.router-import-method button.active{border-color:var(--accent-border);background:var(--accent-soft);color:var(--rg-accent)}
 .router-import-connect>label{display:grid;gap:4px}
 .router-import-connect input{width:100%;min-height:46px;box-sizing:border-box;padding:0 13px;border:1px solid var(--border);border-radius:10px;outline:none;color:var(--text);background:var(--field-bg);font:inherit;font-size:.84rem;transition:border-color .2s ease,box-shadow .2s ease,background .2s ease}
 .router-import-connect input:focus{border-color:var(--focus-ring);background:var(--field-bg);box-shadow:0 0 0 3px var(--accent-soft)}
+.router-import-networks{display:grid;gap:4px}.router-import-networks textarea{width:100%;box-sizing:border-box;padding:10px 13px;border:1px solid var(--border);border-radius:10px;resize:vertical;background:var(--field-bg);color:var(--text);font:inherit;font-size:.84rem}.router-import-networks small{color:var(--text-muted)}
 .router-import-connect button{display:flex;align-items:center;gap:7px;justify-content:center}
 .router-import-credentials{grid-column:1 / -1;margin-top:4px;padding-top:12px;border-top:1px solid var(--border)}
 .router-import-credentials summary{cursor:pointer;color:var(--rg-accent);font-size:.82rem;font-weight:700}
@@ -19,16 +21,17 @@
 .router-import-results-heading small{color:var(--text-muted)}
 
 .router-import-list{display:grid;gap:8px;margin:0;padding:0;list-style:none}
-.router-import-list>li{display:grid;grid-template-columns:auto auto 1fr auto auto;align-items:center;gap:12px;padding:10px 13px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+.router-import-list>li{display:grid;grid-template-columns:18px 26px minmax(0,1fr) 15.5rem 9rem;align-items:center;gap:12px;padding:10px 13px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
 .router-import-list>li.selected{border-color:var(--accent-border);background:var(--accent-soft)}
 .router-import-checkbox input{width:18px;height:18px;accent-color:var(--rg-accent)}
 .router-import-status{display:grid;place-items:center;width:26px;height:26px;border-radius:8px}
 .router-import-status.active{background:var(--success-soft);color:var(--success)}
 .router-import-status.inactive{background:var(--surface-soft);color:var(--text-muted)}
-.router-import-hostname input{width:100%;min-height:38px;box-sizing:border-box;padding:0 11px;border:1px solid var(--border);border-radius:9px;background:var(--field-bg);color:var(--text);font:inherit;font-size:.82rem}
+.router-import-hostname{min-width:0}.router-import-hostname input{width:100%;min-height:38px;box-sizing:border-box;padding:0 11px;border:1px solid var(--border);border-radius:9px;background:var(--field-bg);color:var(--text);font:inherit;font-size:.82rem}
 .router-import-hostname input:focus{border-color:var(--focus-ring);box-shadow:0 0 0 3px var(--accent-soft)}
-.router-import-list code{color:var(--text-muted);font-size:.78rem;white-space:nowrap}
-.router-import-list small{color:var(--text-muted);font-size:.7rem;white-space:nowrap}
+.router-import-list code,.router-import-list small{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.router-import-list code{color:var(--text-muted);font-size:.78rem}
+.router-import-list small{color:var(--text-muted);font-size:.7rem}
 
 .router-import-list-static>li{grid-template-columns:auto 1fr auto auto}
 .router-import-list-static strong{font-weight:700}

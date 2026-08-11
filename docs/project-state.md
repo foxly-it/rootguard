@@ -197,6 +197,14 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   guided/expert records are tracked separately
   ([rootguard#133](https://github.com/foxly-it/rootguard/pull/133), closes
   [#132](https://github.com/foxly-it/rootguard/issues/132)).
+- Router-independent reverse-DNS host discovery through the same normalized
+  draft contract: operators provide canonical private IPv4 or unicast IPv6
+  CIDR prefixes, Core performs bounded PTR lookups for at most 256 unique
+  addresses with 16 workers and a shared 15-second deadline, and the WebApp
+  reports partial lookup failures while keeping all successful results
+  unselected. IPv4 and IPv6 results merge into typed local zones only through
+  the existing preview, validation, activation, history, and rollback path
+  ([rootguard#184](https://github.com/foxly-it/rootguard/issues/184)).
 - Router import UI ("Router import" card on Unbound's Local DNS &
   forwarding tab): the first UI for the typed `LocalZone`/`LocalHost`
   model from #129 - discovered hosts start unselected, hostnames are

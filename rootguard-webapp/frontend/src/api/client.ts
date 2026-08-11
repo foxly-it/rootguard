@@ -408,7 +408,8 @@ export async function checkUnboundForwardTargets(zones: UnboundForwardZone[]): P
 
 export interface DiscoveredHost {
   hostname: string;
-  ipv4: string;
+  ipv4?: string;
+  ipv6?: string;
   mac?: string;
   active: boolean;
   source: string;
@@ -417,6 +418,15 @@ export interface DiscoveredHost {
 export interface RouterDiscoveryResult {
   hosts: DiscoveredHost[];
   truncated: boolean;
+  scanned?: number;
+  failed?: number;
+}
+
+export async function discoverReverseDNSHosts(networks: string[]): Promise<RouterDiscoveryResult> {
+  return request<RouterDiscoveryResult>("/api/router-import/reverse-dns/discover", {
+    method: "POST",
+    body: JSON.stringify({ networks }),
+  });
 }
 
 export async function discoverFritzBoxHosts(address: string, username: string, password: string): Promise<RouterDiscoveryResult> {

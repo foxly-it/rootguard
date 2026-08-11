@@ -520,6 +520,7 @@ func (c *Client) CheckUnboundForwardTargets(ctx context.Context, zones []Unbound
 type DiscoveredHost struct {
 	Hostname string `json:"hostname"`
 	IPv4     string `json:"ipv4"`
+	IPv6     string `json:"ipv6,omitempty"`
 	MAC      string `json:"mac,omitempty"`
 	Active   bool   `json:"active"`
 	Source   string `json:"source"`
@@ -528,6 +529,15 @@ type DiscoveredHost struct {
 type RouterDiscoveryResult struct {
 	Hosts     []DiscoveredHost `json:"hosts"`
 	Truncated bool             `json:"truncated"`
+	Scanned   int              `json:"scanned,omitempty"`
+	Failed    int              `json:"failed,omitempty"`
+}
+
+func (c *Client) DiscoverReverseDNSHosts(ctx context.Context, networks []string) (RouterDiscoveryResult, error) {
+	var result RouterDiscoveryResult
+	err := c.do(ctx, http.MethodPost, "/api/router-import/reverse-dns/discover", map[string]any{"networks": networks}, &result)
+
+	return result, err
 }
 
 func (c *Client) DiscoverFritzBoxHosts(ctx context.Context, address, username, password string) (RouterDiscoveryResult, error) {

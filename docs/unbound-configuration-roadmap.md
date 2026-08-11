@@ -103,7 +103,7 @@ surface (see [issue #131](https://github.com/foxly-it/rootguard/issues/131)):
 the typed model was never scoped to support them, and the rare CNAME/TTL case
 routes to the unrestricted expert editor instead.
 
-### Router import — partially delivered
+### Host discovery and import — delivered
 
 - Bounded discovery from an optional router adapter: the FRITZ!Box adapter
   (`rootguard-core/internal/routerimport`) speaks the documented TR-064
@@ -114,9 +114,15 @@ routes to the unrestricted expert editor instead.
 - Router credentials stay in bounded server-side request handling only -
   never browser storage, logs, history, generated configuration, or
   diagnostic responses.
-- Still planned: bounded discovery from `in-addr.arpa`/`ip6.arpa` without a
-  router, and adapters for vendors beyond FRITZ!Box (same normalized import
-  contract).
+- Router-independent reverse-DNS discovery accepts explicit canonical CIDR
+  prefixes and resolves their `in-addr.arpa`/`ip6.arpa` PTR records through
+  the server resolver. IPv4 prefixes must be private, IPv6 prefixes must be
+  unicast, and no prefix or combined request may exceed 256 unique addresses.
+  Sixteen bounded workers share a 15-second deadline; lookup failures are
+  reported without turning successful results into an activation.
+- Additional router vendors can reuse the normalized import contract later;
+  they are not required for router-independent discovery
+  ([issue #184](https://github.com/foxly-it/rootguard/issues/184)).
 
 ### Existing-configuration import — delivered
 
