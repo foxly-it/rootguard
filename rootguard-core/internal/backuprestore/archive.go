@@ -182,7 +182,7 @@ func allowedDirectory(name string) bool {
 	name = strings.TrimSuffix(name, "/")
 	for _, root := range allowedRoots {
 		root = strings.TrimSuffix(root, "/")
-		if name == root || strings.HasPrefix(root, name+"/") {
+		if name == root || strings.HasPrefix(root, name+"/") || strings.HasPrefix(name, root+"/") {
 			return true
 		}
 	}

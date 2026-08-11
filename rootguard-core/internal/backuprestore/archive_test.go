@@ -35,6 +35,12 @@ func TestExtractValidatesExportAndReturnsInstalledConfig(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(adguard, "AdGuardHome.yaml"), []byte("schema_version: 29"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.MkdirAll(filepath.Join(adguard, "filters", "nested"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(adguard, "filters", "nested", "1.txt"), []byte("filter"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	exporter := backupexport.New(backupexport.Options{DataDir: t.TempDir(), LocalSources: []backupexport.Source{
 		{ArchivePath: "rootguard/installation", Path: source},
 		{ArchivePath: "rootguard/adguard", Path: credentials},
@@ -49,7 +55,7 @@ func TestExtractValidatesExportAndReturnsInstalledConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(stage)
-	if preview.Config.DNSBindAddress != "192.0.2.10" || preview.FileCount != 3 || preview.SchemaVersion != 1 {
+	if preview.Config.DNSBindAddress != "192.0.2.10" || preview.FileCount != 4 || preview.SchemaVersion != 1 {
 		t.Fatalf("unexpected preview: %+v", preview)
 	}
 	if _, err := os.Stat(filepath.Join(stage, "rootguard", "installation", "status.json")); err != nil {
