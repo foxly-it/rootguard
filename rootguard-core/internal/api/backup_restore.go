@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"time"
 
 	"github.com/foxly-it/rootguard-core/internal/backupexport"
 	"github.com/foxly-it/rootguard-core/internal/backuprestore"
@@ -17,6 +18,7 @@ const restoreRequestOverhead = 1 << 20
 
 func backupRestorePreviewHandler(manager *backuprestore.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(10 * time.Minute))
 		passphrase, archive, cleanup, ok := restoreUpload(w, r)
 		if !ok {
 			return
@@ -43,6 +45,7 @@ func backupRestorePreviewHandler(manager *backuprestore.Manager) http.HandlerFun
 
 func backupRestoreHandler(manager *backuprestore.Manager, updates *updater.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(10 * time.Minute))
 		passphrase, archive, cleanup, ok := restoreUpload(w, r)
 		if !ok {
 			return
@@ -95,7 +98,10 @@ func restoreUpload(w http.ResponseWriter, r *http.Request) (string, multipart.Fi
 }
 
 func writeRestoreError(w http.ResponseWriter, err error) {
-	status := http.StatusBadRequest
+	status := http.StatusInternalServerError
+	if errors.Is(err, backuprestore.ErrInvalidBackup) {
+		status = http.StatusBadRequest
+	}
 	if errors.Is(err, installer.ErrNotClean) || errors.Is(err, updater.ErrBusy) {
 		status = http.StatusConflict
 	}

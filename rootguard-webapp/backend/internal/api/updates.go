@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
 )
@@ -92,6 +93,7 @@ func HandleBackupExport(w http.ResponseWriter, r *http.Request, core *coreclient
 }
 
 func HandleBackupRestore(w http.ResponseWriter, r *http.Request, core *coreclient.Client, preview bool) {
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(10 * time.Minute))
 	defer r.Body.Close()
 	r.Body = http.MaxBytesReader(w, r.Body, (1<<30)+(1<<20))
 	path := "/api/backups/restore"

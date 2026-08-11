@@ -2,6 +2,7 @@ package backuprestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,6 +11,11 @@ import (
 	"strings"
 
 	"github.com/foxly-it/rootguard-core/internal/installer"
+)
+
+var (
+	ErrInvalidBackup = errors.New("invalid RootGuard backup")
+	ErrRestoreFailed = errors.New("RootGuard backup restore failed")
 )
 
 type CommandRunner func(context.Context, ...string) ([]byte, error)
@@ -51,7 +57,7 @@ func New(options Options) *Manager {
 func (m *Manager) Preview(ctx context.Context, passphrase string, archive io.Reader, target *installer.Config) (PreviewResult, error) {
 	stage, preview, err := Extract(m.dataDir, passphrase, archive)
 	if err != nil {
-		return PreviewResult{}, err
+		return PreviewResult{}, fmt.Errorf("%w: %v", ErrInvalidBackup, err)
 	}
 	defer os.RemoveAll(stage)
 	config := preview.Config
@@ -64,7 +70,7 @@ func (m *Manager) Preview(ctx context.Context, passphrase string, archive io.Rea
 func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installer.Status, error) {
 	stage, preview, err := Extract(m.dataDir, request.Passphrase, request.Archive)
 	if err != nil {
-		return installer.Status{}, err
+		return installer.Status{}, fmt.Errorf("%w: %v", ErrInvalidBackup, err)
 	}
 	defer os.RemoveAll(stage)
 	config := request.Config
@@ -122,6 +128,9 @@ func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installe
 				return status, fmt.Errorf("%w; roll back local restore data: %v", restoreErr, err)
 			}
 		}
+	}
+	if restoreErr != nil && !errors.Is(restoreErr, installer.ErrNotClean) {
+		return status, fmt.Errorf("%w: %v", ErrRestoreFailed, restoreErr)
 	}
 	return status, restoreErr
 }

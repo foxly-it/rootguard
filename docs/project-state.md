@@ -754,9 +754,15 @@ age-v1/scrypt encrypted archive. It packages checksummed RootGuard state plus
 live AdGuard and Unbound persistent data from fixed server-side sources while
 excluding sessions, external environment secrets, update restore points, and
 temporary exports. Private plaintext staging is removed on every path and
-data-plane updates cannot overlap export creation. Clean-install restore and
-transactional snapshot verification remain the next separate 0.4 steps
-([rootguard#193](https://github.com/foxly-it/rootguard/pull/193)).
+data-plane updates cannot overlap export creation
+([rootguard#193](https://github.com/foxly-it/rootguard/pull/193)). Clean-install
+restore now repeats strict bounded archive/manifest verification, gates apply
+on clean installation and Docker state, permits a re-preflighted target
+address/port, restores into stopped fresh volumes, normalizes Unbound
+ownership, and health-verifies the DNS chain. Failure cleanup removes new
+Docker resources and restores prior local contents
+([rootguard#199](https://github.com/foxly-it/rootguard/pull/199)). Transactional
+snapshot verification remains the next 0.4 step.
 
 Backup retention and portable export have their own authenticated Backups page
 and sidebar entry; Stack & Updates remains focused on service lifecycle,
@@ -808,9 +814,10 @@ Milestone completion snapshot:
   just targeting `rootguard-adguard:53` instead of Unbound's own port.
   AdGuard being unpinned on that network at the time was later found to be a
   real bug - see the 0.4 network-addressing fix below.
-- **0.4 operations/backup/recovery** - 4 of 14 items open: full restore into a
-  clean install, pre-update snapshot/restore verification,
-  power-loss/interrupted-write tests, and a disaster-recovery runbook.
+- **0.4 operations/backup/recovery** - 3 of 14 items open: pre-update
+  snapshot/restore verification, power-loss/interrupted-write tests, and a
+  disaster-recovery runbook. Clean-install full restore landed in
+  [rootguard#199](https://github.com/foxly-it/rootguard/pull/199).
   Logging/versioning/history, the automatic cleanup-safety work, and a
   network-addressing fix ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
   have landed - AdGuard had no pinned address on the internal `rootguard-dns`
@@ -834,9 +841,8 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.4 operations/backup/recovery** - current, in document order: full
-   restore, pre-update snapshot verification,
-   power-loss tests, the DR runbook.
+1. **0.4 operations/backup/recovery** - current, in document order: pre-update
+   snapshot verification, power-loss tests, the DR runbook.
 2. **0.5 security/HTTPS/accessibility** - 3 items open, in document order:
    destructive-action rate limits/audit, the full keyboard/screen-reader
    workflow audit, WCAG labels/errors review.
