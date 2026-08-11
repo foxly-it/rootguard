@@ -19,6 +19,17 @@ var (
 	bearerCredential    = regexp.MustCompile(`(?i)\bbearer\s+[A-Za-z0-9._~+/-]+=*`)
 )
 
+// logContainers is deliberately separate from serviceContainers: reading the
+// bounded, redacted tail is allowed for every managed component, while browser
+// lifecycle actions remain restricted to the DNS data plane.
+var logContainers = map[string]string{
+	"core":    "rootguard-core",
+	"webapp":  "rootguard-webapp",
+	"updater": "rootguard-updater",
+	"adguard": "rootguard-adguard",
+	"unbound": "rootguard-unbound",
+}
+
 type ServiceLogs struct {
 	Service     string   `json:"service"`
 	Lines       []string `json:"lines"`
@@ -30,7 +41,7 @@ type ServiceLogs struct {
 }
 
 func ReadServiceLogs(ctx context.Context, service string) (ServiceLogs, error) {
-	container, ok := serviceContainers[service]
+	container, ok := logContainers[service]
 	if !ok {
 		return ServiceLogs{}, ErrUnknownService
 	}
