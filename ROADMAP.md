@@ -272,7 +272,7 @@ The detailed ownership and directive plan lives in
       typed model was never scoped to support them; the rare CNAME/TTL case
       routes to the unrestricted expert editor instead)
       ([rootguard#167](https://github.com/foxly-it/rootguard/pull/167))
-- [ ] Import local hosts through bounded `in-addr.arpa`/`ip6.arpa` discovery and
+- [x] Import local hosts through bounded `in-addr.arpa`/`ip6.arpa` discovery and
       optional router adapters, beginning with the documented FRITZ!Box TR-064
       host list; keep router credentials server-side and never persist them in
       browser storage or generated Unbound configuration. The FRITZ!Box
@@ -284,10 +284,18 @@ The detailed ownership and directive plan lives in
       submitted credentials - they're used for exactly one discovery
       request and discarded. Verified live against a real FRITZ!Box 6690
       Cable (firmware 267.08.25): both the unauthenticated and the
-      Digest-challenged path. Still missing: `in-addr.arpa`/`ip6.arpa`
-      discovery without a router, and any other vendor's adapter
+      Digest-challenged path. The same import card now also supports
+      router-independent PTR discovery over operator-supplied private IPv4
+      and unicast IPv6 prefixes. Prefixes and the combined request are capped
+      at 256 unique addresses, lookups run with 16 workers inside a 15-second
+      budget, and results remain unselected drafts until the existing
+      preview/validate/activate lifecycle is completed. Additional vendor
+      adapters can reuse the normalized discovery contract but are not
+      required for this router-independent path
       ([rootguard#133](https://github.com/foxly-it/rootguard/pull/133),
-      closes [#132](https://github.com/foxly-it/rootguard/issues/132))
+      closes [#132](https://github.com/foxly-it/rootguard/issues/132);
+      router-independent discovery tracked in
+      [#184](https://github.com/foxly-it/rootguard/issues/184))
 - [x] Make every host import preview-only until the operator selects entries;
       canonicalise names and addresses, detect duplicates and conflicts with
       guided and expert records, and use the existing preview, validation,
