@@ -97,6 +97,11 @@ were verified directly against GHCR and Docker Hub before being recorded.
 7. A volume is eligible only when unused and explicitly labeled
    `io.rootguard.cleanup=true`. Configuration, DNS data, state, sessions, and
    backups remain protected.
+8. The manual preview uses Docker's unique image-layer and volume usage values
+   as reclaimed-space estimates, shows skipped resources separately, and never
+   accepts a resource identifier from the browser.
+9. A confirmed manual cleanup recomputes the complete allowlist immediately
+   before removal and records its result in the bounded update history.
 
 Development Compose files may continue to use local or mutable image references.
 They are not release artifacts and are deliberately kept separate from

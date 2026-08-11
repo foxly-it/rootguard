@@ -44,6 +44,24 @@ func HandlePutBackupSettings(w http.ResponseWriter, r *http.Request, core *corec
 	writeJSON(w, http.StatusOK, status)
 }
 
+func HandleCleanupPreview(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	preview, err := core.CleanupPreview(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func HandleRunCleanup(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	result, err := core.RunCleanup(r.Context())
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func HandleUpdateCheck(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	status, err := core.CheckUpdates(r.Context())
 	if err != nil {

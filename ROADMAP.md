@@ -687,7 +687,15 @@ manual Docker forensics.
       volumes
 - [x] Record every automatic cleanup in the update history and expose
       a clear no-op result when nothing can be removed safely
-- [ ] Add an optional manual cleanup preview with a reclaimed-space estimate
+- [x] Add an optional manual cleanup preview with a reclaimed-space estimate -
+      the Stack Center lists only obsolete image IDs from RootGuard's own
+      successful update history and unused volumes carrying the explicit
+      cleanup label, shows Docker's per-resource `UniqueSize`/volume-size
+      estimate, and requires confirmation before deletion. Execution always
+      recomputes eligibility, retains two successful images per service, and
+      records the result in bounded history; unverifiable resources remain
+      protected and global prune commands remain prohibited
+      ([rootguard#190](https://github.com/foxly-it/rootguard/issues/190))
 - [ ] Encrypted or explicitly protected backup export
 - [ ] Full restore into a clean RootGuard installation
 - [ ] Pre-update snapshot and post-update restore verification
