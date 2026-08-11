@@ -90,6 +90,45 @@ func TestRunManualCleanupRecomputesAndRecordsResult(t *testing.T) {
 	}
 }
 
+func TestRunManualCleanupProtectsCandidateThatBecameUsedAfterPreview(t *testing.T) {
+	usageChecks := 0
+	removeCalls := 0
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			switch strings.Join(arguments, " ") {
+			case "ps -a --filter ancestor=old --format {{.ID}}":
+				usageChecks++
+				if usageChecks > 1 {
+					return []byte("new-container"), nil
+				}
+				return nil, nil
+			case "system df -v --format {{json .Images}}":
+				return []byte(`[{"ID":"old","UniqueSize":"42B"}]`), nil
+			case "volume ls --quiet --filter label=io.rootguard.cleanup=true":
+				return nil, nil
+			case "image rm old":
+				removeCalls++
+				return nil, nil
+			default:
+				return nil, errors.New("unexpected command")
+			}
+		},
+	})
+	manager.status.History = []HistoryEntry{
+		{Service: "unbound", Outcome: "success", FromID: "previous", ToID: "current"},
+		{Service: "unbound", Outcome: "success", FromID: "old", ToID: "previous"},
+	}
+	preview, err := manager.PreviewCleanup(context.Background())
+	if err != nil || len(preview.Resources) != 1 {
+		t.Fatalf("expected initial candidate: preview=%+v err=%v", preview, err)
+	}
+	result, err := manager.RunManualCleanup(context.Background())
+	if err != nil || removeCalls != 0 || strings.Join(result.Skipped, ",") != "image:old" {
+		t.Fatalf("candidate was not protected after becoming used: result=%+v calls=%d err=%v", result, removeCalls, err)
+	}
+}
+
 func TestCleanupPreviewRejectsBusyManagerAndParsesDockerSizes(t *testing.T) {
 	manager := NewManager(Options{DataDir: t.TempDir()})
 	manager.status.State = StateUpdating
