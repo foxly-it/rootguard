@@ -639,7 +639,7 @@ export interface UpdateCleanupResult {
 
 export interface UpdateHistoryEntry {
   service?: string;
-  outcome: "success" | "rolled_back" | "failed" | "no_change";
+  outcome: "success" | "rolled_back" | "failed" | "no_change" | "cleanup";
   from_id?: string;
   to_id?: string;
   from_ids?: Record<string, string>;
@@ -684,6 +684,26 @@ export async function setBackupRetention(retentionPerService: number): Promise<B
     method: "PUT",
     body: JSON.stringify({ retention_per_service: retentionPerService }),
   });
+}
+
+export interface CleanupResource {
+  kind: "image" | "volume";
+  id: string;
+  estimated_bytes: number;
+}
+
+export interface CleanupPreview {
+  resources: CleanupResource[];
+  skipped?: string[];
+  estimated_bytes: number;
+}
+
+export async function fetchCleanupPreview(): Promise<CleanupPreview> {
+  return request<CleanupPreview>("/api/cleanup/preview");
+}
+
+export async function runManualCleanup(): Promise<UpdateCleanupResult> {
+  return request<UpdateCleanupResult>("/api/cleanup", { method: "POST" });
 }
 
 export async function fetchUpdateStatus(): Promise<UpdateStatus> {

@@ -347,67 +347,6 @@ func (m *Manager) attachCleanup(cleanup CleanupResult) {
 	_ = m.persistLocked()
 }
 
-func (m *Manager) cleanupAfterSuccess(ctx context.Context, service string) CleanupResult {
-	result := CleanupResult{}
-	seen := map[string]bool{}
-	alreadyRemoved := map[string]bool{}
-	var ids []string
-	m.mu.RLock()
-	for _, entry := range m.status.History {
-		for _, id := range entry.Cleanup.RemovedImages {
-			alreadyRemoved[id] = true
-		}
-	}
-	for index := len(m.status.History) - 1; index >= 0; index-- {
-		entry := m.status.History[index]
-		if entry.Service != service || entry.Outcome != "success" {
-			continue
-		}
-		for _, id := range []string{entry.FromID, entry.ToID} {
-			if id != "" && !seen[id] {
-				seen[id] = true
-				ids = append(ids, id)
-			}
-		}
-	}
-	m.mu.RUnlock()
-	if len(ids) > 2 {
-		for _, id := range ids[:len(ids)-2] {
-			if alreadyRemoved[id] {
-				continue
-			}
-			containers, err := m.run(ctx, "ps", "-a", "--filter", "ancestor="+id, "--format", "{{.ID}}")
-			if err != nil || strings.TrimSpace(string(containers)) != "" {
-				result.Skipped = append(result.Skipped, id)
-				continue
-			}
-			if _, err := m.run(ctx, "image", "rm", id); err != nil {
-				result.Skipped = append(result.Skipped, id)
-			} else {
-				result.RemovedImages = append(result.RemovedImages, id)
-			}
-		}
-	}
-	volumes, err := m.run(ctx, "volume", "ls", "--quiet", "--filter", "label=io.rootguard.cleanup=true")
-	if err != nil {
-		result.Skipped = append(result.Skipped, "volume-scan")
-		return result
-	}
-	for _, volume := range strings.Fields(string(volumes)) {
-		containers, checkErr := m.run(ctx, "ps", "-a", "--filter", "volume="+volume, "--format", "{{.ID}}")
-		if checkErr != nil || strings.TrimSpace(string(containers)) != "" {
-			result.Skipped = append(result.Skipped, "volume:"+volume)
-			continue
-		}
-		if _, removeErr := m.run(ctx, "volume", "rm", volume); removeErr != nil {
-			result.Skipped = append(result.Skipped, "volume:"+volume)
-		} else {
-			result.RemovedVolumes = append(result.RemovedVolumes, volume)
-		}
-	}
-	return result
-}
-
 func (m *Manager) rollback(
 	ctx context.Context,
 	spec ServiceSpec,

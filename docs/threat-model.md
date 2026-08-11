@@ -43,6 +43,10 @@ Abstand größte Einzel-Vertrauensgrenze im System.
 - Der Updater kennt ausschließlich `core` und `webapp` als Austauschziele,
   zieht nur konfigurierte Ziel-Images und bleibt vom Host aus nicht
   erreichbar (`docs/architecture.md`, „Kontrollierte Container-Updates").
+- Manuelle Docker-Bereinigung akzeptiert keine Ressourcennamen aus dem Browser:
+  Core leitet Kandidaten ausschließlich aus seiner erfolgreichen Update-Historie
+  oder dem festen Volume-Label `io.rootguard.cleanup=true` ab, prüft die Nutzung
+  vor Vorschau und Ausführung erneut und ruft keine globalen Prune-Befehle auf.
 - Digest-gepinnte Core-/WebApp-Releases durchlaufen vor der Aktivierung eine
   Cosign-/SLSA-Provenienzprüfung gegen den erwarteten GitHub-Workflow-
   Unterzeichner (siehe Abschnitt 4).

@@ -47,6 +47,8 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("POST /api/updates/{name}", updateServiceHandler(deps.Updater))
 	apiMux.HandleFunc("GET /api/backups", backupStatusHandler(deps.Updater))
 	apiMux.HandleFunc("PUT /api/backups/settings", putBackupSettingsHandler(deps.Updater))
+	apiMux.HandleFunc("GET /api/cleanup/preview", cleanupPreviewHandler(deps.Updater))
+	apiMux.HandleFunc("POST /api/cleanup", runCleanupHandler(deps.Updater))
 	apiMux.HandleFunc("GET /api/control-plane-updates", controlPlaneStatusHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/check", controlPlaneCheckHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane))
@@ -200,6 +202,36 @@ func putBackupSettingsHandler(manager *updater.Manager) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, status)
+	}
+}
+
+func cleanupPreviewHandler(manager *updater.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		preview, err := manager.PreviewCleanup(r.Context())
+		if err != nil {
+			if errors.Is(err, updater.ErrBusy) {
+				writeError(w, http.StatusConflict, err)
+			} else {
+				writeError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, preview)
+	}
+}
+
+func runCleanupHandler(manager *updater.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		result, err := manager.RunManualCleanup(r.Context())
+		if err != nil {
+			if errors.Is(err, updater.ErrBusy) {
+				writeError(w, http.StatusConflict, err)
+			} else {
+				writeError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, result)
 	}
 }
 

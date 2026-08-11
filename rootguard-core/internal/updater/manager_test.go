@@ -276,10 +276,14 @@ func TestCleanupKeepsTwoImagesAndOnlyRemovesLabeledUnusedVolumes(t *testing.T) {
 			switch command {
 			case "ps -a --filter ancestor=sha256:old --format {{.ID}}":
 				return nil, nil
+			case "system df -v --format {{json .Images}}":
+				return []byte(`[{"ID":"sha256:old","UniqueSize":"12MB"}]`), nil
 			case "image rm sha256:old":
 				return []byte("removed"), nil
 			case "volume ls --quiet --filter label=io.rootguard.cleanup=true":
 				return []byte("rootguard-transient\n"), nil
+			case "system df -v --format {{json .Volumes}}":
+				return []byte(`[{"Name":"rootguard-transient","Size":"1.5MB"}]`), nil
 			case "ps -a --filter volume=rootguard-transient --format {{.ID}}":
 				return nil, nil
 			case "volume rm rootguard-transient":

@@ -138,6 +138,16 @@ erneut geprüft. Der Helper selbst bleibt während des Vorgangs unverändert und
 ist nicht vom Host aus erreichbar. WebApp-Sitzungen liegen in einem eigenen
 Volume und überstehen den kontrollierten WebApp-Austausch.
 
+Die automatische und manuelle Docker-Bereinigung teilen dieselbe serverseitige
+Kandidatenermittlung. Images werden nur aus erfolgreichen, persistenten
+RootGuard-Update-Einträgen abgeleitet; das aktive und das vorherige erfolgreiche
+Image bleiben je Dienst geschützt. Volumes benötigen zusätzlich das feste Label
+`io.rootguard.cleanup=true` und dürfen von keinem Container verwendet werden.
+Die manuelle Vorschau zeigt Dockers gerundete `UniqueSize`-/Volume-Schätzung und
+übersprungene Ressourcen. Nach der Bestätigung wird die Auswahl vollständig neu
+berechnet, statt einer möglicherweise veralteten Browser-Vorschau zu vertrauen.
+Globale Prune-Befehle und frei übergebene Ressourcennamen bleiben ausgeschlossen.
+
 ## Backup- und Restore-Zuständigkeit für AdGuard Home
 
 AdGuards Zustand liegt in zwei separaten, benannten Docker-Volumes statt in

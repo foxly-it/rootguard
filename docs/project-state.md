@@ -410,6 +410,9 @@ Trustworthy Stack Center and production visibility:
 - post-update cleanup retains the active and previous successful image, removes
   only older image IDs recorded by RootGuard, and considers only unused volumes
   carrying the explicit `io.rootguard.cleanup=true` label;
+- the same server-side allowlist powers an optional manual preview with
+  per-resource and total reclaimed-space estimates; a confirmed cleanup
+  recomputes eligibility and records the result in bounded history;
 - safe start, stop, and restart controls with clear impact;
 - bounded, redacted on-demand service logs and actionable failure states;
 - Stack Center runtime inspection now covers Core, WebApp, the independent
@@ -730,6 +733,13 @@ AdGuard data, Unbound state, sessions, backups, and every unlabeled or foreign
 volume remain protected. A cleanup that has nothing safely eligible records a
 visible no-op instead of widening its scope.
 
+The Stack Center also exposes this exact allowlist as a manual cleanup preview.
+It shows Docker's rounded unique image-layer and volume-size estimates, keeps
+unverifiable or in-use resources visibly protected, and accepts no browser-
+supplied resource IDs. Confirmation triggers a fresh server-side scan before
+removal and writes the result into bounded history
+([rootguard#191](https://github.com/foxly-it/rootguard/pull/191)).
+
 Core's pre-update AdGuard/Unbound backups are now bounded separately from image
 and volume cleanup. The Stack Center exposes recognized count and logical bytes
 in total and per service, newest timestamps, and separately measured
@@ -784,9 +794,8 @@ Milestone completion snapshot:
   just targeting `rootguard-adguard:53` instead of Unbound's own port.
   AdGuard being unpinned on that network at the time was later found to be a
   real bug - see the 0.4 network-addressing fix below.
-- **0.4 operations/backup/recovery** - 6 of 14 items open: manual cleanup
-  preview, encrypted export, full restore into a
-  clean install, pre-update snapshot/restore verification,
+- **0.4 operations/backup/recovery** - 5 of 14 items open: encrypted export,
+  full restore into a clean install, pre-update snapshot/restore verification,
   power-loss/interrupted-write tests, and a disaster-recovery runbook.
   Logging/versioning/history, the automatic cleanup-safety work, and a
   network-addressing fix ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
@@ -811,8 +820,8 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.4 operations/backup/recovery** - current, in document order: manual cleanup preview,
-   encrypted export, full restore, pre-update snapshot verification,
+1. **0.4 operations/backup/recovery** - current, in document order: encrypted
+   export, full restore, pre-update snapshot verification,
    power-loss tests, the DR runbook.
 2. **0.5 security/HTTPS/accessibility** - 3 items open, in document order:
    destructive-action rate limits/audit, the full keyboard/screen-reader

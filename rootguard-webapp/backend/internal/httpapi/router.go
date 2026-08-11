@@ -190,6 +190,12 @@ func NewRouter(core *coreclient.Client) http.Handler {
 	mux.HandleFunc("PUT /api/backups/settings", func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePutBackupSettings(w, r, core)
 	})
+	mux.HandleFunc("GET /api/cleanup/preview", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleCleanupPreview(w, r, core)
+	})
+	mux.HandleFunc("POST /api/cleanup", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleRunCleanup(w, r, core)
+	})
 
 	mux.HandleFunc("GET /api/control-plane-updates", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleControlPlaneUpdateStatus(w, r, core)

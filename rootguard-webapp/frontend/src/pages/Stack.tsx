@@ -12,18 +12,21 @@ import {
   ServerCog,
   ShieldCheck,
   PanelsTopLeft,
+  Trash2,
 } from "lucide-react";
 import {
   checkControlPlaneUpdates,
   checkUpdates,
   fetchControlPlaneUpdateStatus,
   fetchBackupStatus,
+  fetchCleanupPreview,
   fetchServices,
   fetchServiceLogs,
   fetchUpdateStatus,
   installServiceUpdate,
   installControlPlaneUpdates,
   setBackupRetention,
+  runManualCleanup,
   serviceAction,
   type ServiceInfo,
   type ServiceLogs,
@@ -31,6 +34,7 @@ import {
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
   type BackupStatus,
+  type CleanupPreview,
   type UpdateHistoryEntry,
 } from "../api/client";
 import "../styles/stack.css";
@@ -42,8 +46,10 @@ export default function Stack() {
   const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [controlPlane, setControlPlane] = useState<ControlPlaneUpdateStatus | null>(null);
   const [backups, setBackups] = useState<BackupStatus | null>(null);
+  const [cleanup, setCleanup] = useState<CleanupPreview | null>(null);
   const [retentionDraft, setRetentionDraft] = useState<number | null>(null);
   const [savingRetention, setSavingRetention] = useState(false);
+  const [runningCleanup, setRunningCleanup] = useState(false);
   const [services, setServices] = useState<ServiceInfo[]>([]);
   const [serviceLogs, setServiceLogs] = useState<Partial<Record<ServiceInfo["name"], ServiceLogs>>>({});
   const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
@@ -58,16 +64,18 @@ export default function Stack() {
 
   const load = useCallback(async () => {
     try {
-      const [nextUpdates, nextControlPlane, nextServices, nextBackups] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextServices, nextBackups, nextCleanup] = await Promise.all([
         fetchUpdateStatus(),
         fetchControlPlaneUpdateStatus(),
         fetchServices(),
         fetchBackupStatus(),
+        fetchCleanupPreview().catch(() => null),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setServices(nextServices);
       setBackups(nextBackups);
+      if (nextCleanup) setCleanup(nextCleanup);
       setRetentionDraft((current) => current ?? nextBackups.settings.retention_per_service);
       setError("");
     } catch (cause) {
@@ -81,7 +89,7 @@ export default function Stack() {
   }, [load]);
 
   const busy = updates?.state === "checking" || updates?.state === "updating"
-    || controlPlane?.state === "checking" || controlPlane?.state === "updating";
+    || controlPlane?.state === "checking" || controlPlane?.state === "updating" || runningCleanup;
   useEffect(() => {
     const timer = window.setInterval(load, busy ? 1500 : 10_000);
     return () => window.clearInterval(timer);
@@ -94,7 +102,7 @@ export default function Stack() {
   );
   const history = useMemo(
     () => [
-      ...(updates?.history ?? []).map((entry) => ({ ...entry, scope: entry.service || "DNS" })),
+      ...(updates?.history ?? []).map((entry) => ({ ...entry, scope: entry.service === "cleanup" ? "Docker" : entry.service || "DNS" })),
       ...(controlPlane?.history ?? []).map((entry) => ({ ...entry, scope: "Control Plane" })),
     ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)).slice(0, 12),
     [updates, controlPlane],
@@ -149,6 +157,29 @@ export default function Stack() {
       setError(errorMessage(cause, t("stack.backupRetentionError")));
     } finally {
       setSavingRetention(false);
+    }
+  }
+
+  async function refreshCleanupPreview() {
+    setError("");
+    try {
+      setCleanup(await fetchCleanupPreview());
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.cleanupPreviewError")));
+    }
+  }
+
+  async function startManualCleanup() {
+    if (!cleanup?.resources.length || !window.confirm(t("stack.cleanupConfirm", { count: cleanup.resources.length, size: formatBytes(cleanup.estimated_bytes) }))) return;
+    setRunningCleanup(true);
+    setError("");
+    try {
+      await runManualCleanup();
+      await load();
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.cleanupRunError")));
+    } finally {
+      setRunningCleanup(false);
     }
   }
 
@@ -238,9 +269,41 @@ export default function Stack() {
               <input type="number" min={2} max={50} value={retentionDraft ?? ""} onChange={(event) => setRetentionDraft(Number.isNaN(event.target.valueAsNumber) ? null : event.target.valueAsNumber)} />
               <small>{t("stack.backupRetentionHelp")}</small>
             </label>
-            <button className="rg-button rg-button-secondary" type="button" disabled={savingRetention || retentionDraft === null || retentionDraft < 2 || retentionDraft > 50 || retentionDraft === backups.settings.retention_per_service} onClick={saveBackupRetention}>
+            <button className="rg-button rg-button-secondary" type="button" disabled={busy || savingRetention || retentionDraft === null || retentionDraft < 2 || retentionDraft > 50 || retentionDraft === backups.settings.retention_per_service} onClick={saveBackupRetention}>
               {savingRetention ? <LoaderCircle className="spin" size={15} /> : <Archive size={15} />}
               {t("stack.backupRetentionSave")}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {cleanup && (
+        <section className="manual-cleanup-panel">
+          <div className="manual-cleanup-heading">
+            <span><Trash2 size={19} /></span>
+            <div>
+              <span className="stack-eyebrow">{t("stack.cleanupEyebrow")}</span>
+              <h2>{t("stack.cleanupTitle")}</h2>
+              <p>{t("stack.cleanupIntro")}</p>
+            </div>
+            <strong>{formatBytes(cleanup.estimated_bytes)}<small>{t("stack.cleanupEstimate")}</small></strong>
+          </div>
+          {cleanup.resources.length ? (
+            <div className="manual-cleanup-list">
+              {cleanup.resources.map((resource) => (
+                <article key={`${resource.kind}-${resource.id}`}>
+                  <span>{t(`stack.cleanupKind.${resource.kind}`)}</span>
+                  <code title={resource.id}>{resource.kind === "image" ? shortID(resource.id) : resource.id}</code>
+                  <strong>{formatBytes(resource.estimated_bytes)}</strong>
+                </article>
+              ))}
+            </div>
+          ) : <p className="manual-cleanup-empty">{t("stack.cleanupEmpty")}</p>}
+          {!!cleanup.skipped?.length && <p className="manual-cleanup-note">{t("stack.cleanupProtected", { count: cleanup.skipped.length })}</p>}
+          <div className="manual-cleanup-actions">
+            <button className="rg-button rg-button-secondary" type="button" disabled={busy || runningCleanup} onClick={refreshCleanupPreview}><RefreshCw size={15} /> {t("stack.cleanupRefresh")}</button>
+            <button className="rg-button rg-button-danger" type="button" disabled={busy || runningCleanup || !cleanup.resources.length} onClick={startManualCleanup}>
+              {runningCleanup ? <LoaderCircle className="spin" size={15} /> : <Trash2 size={15} />} {t("stack.cleanupRun")}
             </button>
           </div>
         </section>

@@ -413,6 +413,18 @@ type BackupStatus struct {
 	LastError      string               `json:"last_error,omitempty"`
 }
 
+type CleanupResource struct {
+	Kind           string `json:"kind"`
+	ID             string `json:"id"`
+	EstimatedBytes int64  `json:"estimated_bytes"`
+}
+
+type CleanupPreview struct {
+	Resources      []CleanupResource `json:"resources"`
+	Skipped        []string          `json:"skipped,omitempty"`
+	EstimatedBytes int64             `json:"estimated_bytes"`
+}
+
 type ControlPlaneUpdateStatus struct {
 	State     string                `json:"state"`
 	Message   string                `json:"message"`
@@ -714,6 +726,18 @@ func (c *Client) BackupStatus(ctx context.Context) (BackupStatus, error) {
 func (c *Client) SetBackupRetention(ctx context.Context, retention int) (BackupStatus, error) {
 	var result BackupStatus
 	err := c.do(ctx, http.MethodPut, "/api/backups/settings", map[string]int{"retention_per_service": retention}, &result)
+	return result, err
+}
+
+func (c *Client) CleanupPreview(ctx context.Context) (CleanupPreview, error) {
+	var result CleanupPreview
+	err := c.do(ctx, http.MethodGet, "/api/cleanup/preview", nil, &result)
+	return result, err
+}
+
+func (c *Client) RunCleanup(ctx context.Context) (UpdateCleanupResult, error) {
+	var result UpdateCleanupResult
+	err := c.do(ctx, http.MethodPost, "/api/cleanup", nil, &result)
 	return result, err
 }
 
