@@ -11,6 +11,7 @@ import {
   Archive,
   Filter,
   LayoutDashboard,
+  ScrollText,
   PanelLeftClose,
   PanelLeftOpen,
   ServerCog,
@@ -64,6 +65,7 @@ export default function SidebarLayout({ children }: Props) {
     { to: "/setup", label: t("nav.setup"), icon: <ServerCog aria-hidden="true" /> },
     { to: "/stack", label: t("nav.stack"), icon: <Boxes aria-hidden="true" /> },
     { to: "/backups", label: t("nav.backups"), icon: <Archive aria-hidden="true" /> },
+    { to: "/logs", label: t("nav.logs"), icon: <ScrollText aria-hidden="true" /> },
     { to: "/unbound", label: t("nav.unbound"), icon: <ShieldCheck aria-hidden="true" /> },
     { to: "/adguard", label: t("nav.adguard"), icon: <Filter aria-hidden="true" /> },
   ];
