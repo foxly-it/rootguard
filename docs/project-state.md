@@ -730,6 +730,15 @@ AdGuard data, Unbound state, sessions, backups, and every unlabeled or foreign
 volume remain protected. A cleanup that has nothing safely eligible records a
 visible no-op instead of widening its scope.
 
+Core's pre-update AdGuard/Unbound backups are now bounded separately from image
+and volume cleanup. The Stack Center exposes recognized count and logical bytes
+in total and per service, newest timestamps, and separately measured
+unrecognized data. Operators can retain 2–50 restore points per service
+(default 5). A lower value requires confirmation and pruning accepts only a
+canonical timestamp/service directory with a manifest matching the allowlisted
+service and container; unknown entries and symlinks remain untouched
+([rootguard#188](https://github.com/foxly-it/rootguard/issues/188)).
+
 ## Remaining production milestones
 
 Cross-referenced against `ROADMAP.md` on 2026-08-09 (supersedes the previous
@@ -741,11 +750,9 @@ Entwicklung" without re-deriving what's next.
 
 Milestone completion snapshot:
 
-- **0.2 Unbound administration** - 2 items open, in top-to-bottom roadmap
-  order: cross-setting conflict detection (the cross-zone hostname-uniqueness
-  gap is closed; access rules have no guided surface to conflict-check
-  against yet, tracked separately below), and host-discovery beyond the
-  FRITZ!Box adapter. Import/export of the complete logical resolver
+- **0.2 Unbound administration** - complete at the pre-1.0 scope. Access rules
+  remain expert-only and a possible guided surface is deferred with the
+  post-1.0 extension architecture. Import/export of the complete logical resolver
   configuration is done (`UnboundConfigTransfer.tsx`,
   `/api/unbound/export`+`/api/unbound/import*`). Hand-written `unbound.conf`
   import is done at full roadmap scope (`UnboundConfImport.tsx`, `import.go`'s
@@ -777,8 +784,8 @@ Milestone completion snapshot:
   just targeting `rootguard-adguard:53` instead of Unbound's own port.
   AdGuard being unpinned on that network at the time was later found to be a
   real bug - see the 0.4 network-addressing fix below.
-- **0.4 operations/backup/recovery** - 7 of 14 items open: configurable
-  retention, manual cleanup preview, encrypted export, full restore into a
+- **0.4 operations/backup/recovery** - 6 of 14 items open: manual cleanup
+  preview, encrypted export, full restore into a
   clean install, pre-update snapshot/restore verification,
   power-loss/interrupted-write tests, and a disaster-recovery runbook.
   Logging/versioning/history, the automatic cleanup-safety work, and a
@@ -804,20 +811,13 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.2 Unbound administration** (current) - work the remaining 2 items in
-   the order they appear in `ROADMAP.md`: conflict detection (still open only
-   pending the untracked guided access-rules surface - see "Tracked editor
-   follow-ups" below), then host-discovery beyond FRITZ!Box. Resolver config
-   import/export, hand-written `unbound.conf` import, and scenario tests are
-   all done.
-2. **0.4 operations/backup/recovery** - the whole milestone is still open,
-   in document order: configurable retention, manual cleanup preview,
+1. **0.4 operations/backup/recovery** - current, in document order: manual cleanup preview,
    encrypted export, full restore, pre-update snapshot verification,
    power-loss tests, the DR runbook.
-3. **0.5 security/HTTPS/accessibility** - 3 items open, in document order:
+2. **0.5 security/HTTPS/accessibility** - 3 items open, in document order:
    destructive-action rate limits/audit, the full keyboard/screen-reader
    workflow audit, WCAG labels/errors review.
-4. **0.6 release engineering** - 9 items open, in document order: automated
+3. **0.6 release engineering** - 8 items open, in document order: automated
    semantic versioning, signed multi-arch manifest digests (property already
    holds, automating the update after each release is the open part), SBOM/
    provenance, image signing/verification, compatibility matrix, upgrade

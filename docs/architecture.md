@@ -156,9 +156,14 @@ geschütztes Daten-Volume; schlägt die anschließende Gesundheitsprüfung fehl,
 stellt Core beide Pfade automatisch wieder her und rollt auf die vorherige
 Image-ID zurück. Diese Sicherung ist ausschließlich ein interner
 Update-Schutz - kein vom Betreiber auslösbarer, herunterladbarer oder über
-mehrere Zeitpunkte hinweg aufbewahrter Restore-Punkt. Ein Update überschreibt
-die vorherige interne Sicherung; es existiert kein längerfristig
-aufbewahrtes Backup-Set.
+die WebApp direkt wiederherstellbarer Export. RootGuard bewahrt standardmäßig
+die fünf neuesten Update-Restore-Punkte je Dienst auf; im Stack Center kann
+der Betreiber diesen Wert zwischen 2 und 50 konfigurieren und Anzahl,
+Speichernutzung sowie den neuesten Zeitpunkt pro Dienst einsehen. Bereinigt
+werden ausschließlich kanonische, per passendem Manifest eindeutig RootGuard
+und dem erlaubten Dienst zugeordnete Verzeichnisse. Unbekannte Dateien,
+Verzeichnisse und Symlinks werden separat als nicht verwalteter Speicher
+angezeigt und niemals gelöscht.
 
 Für Datensicherung über den reinen Update-Schutz hinaus - etwa vor einem
 größeren manuellen Eingriff über die native AdGuard-Oberfläche, oder als
@@ -169,9 +174,9 @@ lassen sich mit Standard-Docker-Bordmitteln sichern
 $(pwd):/backup alpine tar czf /backup/adguard-config.tar.gz -C /data .`,
 analog für `rootguard-adguard-work`), bei gestopptem AdGuard-Container für
 einen konsistenten Snapshot. Ein RootGuard-natives, geführtes
-Backup-Export/-Import (verschlüsselt, mit konfigurierbarer Aufbewahrung) ist
-in ROADMAP.md 0.4 als eigener, noch offener Punkt geführt - diese
-Dokumentation beschreibt den aktuellen Stand, nicht das Zielbild.
+Backup-Export/-Import (verschlüsselt und für eine Neuinstallation
+wiederherstellbar) ist in ROADMAP.md 0.4 weiterhin offen; die konfigurierbare
+Aufbewahrung hier betrifft ausschließlich interne Update-Restore-Punkte.
 
 ## Unbound-Konfigurationszyklus
 

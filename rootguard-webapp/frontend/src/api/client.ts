@@ -658,6 +658,34 @@ export interface UpdateStatus {
   updated_at: string;
 }
 
+export interface BackupServiceUsage {
+  service: "adguard" | "unbound";
+  count: number;
+  bytes: number;
+  oldest_at?: string;
+  newest_at?: string;
+}
+
+export interface BackupStatus {
+  settings: { retention_per_service: number };
+  count: number;
+  managed_bytes: number;
+  unmanaged_bytes: number;
+  services: BackupServiceUsage[];
+  last_error?: string;
+}
+
+export async function fetchBackupStatus(): Promise<BackupStatus> {
+  return request<BackupStatus>("/api/backups");
+}
+
+export async function setBackupRetention(retentionPerService: number): Promise<BackupStatus> {
+  return request<BackupStatus>("/api/backups/settings", {
+    method: "PUT",
+    body: JSON.stringify({ retention_per_service: retentionPerService }),
+  });
+}
+
 export async function fetchUpdateStatus(): Promise<UpdateStatus> {
   return request<UpdateStatus>("/api/updates");
 }
