@@ -42,7 +42,7 @@ func (d *ReverseDNSDiscoverer) Discover(ctx context.Context, networks []string) 
 	defer cancel()
 
 	jobs := make(chan netip.Addr)
-	var hosts []DiscoveredHost
+	hosts := make([]DiscoveredHost, 0)
 	failed := 0
 	var mu sync.Mutex
 	var workers sync.WaitGroup

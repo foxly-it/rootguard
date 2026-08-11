@@ -56,6 +56,9 @@ func TestReverseDNSDiscovererCountsResolverFailures(t *testing.T) {
 	if result.Scanned != 1 || result.Failed != 1 || len(result.Hosts) != 0 {
 		t.Fatalf("unexpected result: %+v", result)
 	}
+	if result.Hosts == nil {
+		t.Fatal("expected an empty host list, got nil")
+	}
 }
 
 func TestReverseDNSDiscovererRejectsUnsafeRanges(t *testing.T) {
