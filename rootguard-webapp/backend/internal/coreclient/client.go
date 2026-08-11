@@ -413,6 +413,15 @@ type BackupStatus struct {
 	LastError      string               `json:"last_error,omitempty"`
 }
 
+type BackupRestorePreview struct {
+	SchemaVersion int                   `json:"schema_version"`
+	CreatedAt     time.Time             `json:"created_at"`
+	FileCount     int                   `json:"file_count"`
+	ExpandedBytes int64                 `json:"expanded_bytes"`
+	Config        InstallationConfig    `json:"config"`
+	Preflight     InstallationPreflight `json:"preflight"`
+}
+
 type CleanupResource struct {
 	Kind           string `json:"kind"`
 	ID             string `json:"id"`
@@ -752,6 +761,18 @@ func (c *Client) ExportBackup(ctx context.Context, passphrase string) (*http.Res
 	}
 	request.Header.Set("Authorization", "Bearer "+c.token)
 	request.Header.Set("Content-Type", "application/json")
+	client := *c.http
+	client.Timeout = 10 * time.Minute
+	return client.Do(request)
+}
+
+func (c *Client) RestoreBackupRequest(ctx context.Context, path, contentType string, body io.Reader) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, body)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Authorization", "Bearer "+c.token)
+	request.Header.Set("Content-Type", contentType)
 	client := *c.http
 	client.Timeout = 10 * time.Minute
 	return client.Do(request)

@@ -91,6 +91,26 @@ func HandleBackupExport(w http.ResponseWriter, r *http.Request, core *coreclient
 	_, _ = io.Copy(w, response.Body)
 }
 
+func HandleBackupRestore(w http.ResponseWriter, r *http.Request, core *coreclient.Client, preview bool) {
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(w, r.Body, (1<<30)+(1<<20))
+	path := "/api/backups/restore"
+	if preview {
+		path += "/preview"
+	}
+	response, err := core.RestoreBackupRequest(r.Context(), path, r.Header.Get("Content-Type"), r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer response.Body.Close()
+	for _, header := range []string{"Content-Type", "Cache-Control"} {
+		w.Header().Set(header, response.Header.Get(header))
+	}
+	w.WriteHeader(response.StatusCode)
+	_, _ = io.Copy(w, response.Body)
+}
+
 func HandleUpdateCheck(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	status, err := core.CheckUpdates(r.Context())
 	if err != nil {

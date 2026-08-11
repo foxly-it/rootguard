@@ -14,6 +14,7 @@ import (
 	"github.com/foxly-it/rootguard-core/internal/adguard"
 	"github.com/foxly-it/rootguard-core/internal/api"
 	"github.com/foxly-it/rootguard-core/internal/backupexport"
+	"github.com/foxly-it/rootguard-core/internal/backuprestore"
 	"github.com/foxly-it/rootguard-core/internal/controlplane"
 	"github.com/foxly-it/rootguard-core/internal/installer"
 	"github.com/foxly-it/rootguard-core/internal/unbound"
@@ -120,6 +121,13 @@ func main() {
 			{ArchivePath: "services/unbound/state", Container: "rootguard-unbound", Path: "/var/lib/unbound"},
 		},
 	})
+	backupRestorer := backuprestore.New(backuprestore.Options{
+		DataDir:        envOrDefault("ROOTGUARD_EXPORT_DIR", "/var/lib/rootguard/exports"),
+		UnboundDir:     envOrDefault("UNBOUND_CONFIG_DIR", "/var/lib/rootguard/unbound"),
+		AdGuardDir:     envOrDefault("ADGUARD_DATA_DIR", "/var/lib/rootguard/adguard"),
+		AdGuardAuthDir: envOrDefault("ROOTGUARD_BLOCKPAGE_AUTH_DIR", "/var/lib/rootguard/adguard-auth"),
+		Installer:      installationManager,
+	})
 	reconcileContext, reconcileCancel := context.WithTimeout(context.Background(), 15*time.Second)
 	if err := installationManager.Reconcile(reconcileContext); err != nil {
 		log.Printf("RootGuard installation reconciliation warning: %v", err)
@@ -135,6 +143,7 @@ func main() {
 		ControlPlane:      controlPlaneClient,
 		AdGuardDNSAddress: envOrDefault("ADGUARD_DNS_ADDRESS", "rootguard-adguard:53"),
 		BackupExporter:    backupExporter,
+		BackupRestorer:    backupRestorer,
 	})
 
 	server := &http.Server{

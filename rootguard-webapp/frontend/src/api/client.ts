@@ -718,6 +718,36 @@ export async function exportEncryptedBackup(passphrase: string): Promise<{ blob:
   return { blob: await response.blob(), filename };
 }
 
+export interface BackupRestorePreview {
+  schema_version: number;
+  created_at: string;
+  file_count: number;
+  expanded_bytes: number;
+  config: InstallationConfig;
+  preflight: InstallationPreflight;
+}
+
+function restoreForm(file: File, passphrase: string, config?: InstallationConfig, confirmation?: string) {
+  const form = new FormData();
+  form.append("passphrase", passphrase);
+  if (config) form.append("config", JSON.stringify(config));
+  if (confirmation) form.append("confirmation", confirmation);
+  form.append("archive", file);
+  return form;
+}
+
+export async function previewEncryptedBackup(file: File, passphrase: string, config?: InstallationConfig): Promise<BackupRestorePreview> {
+  const response = await fetch("/api/backups/restore/preview", { method: "POST", body: restoreForm(file, passphrase, config) });
+  if (!response.ok) throw new Error((await response.text()) || "backup_restore_preview_failed");
+  return response.json() as Promise<BackupRestorePreview>;
+}
+
+export async function restoreEncryptedBackup(file: File, passphrase: string, config: InstallationConfig): Promise<InstallationStatus> {
+  const response = await fetch("/api/backups/restore", { method: "POST", body: restoreForm(file, passphrase, config, "RESTORE") });
+  if (!response.ok) throw new Error((await response.text()) || "backup_restore_failed");
+  return response.json() as Promise<InstallationStatus>;
+}
+
 export async function fetchUpdateStatus(): Promise<UpdateStatus> {
   return request<UpdateStatus>("/api/updates");
 }

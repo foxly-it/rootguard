@@ -13,6 +13,7 @@ import (
 
 	"github.com/foxly-it/rootguard-core/internal/adguard"
 	"github.com/foxly-it/rootguard-core/internal/backupexport"
+	"github.com/foxly-it/rootguard-core/internal/backuprestore"
 	"github.com/foxly-it/rootguard-core/internal/controlplane"
 	"github.com/foxly-it/rootguard-core/internal/docker"
 	"github.com/foxly-it/rootguard-core/internal/installer"
@@ -31,6 +32,7 @@ type Dependencies struct {
 	ControlPlane      *controlplane.Client
 	AdGuardDNSAddress string
 	BackupExporter    *backupexport.Exporter
+	BackupRestorer    *backuprestore.Manager
 }
 
 func RegisterRoutes(deps Dependencies) http.Handler {
@@ -53,6 +55,8 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/cleanup/preview", cleanupPreviewHandler(deps.Updater))
 	apiMux.HandleFunc("POST /api/cleanup", runCleanupHandler(deps.Updater))
 	apiMux.HandleFunc("POST /api/backups/export", backupExportHandler(deps.BackupExporter, deps.Updater))
+	apiMux.HandleFunc("POST /api/backups/restore/preview", backupRestorePreviewHandler(deps.BackupRestorer))
+	apiMux.HandleFunc("POST /api/backups/restore", backupRestoreHandler(deps.BackupRestorer, deps.Updater))
 	apiMux.HandleFunc("GET /api/control-plane-updates", controlPlaneStatusHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/check", controlPlaneCheckHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane))

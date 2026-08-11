@@ -26,6 +26,7 @@ const (
 var (
 	ErrInvalidConfig = errors.New("invalid installation configuration")
 	ErrDeploying     = errors.New("installation is already running")
+	ErrNotClean      = errors.New("restore requires a clean RootGuard installation")
 )
 
 type Config struct {
@@ -76,6 +77,7 @@ type Status struct {
 
 type CommandRunner func(context.Context, ...string) ([]byte, error)
 type BootstrapFunc func(context.Context, string) error
+type RestoreFunc func(context.Context) error
 
 type Options struct {
 	DataDir          string
@@ -266,6 +268,134 @@ func (m *Manager) Start(ctx context.Context, config Config) (Status, error) {
 
 	go m.deploy(report.Config)
 	return status, nil
+}
+
+// Restore deploys the managed stack synchronously and invokes restoreData
+// after fresh containers and volumes have been created but before any service
+// is started.  It is intentionally restricted to a never-installed target.
+func (m *Manager) Restore(ctx context.Context, config Config, restoreData RestoreFunc) (Status, error) {
+	report := m.RestorePreflight(ctx, config)
+	if !report.Ready {
+		return m.Status(), ErrNotClean
+	}
+	m.mu.Lock()
+	if m.status.State != StateNotInstalled && m.status.State != StateFailed {
+		m.mu.Unlock()
+		return Status{}, ErrNotClean
+	}
+	m.status = Status{State: StateDeploying, Config: &report.Config, Steps: []Step{
+		{ID: "prepare", Status: "pending", Message: "Preparing the managed stack"},
+		{ID: "pull", Status: "pending", Message: "Downloading configured service images"},
+		{ID: "create", Status: "pending", Message: "Creating empty service volumes"},
+		{ID: "restore", Status: "pending", Message: "Restoring verified backup data"},
+		{ID: "start", Status: "pending", Message: "Starting restored services"},
+		{ID: "connect", Status: "pending", Message: "Connecting the controller"},
+		{ID: "bootstrap", Status: "pending", Message: "Verifying the protected DNS chain"},
+	}, UpdatedAt: time.Now().UTC()}
+	if err := m.persistLocked(); err != nil {
+		m.mu.Unlock()
+		return Status{}, err
+	}
+	m.mu.Unlock()
+	if err := m.restoreDeploy(ctx, report.Config, restoreData); err != nil {
+		return m.Status(), err
+	}
+	return m.Status(), nil
+}
+
+func (m *Manager) RestorePreflight(ctx context.Context, config Config) Preflight {
+	report := m.Preflight(ctx, config)
+	status := m.Status()
+	clean := status.State == StateNotInstalled || status.State == StateFailed
+	report.Checks = append(report.Checks, Check{ID: "clean_installation", Code: "clean_installation_required", OK: clean,
+		Message: "RootGuard has not deployed a managed DNS stack on this installation.", Action: "Use a new RootGuard installation for full restore."})
+	for _, resource := range []struct{ kind, name string }{{"container", "rootguard-unbound"}, {"container", "rootguard-adguard"}, {"container", "rootguard-blockpage"}, {"volume", "rootguard-unbound-state"}, {"volume", "rootguard-adguard-work"}, {"volume", "rootguard-adguard-config"}, {"network", "rootguard-dns"}} {
+		output, err := m.run(ctx, resource.kind, "inspect", resource.name)
+		detail := strings.ToLower(string(output))
+		missing := err != nil && (strings.Contains(detail, "no such") || strings.Contains(detail, "not found"))
+		report.Checks = append(report.Checks, Check{ID: "restore_" + resource.kind + "_" + resource.name, Code: "restore_target_resource_absent", OK: missing,
+			Message: fmt.Sprintf("Managed Docker %s %s is absent.", resource.kind, resource.name), Action: "Remove stale managed resources only after confirming this is a clean replacement host."})
+		clean = clean && missing
+	}
+	report.Ready = report.Ready && clean
+	return report
+}
+
+func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreData RestoreFunc) error {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Minute)
+	defer cancel()
+	composePath := ""
+	created := false
+	fail := func(phase string, err error) error {
+		if created {
+			_, _ = m.run(ctx, "network", "disconnect", "-f", "rootguard-dns", m.coreContainer)
+			_, _ = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "down", "--volumes", "--remove-orphans")
+		}
+		m.fail(phase, err)
+		return err
+	}
+	_ = m.setStep("prepare", "running", "Writing the versioned RootGuard stack definition")
+	var err error
+	composePath, err = m.writeCompose(config)
+	if err != nil {
+		return fail("prepare", err)
+	}
+	_ = m.setStep("prepare", "done", "Managed stack definition is ready")
+	_ = m.setStep("pull", "running", "Downloading configured service images")
+	if _, err = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "pull"); err != nil {
+		return fail("pull", err)
+	}
+	_ = m.setStep("pull", "done", "Service images are available")
+	_ = m.setStep("create", "running", "Creating stopped containers and empty service volumes")
+	if _, err = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "create"); err != nil {
+		return fail("create", err)
+	}
+	created = true
+	_ = m.setStep("create", "done", "Stopped containers and service volumes are ready")
+	_ = m.setStep("restore", "running", "Copying verified backup data into the clean installation")
+	if err = restoreData(ctx); err != nil {
+		return fail("restore", err)
+	}
+	_ = m.setStep("restore", "done", "Verified backup data is restored")
+	_ = m.setStep("start", "running", "Starting restored Unbound and AdGuard Home")
+	if _, err = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
+		return fail("start", err)
+	}
+	_ = m.setStep("start", "done", "Restored DNS containers are running")
+	_ = m.setStep("connect", "running", "Connecting the controller to the private DNS network")
+	coreIP, err := coreAddress(m.dnsNetworkCIDR)
+	if err != nil {
+		return fail("connect", err)
+	}
+	if output, runErr := m.run(ctx, "network", "connect", "--ip", coreIP, "rootguard-dns", m.coreContainer); runErr != nil && !strings.Contains(strings.ToLower(string(output)), "already exists") {
+		return fail("connect", runErr)
+	}
+	_ = m.setStep("connect", "done", "Controller is connected to the private DNS network")
+	_ = m.setStep("bootstrap", "running", "Waiting for Unbound and verifying restored AdGuard Home")
+	if err = m.waitForUnbound(ctx); err != nil {
+		return fail("bootstrap", err)
+	}
+	blockPageIP := ""
+	if config.BlockpageEnabled {
+		blockPageIP = config.DNSBindAddress
+	}
+	if err = m.bootstrap(ctx, blockPageIP); err != nil {
+		return fail("bootstrap", err)
+	}
+	if config.BlockpageEnabled {
+		if _, err = m.run(ctx, "exec", "rootguard-blockpage", "sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"); err != nil {
+			return fail("bootstrap", err)
+		}
+		if _, err = m.run(ctx, "exec", "rootguard-blockpage", "nginx", "-s", "reload"); err != nil {
+			return fail("bootstrap", err)
+		}
+	}
+	_ = m.setStep("bootstrap", "done", "Restored DNS chain is healthy")
+	m.mu.Lock()
+	m.status.State, m.status.Error, m.status.Diagnostic, m.status.UpdatedAt = StateInstalled, "", nil, time.Now().UTC()
+	err = m.persistLocked()
+	m.mu.Unlock()
+	return err
 }
 
 func (m *Manager) deploy(config Config) {
