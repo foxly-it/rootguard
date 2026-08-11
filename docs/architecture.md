@@ -167,7 +167,7 @@ stellt Core beide Pfade automatisch wieder her und rollt auf die vorherige
 Image-ID zurück. Diese Sicherung ist ausschließlich ein interner
 Update-Schutz - kein vom Betreiber auslösbarer, herunterladbarer oder über
 die WebApp direkt wiederherstellbarer Export. RootGuard bewahrt standardmäßig
-die fünf neuesten Update-Restore-Punkte je Dienst auf; im Stack Center kann
+die fünf neuesten Update-Restore-Punkte je Dienst auf; auf der Backups-Seite kann
 der Betreiber diesen Wert zwischen 2 und 50 konfigurieren und Anzahl,
 Speichernutzung sowie den neuesten Zeitpunkt pro Dienst einsehen. Bereinigt
 werden ausschließlich kanonische, per passendem Manifest eindeutig RootGuard
@@ -175,8 +175,8 @@ und dem erlaubten Dienst zugeordnete Verzeichnisse. Unbekannte Dateien,
 Verzeichnisse und Symlinks werden separat als nicht verwalteter Speicher
 angezeigt und niemals gelöscht.
 
-Für Datensicherung über den reinen Update-Schutz hinaus erzeugt das Stack
-Center ein portables, passwortverschlüsseltes age-v1-Archiv. Es enthält
+Für Datensicherung über den reinen Update-Schutz hinaus erzeugt die
+Backups-Seite ein portables, passwortverschlüsseltes age-v1-Archiv. Es enthält
 RootGuards Unbound-/AdGuard-/Installationszustand, AdGuards live Konfigurations-
 und Arbeitsdaten sowie Unbounds Laufzeitstatus. Browser-Sitzungen, externe
 `.env`-Geheimnisse, interne Update-Restore-Punkte und temporäre Exportdaten

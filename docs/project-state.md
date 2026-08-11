@@ -741,7 +741,7 @@ removal and writes the result into bounded history
 ([rootguard#191](https://github.com/foxly-it/rootguard/pull/191)).
 
 Core's pre-update AdGuard/Unbound backups are now bounded separately from image
-and volume cleanup. The Stack Center exposes recognized count and logical bytes
+and volume cleanup. The Backups page exposes recognized count and logical bytes
 in total and per service, newest timestamps, and separately measured
 unrecognized data. Operators can retain 2–50 restore points per service
 (default 5). A lower value requires confirmation and pruning accepts only a

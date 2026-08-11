@@ -195,7 +195,7 @@ im Session-Volume.
   kontrollierten Austausch, nicht browserseitig abrufbar.
 - Interne Update-Backups sind pro Dienst auf konfigurierbare 2–50
   Wiederherstellungspunkte begrenzt (Standard 5); Speichernutzung und
-  nicht erkannte Daten bleiben im Stack Center sichtbar.
+  nicht erkannte Daten bleiben auf der Backups-Seite sichtbar.
 - Automatische Bereinigung akzeptiert nur kanonische Zeitstempel-/Dienstpfade
   mit einem Manifest, das zum erlaubten Dienst und Container passt. Unbekannte
   Daten und Symlinks werden nicht gelöscht.
