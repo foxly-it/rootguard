@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Download, HardDrive, KeyRound, LoaderCircle } from "lucide-react";
+import { Archive, Download, HardDrive, KeyRound, LoaderCircle, RotateCcw } from "lucide-react";
 import {
   exportEncryptedBackup,
   fetchBackupStatus,
   fetchUpdateStatus,
+  previewEncryptedBackup,
+  restoreEncryptedBackup,
   setBackupRetention,
+  type BackupRestorePreview,
   type BackupStatus,
   type UpdateStatus,
 } from "../api/client";
@@ -22,6 +25,11 @@ export default function Backups() {
   const [passphrase, setPassphrase] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState("");
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [restorePassphrase, setRestorePassphrase] = useState("");
+  const [restorePreview, setRestorePreview] = useState<BackupRestorePreview | null>(null);
+  const [restoreConfirmation, setRestoreConfirmation] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -41,7 +49,36 @@ export default function Backups() {
   }, [load]);
 
   const updateBusy = updates?.state === "checking" || updates?.state === "updating";
-  const busy = updateBusy || savingRetention || exporting;
+  const busy = updateBusy || savingRetention || exporting || restoring;
+
+  async function previewRestore() {
+    if (!restoreFile || restorePassphrase.length < 12) return;
+    const target = restorePreview?.preflight.config;
+    setRestoring(true);
+    setError("");
+    setRestorePreview(null);
+    setRestoreConfirmation(false);
+    try {
+      setRestorePreview(await previewEncryptedBackup(restoreFile, restorePassphrase, target));
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.restorePreviewError")));
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  async function startRestore() {
+    if (!restoreFile || !restorePreview?.preflight.ready || !restoreConfirmation) return;
+    setRestoring(true);
+    setError("");
+    try {
+      await restoreEncryptedBackup(restoreFile, restorePassphrase, restorePreview.preflight.config);
+      window.location.assign("/");
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.restoreError")));
+      setRestoring(false);
+    }
+  }
 
   async function saveRetention() {
     if (!backups || retentionDraft === null || retentionDraft < 2 || retentionDraft > 50) return;
@@ -145,6 +182,33 @@ export default function Backups() {
             {exporting ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />} {exporting ? t("stack.exporting") : t("stack.exportButton")}
           </button>
         </div>
+      </section>
+
+      <section className="encrypted-export-panel restore-panel">
+        <div className="encrypted-export-heading">
+          <span><RotateCcw size={19} /></span>
+          <div><span className="stack-eyebrow">{t("stack.restoreEyebrow")}</span><h2>{t("stack.restoreTitle")}</h2><p>{t("stack.restoreIntro")}</p></div>
+        </div>
+        {!window.isSecureContext && <p className="encrypted-export-warning">{t("stack.exportTransportWarning")}</p>}
+        <div className="encrypted-export-fields">
+          <label><span>{t("stack.restoreArchive")}</span><input type="file" accept=".age,application/vnd.rootguard.backup+age" onChange={(event) => { setRestoreFile(event.target.files?.[0] ?? null); setRestorePreview(null); }} /></label>
+          <label><span>{t("stack.exportPassphrase")}</span><input type="password" autoComplete="current-password" minLength={12} maxLength={1024} value={restorePassphrase} onChange={(event) => { setRestorePassphrase(event.target.value); setRestorePreview(null); }} /></label>
+        </div>
+        <div className="encrypted-export-actions">
+          <p>{t("stack.restorePreviewHelp")}</p>
+          <button className="rg-button rg-button-secondary" type="button" disabled={busy || !restoreFile || restorePassphrase.length < 12} onClick={previewRestore}>{restoring ? <LoaderCircle className="spin" size={15} /> : <Archive size={15} />} {t("stack.restorePreview")}</button>
+        </div>
+        {restorePreview && <div className="restore-preview">
+          <p>{t("stack.restoreSummary", { date: formatDate(restorePreview.created_at), count: restorePreview.file_count, size: formatBytes(restorePreview.expanded_bytes) })}</p>
+          <div className="encrypted-export-fields">
+            <label><span>{t("stack.restoreAddress")}</span><input value={restorePreview.preflight.config.dns_bind_address} onChange={(event) => setRestorePreview({...restorePreview, preflight: {...restorePreview.preflight, ready: false, config: {...restorePreview.preflight.config, dns_bind_address: event.target.value}}})} /></label>
+            <label><span>{t("stack.restorePort")}</span><input type="number" min={1} max={65535} value={restorePreview.preflight.config.dns_port} onChange={(event) => setRestorePreview({...restorePreview, preflight: {...restorePreview.preflight, ready: false, config: {...restorePreview.preflight.config, dns_port: event.target.valueAsNumber}}})} /></label>
+          </div>
+          {!restorePreview.preflight.ready && <button className="rg-button rg-button-secondary" type="button" disabled={busy} onClick={previewRestore}>{t("stack.restoreRecheck")}</button>}
+          {!restorePreview.preflight.ready && <p className="encrypted-export-warning">{t("stack.restoreBlocked")}</p>}
+          <label className="restore-confirm"><input type="checkbox" checked={restoreConfirmation} onChange={(event) => setRestoreConfirmation(event.target.checked)} disabled={!restorePreview.preflight.ready} /><span>{t("stack.restoreConfirm")}</span></label>
+          <button className="rg-button rg-button-primary" type="button" disabled={busy || !restorePreview.preflight.ready || !restoreConfirmation} onClick={startRestore}><RotateCcw size={15} /> {restoring ? t("stack.restoring") : t("stack.restoreButton")}</button>
+        </div>}
       </section>
     </div>
   );

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
 )
@@ -88,6 +89,27 @@ func HandleBackupExport(w http.ResponseWriter, r *http.Request, core *coreclient
 	for _, header := range []string{"Content-Type", "Content-Disposition", "Cache-Control"} {
 		w.Header().Set(header, response.Header.Get(header))
 	}
+	_, _ = io.Copy(w, response.Body)
+}
+
+func HandleBackupRestore(w http.ResponseWriter, r *http.Request, core *coreclient.Client, preview bool) {
+	_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(10 * time.Minute))
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(w, r.Body, (1<<30)+(1<<20))
+	path := "/api/backups/restore"
+	if preview {
+		path += "/preview"
+	}
+	response, err := core.RestoreBackupRequest(r.Context(), path, r.Header.Get("Content-Type"), r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer response.Body.Close()
+	for _, header := range []string{"Content-Type", "Cache-Control"} {
+		w.Header().Set(header, response.Header.Get(header))
+	}
+	w.WriteHeader(response.StatusCode)
 	_, _ = io.Copy(w, response.Body)
 }
 

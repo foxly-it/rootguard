@@ -186,7 +186,11 @@ Core definiert; Symlinks werden abgelehnt. Docker-Kopien liegen nur während der
 Erstellung in einem privaten `0700`-Verzeichnis im geschützten Core-Volume und
 werden auf jedem Erfolgs-/Fehlerpfad entfernt. Der Download wird direkt durch
 age/scrypt verschlüsselt und blockiert parallel laufende Daten-Updates. Der
-geführte Restore dieses Artefakts bleibt der unmittelbar folgende 0.4-Punkt.
+geführte Restore validiert dasselbe Artefakt vollständig, akzeptiert nur eine
+saubere Installation ohne kollidierende verwaltete Docker-Ressourcen, befüllt
+neu angelegte gestoppte Service-Volumes und startet anschließend die
+gesundheitsgeprüfte DNS-Kette. Ein Fehler entfernt die neuen Docker-Ressourcen
+und stellt zuvor vorhandene lokale Volume-Inhalte wieder her.
 
 ## Unbound-Konfigurationszyklus
 

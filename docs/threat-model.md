@@ -206,9 +206,15 @@ im Session-Volume.
   `.env`-Geheimnisse sind nicht Teil des Exports. Fest verdrahtete Quellen,
   Symlink-Ablehnung und privates, immer entferntes Klartext-Staging begrenzen
   Pfad- und Restdatenrisiken.
+- Der geführte Restore prüft vor jeder Änderung Schema, Pflichtdateien,
+  erlaubte Pfade/Typen, exaktes Manifest, Größen und SHA-256 sowie harte
+  Upload-/Entpack-/Dateigrenzen. Apply validiert erneut, verlangt Bestätigung
+  und scheitert geschlossen, wenn Installation oder verwaltete Docker-
+  Ressourcen nicht sauber sind. Klartext- und Rollback-Staging werden immer
+  entfernt; partielle neue Docker-Ressourcen werden nach Fehlern abgebaut.
 
 **Bekannte Restrisiken / offen:**
-- Das Exportpasswort wird nicht gespeichert und muss für die geplante
+- Das Exportpasswort wird nicht gespeichert und muss für jede Vorschau und
   Wiederherstellung erneut eingegeben werden. Über reines HTTP ist das fertige
   Archiv verschlüsselt, das Passwort auf dem Weg vom Browser zur lokalen
   WebApp jedoch nicht transportgeschützt; die Oberfläche warnt sichtbar und

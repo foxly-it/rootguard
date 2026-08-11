@@ -707,7 +707,21 @@ manual Docker forensics.
       out while the artifact is created
       ([rootguard#193](https://github.com/foxly-it/rootguard/pull/193),
       [rootguard#195](https://github.com/foxly-it/rootguard/pull/195))
-- [ ] Full restore into a clean RootGuard installation
+- [x] Full restore into a clean RootGuard installation - the Backups page now
+      validates an encrypted age-v1 export before mutation, including bounded
+      upload/expanded size/file count, exact allowlisted paths and regular
+      file types, required recovery files, manifest inventory, sizes, and
+      SHA-256 checksums. A second apply request repeats all checks, requires an
+      explicit confirmation, and is accepted only when installation state plus
+      Docker containers, internal volumes, network, target address, and port
+      pass a fresh clean-target preflight. Operators can recheck a replacement
+      host with a different bind address/port. RootGuard creates stopped
+      containers and empty volumes, restores local plus AdGuard/Unbound data,
+      normalizes Unbound ownership, then starts and health-verifies the full
+      protected DNS chain. Passphrases are never persisted, plaintext staging
+      is removed on every exit, and a failed attempt removes its new Docker
+      resources and rolls back prior local volume contents
+      ([rootguard#199](https://github.com/foxly-it/rootguard/pull/199))
 - [ ] Pre-update snapshot and post-update restore verification
 - [ ] Power-loss and interrupted-write tests for installation and updates
 - [ ] Disaster-recovery runbook tested on a separate host
