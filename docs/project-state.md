@@ -737,7 +737,7 @@ unrecognized data. Operators can retain 2–50 restore points per service
 (default 5). A lower value requires confirmation and pruning accepts only a
 canonical timestamp/service directory with a manifest matching the allowlisted
 service and container; unknown entries and symlinks remain untouched
-([rootguard#188](https://github.com/foxly-it/rootguard/issues/188)).
+([rootguard#189](https://github.com/foxly-it/rootguard/pull/189)).
 
 ## Remaining production milestones
 

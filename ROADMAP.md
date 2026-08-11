@@ -678,7 +678,7 @@ manual Docker forensics.
       requires the canonical timestamp/service layout plus a manifest matching
       the allowlisted service and container; unknown data and symlinks are
       measured separately and never deleted
-      ([rootguard#188](https://github.com/foxly-it/rootguard/issues/188))
+      ([rootguard#189](https://github.com/foxly-it/rootguard/pull/189))
 - [x] Safe automatic post-update cleanup:
       retain the active and previous successful image, prune only older image
       IDs recorded by RootGuard, and never call global Docker prune commands
