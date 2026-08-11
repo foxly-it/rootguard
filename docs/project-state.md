@@ -738,7 +738,7 @@ It shows Docker's rounded unique image-layer and volume-size estimates, keeps
 unverifiable or in-use resources visibly protected, and accepts no browser-
 supplied resource IDs. Confirmation triggers a fresh server-side scan before
 removal and writes the result into bounded history
-([rootguard#190](https://github.com/foxly-it/rootguard/issues/190)).
+([rootguard#191](https://github.com/foxly-it/rootguard/pull/191)).
 
 Core's pre-update AdGuard/Unbound backups are now bounded separately from image
 and volume cleanup. The Stack Center exposes recognized count and logical bytes

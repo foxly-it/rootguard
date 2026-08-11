@@ -695,7 +695,7 @@ manual Docker forensics.
       recomputes eligibility, retains two successful images per service, and
       records the result in bounded history; unverifiable resources remain
       protected and global prune commands remain prohibited
-      ([rootguard#190](https://github.com/foxly-it/rootguard/issues/190))
+      ([rootguard#191](https://github.com/foxly-it/rootguard/pull/191))
 - [ ] Encrypted or explicitly protected backup export
 - [ ] Full restore into a clean RootGuard installation
 - [ ] Pre-update snapshot and post-update restore verification
