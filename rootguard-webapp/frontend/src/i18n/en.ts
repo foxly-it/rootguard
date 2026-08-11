@@ -292,6 +292,8 @@ export const en: LocaleDefinition = {
     "stack.restoreTitle": "Restore full backup",
     "stack.restoreIntro": "Validate an encrypted RootGuard archive and restore it only onto a clean installation without existing managed DNS resources.",
     "stack.restoreArchive": "Encrypted backup archive",
+    "stack.restoreChooseFile": "Choose archive",
+    "stack.restoreNoFile": "No archive selected yet",
     "stack.restorePreviewHelp": "Nothing is changed during validation and preview.",
     "stack.restorePreview": "Validate backup",
     "stack.restorePreviewError": "The backup could not be validated.",

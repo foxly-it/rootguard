@@ -292,6 +292,8 @@ export const de: LocaleDefinition = {
     "stack.restoreTitle": "Vollbackup wiederherstellen",
     "stack.restoreIntro": "Prüfe ein verschlüsseltes RootGuard-Archiv und stelle es ausschließlich auf einer sauberen Installation ohne vorhandene verwaltete DNS-Ressourcen wieder her.",
     "stack.restoreArchive": "Verschlüsseltes Backup-Archiv",
+    "stack.restoreChooseFile": "Archiv auswählen",
+    "stack.restoreNoFile": "Noch kein Archiv ausgewählt",
     "stack.restorePreviewHelp": "Während Prüfung und Vorschau wird nichts verändert.",
     "stack.restorePreview": "Backup prüfen",
     "stack.restorePreviewError": "Das Backup konnte nicht geprüft werden.",

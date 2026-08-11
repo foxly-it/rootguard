@@ -201,7 +201,14 @@ export default function Backups() {
         </div>
         {!window.isSecureContext && <p className="encrypted-export-warning">{t("stack.exportTransportWarning")}</p>}
         <div className="encrypted-export-fields">
-          <label><span>{t("stack.restoreArchive")}</span><input type="file" accept=".age,application/vnd.rootguard.backup+age" onChange={(event) => { setRestoreFile(event.target.files?.[0] ?? null); setRestorePreview(null); }} /></label>
+          <label className="backup-file-field">
+            <span>{t("stack.restoreArchive")}</span>
+            <span className="backup-file-control">
+              <input className="backup-file-input" type="file" accept=".age,application/vnd.rootguard.backup+age" onChange={(event) => { setRestoreFile(event.target.files?.[0] ?? null); setRestorePreview(null); }} />
+              <span className="backup-file-action"><FileInput size={16} /> {t("stack.restoreChooseFile")}</span>
+              <span className={`backup-file-name${restoreFile ? " selected" : ""}`} title={restoreFile?.name}>{restoreFile?.name || t("stack.restoreNoFile")}</span>
+            </span>
+          </label>
           <label><span>{t("stack.exportPassphrase")}</span><input type="password" autoComplete="current-password" minLength={12} maxLength={1024} value={restorePassphrase} onChange={(event) => { setRestorePassphrase(event.target.value); setRestorePreview(null); }} /></label>
         </div>
         <div className="encrypted-export-actions">
