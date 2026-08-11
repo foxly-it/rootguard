@@ -8,6 +8,7 @@ import { createPortal } from "react-dom";
 import { NavLink } from "react-router";
 import {
   Boxes,
+  Archive,
   Filter,
   LayoutDashboard,
   PanelLeftClose,
@@ -62,6 +63,7 @@ export default function SidebarLayout({ children }: Props) {
     { to: "/dashboard", label: t("nav.overview"), icon: <LayoutDashboard aria-hidden="true" /> },
     { to: "/setup", label: t("nav.setup"), icon: <ServerCog aria-hidden="true" /> },
     { to: "/stack", label: t("nav.stack"), icon: <Boxes aria-hidden="true" /> },
+    { to: "/backups", label: t("nav.backups"), icon: <Archive aria-hidden="true" /> },
     { to: "/unbound", label: t("nav.unbound"), icon: <ShieldCheck aria-hidden="true" /> },
     { to: "/adguard", label: t("nav.adguard"), icon: <Filter aria-hidden="true" /> },
   ];

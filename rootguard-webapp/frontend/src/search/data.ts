@@ -23,6 +23,7 @@ export const searchIndex: SearchEntry[] = [
   { id: "page-dashboard", labelKey: "nav.overview", categoryKey: "search.category.pages", route: "/dashboard" },
   { id: "page-setup", labelKey: "nav.setup", categoryKey: "search.category.pages", route: "/setup" },
   { id: "page-stack", labelKey: "nav.stack", categoryKey: "search.category.pages", route: "/stack" },
+  { id: "page-backups", labelKey: "nav.backups", categoryKey: "search.category.pages", route: "/backups" },
   { id: "page-unbound", labelKey: "nav.unbound", categoryKey: "search.category.pages", route: "/unbound" },
   { id: "page-adguard", labelKey: "nav.adguard", categoryKey: "search.category.pages", route: "/adguard" },
 
@@ -71,7 +72,9 @@ export const searchIndex: SearchEntry[] = [
   // ---------------- Stack & Updates ----------------
   { id: "stack-check-updates", labelKey: "stack.check", categoryKey: "search.category.stack", route: "/stack", keywords: ["update check"] },
   { id: "stack-control-plane", labelKey: "stack.controlPlaneTitle", categoryKey: "search.category.stack", route: "/stack", keywords: ["core", "webapp", "updater"] },
-  { id: "stack-protection", labelKey: "stack.protection", categoryKey: "search.category.stack", route: "/stack", keywords: ["backup", "rollback"] },
+  { id: "stack-protection", labelKey: "stack.protection", categoryKey: "search.category.stack", route: "/stack", keywords: ["rollback"] },
+  { id: "backups-retention", labelKey: "stack.backupTitle", categoryKey: "search.category.backups", route: "/backups", keywords: ["backup", "retention", "restore point"] },
+  { id: "backups-export", labelKey: "stack.exportTitle", categoryKey: "search.category.backups", route: "/backups", keywords: ["backup", "export", "age", "passphrase"] },
 
   // ---------------- AdGuard ----------------
   { id: "adguard-open", labelKey: "adguard.open", categoryKey: "search.category.adguard", route: "/adguard", keywords: ["native interface"] },

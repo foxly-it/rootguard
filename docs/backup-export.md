@@ -1,6 +1,6 @@
 # Encrypted full backup export
 
-RootGuard's Stack Center can download a portable full backup protected by an
+RootGuard's dedicated Backups page can download a portable full backup protected by an
 operator-chosen passphrase. The binary file uses the interoperable age-v1
 format with scrypt passphrase encryption. RootGuard never stores the
 passphrase; losing it makes the archive unrecoverable.
