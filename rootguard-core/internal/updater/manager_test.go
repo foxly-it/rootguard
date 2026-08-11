@@ -310,6 +310,28 @@ func TestCleanupKeepsTwoImagesAndOnlyRemovesLabeledUnusedVolumes(t *testing.T) {
 	}
 }
 
+func TestRunExclusiveBlocksConcurrentUpdaterOperations(t *testing.T) {
+	manager := NewManager(Options{DataDir: t.TempDir()})
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- manager.RunExclusive("export", func() error {
+			close(entered)
+			<-release
+			return nil
+		})
+	}()
+	<-entered
+	if _, err := manager.StartCheck(); !errors.Is(err, ErrBusy) {
+		t.Fatalf("expected updater operation to be blocked, got %v", err)
+	}
+	close(release)
+	if err := <-done; err != nil || manager.Status().State != StateIdle {
+		t.Fatalf("exclusive operation did not finish cleanly: err=%v status=%+v", err, manager.Status())
+	}
+}
+
 func waitForIdle(t *testing.T, manager *Manager) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)

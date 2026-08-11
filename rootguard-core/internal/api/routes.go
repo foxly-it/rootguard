@@ -9,8 +9,10 @@ import (
 	"net/http"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/foxly-it/rootguard-core/internal/adguard"
+	"github.com/foxly-it/rootguard-core/internal/backupexport"
 	"github.com/foxly-it/rootguard-core/internal/controlplane"
 	"github.com/foxly-it/rootguard-core/internal/docker"
 	"github.com/foxly-it/rootguard-core/internal/installer"
@@ -28,6 +30,7 @@ type Dependencies struct {
 	Updater           *updater.Manager
 	ControlPlane      *controlplane.Client
 	AdGuardDNSAddress string
+	BackupExporter    *backupexport.Exporter
 }
 
 func RegisterRoutes(deps Dependencies) http.Handler {
@@ -49,6 +52,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("PUT /api/backups/settings", putBackupSettingsHandler(deps.Updater))
 	apiMux.HandleFunc("GET /api/cleanup/preview", cleanupPreviewHandler(deps.Updater))
 	apiMux.HandleFunc("POST /api/cleanup", runCleanupHandler(deps.Updater))
+	apiMux.HandleFunc("POST /api/backups/export", backupExportHandler(deps.BackupExporter, deps.Updater))
 	apiMux.HandleFunc("GET /api/control-plane-updates", controlPlaneStatusHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/check", controlPlaneCheckHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane))
@@ -233,6 +237,52 @@ func runCleanupHandler(manager *updater.Manager) http.HandlerFunc {
 		}
 		writeJSON(w, http.StatusOK, result)
 	}
+}
+
+func backupExportHandler(exporter *backupexport.Exporter, manager *updater.Manager) http.HandlerFunc {
+	type request struct {
+		Passphrase string `json:"passphrase"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+		decoder.DisallowUnknownFields()
+		var body request
+		if err := decoder.Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := backupexport.ValidatePassphrase(body.Passphrase); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/vnd.rootguard.backup+age")
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="rootguard-backup-%s.tar.gz.age"`, time.Now().UTC().Format("2006-01-02")))
+		w.Header().Set("Cache-Control", "no-store")
+		writer := &lazyResponseWriter{ResponseWriter: w}
+		err := manager.RunExclusive("Verschlüsseltes Vollbackup wird erstellt.", func() error {
+			return exporter.Export(r.Context(), body.Passphrase, writer)
+		})
+		if err != nil && !writer.wrote {
+			if errors.Is(err, backupexport.ErrInvalidPassphrase) {
+				writeError(w, http.StatusBadRequest, err)
+			} else if errors.Is(err, backupexport.ErrBusy) || errors.Is(err, updater.ErrBusy) {
+				writeError(w, http.StatusConflict, err)
+			} else {
+				writeError(w, http.StatusInternalServerError, err)
+			}
+		}
+	}
+}
+
+type lazyResponseWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (w *lazyResponseWriter) Write(data []byte) (int, error) {
+	w.wrote = true
+	return w.ResponseWriter.Write(data)
 }
 
 func getUnboundConfigurationHandler(manager *unbound.Manager) http.HandlerFunc {

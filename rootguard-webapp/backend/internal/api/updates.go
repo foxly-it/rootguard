@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
@@ -60,6 +61,34 @@ func HandleRunCleanup(w http.ResponseWriter, r *http.Request, core *coreclient.C
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func HandleBackupExport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	defer r.Body.Close()
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+	decoder.DisallowUnknownFields()
+	var request struct {
+		Passphrase string `json:"passphrase"`
+	}
+	if err := decoder.Decode(&request); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	response, err := core.ExportBackup(r.Context(), request.Passphrase)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		http.Error(w, string(message), response.StatusCode)
+		return
+	}
+	for _, header := range []string{"Content-Type", "Content-Disposition", "Cache-Control"} {
+		w.Header().Set(header, response.Header.Get(header))
+	}
+	_, _ = io.Copy(w, response.Body)
 }
 
 func HandleUpdateCheck(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {

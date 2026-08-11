@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   PanelsTopLeft,
   Trash2,
+  KeyRound,
 } from "lucide-react";
 import {
   checkControlPlaneUpdates,
@@ -27,6 +28,7 @@ import {
   installControlPlaneUpdates,
   setBackupRetention,
   runManualCleanup,
+  exportEncryptedBackup,
   serviceAction,
   type ServiceInfo,
   type ServiceLogs,
@@ -50,6 +52,9 @@ export default function Stack() {
   const [retentionDraft, setRetentionDraft] = useState<number | null>(null);
   const [savingRetention, setSavingRetention] = useState(false);
   const [runningCleanup, setRunningCleanup] = useState(false);
+  const [exportingBackup, setExportingBackup] = useState(false);
+  const [backupPassphrase, setBackupPassphrase] = useState("");
+  const [backupPassphraseConfirm, setBackupPassphraseConfirm] = useState("");
   const [services, setServices] = useState<ServiceInfo[]>([]);
   const [serviceLogs, setServiceLogs] = useState<Partial<Record<ServiceInfo["name"], ServiceLogs>>>({});
   const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
@@ -89,7 +94,7 @@ export default function Stack() {
   }, [load]);
 
   const busy = updates?.state === "checking" || updates?.state === "updating"
-    || controlPlane?.state === "checking" || controlPlane?.state === "updating" || runningCleanup;
+    || controlPlane?.state === "checking" || controlPlane?.state === "updating" || runningCleanup || exportingBackup;
   useEffect(() => {
     const timer = window.setInterval(load, busy ? 1500 : 10_000);
     return () => window.clearInterval(timer);
@@ -180,6 +185,29 @@ export default function Stack() {
       setError(errorMessage(cause, t("stack.cleanupRunError")));
     } finally {
       setRunningCleanup(false);
+    }
+  }
+
+  async function startBackupExport() {
+    if (backupPassphrase.length < 12 || backupPassphrase !== backupPassphraseConfirm) return;
+    setExportingBackup(true);
+    setError("");
+    try {
+      const exported = await exportEncryptedBackup(backupPassphrase);
+      const url = URL.createObjectURL(exported.blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = exported.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.exportError")));
+    } finally {
+      setBackupPassphrase("");
+      setBackupPassphraseConfirm("");
+      setExportingBackup(false);
     }
   }
 
@@ -308,6 +336,24 @@ export default function Stack() {
           </div>
         </section>
       )}
+
+      <section className="encrypted-export-panel">
+        <div className="encrypted-export-heading">
+          <span><KeyRound size={19} /></span>
+          <div><span className="stack-eyebrow">{t("stack.exportEyebrow")}</span><h2>{t("stack.exportTitle")}</h2><p>{t("stack.exportIntro")}</p></div>
+        </div>
+        {!window.isSecureContext && <p className="encrypted-export-warning">{t("stack.exportTransportWarning")}</p>}
+        <div className="encrypted-export-fields">
+          <label><span>{t("stack.exportPassphrase")}</span><input type="password" autoComplete="new-password" value={backupPassphrase} onChange={(event) => setBackupPassphrase(event.target.value)} minLength={12} maxLength={1024} /><small>{t("stack.exportPassphraseHelp")}</small></label>
+          <label><span>{t("stack.exportPassphraseConfirm")}</span><input type="password" autoComplete="new-password" value={backupPassphraseConfirm} onChange={(event) => setBackupPassphraseConfirm(event.target.value)} minLength={12} maxLength={1024} /><small>{backupPassphraseConfirm && backupPassphrase !== backupPassphraseConfirm ? t("stack.exportMismatch") : t("stack.exportLossWarning")}</small></label>
+        </div>
+        <div className="encrypted-export-actions">
+          <p>{t("stack.exportFormat")}</p>
+          <button className="rg-button rg-button-primary" type="button" disabled={busy || exportingBackup || backupPassphrase.length < 12 || backupPassphrase !== backupPassphraseConfirm} onClick={startBackupExport}>
+            {exportingBackup ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />} {exportingBackup ? t("stack.exporting") : t("stack.exportButton")}
+          </button>
+        </div>
+      </section>
 
       {controlPlane && (
         <section className="control-plane-panel">

@@ -741,6 +741,22 @@ func (c *Client) RunCleanup(ctx context.Context) (UpdateCleanupResult, error) {
 	return result, err
 }
 
+func (c *Client) ExportBackup(ctx context.Context, passphrase string) (*http.Response, error) {
+	data, err := json.Marshal(map[string]string{"passphrase": passphrase})
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/backups/export", bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Authorization", "Bearer "+c.token)
+	request.Header.Set("Content-Type", "application/json")
+	client := *c.http
+	client.Timeout = 10 * time.Minute
+	return client.Do(request)
+}
+
 func (c *Client) CheckUpdates(ctx context.Context) (UpdateStatus, error) {
 	var result UpdateStatus
 	err := c.do(ctx, http.MethodPost, "/api/updates/check", nil, &result)

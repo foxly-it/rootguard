@@ -200,12 +200,22 @@ im Session-Volume.
   mit einem Manifest, das zum erlaubten Dienst und Container passt. Unbekannte
   Daten und Symlinks werden nicht gelöscht.
 - Passwort-Hashes sind PBKDF2-SHA256-gesalzen, nicht im Klartext.
+- Portable Vollbackups werden vor dem Download interoperabel mit age-v1 und
+  einer scrypt-abgeleiteten Passwortidentität authentifiziert verschlüsselt.
+  Ein versioniertes Manifest enthält SHA-256-Prüfsummen; Sitzungen und externe
+  `.env`-Geheimnisse sind nicht Teil des Exports. Fest verdrahtete Quellen,
+  Symlink-Ablehnung und privates, immer entferntes Klartext-Staging begrenzen
+  Pfad- und Restdatenrisiken.
 
 **Bekannte Restrisiken / offen:**
-- Kein verschlüsselter oder explizit geschützter Backup-Export (ROADMAP.md
-  0.4) - ein Volume-Snapshot ist aktuell so vertraulich wie eine laufende
-  Installation selbst; wer Zugriff auf das Backup-Medium hat, hat effektiv
-  Zugriff auf die enthaltenen Zugangsdaten.
+- Das Exportpasswort wird nicht gespeichert und muss für die geplante
+  Wiederherstellung erneut eingegeben werden. Über reines HTTP ist das fertige
+  Archiv verschlüsselt, das Passwort auf dem Weg vom Browser zur lokalen
+  WebApp jedoch nicht transportgeschützt; die Oberfläche warnt sichtbar und
+  `docs/https-reverse-proxy.md` beschreibt den unterstützten HTTPS-Betrieb.
+- Live-Daten können sich während einzelner Dateikopien verändern. Updates sind
+  zwar ausgeschlossen, ein transaktionsartiger Dienst-Snapshot und seine
+  Restore-Verifikation bleiben jedoch eigene offene 0.4-Punkte.
 
 ### 6. AdGuard-Gateway
 

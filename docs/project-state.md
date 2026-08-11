@@ -749,6 +749,15 @@ canonical timestamp/service directory with a manifest matching the allowlisted
 service and container; unknown entries and symlinks remain untouched
 ([rootguard#189](https://github.com/foxly-it/rootguard/pull/189)).
 
+Operators can now download a separate portable full backup as an interoperable
+age-v1/scrypt encrypted archive. It packages checksummed RootGuard state plus
+live AdGuard and Unbound persistent data from fixed server-side sources while
+excluding sessions, external environment secrets, update restore points, and
+temporary exports. Private plaintext staging is removed on every path and
+data-plane updates cannot overlap export creation. Clean-install restore and
+transactional snapshot verification remain the next separate 0.4 steps
+([rootguard#192](https://github.com/foxly-it/rootguard/issues/192)).
+
 ## Remaining production milestones
 
 Cross-referenced against `ROADMAP.md` on 2026-08-09 (supersedes the previous
@@ -794,8 +803,8 @@ Milestone completion snapshot:
   just targeting `rootguard-adguard:53` instead of Unbound's own port.
   AdGuard being unpinned on that network at the time was later found to be a
   real bug - see the 0.4 network-addressing fix below.
-- **0.4 operations/backup/recovery** - 5 of 14 items open: encrypted export,
-  full restore into a clean install, pre-update snapshot/restore verification,
+- **0.4 operations/backup/recovery** - 4 of 14 items open: full restore into a
+  clean install, pre-update snapshot/restore verification,
   power-loss/interrupted-write tests, and a disaster-recovery runbook.
   Logging/versioning/history, the automatic cleanup-safety work, and a
   network-addressing fix ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
@@ -820,8 +829,8 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.4 operations/backup/recovery** - current, in document order: encrypted
-   export, full restore, pre-update snapshot verification,
+1. **0.4 operations/backup/recovery** - current, in document order: full
+   restore, pre-update snapshot verification,
    power-loss tests, the DR runbook.
 2. **0.5 security/HTTPS/accessibility** - 3 items open, in document order:
    destructive-action rate limits/audit, the full keyboard/screen-reader
