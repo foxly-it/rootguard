@@ -111,6 +111,9 @@ func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installe
 				return fmt.Errorf("restore %s: %w: %s", item.target, err, strings.TrimSpace(string(output)))
 			}
 		}
+		if err := m.normalizeUnboundOwnership(ctx); err != nil {
+			return err
+		}
 		return nil
 	})
 	if restoreErr != nil {
@@ -121,6 +124,27 @@ func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installe
 		}
 	}
 	return status, restoreErr
+}
+
+func (m *Manager) normalizeUnboundOwnership(ctx context.Context) error {
+	output, err := m.run(ctx, "inspect", "--format", "{{.Config.Image}}", "rootguard-unbound")
+	if err != nil {
+		return fmt.Errorf("inspect restored Unbound image: %w", err)
+	}
+	image := strings.TrimSpace(string(output))
+	if image == "" {
+		return fmt.Errorf("inspect restored Unbound image: empty image")
+	}
+	for _, volume := range []struct{ name, path string }{
+		{"rootguard-unbound-config", "/etc/unbound/unbound.d"},
+		{"rootguard-unbound-state", "/var/lib/unbound"},
+	} {
+		output, err := m.run(ctx, "run", "--rm", "--network", "none", "--user", "0:0", "--read-only", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--security-opt", "no-new-privileges:true", "--volume", volume.name+":"+volume.path, "--entrypoint", "/usr/bin/chown", image, "--recursive", "100:101", volume.path)
+		if err != nil {
+			return fmt.Errorf("normalize %s ownership: %w: %s", volume.name, err, strings.TrimSpace(string(output)))
+		}
+	}
+	return nil
 }
 
 func replaceDirectory(source, target string) error {

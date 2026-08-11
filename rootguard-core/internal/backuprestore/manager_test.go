@@ -58,6 +58,9 @@ func TestManagerRestoresVerifiedDataThroughCleanInstaller(t *testing.T) {
 			return []byte("not found"), errors.New("not found")
 		}
 		if len(arguments) > 2 && arguments[0] == "inspect" && arguments[1] == "--format" {
+			if arguments[len(arguments)-1] == "rootguard-unbound" && arguments[2] == "{{.Config.Image}}" {
+				return []byte("unbound:test"), nil
+			}
 			return []byte("healthy"), nil
 		}
 		return nil, nil
@@ -83,7 +86,7 @@ func TestManagerRestoresVerifiedDataThroughCleanInstaller(t *testing.T) {
 		t.Fatal("old clean-target data was retained")
 	}
 	joined := strings.Join(commands, "\n")
-	for _, expected := range []string{"compose --project-name rootguard-dns", " create", "cp ", "rootguard-unbound:/var/lib/unbound", " up -d", "network connect --ip 172.29.53.5"} {
+	for _, expected := range []string{"compose --project-name rootguard-dns", " create", "cp ", "rootguard-unbound:/var/lib/unbound", "rootguard-unbound-config:/etc/unbound/unbound.d", "100:101", " up -d", "network connect --ip 172.29.53.5"} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("missing command %q in:\n%s", expected, joined)
 		}
