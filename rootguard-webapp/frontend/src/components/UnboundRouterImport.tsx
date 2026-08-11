@@ -250,8 +250,8 @@ export default function UnboundRouterImport({
                     spellCheck={false}
                   />
                 </label>
-                <code>{host.source.ipv4 || host.source.ipv6}</code>
-                <small>{host.source.mac}</small>
+                <code title={host.source.ipv4 || host.source.ipv6}>{host.source.ipv4 || host.source.ipv6}</code>
+                <small title={host.source.mac}>{host.source.mac}</small>
               </li>
             ))}
           </ul>
