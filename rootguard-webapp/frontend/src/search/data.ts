@@ -75,7 +75,10 @@ export const searchIndex: SearchEntry[] = [
   { id: "stack-control-plane", labelKey: "stack.controlPlaneTitle", categoryKey: "search.category.stack", route: "/stack", keywords: ["core", "webapp", "updater"] },
   { id: "stack-protection", labelKey: "stack.protection", categoryKey: "search.category.stack", route: "/stack", keywords: ["rollback"] },
   { id: "backups-retention", labelKey: "stack.backupTitle", categoryKey: "search.category.backups", route: "/backups", keywords: ["backup", "retention", "restore point"] },
-  { id: "backups-export", labelKey: "stack.exportTitle", categoryKey: "search.category.backups", route: "/backups", keywords: ["backup", "export", "age", "passphrase"] },
+  { id: "backups-export", labelKey: "stack.exportTitle", categoryKey: "search.category.backups", route: "/backups#backup-export", keywords: ["backup", "export", "age", "passphrase"] },
+  { id: "backups-restore", labelKey: "stack.restoreTitle", categoryKey: "search.category.backups", route: "/backups#backup-restore", keywords: ["backup", "restore", "import", "age", "recovery"] },
+  { id: "unbound-bundle-import", labelKey: "backups.importBundle", categoryKey: "search.category.unbound", route: "/unbound/advanced#unbound-section-advanced-transfer", keywords: ["import", "export", "bundle", "transfer", "json"] },
+  { id: "unbound-conf-import", labelKey: "backups.importConf", categoryKey: "search.category.unbound", route: "/unbound/advanced#unbound-section-advanced-import-conf", keywords: ["import", "unbound.conf", "config"] },
 
   // ---------------- AdGuard ----------------
   { id: "adguard-open", labelKey: "adguard.open", categoryKey: "search.category.adguard", route: "/adguard", keywords: ["native interface"] },

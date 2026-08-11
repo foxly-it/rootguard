@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { Archive, Download, HardDrive, KeyRound, LoaderCircle, RotateCcw } from "lucide-react";
+import { Archive, ArrowRight, Download, FileInput, HardDrive, KeyRound, LoaderCircle, RotateCcw, Settings2 } from "lucide-react";
+import { Link } from "react-router";
 import {
   exportEncryptedBackup,
   fetchBackupStatus,
@@ -130,6 +131,15 @@ export default function Backups() {
       {error && <div className="stack-feedback error">{error}</div>}
       {updateBusy && <div className="stack-feedback working"><LoaderCircle className="spin" size={17} /><span>{t("backups.updateBusy")}</span></div>}
 
+      <section className="backup-import-guide" aria-labelledby="backup-import-guide-title">
+        <div><span className="stack-eyebrow">{t("backups.importEyebrow")}</span><h2 id="backup-import-guide-title">{t("backups.importTitle")}</h2><p>{t("backups.importIntro")}</p></div>
+        <div className="backup-import-options">
+          <a href="#backup-restore"><RotateCcw size={19} /><span><strong>{t("backups.importFull")}</strong><small>{t("backups.importFullHelp")}</small></span><ArrowRight size={16} /></a>
+          <Link to="/unbound/advanced#unbound-section-advanced-transfer"><Settings2 size={19} /><span><strong>{t("backups.importBundle")}</strong><small>{t("backups.importBundleHelp")}</small></span><ArrowRight size={16} /></Link>
+          <Link to="/unbound/advanced#unbound-section-advanced-import-conf"><FileInput size={19} /><span><strong>{t("backups.importConf")}</strong><small>{t("backups.importConfHelp")}</small></span><ArrowRight size={16} /></Link>
+        </div>
+      </section>
+
       {backups && (
         <section className="backup-retention-panel">
           <div className="backup-retention-heading">
@@ -166,7 +176,7 @@ export default function Backups() {
         </section>
       )}
 
-      <section className="encrypted-export-panel">
+      <section className="encrypted-export-panel" id="backup-export">
         <div className="encrypted-export-heading">
           <span><KeyRound size={19} /></span>
           <div><span className="stack-eyebrow">{t("stack.exportEyebrow")}</span><h2>{t("stack.exportTitle")}</h2><p>{t("stack.exportIntro")}</p></div>
@@ -184,7 +194,7 @@ export default function Backups() {
         </div>
       </section>
 
-      <section className="encrypted-export-panel restore-panel">
+      <section className="encrypted-export-panel restore-panel" id="backup-restore">
         <div className="encrypted-export-heading">
           <span><RotateCcw size={19} /></span>
           <div><span className="stack-eyebrow">{t("stack.restoreEyebrow")}</span><h2>{t("stack.restoreTitle")}</h2><p>{t("stack.restoreIntro")}</p></div>
