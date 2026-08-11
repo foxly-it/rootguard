@@ -195,12 +195,16 @@
 
 .resource-profile-field strong { color: var(--text); }
 .resource-profile-field select {
-  width: 100%;
-  padding: 11px;
+  width: min(100%, 320px);
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 0 34px 0 11px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--field-bg);
   color: var(--text);
+  font: inherit;
+  font-size: .78rem;
 }
 .resource-profile-field small { line-height: 1.45; }
 
