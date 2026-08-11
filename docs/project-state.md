@@ -321,8 +321,13 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   and a downloadable privacy-safe report. Every request remains limited to 100
   lines from the previous 30 minutes and 64 KiB. Core removes control
   characters and redacts common authorization, token, password, secret, and
-  API-key patterns; the browser cannot choose arbitrary containers or paths
-  ([rootguard#201](https://github.com/foxly-it/rootguard/pull/201)).
+  API-key patterns; the browser cannot choose arbitrary containers or paths.
+  Log reads use their own fixed five-container allowlist. The lifecycle-action
+  allowlist remains separately restricted to AdGuard Home and Unbound, so
+  exposing Core/WebApp/Updater diagnostics does not permit browser-controlled
+  lifecycle actions against the control plane
+  ([rootguard#201](https://github.com/foxly-it/rootguard/pull/201),
+  [rootguard#210](https://github.com/foxly-it/rootguard/pull/210)).
 - Separate internal control-plane updater for allowlisted Core and WebApp
   images. It remains alive while both containers are replaced as a pair,
   persists status outside either target, verifies exact image IDs and both

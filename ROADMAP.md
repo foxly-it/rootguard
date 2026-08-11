@@ -657,7 +657,12 @@ manual Docker forensics.
       Logs & Diagnostics page selects every allowlisted service, offers local
       text/severity filters, optional refresh and a downloadable redacted
       report, while Core retains the 30-minute, 100-line, and 64-KiB bounds
-      ([rootguard#201](https://github.com/foxly-it/rootguard/pull/201))
+      ([rootguard#201](https://github.com/foxly-it/rootguard/pull/201)). Live
+      LXC verification additionally separated the five-service log-read
+      allowlist from the deliberately narrower AdGuard/Unbound lifecycle-action
+      allowlist, so control-plane logs are readable without granting browser
+      start/stop/restart authority over those containers
+      ([rootguard#210](https://github.com/foxly-it/rootguard/pull/210))
 - [x] Real component versions, image digests, uptime, and health reasons
 - [x] Persistent, bounded update and rollback history for data and control plane
 - [x] Keep the operations UI scannable as capabilities grow - import scope is
