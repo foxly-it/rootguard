@@ -349,6 +349,12 @@ The detailed ownership and directive plan lives in
 
 ### User experience and safety
 
+- [x] Compact the Unbound resource-profile selector and align the trusted
+      private-domain input/action as one control row. Desktop now uses a
+      bounded 38 px profile selector and equal 46 px domain controls; mobile
+      retains the full accessible action name while reducing the add action to
+      a square icon button
+      ([rootguard#216](https://github.com/foxly-it/rootguard/issues/216))
 - [x] Fix the Dashboard service KPI so its active and total counts come from
       the same allowlisted five-service inventory; a healthy full stack now
       shows `5 / 5` instead of a stale `5 / 2`

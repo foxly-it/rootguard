@@ -121,7 +121,7 @@ export default function UnboundPrivateDomains({
             }
           }} />
         </label>
-        <button className="rg-button rg-button-secondary secondary-action unbound-action" type="button" disabled={!draft.trim() || domains.length >= maxPrivateDomains} onClick={addDomain}><Plus size={15} /> <span>{t("private.add")}</span></button>
+        <button className="rg-button rg-button-secondary secondary-action unbound-action private-domain-add" type="button" disabled={!draft.trim() || domains.length >= maxPrivateDomains} onClick={addDomain} aria-label={t("private.add")} title={t("private.add")}><Plus size={15} /> <span>{t("private.add")}</span></button>
       </div>
 
       <div className="private-domain-list">

@@ -4,3 +4,30 @@
 .unbound-action.primary:hover:not(:disabled){border-color:var(--focus-ring);background:var(--accent-soft)}
 .icon-action{display:grid!important;place-items:center!important;width:38px;height:38px;padding:0!important;border:1px solid var(--border);border-radius:10px;background:var(--surface-soft);color:var(--text-muted)}
 .icon-action:hover:not(:disabled){border-color:var(--accent-border);color:var(--text)}
+
+.private-domain-editor input,
+.private-domain-editor .private-domain-add {
+  height: 46px;
+  min-height: 46px;
+  box-sizing: border-box;
+}
+
+@media (max-width: 540px) {
+  .private-domain-add {
+    justify-self: end;
+    width: 46px;
+    padding: 0 !important;
+  }
+
+  .private-domain-add span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
