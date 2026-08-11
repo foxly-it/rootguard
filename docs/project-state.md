@@ -168,6 +168,12 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   preview, effective `unbound-checkconf`, history, activation, and rollback all
   cover the new settings. AdGuard Home's own private reverse-resolver routing
   remains an integration responsibility rather than duplicated resolver logic.
+- Conflict detection now covers every Unbound surface RootGuard guides before
+  1.0: local hosts and zones, forwarding, private domains, and expert text.
+  Access rules remain available to advanced operators through the expert editor
+  and are not a pre-1.0 guided feature. A guided access-rules surface may later
+  serve as a reference use case for the explicitly post-1.0 extension
+  architecture ([rootguard#186](https://github.com/foxly-it/rootguard/issues/186)).
 - Typed backend foundation for the planned zone-centred host inventory: new
   `LocalZone`/`LocalHost` types in `rootguard-core/internal/unbound/settings.go`
   (hostname plus IPv4 and/or IPv6, optional PTR), validated (canonical zone and
