@@ -45,6 +45,8 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/updates", updateStatusHandler(deps.Updater))
 	apiMux.HandleFunc("POST /api/updates/check", updateCheckHandler(deps.Updater))
 	apiMux.HandleFunc("POST /api/updates/{name}", updateServiceHandler(deps.Updater))
+	apiMux.HandleFunc("GET /api/backups", backupStatusHandler(deps.Updater))
+	apiMux.HandleFunc("PUT /api/backups/settings", putBackupSettingsHandler(deps.Updater))
 	apiMux.HandleFunc("GET /api/control-plane-updates", controlPlaneStatusHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/check", controlPlaneCheckHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane))
@@ -158,6 +160,46 @@ func updateServiceHandler(manager *updater.Manager) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusAccepted, status)
+	}
+}
+
+func backupStatusHandler(manager *updater.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		status, err := manager.BackupStatus()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	}
+}
+
+func putBackupSettingsHandler(manager *updater.Manager) http.HandlerFunc {
+	type request struct {
+		RetentionPerService int `json:"retention_per_service"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
+		decoder.DisallowUnknownFields()
+		var body request
+		if err := decoder.Decode(&body); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		status, err := manager.SetBackupRetention(body.RetentionPerService)
+		if err != nil {
+			switch {
+			case errors.Is(err, updater.ErrBusy):
+				writeError(w, http.StatusConflict, err)
+			case errors.Is(err, updater.ErrInvalidBackupRetention):
+				writeError(w, http.StatusBadRequest, err)
+			default:
+				writeError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
 	}
 }
 

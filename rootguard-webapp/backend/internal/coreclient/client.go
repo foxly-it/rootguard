@@ -392,6 +392,27 @@ type UpdateStatus struct {
 	UpdatedAt     time.Time             `json:"updated_at"`
 }
 
+type BackupSettings struct {
+	RetentionPerService int `json:"retention_per_service"`
+}
+
+type BackupServiceUsage struct {
+	Service  string     `json:"service"`
+	Count    int        `json:"count"`
+	Bytes    int64      `json:"bytes"`
+	OldestAt *time.Time `json:"oldest_at,omitempty"`
+	NewestAt *time.Time `json:"newest_at,omitempty"`
+}
+
+type BackupStatus struct {
+	Settings       BackupSettings       `json:"settings"`
+	Count          int                  `json:"count"`
+	ManagedBytes   int64                `json:"managed_bytes"`
+	UnmanagedBytes int64                `json:"unmanaged_bytes"`
+	Services       []BackupServiceUsage `json:"services"`
+	LastError      string               `json:"last_error,omitempty"`
+}
+
 type ControlPlaneUpdateStatus struct {
 	State     string                `json:"state"`
 	Message   string                `json:"message"`
@@ -681,6 +702,18 @@ func (c *Client) DeployInstallation(ctx context.Context, config InstallationConf
 func (c *Client) UpdateStatus(ctx context.Context) (UpdateStatus, error) {
 	var result UpdateStatus
 	err := c.do(ctx, http.MethodGet, "/api/updates", nil, &result)
+	return result, err
+}
+
+func (c *Client) BackupStatus(ctx context.Context) (BackupStatus, error) {
+	var result BackupStatus
+	err := c.do(ctx, http.MethodGet, "/api/backups", nil, &result)
+	return result, err
+}
+
+func (c *Client) SetBackupRetention(ctx context.Context, retention int) (BackupStatus, error) {
+	var result BackupStatus
+	err := c.do(ctx, http.MethodPut, "/api/backups/settings", map[string]int{"retention_per_service": retention}, &result)
 	return result, err
 }
 

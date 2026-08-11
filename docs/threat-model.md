@@ -189,6 +189,12 @@ im Session-Volume.
 **Bestehende Gegenmaßnahmen:**
 - Backups/Snapshots entstehen ausschließlich serverseitig vor einem
   kontrollierten Austausch, nicht browserseitig abrufbar.
+- Interne Update-Backups sind pro Dienst auf konfigurierbare 2–50
+  Wiederherstellungspunkte begrenzt (Standard 5); Speichernutzung und
+  nicht erkannte Daten bleiben im Stack Center sichtbar.
+- Automatische Bereinigung akzeptiert nur kanonische Zeitstempel-/Dienstpfade
+  mit einem Manifest, das zum erlaubten Dienst und Container passt. Unbekannte
+  Daten und Symlinks werden nicht gelöscht.
 - Passwort-Hashes sind PBKDF2-SHA256-gesalzen, nicht im Klartext.
 
 **Bekannte Restrisiken / offen:**
@@ -196,9 +202,6 @@ im Session-Volume.
   0.4) - ein Volume-Snapshot ist aktuell so vertraulich wie eine laufende
   Installation selbst; wer Zugriff auf das Backup-Medium hat, hat effektiv
   Zugriff auf die enthaltenen Zugangsdaten.
-- Keine dokumentierte Backup-Aufbewahrungsrichtlinie mit
-  Speicherplatz-Sichtbarkeit (ROADMAP.md 0.4) - alte Backups verbleiben ohne
-  explizite Übersicht, was auch ihre Vertraulichkeits-Lebensdauer verlängert.
 
 ### 6. AdGuard-Gateway
 

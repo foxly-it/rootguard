@@ -150,6 +150,13 @@
   display: block;
 }
 
+.backup-retention-panel{display:grid;gap:18px;margin-top:18px;padding:25px;border:1px solid var(--border);border-radius:18px;background:var(--surface)}
+.backup-retention-heading{display:flex;align-items:flex-start;gap:14px}.backup-retention-heading>span{display:grid;place-items:center;width:40px;height:40px;flex:0 0 40px;border-radius:11px;color:var(--info);background:var(--info-soft)}
+.backup-retention-heading h2{margin:5px 0 4px;font-size:1.25rem}.backup-retention-heading p{margin:0;color:var(--text-muted);font-size:.8rem;line-height:1.55}
+.backup-usage-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}.backup-usage-grid article{display:grid;gap:4px;padding:16px;border:1px solid var(--border-subtle);border-radius:12px;background:var(--surface-soft)}.backup-usage-grid strong{font-size:1.1rem}.backup-usage-grid span,.backup-usage-grid small{color:var(--text-muted);font-size:.72rem}
+.backup-retention-control{display:flex;align-items:end;gap:14px}.backup-retention-control label{display:grid;gap:5px;flex:1}.backup-retention-control input{width:120px;min-height:42px;box-sizing:border-box;padding:0 12px;border:1px solid var(--border);border-radius:9px;background:var(--field-bg);color:var(--text);font:inherit}.backup-retention-control small{color:var(--text-muted)}.backup-retention-control button{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.backup-retention-warning{margin:0;padding:10px 12px;border-radius:9px;color:var(--warning);background:var(--warning-soft);font-size:.76rem}
+
 .stack-summary small {
   color: var(--text-muted);
   font-size: 0.7rem;
@@ -677,6 +684,7 @@
 @media (max-width: 980px) {
   .stack-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stack-services { grid-template-columns: 1fr; }
+  .backup-usage-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 650px) {
@@ -687,4 +695,5 @@
   .control-plane-services { grid-template-columns: 1fr; }
   .stack-history-heading { flex-direction: column; }
   .stack-history-list article { grid-template-columns: 1fr; gap: 7px; }
+  .backup-retention-control { align-items:stretch; flex-direction:column; }
 }

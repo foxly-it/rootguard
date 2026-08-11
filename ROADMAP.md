@@ -669,7 +669,16 @@ manual Docker forensics.
       now get their own pinned, non-conflicting addresses, matching Unbound
       and the blockpage
       ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
-- [ ] Configurable backup retention with storage-usage visibility
+- [x] Configurable backup retention with storage-usage visibility - the Core
+      updater now retains a configurable 2–50 recognized pre-update restore
+      points per service (default 5), persists the policy separately from
+      update state, and enforces it only after an update/rollback lifecycle or
+      an explicitly confirmed settings change. The Stack Center shows total
+      and per-service counts, logical bytes, and newest timestamps. Pruning
+      requires the canonical timestamp/service layout plus a manifest matching
+      the allowlisted service and container; unknown data and symlinks are
+      measured separately and never deleted
+      ([rootguard#189](https://github.com/foxly-it/rootguard/pull/189))
 - [x] Safe automatic post-update cleanup:
       retain the active and previous successful image, prune only older image
       IDs recorded by RootGuard, and never call global Docker prune commands

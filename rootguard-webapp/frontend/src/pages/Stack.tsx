@@ -5,6 +5,7 @@ import {
   Cpu,
   Download,
   FileText,
+  HardDrive,
   LoaderCircle,
   RefreshCw,
   RotateCcw,
@@ -16,17 +17,20 @@ import {
   checkControlPlaneUpdates,
   checkUpdates,
   fetchControlPlaneUpdateStatus,
+  fetchBackupStatus,
   fetchServices,
   fetchServiceLogs,
   fetchUpdateStatus,
   installServiceUpdate,
   installControlPlaneUpdates,
+  setBackupRetention,
   serviceAction,
   type ServiceInfo,
   type ServiceLogs,
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
+  type BackupStatus,
   type UpdateHistoryEntry,
 } from "../api/client";
 import "../styles/stack.css";
@@ -37,6 +41,9 @@ export default function Stack() {
   const { t, formatDate } = useI18n();
   const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [controlPlane, setControlPlane] = useState<ControlPlaneUpdateStatus | null>(null);
+  const [backups, setBackups] = useState<BackupStatus | null>(null);
+  const [retentionDraft, setRetentionDraft] = useState<number | null>(null);
+  const [savingRetention, setSavingRetention] = useState(false);
   const [services, setServices] = useState<ServiceInfo[]>([]);
   const [serviceLogs, setServiceLogs] = useState<Partial<Record<ServiceInfo["name"], ServiceLogs>>>({});
   const [loadingLogs, setLoadingLogs] = useState<ServiceInfo["name"] | "">("");
@@ -51,14 +58,17 @@ export default function Stack() {
 
   const load = useCallback(async () => {
     try {
-      const [nextUpdates, nextControlPlane, nextServices] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextServices, nextBackups] = await Promise.all([
         fetchUpdateStatus(),
         fetchControlPlaneUpdateStatus(),
         fetchServices(),
+        fetchBackupStatus(),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setServices(nextServices);
+      setBackups(nextBackups);
+      setRetentionDraft((current) => current ?? nextBackups.settings.retention_per_service);
       setError("");
     } catch (cause) {
       setError(errorMessage(cause, "Stack-Status konnte nicht geladen werden."));
@@ -128,6 +138,20 @@ export default function Stack() {
     }
   }
 
+  async function saveBackupRetention() {
+    if (!backups || retentionDraft === null || retentionDraft < 2 || retentionDraft > 50) return;
+    if (retentionDraft < backups.settings.retention_per_service && !window.confirm(t("stack.backupRetentionConfirm"))) return;
+    setSavingRetention(true);
+    setError("");
+    try {
+      setBackups(await setBackupRetention(retentionDraft));
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.backupRetentionError")));
+    } finally {
+      setSavingRetention(false);
+    }
+  }
+
   async function control(name: ServiceInfo["name"], action: "start" | "stop" | "restart") {
     if (action === "stop" && !window.confirm(t("stack.confirmStop", { service: name }))) return;
     try {
@@ -185,6 +209,42 @@ export default function Stack() {
         <Summary icon={<Archive />} label={t("stack.protection")} value={t("stack.backup")} />
         <Summary icon={<RotateCcw />} label={t("stack.failure")} value={t("stack.rollback")} />
       </section>
+
+      {backups && (
+        <section className="backup-retention-panel">
+          <div className="backup-retention-heading">
+            <span><HardDrive size={19} /></span>
+            <div>
+              <span className="stack-eyebrow">{t("stack.backupEyebrow")}</span>
+              <h2>{t("stack.backupTitle")}</h2>
+              <p>{t("stack.backupIntro")}</p>
+            </div>
+          </div>
+          <div className="backup-usage-grid">
+            <article><strong>{formatBytes(backups.managed_bytes)}</strong><span>{t("stack.backupManaged", { count: backups.count })}</span></article>
+            {backups.services.map((service) => (
+              <article key={service.service}>
+                <strong>{formatBytes(service.bytes)}</strong>
+                <span>{t(`stack.backupService.${service.service}`, { count: service.count })}</span>
+                <small>{service.newest_at ? t("stack.backupNewest", { date: formatDate(service.newest_at) }) : t("stack.backupNone")}</small>
+              </article>
+            ))}
+          </div>
+          {backups.unmanaged_bytes > 0 && <p className="backup-retention-warning">{t("stack.backupUnmanaged", { size: formatBytes(backups.unmanaged_bytes) })}</p>}
+          {backups.last_error && <p className="backup-retention-warning">{t("stack.backupPruneError", { error: backups.last_error })}</p>}
+          <div className="backup-retention-control">
+            <label>
+              <span>{t("stack.backupRetention")}</span>
+              <input type="number" min={2} max={50} value={retentionDraft ?? ""} onChange={(event) => setRetentionDraft(Number.isNaN(event.target.valueAsNumber) ? null : event.target.valueAsNumber)} />
+              <small>{t("stack.backupRetentionHelp")}</small>
+            </label>
+            <button className="rg-button rg-button-secondary" type="button" disabled={savingRetention || retentionDraft === null || retentionDraft < 2 || retentionDraft > 50 || retentionDraft === backups.settings.retention_per_service} onClick={saveBackupRetention}>
+              {savingRetention ? <LoaderCircle className="spin" size={15} /> : <Archive size={15} />}
+              {t("stack.backupRetentionSave")}
+            </button>
+          </div>
+        </section>
+      )}
 
       {controlPlane && (
         <section className="control-plane-panel">
@@ -463,6 +523,18 @@ function imageVersion(image?: string) {
   const slash = image.lastIndexOf("/");
   const colon = image.lastIndexOf(":");
   return colon > slash ? image.slice(colon + 1) : "latest";
+}
+
+function formatBytes(value: number) {
+  if (value < 1024) return `${value} B`;
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let amount = value;
+  let unit = -1;
+  do {
+    amount /= 1024;
+    unit++;
+  } while (amount >= 1024 && unit < units.length - 1);
+  return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${units[unit]}`;
 }
 
 function errorMessage(error: unknown, fallback: string) {

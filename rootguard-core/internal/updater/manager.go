@@ -99,16 +99,18 @@ type Options struct {
 }
 
 type Manager struct {
-	mu             sync.RWMutex
-	status         Status
-	dataDir        string
-	composeDir     string
-	run            CommandRunner
-	verify         VerifyFunc
-	specs          map[string]ServiceSpec
-	selected       map[string]string
-	verifyAttempts int
-	retryDelay     time.Duration
+	mu              sync.RWMutex
+	status          Status
+	dataDir         string
+	composeDir      string
+	run             CommandRunner
+	verify          VerifyFunc
+	specs           map[string]ServiceSpec
+	selected        map[string]string
+	backupRetention int
+	backupError     string
+	verifyAttempts  int
+	retryDelay      time.Duration
 }
 
 func NewManager(options Options) *Manager {
@@ -125,14 +127,15 @@ func NewManager(options Options) *Manager {
 		options.RetryDelay = time.Second
 	}
 	manager := &Manager{
-		dataDir:        options.DataDir,
-		composeDir:     options.ComposeDir,
-		run:            options.Run,
-		verify:         options.Verify,
-		specs:          make(map[string]ServiceSpec, len(options.Services)),
-		selected:       map[string]string{},
-		verifyAttempts: options.VerifyAttempts,
-		retryDelay:     options.RetryDelay,
+		dataDir:         options.DataDir,
+		composeDir:      options.ComposeDir,
+		run:             options.Run,
+		verify:          options.Verify,
+		specs:           make(map[string]ServiceSpec, len(options.Services)),
+		selected:        map[string]string{},
+		backupRetention: DefaultBackupRetention,
+		verifyAttempts:  options.VerifyAttempts,
+		retryDelay:      options.RetryDelay,
 		status: Status{
 			State:     StateIdle,
 			Message:   "Noch keine Update-Prüfung durchgeführt.",
@@ -147,6 +150,7 @@ func NewManager(options Options) *Manager {
 		})
 	}
 	manager.load()
+	manager.loadBackupSettings()
 	manager.reconcileServices(options.Services)
 	if manager.status.State == StateChecking || manager.status.State == StateUpdating {
 		manager.status.State = StateFailed
@@ -256,6 +260,7 @@ func (m *Manager) update(service string) {
 		m.fail(service, fmt.Errorf("backup %s: %w", service, err))
 		return
 	}
+	defer m.enforceBackupRetention()
 	m.setProgress(service, "Lade das freigegebene Ziel-Image.")
 	if _, err := m.run(ctx, "pull", spec.TargetImage); err != nil {
 		m.fail(service, fmt.Errorf("pull target image: %w", err))
