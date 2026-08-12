@@ -256,28 +256,22 @@
   padding-right: 17px;
 }
 
-/* .toggle-row's own margin: 0 -12px (unbound-polish.css) shifts its
-   border-box - and therefore its :hover background - 12px past whatever
-   padding says, since margin positions the border-box relative to the
-   parent regardless of padding; padding only moves the *content* within
-   that already-placed box. Stacking padding on top (as a previous version
-   of this rule did, 17px + 12px = 29px) kept the text aligned with
-   .number-grid's siblings but left the hover highlight overhanging past
-   the card's rounded corner, since nothing here touched the margin that
-   actually caused it. Cancelling the margin back to 0 and using a flat
-   17px inset - matching every other direct child - keeps the same text
-   alignment with a hover background that stays flush inside the card.
-   */
+/* Keep the hover surface visibly inset while its content remains aligned
+   with the number cards and the other advanced settings. */
 .advanced-settings > .toggle-row {
-  margin-left: 0;
-  margin-right: 0;
-  padding-left: 17px;
-  padding-right: 17px;
+  margin-left: 8px;
+  margin-right: 8px;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
+.advanced-settings > .toggle-row + .toggle-row {
+  margin-top: 8px;
 }
 
 .advanced-settings .number-grid {
   margin: 0;
-  padding: 0 17px 17px;
+  padding: 17px;
 }
 
 .live-config-panel > pre {
