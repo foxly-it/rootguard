@@ -101,12 +101,27 @@ Updates, AdGuard-Verwaltung.
   max. 500 Einträge) zeichnet Login-Erfolg/-Fehlschlag, Rate-Limiting,
   Logout, Passwort-Recovery und Session-Revocation auf - sichtbar im
   selben "Aktive Sitzungen"-Panel.
+- Dasselbe Rate-Limit-/Audit-Prinzip deckt jetzt auch destruktive Aktionen
+  außerhalb der Authentifizierung ab: ein gemeinsames, sitzungsbasiertes
+  Sliding-Window-Budget (30 Anfragen / 5 Minuten über alle geschützten
+  Routen hinweg, kein separates Budget pro Route) begrenzt Unbound-
+  Aktivierung/-Restore/-Custom-Config/-Import/-Diagnose-Logging,
+  Service-Start/Stop/Restart und -Updates, Backup-Einstellungen/-Export/
+  -Restore, manuelles Cleanup, Control-Plane-Update-Installation,
+  Installations-Deploy sowie AdGuard-Bootstrap und Filter-Toggle. Alle
+  betroffenen Routen sind reine Proxies der WebApp zu Core, wodurch der
+  Schutz am einzigen browserseitigen Einstiegspunkt greift, ohne Core
+  selbst ändern zu müssen. Erfolg, Fehlschlag und Rate-Limiting erscheinen
+  im selben `GET /api/auth/audit`-Log
+  ([rootguard#219](https://github.com/foxly-it/rootguard/issues/219)).
 
 **Bekannte Restrisiken / offen:**
-- Rate-Limits und Audit-Events decken bislang nur die Authentifizierung ab,
-  nicht destruktive Aktionen an anderer Stelle der Anwendung (Unbound-
-  Aktivierung, Service-Updates/-Rollbacks, AdGuard-Bootstrap und
-  Vergleichbares) - siehe ROADMAP.md 0.5.
+- Das geteilte Budget schützt vor massenhaftem Missbrauch einer einzelnen
+  (z. B. kompromittierten) Session, nicht vor einem einzelnen gezielten
+  destruktiven Aufruf durch einen legitim authentifizierten Nutzer - das
+  ist erwartetes Verhalten, kein Bug: Auth-gestützte Autorisierung bleibt
+  die eigentliche Zugriffskontrolle, das Rate-Limit ist eine zusätzliche
+  Schadensbegrenzung.
 
 ### 3. Interne Netzwerke (control, edge, DNS-Netz)
 
