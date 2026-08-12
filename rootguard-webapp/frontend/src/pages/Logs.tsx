@@ -94,7 +94,7 @@ export default function Logs() {
         <button className="rg-button rg-button-secondary" type="button" disabled={loading} onClick={() => load()}><RefreshCw className={loading ? "spin" : ""} size={16} /> {t("common.refresh")}</button>
       </section>
 
-      {error && <div className="stack-feedback error">{error}</div>}
+      {error && <div className="stack-feedback error" role="alert">{error}</div>}
 
       <section className="logs-service-picker" aria-label={t("logs.services")}>
         {services.map((service) => <button key={service.name} type="button" className={selected === service.name ? "active" : ""} onClick={() => selectService(service.name)}>

@@ -41,11 +41,11 @@ export default function AdGuard() {
         setStatus(null);
       }
     } catch (cause) {
-      setError(errorMessage(cause, "AdGuard-Status konnte nicht geladen werden."));
+      setError(errorMessage(cause, t("adguard.statusLoadError")));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(load, 0);
@@ -62,7 +62,7 @@ export default function AdGuard() {
       setStatus(updated);
       setMessage(t("adguard.bootstrapComplete"));
     } catch (cause) {
-      setError(errorMessage(cause, "AdGuard Home konnte nicht eingerichtet werden."));
+      setError(errorMessage(cause, t("adguard.bootstrapError")));
     } finally {
       setBootstrapping(false);
     }
@@ -127,7 +127,7 @@ export default function AdGuard() {
       </section>
 
       {message && <div className="adguard-feedback success">{message}</div>}
-      {error && <div className="adguard-feedback error">{error}</div>}
+      {error && <div className="adguard-feedback error" role="alert">{error}</div>}
 
       <div className="adguard-grid">
         <section className="adguard-panel">
@@ -211,7 +211,7 @@ export default function AdGuard() {
               {testingFilters ? t("adguard.filterTesting") : t("adguard.filterTestRun")}
             </button>
           </div>
-          {filterError && <div className="adguard-feedback error">{filterError}</div>}
+          {filterError && <div className="adguard-feedback error" role="alert">{filterError}</div>}
           {testingFilters && !filterReport && <div className="adguard-filter-loading"><RefreshCw size={22} className="spin" /><span>{t("adguard.filterTesting")}</span></div>}
           {filterReport && (
             <>

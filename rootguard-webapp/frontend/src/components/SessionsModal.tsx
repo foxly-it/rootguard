@@ -82,7 +82,7 @@ export default function SessionsModal({ open, onClose }: { open: boolean; onClos
 
   return (
     <ContentModal open={open} size="medium" eyebrow={t("sessions.eyebrow")} title={t("sessions.title")} closeLabel={t("common.close")} onClose={onClose}>
-      {error && <p className="feedback error">{error}</p>}
+      {error && <p className="feedback error" role="alert">{error}</p>}
       {sessions === null && !error && <p className="muted-copy">…</p>}
       {sessions?.length === 0 && <p className="muted-copy">{t("sessions.empty")}</p>}
       {sessions && sessions.length > 0 && (
@@ -112,7 +112,7 @@ export default function SessionsModal({ open, onClose }: { open: boolean; onClos
       )}
 
       <h3 className="sessions-section-heading">{t("sessions.activityTitle")}</h3>
-      {auditError && <p className="feedback error">{auditError}</p>}
+      {auditError && <p className="feedback error" role="alert">{auditError}</p>}
       {auditEvents === null && !auditError && <p className="muted-copy">…</p>}
       {auditEvents?.length === 0 && <p className="muted-copy">{t("sessions.activityEmpty")}</p>}
       {auditEvents && auditEvents.length > 0 && (

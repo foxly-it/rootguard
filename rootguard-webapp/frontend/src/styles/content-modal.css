@@ -4,8 +4,20 @@
    dark, independent of the active theme - consistent with treating
    logs/config output like a code block. Do not wire its chrome to the
    theme tokens above; only its own literals should change if its look
-   is revisited. */
-.content-modal{display:block;width:min(1120px,calc(100vw - 48px));min-height:min(820px,calc(100dvh - 48px));margin:auto;overflow:visible;border:1px solid rgba(136,172,216,.25);border-radius:20px;background:#07111e;color:#e8f3ff;box-shadow:0 28px 90px rgba(0,0,0,.55)}
+   is revisited.
+
+   Non-code content rendered inside it (SessionsModal's session/audit
+   lists, AdGuard's filter-test results) still reaches for the shared
+   semantic tokens rather than its own literals, same as it would on a
+   normal page. Since this shell never flips with the page's light/dark
+   theme, re-pin those tokens back to their dark-theme values for this
+   subtree only - otherwise a light-theme session picks up light-theme
+   text colors here and renders unreadable against the permanently-dark
+   background (found via axe: --rg-text-secondary/--rg-accent resolving
+   to ~2.5:1 contrast instead of the theme's real >6:1). This keeps the
+   chrome itself exactly as fixed as the comment above requires; it only
+   makes token-based *content* honor that same fixedness. */
+.content-modal{--bg:#07111e;--surface:#0c1a2c;--surface-soft:rgba(255,255,255,.03);--border:rgba(136,172,216,.16);--border-subtle:rgba(136,172,216,.1);--text:#e8f3ff;--text-muted:#9fb4d4;--accent:#00bcd4;--accent-soft:rgba(0,188,212,.12);--accent-border:rgba(0,188,212,.35);--success:#4ade80;--success-soft:rgba(34,197,94,.12);--warning:#f59e0b;--warning-soft:rgba(245,158,11,.12);--danger:#f87171;--danger-soft:rgba(248,113,113,.12);--info:#93c5fd;--info-soft:rgba(147,197,253,.12);display:block;width:min(1120px,calc(100vw - 48px));min-height:min(820px,calc(100dvh - 48px));margin:auto;overflow:visible;border:1px solid rgba(136,172,216,.25);border-radius:20px;background:#07111e;color:#e8f3ff;box-shadow:0 28px 90px rgba(0,0,0,.55)}
 .content-modal.content-modal-medium{width:min(880px,calc(100vw - 48px));min-height:0}
 .content-modal>header{position:sticky;z-index:1;top:-24px;display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;border-bottom:1px solid rgba(136,172,216,.16);border-radius:20px 20px 0 0;background:rgba(7,17,30,.97);backdrop-filter:blur(14px)}
 .content-modal>header span{display:block;margin-bottom:5px;color:#67e8f9;font-size:.68rem;font-weight:800;letter-spacing:.14em}

@@ -125,7 +125,7 @@ export default function Overview() {
         </div>
       </section>
 
-      {error && <div className="overview-error">{error}</div>}
+      {error && <div className="overview-error" role="alert">{error}</div>}
 
       <section className="overview-kpis">
         <KpiCard icon={<Network />} label={t("overview.endpoint")} value={bindAddress} note={t("overview.endpointNote")} />

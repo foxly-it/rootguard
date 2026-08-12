@@ -57,9 +57,9 @@ export default function Stack() {
       setServices(nextServices);
       setError("");
     } catch (cause) {
-      setError(errorMessage(cause, "Stack-Status konnte nicht geladen werden."));
+      setError(errorMessage(cause, t("stack.statusLoadError")));
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     const initial = window.setTimeout(load, 0);
@@ -97,7 +97,7 @@ export default function Stack() {
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
     } catch (cause) {
-      setError(errorMessage(cause, "Update-Prüfung konnte nicht gestartet werden."));
+      setError(errorMessage(cause, t("stack.updateCheckError")));
     }
   }
 
@@ -120,7 +120,7 @@ export default function Stack() {
     try {
       setUpdates(await installServiceUpdate(service.name));
     } catch (cause) {
-      setError(errorMessage(cause, "Update konnte nicht gestartet werden."));
+      setError(errorMessage(cause, t("stack.updateStartError")));
     }
   }
 
@@ -153,7 +153,7 @@ export default function Stack() {
       await serviceAction(name, action);
       await load();
     } catch (cause) {
-      setError(errorMessage(cause, "Dienstaktion fehlgeschlagen."));
+      setError(errorMessage(cause, t("stack.serviceActionError")));
     }
   }
 
@@ -171,7 +171,7 @@ export default function Stack() {
         </button>
       </section>
 
-      {error && <div className="stack-feedback error">{error}</div>}
+      {error && <div className="stack-feedback error" role="alert">{error}</div>}
       {updates && (
         <div className={`stack-feedback ${updates.state === "failed" ? "error" : busy ? "working" : "success"}`}>
           {busy && <LoaderCircle className="spin" size={17} />}
@@ -284,7 +284,7 @@ export default function Stack() {
                 </dl>
               </details>
 
-              {service.error && <p className="stack-service-error">{service.error}</p>}
+              {service.error && <p className="stack-service-error" role="alert">{service.error}</p>}
 
               <div className="stack-card-actions">
                 <button className="rg-button rg-button-primary" type="button" disabled={busy || !service.update_available} onClick={() => startUpdate(service)}>
