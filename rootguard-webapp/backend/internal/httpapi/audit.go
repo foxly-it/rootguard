@@ -16,6 +16,7 @@ type auditEvent struct {
 	Event     string    `json:"event"`
 	Username  string    `json:"username,omitempty"`
 	RemoteIP  string    `json:"remote_ip"`
+	Detail    string    `json:"detail,omitempty"`
 }
 
 const (
@@ -28,7 +29,33 @@ const (
 	auditSessionRevoked   = "session_revoked"
 )
 
+// Destructive-action base event names. guardDestructive appends "_success",
+// "_failure", or "_rate_limited" to whichever of these matches the route
+// being guarded - see destructive.go.
+const (
+	auditUnboundSettingsApplied          = "unbound_settings_applied"
+	auditUnboundSettingsRestored         = "unbound_settings_restored"
+	auditUnboundImportApplied            = "unbound_import_applied"
+	auditUnboundCustomApplied            = "unbound_custom_applied"
+	auditUnboundDiagnosticLoggingStarted = "unbound_diagnostic_logging_started"
+	auditUnboundDiagnosticLoggingStopped = "unbound_diagnostic_logging_stopped"
+	auditServiceAction                   = "service_action"
+	auditServiceUpdateStarted            = "service_update_started"
+	auditBackupSettingsChanged           = "backup_settings_changed"
+	auditCleanupRun                      = "cleanup_run"
+	auditBackupExport                    = "backup_export"
+	auditBackupRestore                   = "backup_restore"
+	auditControlPlaneUpdateInstall       = "control_plane_update_install"
+	auditInstallationDeploy              = "installation_deploy"
+	auditAdGuardBootstrap                = "adguard_bootstrap"
+	auditAdGuardFilteringToggled         = "adguard_filtering_toggled"
+)
+
 func (a *SessionAuth) recordAudit(event, username, remoteIP string) {
+	a.recordAuditDetail(event, username, remoteIP, "")
+}
+
+func (a *SessionAuth) recordAuditDetail(event, username, remoteIP, detail string) {
 	a.auditMu.Lock()
 	defer a.auditMu.Unlock()
 	a.auditEvents = append(a.auditEvents, auditEvent{
@@ -36,6 +63,7 @@ func (a *SessionAuth) recordAudit(event, username, remoteIP string) {
 		Event:     event,
 		Username:  username,
 		RemoteIP:  remoteIP,
+		Detail:    detail,
 	})
 	if len(a.auditEvents) > auditMaxEvents {
 		a.auditEvents = a.auditEvents[len(a.auditEvents)-auditMaxEvents:]

@@ -785,9 +785,17 @@ a trusted network.
       logout, recovery, and session revocation - visible in the user menu's
       "Active sessions" panel alongside the session inventory
       ([rootguard#148](https://github.com/foxly-it/rootguard/pull/148))
-- [ ] Rate limits and audit events for destructive actions elsewhere in the
-      app (Unbound activation, service updates/rollbacks, AdGuard bootstrap,
-      and similar) - only the authentication surface above is covered so far
+- [x] Rate limits and audit events for destructive actions elsewhere in the
+      app: a shared, per-session sliding-window limiter (30 requests / 5
+      minutes across every destructive route, not a separate budget per
+      route) and audit logging now cover Unbound settings activation,
+      history restore, custom-config apply, import apply, and diagnostic
+      logging start/stop; service start/stop/restart and image updates;
+      backup settings changes, export, and restore; manual cleanup;
+      control-plane update install; installation deploy; and AdGuard
+      bootstrap and filtering toggle - the same `GET /api/auth/audit` log
+      the authentication surface already used
+      ([rootguard#219](https://github.com/foxly-it/rootguard/issues/219))
 - [x] Threat model covering Docker socket holders, browser, internal networks,
       update supply chain, backups, and the AdGuard gateway
       (`docs/threat-model.md`,

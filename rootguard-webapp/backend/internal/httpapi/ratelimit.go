@@ -5,10 +5,13 @@ import (
 	"time"
 )
 
-// rateLimiter is a simple sliding-window failure counter, keyed by an
-// arbitrary string (client address, in practice). It does not limit
-// successful requests - only repeated failures - so a legitimate operator
-// typing their own password correctly is never affected.
+// rateLimiter is a simple sliding-window counter, keyed by an arbitrary
+// string. The login/recovery limiters only ever call recordFailure for
+// actual failures, so a legitimate operator typing their own password
+// correctly is never affected; the destructive-action limiter (see
+// destructive.go) instead calls recordFailure for every attempt regardless
+// of outcome, since the thing being bounded there is request volume itself,
+// not repeated wrong guesses.
 type rateLimiter struct {
 	mu         sync.Mutex
 	window     time.Duration

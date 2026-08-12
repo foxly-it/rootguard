@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-09
+Last updated: 2026-08-12
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -402,6 +402,27 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   WebApp, Unbound, and Updater. A separate trademark notice keeps RootGuard and
   Foxly IT names and visual identity outside the software license and asks
   modified distributions to use distinct branding.
+- Rate limits and audit events for destructive actions beyond the
+  authentication surface: `rootguard-webapp/backend/internal/httpapi/
+  destructive.go`'s `guardDestructive` wraps the ~16 mutating webapp routes
+  that proxy to Core (Unbound settings/history/custom/import/diagnostic-
+  logging, service start/stop/restart and updates, backup settings/export/
+  restore, cleanup, control-plane update install, installation deploy,
+  AdGuard bootstrap and filtering) with the same `SessionAuth`-owned
+  sliding-window limiter and audit log the login/recovery surface already
+  used - a single shared budget (30 requests / 5 minutes) across every
+  destructive route rather than one per route, since the goal is bounding
+  what a single session can do overall. All destructive routes are thin
+  proxies to `rootguard-core` (which itself has no rate-limit/audit
+  infrastructure), so guarding the webapp's one browser-facing entrypoint
+  covers every case without needing any Core-side change. Live-verified on
+  the Debian LXC test stack: the 31st request in a 5-minute window to any
+  guarded route returns `429` while unrelated GET routes stay unaffected,
+  and the shared budget blocks a *different* guarded route once exhausted -
+  confirming it's a per-session budget, not per-endpoint. `GET /api/auth/
+  audit` gained `<action>_success`/`_failure`/`_rate_limited` events with a
+  new optional `detail` field (method + path) alongside the existing auth
+  events ([rootguard#219](https://github.com/foxly-it/rootguard/issues/219)).
 
 ## Current development slice
 
@@ -842,10 +863,11 @@ Milestone completion snapshot:
   use" *and* have its automatic rollback fail with the exact same error,
   leaving Unbound down until manually repaired. The controller's own
   `docker network connect` to that network had the identical gap. Both now
-- **0.5 security/HTTPS/accessibility** - 3 items open, all close to done:
-  destructive-action rate limits/audit beyond the authentication surface,
-  a full keyboard/screen-reader workflow re-verification, and a WCAG
-  labels/errors review.
+- **0.5 security/HTTPS/accessibility** - 2 items open: a full keyboard/
+  screen-reader workflow re-verification, and a WCAG labels/errors review.
+  Destructive-action rate limits/audit beyond the authentication surface
+  landed ([rootguard#219](https://github.com/foxly-it/rootguard/issues/219),
+  see "Delivered and verified" above).
 - **0.6 beta release engineering** - 8 of 10 items open (issue templates
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
@@ -857,16 +879,27 @@ previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
 1. **0.4 operations/backup/recovery** - current, in document order: pre-update
    snapshot verification, power-loss tests, the DR runbook.
-2. **0.5 security/HTTPS/accessibility** - 3 items open, in document order:
-   destructive-action rate limits/audit, the full keyboard/screen-reader
-   workflow audit, WCAG labels/errors review.
+2. **0.5 security/HTTPS/accessibility** - 2 items open, in document order:
+   the full keyboard/screen-reader workflow audit, WCAG labels/errors
+   review.
 3. **0.6 release engineering** - 8 items open, in document order: automated
    semantic versioning, signed multi-arch manifest digests (property already
    holds, automating the update after each release is the open part), SBOM/
    provenance, image signing/verification, compatibility matrix, upgrade
    tests, migration framework, changelog generation, website/Wiki CI check.
 
-**Immediate next item when resuming:** 0.2's conflict-detection checkbox
+**2026-08-12 update:** destructive-action rate limits/audit
+([rootguard#219](https://github.com/foxly-it/rootguard/issues/219)) was
+picked up directly out of 0.5, ahead of 0.4 in the working order above, per
+explicit user direction to resume specifically in 0.5. 0.4 (pre-update
+snapshot verification, power-loss tests, the DR runbook) remains untouched
+and is still first in the recommended top-to-bottom order if not otherwise
+directed. 0.5's remaining two items - the full keyboard/screen-reader
+workflow audit and the WCAG labels/errors review - are the next concrete
+step if continuing in 0.5.
+
+**Immediate next item when resuming (0.2, if not directed elsewhere):**
+0.2's conflict-detection checkbox
 stays unchecked, but the only concrete gap left under it is a guided surface
 for access rules (currently expert-only) - a separate, larger feature (see
 "Tracked editor follow-ups" below), not a conflict-detection bug. Cross-zone
