@@ -45,9 +45,10 @@ import (
 // Also serves the frontend SPA.
 // =====================================================
 
-func NewRouter(core *coreclient.Client) http.Handler {
+func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 
 	mux := http.NewServeMux()
+	dest := sessionAuth.guardDestructive
 
 	// ==================================================
 	// Health Endpoints
@@ -150,6 +151,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 	//
 	// ==================================================
 
+	serviceAction := dest(auditServiceAction, func(w http.ResponseWriter, r *http.Request) {
+		api.HandleServiceAction(w, r, core)
+	})
 	mux.HandleFunc("/api/service/", func(w http.ResponseWriter, r *http.Request) {
 
 		if r.Method != http.MethodPost {
@@ -157,7 +161,7 @@ func NewRouter(core *coreclient.Client) http.Handler {
 			return
 		}
 
-		api.HandleServiceAction(w, r, core)
+		serviceAction(w, r)
 
 	})
 
@@ -169,9 +173,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleInstallationPreflight(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/installation/deploy", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/installation/deploy", dest(auditInstallationDeploy, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleInstallationDeploy(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("GET /api/updates", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUpdateStatus(w, r, core)
@@ -181,30 +185,30 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleUpdateCheck(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/updates/{name}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/updates/{name}", dest(auditServiceUpdateStarted, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUpdateService(w, r, core)
-	})
+	}))
 	mux.HandleFunc("GET /api/backups", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupStatus(w, r, core)
 	})
-	mux.HandleFunc("PUT /api/backups/settings", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/backups/settings", dest(auditBackupSettingsChanged, func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePutBackupSettings(w, r, core)
-	})
+	}))
 	mux.HandleFunc("GET /api/cleanup/preview", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleCleanupPreview(w, r, core)
 	})
-	mux.HandleFunc("POST /api/cleanup", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/cleanup", dest(auditCleanupRun, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleRunCleanup(w, r, core)
-	})
-	mux.HandleFunc("POST /api/backups/export", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("POST /api/backups/export", dest(auditBackupExport, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupExport(w, r, core)
-	})
+	}))
 	mux.HandleFunc("POST /api/backups/restore/preview", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupRestore(w, r, core, true)
 	})
-	mux.HandleFunc("POST /api/backups/restore", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/backups/restore", dest(auditBackupRestore, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupRestore(w, r, core, false)
-	})
+	}))
 
 	mux.HandleFunc("GET /api/control-plane-updates", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleControlPlaneUpdateStatus(w, r, core)
@@ -214,16 +218,19 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleControlPlaneUpdateCheck(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/control-plane-updates/install", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/control-plane-updates/install", dest(auditControlPlaneUpdateInstall, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleControlPlaneUpdateInstall(w, r, core)
-	})
+	}))
 
+	putUnboundSettings := dest(auditUnboundSettingsApplied, func(w http.ResponseWriter, r *http.Request) {
+		api.HandlePutUnboundSettings(w, r, core)
+	})
 	mux.HandleFunc("/api/unbound/settings", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			api.HandleGetUnboundSettings(w, r, core)
 		case http.MethodPut:
-			api.HandlePutUnboundSettings(w, r, core)
+			putUnboundSettings(w, r)
 		default:
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		}
@@ -241,9 +248,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleUnboundHistory(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/unbound/history/{id}/restore", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/unbound/history/{id}/restore", dest(auditUnboundSettingsRestored, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleRestoreUnboundVersion(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("GET /api/unbound/diagnostics", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundDiagnostics(w, r, core)
@@ -254,12 +261,12 @@ func NewRouter(core *coreclient.Client) http.Handler {
 	mux.HandleFunc("GET /api/unbound/diagnostic-logging", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundDiagnosticLoggingStatus(w, r, core)
 	})
-	mux.HandleFunc("POST /api/unbound/diagnostic-logging", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/unbound/diagnostic-logging", dest(auditUnboundDiagnosticLoggingStarted, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleStartUnboundDiagnosticLogging(w, r, core)
-	})
-	mux.HandleFunc("DELETE /api/unbound/diagnostic-logging", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("DELETE /api/unbound/diagnostic-logging", dest(auditUnboundDiagnosticLoggingStopped, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleStopUnboundDiagnosticLogging(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("GET /api/unbound/presets", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundPresets(w, r, core)
@@ -290,9 +297,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandlePreviewUnboundCustom(w, r, core)
 	})
 
-	mux.HandleFunc("PUT /api/unbound/custom", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("PUT /api/unbound/custom", dest(auditUnboundCustomApplied, func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePutUnboundCustom(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("GET /api/unbound/directives", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundDirectives(w, r, core)
@@ -306,9 +313,9 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandlePreviewUnboundImport(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/unbound/import", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/unbound/import", dest(auditUnboundImportApplied, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleApplyUnboundImport(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("POST /api/unbound/import-conf", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleClassifyUnboundImportConf(w, r, core)
@@ -322,12 +329,15 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleGetAdGuardStatus(w, r, core)
 	})
 
+	bootstrapAdGuard := dest(auditAdGuardBootstrap, func(w http.ResponseWriter, r *http.Request) {
+		api.HandleBootstrapAdGuard(w, r, core)
+	})
 	mux.HandleFunc("/api/adguard/bootstrap", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		api.HandleBootstrapAdGuard(w, r, core)
+		bootstrapAdGuard(w, r)
 	})
 
 	mux.HandleFunc("/api/adguard/filter-report", func(w http.ResponseWriter, r *http.Request) {
@@ -338,12 +348,15 @@ func NewRouter(core *coreclient.Client) http.Handler {
 		api.HandleGetAdGuardFilterReport(w, r, core)
 	})
 
+	setAdGuardFiltering := dest(auditAdGuardFilteringToggled, func(w http.ResponseWriter, r *http.Request) {
+		api.HandleSetAdGuardFiltering(w, r, core)
+	})
 	mux.HandleFunc("/api/adguard/filtering", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		api.HandleSetAdGuardFiltering(w, r, core)
+		setAdGuardFiltering(w, r)
 	})
 
 	mux.Handle("/adguard-ui/", core.AdGuardUIHandler())

@@ -33,6 +33,7 @@ type SessionAuth struct {
 	credentialsPath      string
 	loginLimiter         *rateLimiter
 	recoveryLimiter      *rateLimiter
+	destructiveLimiter   *rateLimiter
 	auditPath            string
 	auditMu              sync.Mutex
 	auditEvents          []auditEvent
@@ -104,6 +105,15 @@ func NewSessionAuth(expectedUser, expectedPassword, recoveryToken string, ttl ti
 		// for defense in depth rather than relying on its length alone.
 		loginLimiter:    newRateLimiter(5*time.Minute, 5),
 		recoveryLimiter: newRateLimiter(5*time.Minute, 5),
+		// A single shared budget across every destructive route (Unbound
+		// activation, service updates, backup restore, AdGuard bootstrap,
+		// ...) rather than one limiter per route - the goal is to bound how
+		// much a single (possibly compromised) session can do overall, not
+		// to give every individual action its own separate allowance. 30
+		// requests in 5 minutes comfortably covers an operator actively
+		// working through Setup or Unbound configuration while still
+		// stopping a runaway script.
+		destructiveLimiter: newRateLimiter(5*time.Minute, 30),
 	}
 	if persistencePath != "" {
 		auth.credentialsPath = filepath.Join(filepath.Dir(persistencePath), "credentials.json")
