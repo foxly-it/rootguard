@@ -119,7 +119,7 @@ export default function UserMenu() {
         </div>
       )}
 
-      <SessionsModal open={sessionsOpen} onClose={() => setSessionsOpen(false)} />
+      <SessionsModal open={sessionsOpen} onClose={() => setSessionsOpen(false)} returnFocusTo={triggerRef} />
     </div>
   );
 }
