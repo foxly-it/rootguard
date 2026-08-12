@@ -128,7 +128,7 @@ export default function Backups() {
         </div>
       </section>
 
-      {error && <div className="stack-feedback error">{error}</div>}
+      {error && <div className="stack-feedback error" role="alert">{error}</div>}
       {updateBusy && <div className="stack-feedback working"><LoaderCircle className="spin" size={17} /><span>{t("backups.updateBusy")}</span></div>}
 
       <section className="backup-import-guide" aria-labelledby="backup-import-guide-title">

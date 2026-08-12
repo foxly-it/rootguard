@@ -12,6 +12,16 @@
   box-sizing: border-box;
 }
 
+/* .rg-button-secondary's default --accent text reads fine against a flat
+   surface everywhere else it's used, but here it also sits inside the
+   private-domain-editor's own --info-soft tinted card - a second
+   translucent layer that dropped it to 3.9:1 (axe-verified). Swap to the
+   high-contrast text token for just this button; the border/background
+   still signal it's an action the same as elsewhere. */
+.private-domain-editor .private-domain-add {
+  color: var(--text);
+}
+
 @media (max-width: 540px) {
   .private-domain-add {
     justify-self: end;

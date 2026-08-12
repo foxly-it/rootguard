@@ -115,6 +115,7 @@ export default function SidebarLayout({ children }: Props) {
                           key={sub.id}
                           href={`#${sub.id}`}
                           className={sub.active ? "nav-subitem active" : "nav-subitem"}
+                          aria-label={collapsed ? sub.label : undefined}
                           onClick={(event) => { event.preventDefault(); sub.onSelect(); }}
                           onMouseEnter={(event) => showTooltip(event, sub.label)}
                           onMouseLeave={hideTooltip}

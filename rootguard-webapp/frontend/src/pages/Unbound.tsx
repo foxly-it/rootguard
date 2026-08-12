@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import {
   Activity, Code2, Expand, MapPinned, SlidersHorizontal,
   Sparkles, Settings2, Lightbulb, Home, Lock, Route, FileText, SquarePen, History as HistoryIcon,
-  Router as RouterIcon, ArrowLeftRight, FileUp,
+  Router as RouterIcon, ArrowLeftRight, FileUp, Stethoscope, Waypoints,
 } from "lucide-react";
 import {
   fetchUnboundDiagnostics,
@@ -210,7 +210,7 @@ export default function Unbound() {
   }
 
   async function restore(entry: UnboundHistoryEntry) {
-    if (busy || !window.confirm(`Version vom ${formatDate(entry.created_at)} wirklich wiederherstellen?`)) return;
+    if (busy || !window.confirm(t("unbound.confirmRestore", { date: formatDate(entry.created_at) }))) return;
     setBusy(true);
     clearFeedback();
     try {
@@ -481,6 +481,11 @@ interface UnboundSubSection { id: string; label: string; icon: React.ReactNode }
 
 function sectionsFor(section: UnboundSection, t: (key: string) => string): UnboundSubSection[] {
   switch (section) {
+    case "overview":
+      return [
+        { id: "unbound-section-overview-diagnostics", label: t("unbound.liveDiagnostics"), icon: <Stethoscope aria-hidden="true" /> },
+        { id: "unbound-section-overview-path-diagnostics", label: t("unbound.pathDiagnostics"), icon: <Waypoints aria-hidden="true" /> },
+      ];
     case "resolver":
       return [
         { id: "unbound-section-resolver-presets", label: t("unbound.section.profiles"), icon: <Sparkles aria-hidden="true" /> },

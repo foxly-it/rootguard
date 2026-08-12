@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import { Laptop, LogOut } from "lucide-react";
 import ContentModal from "./ContentModal";
 import { fetchAuditLog, fetchSessions, revokeSession, type AuditEvent, type SessionSummary } from "../api/client";
@@ -7,7 +7,7 @@ import "../styles/sessions.css";
 
 const WARNING_AUDIT_EVENTS = new Set<AuditEvent["event"]>(["login_failure", "login_rate_limited", "recovery_failure"]);
 
-export default function SessionsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SessionsModal({ open, onClose, returnFocusTo }: { open: boolean; onClose: () => void; returnFocusTo?: RefObject<Element | null> }) {
   const { t, locale } = useI18n();
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [error, setError] = useState("");
@@ -81,8 +81,8 @@ export default function SessionsModal({ open, onClose }: { open: boolean; onClos
   }
 
   return (
-    <ContentModal open={open} size="medium" eyebrow={t("sessions.eyebrow")} title={t("sessions.title")} closeLabel={t("common.close")} onClose={onClose}>
-      {error && <p className="feedback error">{error}</p>}
+    <ContentModal open={open} size="medium" eyebrow={t("sessions.eyebrow")} title={t("sessions.title")} closeLabel={t("common.close")} onClose={onClose} returnFocusTo={returnFocusTo}>
+      {error && <p className="feedback error" role="alert">{error}</p>}
       {sessions === null && !error && <p className="muted-copy">…</p>}
       {sessions?.length === 0 && <p className="muted-copy">{t("sessions.empty")}</p>}
       {sessions && sessions.length > 0 && (
@@ -112,7 +112,7 @@ export default function SessionsModal({ open, onClose }: { open: boolean; onClos
       )}
 
       <h3 className="sessions-section-heading">{t("sessions.activityTitle")}</h3>
-      {auditError && <p className="feedback error">{auditError}</p>}
+      {auditError && <p className="feedback error" role="alert">{auditError}</p>}
       {auditEvents === null && !auditError && <p className="muted-copy">…</p>}
       {auditEvents?.length === 0 && <p className="muted-copy">{t("sessions.activityEmpty")}</p>}
       {auditEvents && auditEvents.length > 0 && (
