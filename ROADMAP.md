@@ -806,17 +806,41 @@ a trusted network.
       vulnerabilities, secrets, and Dockerfile misconfigurations) across the
       whole repository, all gated on pull requests and pushes to `main`
       ([rootguard#143](https://github.com/foxly-it/rootguard/pull/143))
-- [ ] Keyboard and screen-reader audit of every WebGUI workflow - partial
-      groundwork already done as part of the 0.1 navigation slice's exit
-      gate ([rootguard#109](https://github.com/foxly-it/rootguard/pull/109)),
-      but that pass covered pages and common interaction patterns rather
-      than every workflow branch (error states, full Setup wizard flow,
-      etc.); treat this as a formal release-gate re-verification, not a
-      from-scratch audit
-- [ ] WCAG 2.2 AA contrast, focus, labels, and errors review - contrast and
+- [x] Keyboard and screen-reader audit of every WebGUI workflow - formal
+      re-verification of every current route (the original pass predates
+      Login, Backups, and Logs & Diagnostics entirely) plus every
+      interactive state added since: automated axe-core across 8 routes x
+      2 themes (30 scan combinations, all clean after fixes), scripted
+      keyboard walk-throughs of the full login/recovery flow, the
+      collapsed-sidebar sub-nav, three independent `ContentModal` focus
+      traps (Sessions, AdGuard filter-test, plus the existing search
+      modal), and the Zones tab's guided-workflow wizards. Found and fixed
+      three real bugs beyond the earlier pass's scope: collapsed-sidebar
+      sub-nav links had no accessible name on 3 of 4 Unbound tabs (icon
+      only, label hidden via CSS, no `aria-label` fallback - the exact
+      pattern the top-level nav items already had); the Overview tab's
+      own two sub-nav entries never appeared at all (`sectionsFor()` had
+      no case for it); and closing the session-inventory modal silently
+      dropped focus to `<body>` instead of the user-menu trigger, the
+      same async-unmount race `returnFocusTo` was built for in
+      [rootguard#110](https://github.com/foxly-it/rootguard/pull/110) -
+      that prop just had no live caller left once Logs became its own
+      page ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221))
+- [x] WCAG 2.2 AA contrast, focus, labels, and errors review - contrast and
       focus got real fixes in
-      [rootguard#109](https://github.com/foxly-it/rootguard/pull/109);
-      labels and errors still need a systematic pass
+      [rootguard#110](https://github.com/foxly-it/rootguard/pull/110);
+      the labels and errors pass above closed the rest: error text on
+      Overview, AdGuard, Stack, Backups, Logs, and the session/audit
+      panel was never announced to screen readers (`role="alert"` only
+      existed on Login/Setup/Unbound/the 4 guided wizards) - now
+      consistent across every page. Two further contrast regressions
+      found and fixed: `ContentModal`'s intentionally-always-dark shell
+      broke contrast for theme-tokened content once the page itself was
+      in light theme (the shell's own literals were already fixed per
+      design, but its legacy `--rg-*` token aliases were declared once at
+      `:root` and never re-pinned for content rendered inside it); and
+      two guided-workflow "active" buttons lost contrast once composited
+      over an already-tinted `--info-soft` card
 - [x] Reduced-motion review: verified live with `prefers-reduced-motion:
       reduce` emulated - `styles/motion.css`'s universal `*`/`!important`
       reset neutralizes every CSS animation and transition in the app (no

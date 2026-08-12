@@ -402,6 +402,61 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   WebApp, Unbound, and Updater. A separate trademark notice keeps RootGuard and
   Foxly IT names and visual identity outside the software license and asks
   modified distributions to use distinct branding.
+- Formal keyboard/screen-reader re-verification of every WebGUI workflow,
+  closing 0.5's last two accessibility items. The 2026-08 baseline (PR
+  #110, closing #109) axe-core-scanned exactly 5 pages in one session and
+  explicitly scoped out error states and the full Setup wizard; three
+  pages shipped since then were never scanned at all (Login, Backups,
+  Logs & Diagnostics). This pass: automated axe-core (wcag2a/aa,
+  wcag21a/aa, wcag22aa) across all 8 current routes x light/dark (30 scan
+  combinations, plus interactive states - the user menu, the
+  session/audit panel, the login recovery sub-flow), scripted keyboard
+  verification of the full login/recovery flow, three independent
+  `ContentModal` focus traps (session/audit panel, AdGuard's filter-test
+  dialog, the existing search modal), and the Zones tab's four guided
+  workflow wizards. Zero violations remain after fixes. Three real bugs
+  found and fixed, beyond re-confirming what already worked:
+  - Collapsed-sidebar sub-nav links (`SidebarLayout.tsx`'s `nav-subitems`,
+    used by 3 of Unbound's 4 tabs) had no accessible name once the label
+    span was hidden via `.sidebar-collapsed .nav-subitem-label{display:none}`
+    - the top-level nav items already had an `aria-label` fallback for
+    this exact state, the nested sub-items never got the same treatment.
+  - The Overview tab's own two sectioned panels (`unbound-section-overview-diagnostics`,
+    `-path-diagnostics`) never appeared in the sidebar sub-nav at all -
+    `sectionsFor()` had cases for `resolver`/`zones`/`advanced` but no
+    `overview` case, silently falling through to an empty list.
+  - Closing the session/audit-log modal (`SessionsModal`) dropped focus to
+    `<body>` instead of the user-menu trigger: selecting "Active sessions"
+    closes the dropdown (`setOpen(false)`) in the same click handler that
+    opens the modal, so by the time `ContentModal`'s focus-effect runs,
+    the dropdown item it would have auto-captured is already unmounted.
+    The exact same async-unmount race `returnFocusTo` was built for in
+    PR #110's own follow-up (Stack's log viewer) - that prop just had no
+    live caller left once Logs became its own page (PR #201). Wired
+    `SessionsModal` through to the trigger ref `UserMenu` already holds.
+  - Two further WCAG AA contrast regressions, the same class of bug as
+    PR #110's own fixes but never scanned since the affected components
+    didn't exist yet: `ContentModal`'s shell is intentionally always dark
+    "like a code block" regardless of page theme (an explicit, documented
+    decision) - but content rendered inside it that reaches for the
+    shared semantic tokens (`SessionsModal`'s session/audit lists) still
+    theme-flipped with the page, reading unreadable once the page itself
+    was in light theme. Fixed by re-pinning the tokens - including the
+    legacy `--rg-*` aliases, which are declared once at `:root` and don't
+    recompute for descendants just because a nested element overrides
+    the token they reference - to their dark-theme values inside
+    `.content-modal`'s own scope, keeping the shell exactly as
+    theme-invariant as designed while making token-based content honor
+    that same invariance. Separately, two guided-workflow "active" state
+    buttons (`.private-domain-add`, the router-import method selector)
+    dropped to 3.9:1 because they sit inside their own `--info-soft`
+    tinted card, compositing two translucent layers instead of one -
+    switched their active-state text to the high-contrast text token,
+    since the border/background already signal the active state.
+  Also translated 6 hardcoded German fallback error strings found along
+  the way (AdGuard/Stack error paths, an Unbound restore confirmation)
+  that surfaced in English-locale sessions
+  ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)).
 - Rate limits and audit events for destructive actions beyond the
   authentication surface: `rootguard-webapp/backend/internal/httpapi/
   destructive.go`'s `guardDestructive` wraps the ~16 mutating webapp routes
@@ -863,11 +918,13 @@ Milestone completion snapshot:
   use" *and* have its automatic rollback fail with the exact same error,
   leaving Unbound down until manually repaired. The controller's own
   `docker network connect` to that network had the identical gap. Both now
-- **0.5 security/HTTPS/accessibility** - 2 items open: a full keyboard/
-  screen-reader workflow re-verification, and a WCAG labels/errors review.
-  Destructive-action rate limits/audit beyond the authentication surface
-  landed ([rootguard#219](https://github.com/foxly-it/rootguard/issues/219),
-  see "Delivered and verified" above).
+- **0.5 security/HTTPS/accessibility** - **complete**. Destructive-action
+  rate limits/audit beyond the authentication surface
+  ([rootguard#219](https://github.com/foxly-it/rootguard/issues/219)) and
+  the formal keyboard/screen-reader re-verification plus WCAG labels/
+  errors review
+  ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)) both
+  landed - see "Delivered and verified" above for both.
 - **0.6 beta release engineering** - 8 of 10 items open (issue templates
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
@@ -879,24 +936,23 @@ previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
 1. **0.4 operations/backup/recovery** - current, in document order: pre-update
    snapshot verification, power-loss tests, the DR runbook.
-2. **0.5 security/HTTPS/accessibility** - 2 items open, in document order:
-   the full keyboard/screen-reader workflow audit, WCAG labels/errors
-   review.
+2. **0.5 security/HTTPS/accessibility** - complete, see above.
 3. **0.6 release engineering** - 8 items open, in document order: automated
    semantic versioning, signed multi-arch manifest digests (property already
    holds, automating the update after each release is the open part), SBOM/
    provenance, image signing/verification, compatibility matrix, upgrade
    tests, migration framework, changelog generation, website/Wiki CI check.
 
-**2026-08-12 update:** destructive-action rate limits/audit
-([rootguard#219](https://github.com/foxly-it/rootguard/issues/219)) was
-picked up directly out of 0.5, ahead of 0.4 in the working order above, per
-explicit user direction to resume specifically in 0.5. 0.4 (pre-update
-snapshot verification, power-loss tests, the DR runbook) remains untouched
-and is still first in the recommended top-to-bottom order if not otherwise
-directed. 0.5's remaining two items - the full keyboard/screen-reader
-workflow audit and the WCAG labels/errors review - are the next concrete
-step if continuing in 0.5.
+**2026-08-12 update:** 0.5 was picked up directly, ahead of 0.4 in the
+working order above, per explicit user direction to resume specifically in
+0.5 - both remaining items landed the same session: destructive-action
+rate limits/audit
+([rootguard#219](https://github.com/foxly-it/rootguard/issues/219)) and
+the formal keyboard/screen-reader re-verification plus WCAG labels/errors
+review ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)).
+**0.5 is now fully complete.** 0.4 (pre-update snapshot verification,
+power-loss tests, the DR runbook) remains untouched and is next in the
+recommended top-to-bottom order if not otherwise directed.
 
 **Immediate next item when resuming (0.2, if not directed elsewhere):**
 0.2's conflict-detection checkbox
