@@ -960,7 +960,7 @@ Milestone completion snapshot:
   errors review
   ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)) both
   landed - see "Delivered and verified" above for both.
-- **0.6 beta release engineering** - 8 of 10 items open (issue templates
+- **0.6 beta release engineering** - 6 of 10 items open (issue templates
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
   release on 2026-08-10). This is the actual gate to cut `0.6.0-beta.1`.
@@ -968,12 +968,13 @@ Milestone completion snapshot:
   ([rootguard#229](https://github.com/foxly-it/rootguard/issues/229)) and
   release-image attestation verification extended from core/webapp to all 5
   components
-  ([rootguard#230](https://github.com/foxly-it/rootguard/issues/230)) are
-  implemented and unit-tested, but deliberately left unchecked in
-  `ROADMAP.md` pending live verification against a real `release-alpha.yml`
-  run - per this roadmap's own rule, a checkbox is only marked done once its
-  acceptance criteria actually pass, not once the code merges. Both flow
-  from the same discovery: `release-alpha.yml` never set `sbom:`/
+  ([rootguard#230](https://github.com/foxly-it/rootguard/issues/230)) both
+  landed and are now verified live: `v0.1.0-alpha.8`, a real tagged release
+  cut specifically to prove this, published all 5 images with a fetchable
+  SPDX SBOM and SLSA provenance predicate, and `cosign verify-attestation`
+  - run from inside a live `rootguard-core` container using the exact
+  binary and policy Core itself ships with - reported `verified` for all 5.
+  Both flow from the same discovery: `release-alpha.yml` never set `sbom:`/
   `provenance: mode=max` on `docker/build-push-action` for any of its 5
   matrix components (only `ci-unbound.yml` did, for unbound specifically,
   outside the actual release path), and `attestation.go`'s policy map only
