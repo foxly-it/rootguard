@@ -924,8 +924,28 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       four RootGuard image pins landed correctly in a `[skip ci]` commit
       pushed straight to `main`, verified against the actual published
       digests before the tag was cut
-- [ ] SBOM and provenance for every image
-- [ ] Image signing and signature verification in the release/update path
+- [x] SBOM and provenance for every image -
+      `release-alpha.yml`'s shared `docker/build-push-action` step now sets
+      `sbom: true` and `provenance: mode=max` for all 5 matrix components
+      (previously only `ci-unbound.yml` did, for unbound alone, outside the
+      actual release path). Verified against the real `v0.1.0-alpha.8`
+      release: every one of the 5 published images carries a fetchable SPDX
+      SBOM and SLSA provenance predicate
+      (`docker buildx imagetools inspect --format '{{json .SBOM}}'`/
+      `'{{json .Provenance}}'`)
+      ([rootguard#229](https://github.com/foxly-it/rootguard/issues/229))
+- [x] Image signing and signature verification in the release/update path -
+      the signing half already existed: `actions/attest@v4` produces a
+      GitHub/Sigstore-backed keyless build-provenance attestation
+      (Fulcio-signed over GitHub Actions OIDC) for every published image.
+      The gap was verification coverage: `attestation.go`'s policy map only
+      ever checked `core`/`webapp`, so `updater`/`unbound`/`blockpage`
+      silently reported `not_applicable` in the Stack Center despite being
+      published by the identical signer. Extended to all 5. Verified
+      against the real `v0.1.0-alpha.8` release: `cosign verify-attestation`
+      (run from inside a live `rootguard-core` container, the exact binary
+      and policy Core itself uses) reports `verified` for all 5 images
+      ([rootguard#230](https://github.com/foxly-it/rootguard/issues/230))
 - [ ] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions
 - [ ] Upgrade tests from every supported previous RootGuard release
 - [ ] Migration framework for persistent state and configuration schemas
