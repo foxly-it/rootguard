@@ -74,6 +74,37 @@ func TestReleaseAttestationPinsWebappSignerPolicy(t *testing.T) {
 	}
 }
 
+// TestReleaseAttestationCoversEveryReleasedComponent guards updater,
+// unbound, and blockpage against the same silent policy gap webapp once had
+// (see TestReleaseAttestationPinsWebappSignerPolicy) - all 5 components are
+// published by the identical release-alpha.yml matrix build, so none of
+// them should ever report not_applicable for a real, correctly signed
+// release image.
+func TestReleaseAttestationCoversEveryReleasedComponent(t *testing.T) {
+	for _, service := range []string{"updater", "unbound", "blockpage"} {
+		resetAttestationCache()
+		var arguments []string
+		run := func(_ context.Context, name string, args ...string) ([]byte, error) {
+			if name != "cosign" {
+				t.Fatalf("unexpected command %s", name)
+			}
+			arguments = args
+			return []byte(`{"verified":true}`), nil
+		}
+		image := "ghcr.io/foxly-it/rootguard-" + service + ":v1@sha256:abc"
+		status, checked := verifyReleaseAttestationWith(context.Background(), service, image, run, func() time.Time { return time.Unix(1, 0) })
+		if status != "verified" || checked == "" {
+			t.Fatalf("%s: unexpected verification result: %s %s", service, status, checked)
+		}
+		joined := strings.Join(arguments, " ")
+		for _, expected := range []string{"--type https://slsa.dev/provenance/v1", "foxly-it/rootguard", "release-alpha", "https://token.actions.githubusercontent.com"} {
+			if !strings.Contains(joined, expected) {
+				t.Fatalf("%s: missing policy %q in %s", service, expected, joined)
+			}
+		}
+	}
+}
+
 func TestReleaseAttestationCachesResultByDigestReference(t *testing.T) {
 	resetAttestationCache()
 	calls := 0
