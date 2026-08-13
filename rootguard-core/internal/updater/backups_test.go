@@ -147,6 +147,95 @@ func TestBackupScannerDoesNotFollowSymlinksOrTrustMismatchedManifests(t *testing
 	}
 }
 
+func TestWriteAndVerifyBackupManifestRoundTrips(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "AdGuardHome.yaml"), []byte("original configuration"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	spec := ServiceSpec{Name: "adguard", Container: "rootguard-adguard", TargetImage: "adguard:latest"}
+	if err := writeBackupManifest(directory, spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyBackupManifest(directory, spec); err != nil {
+		t.Fatalf("expected an untouched backup to verify, got %v", err)
+	}
+}
+
+func TestVerifyBackupManifestDetectsTamperedContent(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "AdGuardHome.yaml"), []byte("original configuration"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	spec := ServiceSpec{Name: "adguard", Container: "rootguard-adguard"}
+	if err := writeBackupManifest(directory, spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "AdGuardHome.yaml"), []byte("tampered"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyBackupManifest(directory, spec); err == nil {
+		t.Fatal("expected tampered file content to fail verification")
+	}
+}
+
+func TestVerifyBackupManifestDetectsMissingAndExtraFiles(t *testing.T) {
+	spec := ServiceSpec{Name: "adguard", Container: "rootguard-adguard"}
+
+	missing := t.TempDir()
+	if err := os.WriteFile(filepath.Join(missing, "AdGuardHome.yaml"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeBackupManifest(missing, spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(missing, "AdGuardHome.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyBackupManifest(missing, spec); err == nil {
+		t.Fatal("expected a missing backup file to fail verification")
+	}
+
+	extra := t.TempDir()
+	if err := os.WriteFile(filepath.Join(extra, "AdGuardHome.yaml"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeBackupManifest(extra, spec); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(extra, "unexpected"), []byte("planted"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyBackupManifest(extra, spec); err == nil {
+		t.Fatal("expected an unexpected extra backup file to fail verification")
+	}
+}
+
+func TestVerifyBackupManifestRefusesSymlinksAndMismatchedService(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "AdGuardHome.yaml"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	spec := ServiceSpec{Name: "adguard", Container: "rootguard-adguard"}
+	if err := writeBackupManifest(directory, spec); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := verifyBackupManifest(directory, ServiceSpec{Name: "unbound", Container: "rootguard-unbound"}); err == nil {
+		t.Fatal("expected a manifest for a different service to fail verification")
+	}
+
+	external := t.TempDir()
+	if err := os.WriteFile(filepath.Join(external, "secret"), []byte("do-not-follow"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, filepath.Join(directory, "linked")); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyBackupManifest(directory, spec); err == nil {
+		t.Fatal("expected a symlinked backup entry to fail verification")
+	}
+}
+
 func writeManagedBackup(t *testing.T, dataDir, timestamp, service, container, content string) string {
 	t.Helper()
 	directory := filepath.Join(dataDir, "backups", timestamp, service)

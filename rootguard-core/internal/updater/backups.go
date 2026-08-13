@@ -1,9 +1,12 @@
 package updater
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,6 +20,7 @@ const (
 	MinBackupRetention     = 2
 	MaxBackupRetention     = 50
 	backupTimestampLayout  = "20060102T150405.000000000Z"
+	manifestFileName       = "manifest.json"
 )
 
 var ErrInvalidBackupRetention = errors.New("invalid backup retention")
@@ -189,17 +193,138 @@ func (m *Manager) validBackupManifest(directory, service string) bool {
 	if !ok {
 		return false
 	}
-	path := filepath.Join(directory, "manifest.json")
+	path := filepath.Join(directory, manifestFileName)
 	info, err := os.Lstat(path)
 	if err != nil || !info.Mode().IsRegular() {
 		return false
 	}
-	var manifest struct {
-		Service   string `json:"service"`
-		Container string `json:"container"`
-	}
 	data, err := os.ReadFile(path)
-	return err == nil && json.Unmarshal(data, &manifest) == nil && manifest.Service == service && manifest.Container == spec.Container
+	if err != nil {
+		return false
+	}
+	var manifest backupManifest
+	return json.Unmarshal(data, &manifest) == nil && manifest.Service == service && manifest.Container == spec.Container
+}
+
+// backupManifest records the files copied into a pre-update snapshot so a
+// later restore can detect a partial or corrupted docker cp before trusting
+// it, instead of silently restoring bad data.
+type backupManifest struct {
+	Service   string       `json:"service"`
+	Container string       `json:"container"`
+	Image     string       `json:"image"`
+	Files     []backupFile `json:"files"`
+}
+
+type backupFile struct {
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256"`
+}
+
+// writeBackupManifest checksums every file already copied into directory and
+// writes manifest.json describing them. It must run after all sources are
+// copied and before the directory is relied upon for rollback.
+func writeBackupManifest(directory string, spec ServiceSpec) error {
+	files, err := checksumTree(directory)
+	if err != nil {
+		return fmt.Errorf("checksum backup: %w", err)
+	}
+	manifest := backupManifest{Service: spec.Name, Container: spec.Container, Image: spec.TargetImage, Files: files}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(directory, manifestFileName), data, 0600)
+}
+
+// verifyBackupManifest recomputes checksums for directory and compares them
+// against its manifest.json, so a rollback refuses a partial or corrupted
+// snapshot instead of restoring it into a running container.
+func verifyBackupManifest(directory string, spec ServiceSpec) error {
+	data, err := os.ReadFile(filepath.Join(directory, manifestFileName))
+	if err != nil {
+		return fmt.Errorf("read backup manifest: %w", err)
+	}
+	var manifest backupManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return fmt.Errorf("parse backup manifest: %w", err)
+	}
+	if manifest.Service != spec.Name || manifest.Container != spec.Container {
+		return fmt.Errorf("backup manifest does not match %s", spec.Name)
+	}
+	current, err := checksumTree(directory)
+	if err != nil {
+		return fmt.Errorf("checksum backup: %w", err)
+	}
+	if len(current) != len(manifest.Files) {
+		return fmt.Errorf("backup file count changed: expected %d, found %d", len(manifest.Files), len(current))
+	}
+	expected := make(map[string]backupFile, len(manifest.Files))
+	for _, file := range manifest.Files {
+		expected[file.Path] = file
+	}
+	for _, file := range current {
+		want, ok := expected[file.Path]
+		if !ok {
+			return fmt.Errorf("unexpected backup file %q", file.Path)
+		}
+		if want.SHA256 != file.SHA256 || want.Size != file.Size {
+			return fmt.Errorf("backup file %q failed integrity check", file.Path)
+		}
+	}
+	return nil
+}
+
+// checksumTree hashes every regular file under root except manifest.json
+// itself, refusing symlinks the same way the portable backup export does.
+func checksumTree(root string) ([]backupFile, error) {
+	manifestPath := filepath.Join(root, manifestFileName)
+	files := []backupFile{}
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == manifestPath || entry.IsDir() {
+			return nil
+		}
+		file, err := checksumFile(root, path, entry)
+		if err != nil {
+			return err
+		}
+		files = append(files, file)
+		return nil
+	})
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+	return files, err
+}
+
+func checksumFile(root, path string, entry fs.DirEntry) (backupFile, error) {
+	if entry.Type()&os.ModeSymlink != 0 {
+		return backupFile{}, fmt.Errorf("refuse symlink in backup %q", path)
+	}
+	info, err := entry.Info()
+	if err != nil || !info.Mode().IsRegular() {
+		return backupFile{}, fmt.Errorf("refuse non-regular backup entry %q", path)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return backupFile{}, err
+	}
+	hash := sha256.New()
+	_, copyErr := io.Copy(hash, file)
+	closeErr := file.Close()
+	if copyErr != nil {
+		return backupFile{}, copyErr
+	}
+	if closeErr != nil {
+		return backupFile{}, closeErr
+	}
+	relative, err := filepath.Rel(root, path)
+	if err != nil {
+		return backupFile{}, err
+	}
+	return backupFile{Path: filepath.ToSlash(relative), Size: info.Size(), SHA256: hex.EncodeToString(hash.Sum(nil))}, nil
 }
 
 func (m *Manager) backupRoot() string {
