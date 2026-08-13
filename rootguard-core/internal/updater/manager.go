@@ -88,9 +88,15 @@ type Status struct {
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
+// DefaultComposeProject is the Docker Compose project name every production
+// caller uses. Options.ComposeProject exists so tests can point composeUp at
+// an isolated project instead of colliding with a real running deployment.
+const DefaultComposeProject = "rootguard-dns"
+
 type Options struct {
 	DataDir        string
 	ComposeDir     string
+	ComposeProject string
 	Run            CommandRunner
 	Verify         VerifyFunc
 	Services       []ServiceSpec
@@ -103,6 +109,7 @@ type Manager struct {
 	status          Status
 	dataDir         string
 	composeDir      string
+	composeProject  string
 	run             CommandRunner
 	verify          VerifyFunc
 	specs           map[string]ServiceSpec
@@ -117,6 +124,9 @@ func NewManager(options Options) *Manager {
 	if options.Run == nil {
 		options.Run = runDocker
 	}
+	if options.ComposeProject == "" {
+		options.ComposeProject = DefaultComposeProject
+	}
 	if options.Verify == nil {
 		options.Verify = func(context.Context, string) error { return nil }
 	}
@@ -129,6 +139,7 @@ func NewManager(options Options) *Manager {
 	manager := &Manager{
 		dataDir:         options.DataDir,
 		composeDir:      options.ComposeDir,
+		composeProject:  options.ComposeProject,
 		run:             options.Run,
 		verify:          options.Verify,
 		specs:           make(map[string]ServiceSpec, len(options.Services)),
@@ -389,6 +400,12 @@ func (m *Manager) rollback(
 	if err := m.composeUp(ctx, spec.Name); err != nil {
 		return err
 	}
+	// The container is back on the known-good previous image at this point even
+	// if the check below fails, rather than left on the candidate image that
+	// already failed its own health check.
+	if err := verifyBackupManifest(backupDir, spec); err != nil {
+		return fmt.Errorf("verify backup integrity: %w", err)
+	}
 	for _, source := range spec.BackupPaths {
 		name := filepath.Base(source)
 		if _, err := m.run(ctx, "cp", filepath.Join(backupDir, name)+"/.", spec.Container+":"+source); err != nil {
@@ -518,9 +535,7 @@ func (m *Manager) backup(ctx context.Context, spec ServiceSpec) (string, error) 
 			return "", fmt.Errorf("copy %s: %w", source, err)
 		}
 	}
-	manifest := map[string]string{"service": spec.Name, "container": spec.Container, "image": spec.TargetImage}
-	data, _ := json.MarshalIndent(manifest, "", "  ")
-	if err := os.WriteFile(filepath.Join(directory, "manifest.json"), data, 0600); err != nil {
+	if err := writeBackupManifest(directory, spec); err != nil {
 		return "", err
 	}
 	return directory, nil
@@ -553,7 +568,7 @@ func (m *Manager) inspectImage(ctx context.Context, image string) (string, error
 func (m *Manager) composeUp(ctx context.Context, service string) error {
 	base := filepath.Join(m.composeDir, "compose.yaml")
 	override := filepath.Join(m.dataDir, "updates.yaml")
-	_, err := m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", base, "-f", override, "up", "-d", "--no-deps", service)
+	_, err := m.run(ctx, "compose", "--project-name", m.composeProject, "-f", base, "-f", override, "up", "-d", "--no-deps", service)
 	return err
 }
 

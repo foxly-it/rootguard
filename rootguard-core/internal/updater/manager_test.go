@@ -208,6 +208,102 @@ func TestFailedUpdateRestoresPreviousVolumeOwnershipBeforeRollback(t *testing.T)
 	}
 }
 
+func TestFailedRollbackRefusesTamperedBackupInsteadOfRestoringIt(t *testing.T) {
+	dataDir := t.TempDir()
+	composeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	containerRoot := t.TempDir()
+	confDir := filepath.Join(containerRoot, "opt", "adguardhome", "conf")
+	if err := os.MkdirAll(confDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(confDir, "AdGuardHome.yaml"), []byte("original configuration"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	var backupDir string
+	var restoreInvoked bool
+	manager := NewManager(Options{
+		DataDir: dataDir, ComposeDir: composeDir,
+		VerifyAttempts: 1, RetryDelay: time.Millisecond,
+		Services: []ServiceSpec{{
+			Name: "adguard", DisplayName: "AdGuard Home", Container: "rootguard-adguard",
+			TargetImage: "adguard:latest", BackupPaths: []string{"/opt/adguardhome/conf"},
+		}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			switch arguments[0] {
+			case "inspect":
+				return []byte("adguard:v1|sha256:old"), nil
+			case "cp":
+				if !strings.HasPrefix(arguments[1], "rootguard-adguard:") {
+					restoreInvoked = true
+					return []byte("ok"), nil
+				}
+				source := strings.TrimPrefix(arguments[1], "rootguard-adguard:")
+				backupDir = arguments[2]
+				if err := copyDirForTest(filepath.Join(containerRoot, source), filepath.Join(backupDir, filepath.Base(source))); err != nil {
+					return nil, err
+				}
+				return []byte("ok"), nil
+			case "pull":
+				// Tamper with the backup only after its manifest was already
+				// written, simulating corruption discovered too late for the
+				// manifest itself to reflect it.
+				tampered := filepath.Join(backupDir, "conf", "AdGuardHome.yaml")
+				if err := os.WriteFile(tampered, []byte("tampered"), 0600); err != nil {
+					return nil, err
+				}
+				return []byte("ok"), nil
+			case "image":
+				return []byte("sha256:new"), nil
+			default:
+				return []byte("ok"), nil
+			}
+		},
+		Verify: func(context.Context, string) error {
+			return errors.New("candidate unhealthy")
+		},
+	})
+
+	if _, err := manager.StartUpdate("adguard"); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	result := manager.Status()
+	if result.State != StateFailed || !strings.Contains(result.Message, "verify backup integrity") {
+		t.Fatalf("expected a refused rollback due to backup integrity, got %#v", result)
+	}
+	if restoreInvoked {
+		t.Fatal("a tampered backup must never be restored into the container")
+	}
+	if content, err := os.ReadFile(filepath.Join(confDir, "AdGuardHome.yaml")); err != nil || string(content) != "original configuration" {
+		t.Fatalf("fake container content changed despite the refused restore: %q, err=%v", content, err)
+	}
+}
+
+func copyDirForTest(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0700)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0600)
+	})
+}
+
 func TestUnknownServiceIsRejected(t *testing.T) {
 	manager := NewManager(Options{DataDir: t.TempDir()})
 	if _, err := manager.StartUpdate("webapp"); !errors.Is(err, ErrUnknownService) {

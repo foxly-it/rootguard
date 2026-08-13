@@ -743,7 +743,22 @@ manual Docker forensics.
       is removed on every exit, and a failed attempt removes its new Docker
       resources and rolls back prior local volume contents
       ([rootguard#199](https://github.com/foxly-it/rootguard/pull/199))
-- [ ] Pre-update snapshot and post-update restore verification
+- [x] Pre-update snapshot and post-update restore verification - distinct
+      from the operator-triggered portable backup/restore above: the
+      *internal, automatic* pre-update snapshot Core takes before replacing
+      an AdGuard/Unbound image now carries a SHA-256 checksum per backed-up
+      file in its manifest (`rootguard-core/internal/updater/backups.go`).
+      A failed update's automatic rollback verifies every checksum before
+      trusting the snapshot; a corrupted or partial backup is refused rather
+      than silently restored, while the container still lands back on the
+      known-good previous image even when the data restore itself is
+      refused. A real Docker integration test
+      (`rollback_integration_test.go`, `go test -tags integration
+      ./internal/updater/... -run TestRollback`) proves both paths against
+      an actual container and a real `docker compose` image swap, under its
+      own isolated Compose project so it can never interact with a real
+      RootGuard deployment; wired into `ci-core.yml` as a dedicated job
+      ([rootguard#223](https://github.com/foxly-it/rootguard/issues/223))
 - [ ] Power-loss and interrupted-write tests for installation and updates
 - [ ] Disaster-recovery runbook tested on a separate host
 
