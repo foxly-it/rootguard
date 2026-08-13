@@ -905,9 +905,8 @@ Milestone completion snapshot:
   just targeting `rootguard-adguard:53` instead of Unbound's own port.
   AdGuard being unpinned on that network at the time was later found to be a
   real bug - see the 0.4 network-addressing fix below.
-- **0.4 operations/backup/recovery** - 2 of 14 items open: power-loss/
-  interrupted-write tests and a disaster-recovery runbook. Clean-install
-  full restore landed in
+- **0.4 operations/backup/recovery** - 1 of 14 items open: a
+  disaster-recovery runbook. Clean-install full restore landed in
   [rootguard#199](https://github.com/foxly-it/rootguard/pull/199).
   Pre-update snapshot and post-update restore verification landed
   ([rootguard#223](https://github.com/foxly-it/rootguard/issues/223)): the
@@ -918,6 +917,19 @@ Milestone completion snapshot:
   instead of silently restoring it - proven against a real Docker container
   and a real `docker compose` image swap in a new `ci-core.yml` job, under
   its own isolated Compose project so it never touches a real deployment.
+  Power-loss and interrupted-write tests landed
+  ([rootguard#225](https://github.com/foxly-it/rootguard/issues/225)): fixed
+  the one remaining non-atomic write (`writeBackupManifest`), then proved -
+  via a real child-process SIGKILL mid-operation, restarted against the same
+  on-disk state, since Go has no per-goroutine kill - that both
+  `updater.Manager` (real Docker, killed between the pre-update backup and
+  the candidate image swap, and again between the swap and verify/rollback)
+  and `installer.Manager` (Docker-free, since `deploy()` hardcodes
+  production container/network names with no isolated-project escape hatch
+  the way `updater.Manager` now has) recover cleanly: an accurate
+  interrupted-operation diagnostic, whatever was already captured before the
+  kill stays intact, and a retried operation afterward completes
+  successfully rather than leaving the appliance stuck.
   Logging/versioning/history, the automatic cleanup-safety work, and a
   network-addressing fix ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
   have landed - AdGuard had no pinned address on the internal `rootguard-dns`
@@ -943,9 +955,9 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.4 operations/backup/recovery** - current, in document order:
-   power-loss tests, the DR runbook (pre-update snapshot verification is
-   done, see above).
+1. **0.4 operations/backup/recovery** - current: only the disaster-recovery
+   runbook remains (pre-update snapshot verification and power-loss tests
+   are done, see above).
 2. **0.5 security/HTTPS/accessibility** - complete, see above.
 3. **0.6 release engineering** - 8 items open, in document order: automated
    semantic versioning, signed multi-arch manifest digests (property already
@@ -962,11 +974,12 @@ the formal keyboard/screen-reader re-verification plus WCAG labels/errors
 review ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)).
 **0.5 is now fully complete.**
 
-**2026-08-13 update:** 0.4's pre-update snapshot/restore verification landed
-([rootguard#223](https://github.com/foxly-it/rootguard/issues/223), see
-above). Power-loss/interrupted-write tests and the disaster-recovery runbook
-remain and are next in the recommended top-to-bottom order if not otherwise
-directed.
+**2026-08-13 update:** 0.4's pre-update snapshot/restore verification
+([rootguard#223](https://github.com/foxly-it/rootguard/issues/223)) and
+power-loss/interrupted-write tests
+([rootguard#225](https://github.com/foxly-it/rootguard/issues/225)) both
+landed, worked through autonomously per explicit user direction to complete
+0.4. Only the disaster-recovery runbook remains before 0.4 is fully closed.
 
 **Immediate next item when resuming (0.2, if not directed elsewhere):**
 0.2's conflict-detection checkbox

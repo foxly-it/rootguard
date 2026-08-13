@@ -235,7 +235,7 @@ func writeBackupManifest(directory string, spec ServiceSpec) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(directory, manifestFileName), data, 0600)
+	return writeAtomic(filepath.Join(directory, manifestFileName), data)
 }
 
 // verifyBackupManifest recomputes checksums for directory and compares them
