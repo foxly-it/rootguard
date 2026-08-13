@@ -913,7 +913,23 @@ Exit: documented security review has no unresolved critical or high finding.
 
 Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
 
-- [ ] Automated semantic versioning across all component repositories
+- [x] Automated semantic versioning across all component repositories -
+      RootGuard now follows Conventional Commits
+      (`CONTRIBUTING.md`); a manually-triggered `release-version-bump.yml`
+      computes the next `v0.1.0-alpha.N` tag, refuses an empty release, and
+      pushes it. A human still decides *when* to cut a release, this only
+      removes having to type or remember the next version number. Verified
+      live end to end (`v0.1.0-alpha.9`) - version computation, changelog
+      generation, and the GitHub Release all worked correctly on the first
+      run. That same run also surfaced a real bug now fixed: GitHub Actions
+      never auto-triggers another workflow's `on: push: tags` from a push
+      made with the built-in `GITHUB_TOKEN` (an anti-recursion safeguard),
+      so the pushed tag alone never started `release-alpha.yml` - a
+      "phantom" release existed (tag + GitHub Release, no images) until the
+      fix explicitly dispatches `release-alpha.yml` with the computed
+      version, the same `workflow_dispatch` path already used by hand for
+      every prior alpha release
+      ([rootguard#233](https://github.com/foxly-it/rootguard/issues/233))
 - [x] Multi-architecture GHCR manifest lists pinned by digest -
       `release-alpha.yml` publishes proper `linux/amd64,linux/arm64`
       manifest lists for all 5 components, and `compose.alpha.yaml`
@@ -957,7 +973,19 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       `config.yml` routes security reports to GitHub's private security
       advisories instead of a public template, which is the correct handling
       for vulnerabilities, not a gap
-- [ ] Public changelog generated from reviewed release entries
+- [x] Public changelog generated from reviewed release entries -
+      `cliff.toml` (git-cliff) generates each release's `CHANGELOG.md`
+      section and GitHub Release body from Conventional Commit history
+      since the last tag, grouped by type and linking `(#123)` references
+      to their PR. `CHANGELOG.md` is seeded with the full history across
+      all 8 pre-existing alpha releases, scoped to the real
+      `v0.1.0-alpha.N` tag pattern rather than a bare `v*` glob - the
+      repository also carries a few stray, non-release tags (`v1.0.0`,
+      `v0.1.0`, `v0.2.0-service-discovery`) that would otherwise interleave
+      into the changelog out of chronological order. Verified live:
+      `v0.1.0-alpha.9`'s changelog section and GitHub Release were both
+      generated correctly
+      ([rootguard#234](https://github.com/foxly-it/rootguard/issues/234))
 - [ ] Website status and Wiki updated as a required CI/release check
 
 Exit: publish `0.6.0-beta.1` for broader self-hosted testing.
