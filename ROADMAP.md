@@ -1051,7 +1051,10 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       `v0.1.0-alpha.8`/`v0.1.0-alpha.9` had already shipped
       ([rootguard#240](https://github.com/foxly-it/rootguard/issues/240))
 
-Exit: publish `0.6.0-beta.1` for broader self-hosted testing.
+Exit: publish `0.1.0-beta.1` for broader self-hosted testing - continuing
+the existing `0.1.0-alpha.N` version series, not jumping to `0.6.0`; "0.6"
+here is this roadmap's own milestone label, not the software's version
+number.
 
 ---
 
