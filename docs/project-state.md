@@ -963,7 +963,9 @@ Milestone completion snapshot:
 - **0.6 beta release engineering** - 2 of 10 items open (issue templates
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
-  release on 2026-08-10). This is the actual gate to cut `0.6.0-beta.1`.
+  release on 2026-08-10). This is the actual gate to cut `0.1.0-beta.1`
+  (continuing the existing `0.1.0-alpha.N` series - "0.6" is this
+  roadmap's own milestone label, not the software's version number).
   SBOM/provenance for every image
   ([rootguard#229](https://github.com/foxly-it/rootguard/issues/229)) and
   release-image attestation verification extended from core/webapp to all 5
