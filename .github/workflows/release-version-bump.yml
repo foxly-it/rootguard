@@ -1,0 +1,84 @@
+name: Cut next alpha release
+
+# Computes the next version, generates the changelog section for everything
+# merged since the last tag, and pushes a new v0.1.0-alpha.N tag - which in
+# turn triggers release-alpha.yml's existing tag-push publish pipeline
+# unchanged. Manually triggered rather than automatic on every push to main:
+# a human still decides *when* to cut a release, this only removes having to
+# type or remember the next version number by hand.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+env:
+  GIT_CLIFF_VERSION: "2.13.1"
+
+jobs:
+  version-and-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: next
+        run: |
+          set -euo pipefail
+          latest_tag="$(git tag --list 'v0.1.0-alpha.*' | sort -t. -k4 -n | tail -1)"
+          if [ -z "$latest_tag" ]; then
+            echo "No existing v0.1.0-alpha.* tag found" >&2
+            exit 1
+          fi
+          latest_n="${latest_tag##*.}"
+          next_n=$((latest_n + 1))
+          next_version="0.1.0-alpha.${next_n}"
+          if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ]; then
+            echo "No commits since ${latest_tag} - nothing to release" >&2
+            exit 1
+          fi
+          echo "latest_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${next_version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${next_version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install git-cliff
+        run: |
+          set -euo pipefail
+          curl -fsSL -o git-cliff.tar.gz \
+            "https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          tar -xzf git-cliff.tar.gz "git-cliff-${GIT_CLIFF_VERSION}/git-cliff"
+          install "git-cliff-${GIT_CLIFF_VERSION}/git-cliff" /usr/local/bin/git-cliff
+          git-cliff --version
+
+      - name: Generate this release's changelog section
+        id: changelog
+        run: |
+          set -euo pipefail
+          range="${{ steps.next.outputs.latest_tag }}..HEAD"
+          git-cliff --config cliff.toml --tag "${{ steps.next.outputs.tag }}" \
+            "$range" --strip header -o /tmp/release-notes.md
+          git-cliff --config cliff.toml --tag "${{ steps.next.outputs.tag }}" \
+            "$range" --prepend CHANGELOG.md
+
+      - name: Commit changelog and tag the release
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "chore(release): ${{ steps.next.outputs.version }}"
+          git tag -a "${{ steps.next.outputs.tag }}" -m "${{ steps.next.outputs.version }}"
+          git push origin HEAD:main
+          git push origin "${{ steps.next.outputs.tag }}"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.next.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --title "${{ steps.next.outputs.version }}" \
+            --notes-file /tmp/release-notes.md \
+            --prerelease

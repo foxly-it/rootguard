@@ -980,6 +980,24 @@ Milestone completion snapshot:
   outside the actual release path), and `attestation.go`'s policy map only
   ever covered core/webapp even though updater/unbound/blockpage are
   published by the identical signer.
+  Automated semantic versioning
+  ([rootguard#233](https://github.com/foxly-it/rootguard/issues/233)) and
+  changelog generation
+  ([rootguard#234](https://github.com/foxly-it/rootguard/issues/234)) are
+  implemented together, since both flow from the same mechanism: RootGuard
+  now follows Conventional Commits (documented in `CONTRIBUTING.md`), a new
+  manually-triggered `release-version-bump.yml` computes the next
+  `v0.1.0-alpha.N` tag and pushes it (letting the existing `release-alpha.yml`
+  tag-push trigger take over unchanged), and `cliff.toml`
+  ([git-cliff](https://git-cliff.org/)) generates that release's `CHANGELOG.md`
+  section plus a real GitHub Release from the commits since the last tag.
+  `CHANGELOG.md` is seeded with the full history across all 8 existing alpha
+  releases, deliberately scoped to the real `v0.1.0-alpha.N` tag pattern
+  rather than a bare `v*` glob - the repository also carries a few stray,
+  non-release tags (`v1.0.0`, `v0.1.0`, `v0.2.0-service-discovery`) that
+  would otherwise interleave into the changelog out of chronological order.
+  Both roadmap checkboxes stay unchecked pending live verification against a
+  real release, same as #229/#230 above.
 
 **Working order: top-to-bottom through the roadmap document**, per explicit
 user direction (2026-08-09) - not "closest-to-done first" as this section
