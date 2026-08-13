@@ -1,0 +1,64 @@
+# git-cliff configuration - generates CHANGELOG.md from Conventional Commits
+# history. See docs/versioning.md for the commit convention this depends on.
+# https://git-cliff.org/docs/configuration
+
+[changelog]
+header = """
+# Changelog
+
+All notable changes to RootGuard are documented here, generated from the
+commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
+still ahead.
+"""
+body = """
+{% if version %}\
+    ## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+    ## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}
+    ### {{ group | striptags | trim | upper_first }}
+    {% for commit in commits %}
+        - {{ commit.message | split(pat="\n") | first | trim | upper_first }}\
+    {% endfor %}
+{% endfor %}\n
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+commit_preprocessors = [
+  # Turn a trailing "(#123)" into a link to the PR, same shorthand
+  # ROADMAP.md/docs/project-state.md already use throughout. (?m) so this
+  # matches the end of the subject line, not just the end of the whole
+  # message - a squash-merge commit's body commonly continues past it.
+  { pattern = '(?m)\(#(\d+)\)$', replace = "([#${1}](https://github.com/foxly-it/rootguard/pull/${1}))" },
+]
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Changed" },
+  { message = "^redesign", group = "Changed" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Testing" },
+  { message = "^ci", group = "CI" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "Maintenance" },
+  { message = "^\\[skip ci\\]", skip = true },
+  { message = "^Merge ", skip = true },
+  # Commits before docs/versioning.md's Conventional Commits convention
+  # (2026-08) predate the type(scope): prefix - still worth keeping in the
+  # changelog, just uncategorized rather than dropped or misclassified.
+  { message = ".*", group = "Other" },
+]
+filter_commits = false
+# Scoped to the actual alpha release scheme, not a bare "v[0-9]*" glob - the
+# repository also carries a few stray, non-release tags from before this
+# numbering settled (v1.0.0, v0.1.0, v0.2.0-service-discovery) that would
+# otherwise interleave into the changelog out of chronological order.
+tag_pattern = "^v0\\.1\\.0-alpha\\.[0-9]+$"
+sort_commits = "oldest"

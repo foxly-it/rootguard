@@ -57,6 +57,24 @@ Schritt ändern.
 - Verwende für neue Texte die deutsche und englische Variante, wenn die
   betroffene Oberfläche zweisprachig ist.
 
+## Commit-Nachrichten
+
+Der Titel jedes Commits (bzw. bei einem gesquashten Pull Request: der
+Merge-Commit-Titel) folgt [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+<typ>(<optionaler bereich>): <kurze beschreibung>
+```
+
+Gebräuchliche Typen: `feat` (neues Verhalten), `fix` (Bugfix), `docs`
+(Dokumentation), `refactor`, `perf`, `test`, `ci`, `chore`. Ein
+`!` nach dem Typ/Bereich (z. B. `feat!:`) oder eine `BREAKING CHANGE:`-Zeile
+im Commit-Body markiert eine rückwärtsinkompatible Änderung.
+
+Daraus generiert `cliff.toml` bei jedem Release automatisch den Abschnitt in
+[CHANGELOG.md](CHANGELOG.md) - ein Commit ohne passenden Typ landet dort
+lediglich unter „Other" statt in der passenden Kategorie, bricht aber nichts.
+
 ## Vor dem Pull Request
 
 Für Änderungen im Hauptrepository:
@@ -82,3 +100,13 @@ Ein Pull Request sollte enthalten:
 
 Mit einem Beitrag erklärst du dich damit einverstanden, ihn unter der
 Projektlizenz [AGPL-3.0-or-later](LICENSE) zu veröffentlichen.
+
+## Release-Prozess (nur Maintainer)
+
+Ein neuer Alpha-Release wird über den Workflow „Cut next alpha release"
+(`.github/workflows/release-version-bump.yml`, manuell per
+`workflow_dispatch` ausgelöst) angestoßen. Er ermittelt die nächste
+Versionsnummer selbst, generiert den passenden Abschnitt in
+[CHANGELOG.md](CHANGELOG.md) aus der Commit-Historie seit dem letzten Tag,
+committet und taggt - der bestehende `release-alpha.yml`-Workflow übernimmt
+danach unverändert Build, Signierung und Veröffentlichung wie bisher.
