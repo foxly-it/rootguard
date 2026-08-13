@@ -5,10 +5,12 @@
 FROM alpine:3.23
 
 ARG HEALTHY=true
-RUN mkdir -p /data && printf 'authentic data' > /data/marker \
-    && if [ "$HEALTHY" = "true" ]; then touch /healthy; fi
+RUN adduser -D -u 10001 fixture \
+    && mkdir -p /data && printf 'authentic data' > /data/marker && chown -R fixture:fixture /data \
+    && if [ "$HEALTHY" = "true" ]; then touch /healthy && chown fixture:fixture /healthy; fi
 
 HEALTHCHECK --interval=1s --timeout=1s --retries=1 --start-period=1s \
     CMD test -f /healthy
 
+USER fixture
 ENTRYPOINT ["sleep", "infinity"]
