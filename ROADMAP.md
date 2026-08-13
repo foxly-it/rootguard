@@ -962,8 +962,39 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       (run from inside a live `rootguard-core` container, the exact binary
       and policy Core itself uses) reports `verified` for all 5 images
       ([rootguard#230](https://github.com/foxly-it/rootguard/issues/230))
-- [ ] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions
-- [ ] Upgrade tests from every supported previous RootGuard release
+- [ ] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions -
+      implemented (`docs/compatibility-matrix.md` consolidates all four
+      axes: three already had real, independent CI proof - Docker
+      platform/engine via `docs/platform-support.md`'s clean-install
+      matrix, AdGuard channel via `ci-adguard-compat.yml`'s stable/beta
+      matrix, Unbound via `ci-unbound.yml`'s native-arch and scenario
+      checks - RootGuard pins its own Unbound build, not an operator
+      choice), but left unchecked pending the same live verification as
+      the upgrade-test item directly below, since its fourth axis depends
+      on that job actually passing for real
+      ([rootguard#243](https://github.com/foxly-it/rootguard/issues/243))
+- [ ] Upgrade tests from every supported previous RootGuard release -
+      scoped to the one release directly before the current one (N-1 -> N):
+      RootGuard is pre-1.0 alpha and doesn't yet promise compatibility
+      further back. `release-alpha.yml`'s new `upgrade-test` job deploys
+      the previous release exactly as it shipped, completes guided setup,
+      verifies DNS, then upgrades Core/WebApp in place through the real
+      control-plane updater (never a synthetic fixture) to the version
+      being published, and verifies the running images and DNS resolution
+      afterward. Building it surfaced a real, independent bug now fixed in
+      the same change: the release tag is created *before* the pin-update
+      commit that follows it, so every existing tag
+      (confirmed live: `v0.1.0-alpha.7`, `v0.1.0-alpha.8`) has always
+      pointed at a `compose.alpha.yaml` still pinned to the *previous*
+      release's images - the documented quick start
+      (`curl .../v0.1.0-alpha.N/compose.alpha.yaml`) fetched the wrong
+      images for every past release. `update-alpha-pins` now moves the tag
+      to the pin-update commit it just created; the `upgrade-test` job
+      itself doesn't depend on that fix, since it locates the correct
+      pin-update commit directly rather than trusting the tag. Left
+      unchecked pending live verification against a real release, per this
+      roadmap's own rule
+      ([rootguard#242](https://github.com/foxly-it/rootguard/issues/242))
 - [x] Migration framework for persistent state and configuration schemas -
       scoped deliberately, per explicit user direction, to schema-version +
       fail-closed consistency rather than a full transform-function

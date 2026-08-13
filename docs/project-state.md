@@ -1031,6 +1031,30 @@ Milestone completion snapshot:
   `site/*.html` still said `0.1.0-alpha.7` in the status badge, quick-start
   `curl` commands, pinned `.env` image digests, and version labels, even
   though `v0.1.0-alpha.8`/`v0.1.0-alpha.9` had already shipped.
+  Upgrade tests
+  ([rootguard#242](https://github.com/foxly-it/rootguard/issues/242)) and
+  the compatibility matrix
+  ([rootguard#243](https://github.com/foxly-it/rootguard/issues/243)) are
+  implemented but deliberately left unchecked pending live verification,
+  same as the earlier SBOM/attestation/versioning items - a new
+  `upgrade-test` job in `release-alpha.yml` deploys the previous published
+  release exactly as it shipped, completes guided setup, verifies DNS, then
+  upgrades Core/WebApp in place through the real control-plane updater
+  (never a synthetic fixture) to the version being published, and verifies
+  the running images and DNS resolution afterward.
+  `docs/compatibility-matrix.md` consolidates this RootGuard-version axis
+  with three that already had independent CI proof (Docker platform/engine,
+  AdGuard channel, Unbound - RootGuard pins its own build, not an operator
+  choice). Building the upgrade test surfaced a real, independent bug, now
+  fixed in the same change: the release tag is created *before* the
+  pin-update commit that follows it, so every existing tag (confirmed live:
+  `v0.1.0-alpha.7`, `v0.1.0-alpha.8`) has always pointed at a
+  `compose.alpha.yaml` still pinned to the *previous* release's images - the
+  documented quick start fetched the wrong images for every past release.
+  `update-alpha-pins` now moves the tag to the pin-update commit it just
+  created going forward; historical tags remain stale unless retroactively
+  fixed, which needs the user's call since it touches already-published
+  external references.
 
 **Working order: top-to-bottom through the roadmap document**, per explicit
 user direction (2026-08-09) - not "closest-to-done first" as this section
