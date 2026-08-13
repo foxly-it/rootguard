@@ -4,6 +4,8 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -128,6 +130,19 @@ func TestControlPlaneCleanupNeverUsesGlobalPrune(t *testing.T) {
 	if strings.Contains(all, "sha256:core-previous") || strings.Contains(all, "sha256:core-current") ||
 		strings.Contains(all, "prune") {
 		t.Fatalf("cleanup touched a protected resource:\n%s", all)
+	}
+}
+
+func TestInterruptedControlPlaneUpdateGetsRecoverableDiagnosticOnRestart(t *testing.T) {
+	dataDir := t.TempDir()
+	data := `{"state":"updating","message":"in progress","services":[],"updated_at":"2026-07-28T00:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(dataDir, "status.json"), []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager := newManager(dataDir, "/compose.yaml", "rootguard", testSpecs(), nil)
+	status := manager.Status()
+	if status.State != stateFailed || !strings.Contains(status.Message, "unterbrochen") {
+		t.Fatalf("expected an interrupted-update diagnostic on restart, got %#v", status)
 	}
 }
 

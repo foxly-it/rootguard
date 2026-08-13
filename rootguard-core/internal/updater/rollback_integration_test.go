@@ -32,6 +32,11 @@ const (
 	fixtureComposeProject = "rootguard-updater-fixture-it"
 	fixtureOldImage       = "rootguard-updater-fixture:old"
 	fixtureBadImage       = "rootguard-updater-fixture:bad"
+	// A second healthy tag, distinct from fixtureOldImage, so a recovery
+	// retry after a simulated crash (power_loss_integration_test.go) proves
+	// a real image swap and health check, not the same-ID "no_change"
+	// fast path Manager.update takes when the target already matches.
+	fixtureRecoveredImage = "rootguard-updater-fixture:recovered"
 )
 
 func TestMain(m *testing.M) {
@@ -57,13 +62,17 @@ func waitForIdleWithin(t *testing.T, manager *Manager, timeout time.Duration) {
 
 func buildFixtureImages(t *testing.T) {
 	t.Helper()
-	buildFixture(t, fixtureOldImage, "true")
-	buildFixture(t, fixtureBadImage, "false")
+	buildFixture(t, fixtureOldImage, "true", "old")
+	buildFixture(t, fixtureBadImage, "false", "bad")
+	buildFixture(t, fixtureRecoveredImage, "true", "recovered")
 }
 
-func buildFixture(t *testing.T, tag, healthy string) {
+func buildFixture(t *testing.T, tag, healthy, variant string) {
 	t.Helper()
-	output, err := exec.Command("docker", "build", "--build-arg", "HEALTHY="+healthy, "--tag", tag, "testdata/fixture").CombinedOutput()
+	output, err := exec.Command("docker", "build",
+		"--build-arg", "HEALTHY="+healthy,
+		"--build-arg", "VARIANT="+variant,
+		"--tag", tag, "testdata/fixture").CombinedOutput()
 	if err != nil {
 		t.Fatalf("docker build %s: %v: %s", tag, err, output)
 	}

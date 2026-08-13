@@ -304,6 +304,19 @@ func copyDirForTest(src, dst string) error {
 	})
 }
 
+func TestInterruptedUpdateGetsRecoverableDiagnosticOnRestart(t *testing.T) {
+	dataDir := t.TempDir()
+	data := `{"state":"updating","active_service":"unbound","message":"in progress","services":[],"updated_at":"2026-07-28T00:00:00Z"}`
+	if err := os.WriteFile(filepath.Join(dataDir, "status.json"), []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(Options{DataDir: dataDir})
+	status := manager.Status()
+	if status.State != StateFailed || !strings.Contains(status.Message, "unterbrochen") {
+		t.Fatalf("expected an interrupted-update diagnostic on restart, got %#v", status)
+	}
+}
+
 func TestUnknownServiceIsRejected(t *testing.T) {
 	manager := NewManager(Options{DataDir: t.TempDir()})
 	if _, err := manager.StartUpdate("webapp"); !errors.Is(err, ErrUnknownService) {

@@ -5,6 +5,12 @@
 FROM alpine:3.23
 
 ARG HEALTHY=true
+# Two otherwise-identical healthy tags must still build to distinct image
+# IDs, or Manager's candidate-vs-current comparison treats a "recovery"
+# update as a same-ID no-op instead of a real swap. VARIANT only affects a
+# label, never runtime behavior.
+ARG VARIANT=default
+LABEL io.rootguard.fixture.variant="${VARIANT}"
 RUN adduser -D -u 10001 fixture \
     && mkdir -p /data && printf 'authentic data' > /data/marker && chown -R fixture:fixture /data \
     && if [ "$HEALTHY" = "true" ]; then touch /healthy && chown fixture:fixture /healthy; fi

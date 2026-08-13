@@ -759,7 +759,27 @@ manual Docker forensics.
       own isolated Compose project so it can never interact with a real
       RootGuard deployment; wired into `ci-core.yml` as a dedicated job
       ([rootguard#223](https://github.com/foxly-it/rootguard/issues/223))
-- [ ] Power-loss and interrupted-write tests for installation and updates
+- [x] Power-loss and interrupted-write tests for installation and updates -
+      every persisted file already used atomic temp+rename except
+      `writeBackupManifest`, now fixed to match. Since Go has no
+      per-goroutine kill, genuinely simulating a killed process needs a real
+      child OS process SIGKILLed mid-operation (the same "TestHelperProcess"
+      technique Go's own `os/exec` tests use): both `updater.Manager`
+      (`power_loss_integration_test.go`, real Docker, killed between
+      `backup()` and the candidate image swap, and again between the swap
+      and Verify/rollback) and `installer.Manager`
+      (`power_loss_test.go`, Docker-free - `deploy()` hardcodes production
+      container/network names with no isolated-project escape hatch, so a
+      real-Docker version would risk colliding with an actual deployment;
+      the process-persistence layer under test does not depend on the
+      containers being real) prove a restarted Manager reports the existing
+      interrupted-operation diagnostic instead of a stale in-progress
+      status, that whatever was already captured/written before the kill
+      stays intact, and that a retried operation afterward completes
+      cleanly - the appliance is never left stuck. Wired into `ci-core.yml`;
+      the installer test needs no Docker and already runs in the plain
+      `go test ./...` job
+      ([rootguard#225](https://github.com/foxly-it/rootguard/issues/225))
 - [ ] Disaster-recovery runbook tested on a separate host
 
 Exit: backup export/import and failed-update recovery are automated and tested.

@@ -31,13 +31,18 @@ jobs:
         run: docker build -t rootguard-core:test .
 
   # Exercises the pre-update snapshot/rollback path (Manager.backup,
-  # Manager.rollback, and the SHA-256 checksum verification guarding it)
-  # against a real Docker container, a real docker-compose image swap, and a
-  # real docker cp - not the mocked CommandRunner the `test` job's unit tests
-  # use. Runs under its own isolated Compose project
+  # Manager.rollback, and the SHA-256 checksum verification guarding it) and
+  # the power-loss/interrupted-write path (a real SIGKILL of a subprocess
+  # helper mid-update, then a fresh Manager restarted against the same
+  # on-disk state) against a real Docker container, a real docker-compose
+  # image swap, and a real docker cp - not the mocked CommandRunner the
+  # `test` job's unit tests use. Runs under its own isolated Compose project
   # (rollback_integration_test.go's fixtureComposeProject), never the
   # production DefaultComposeProject, so it cannot interact with a real
-  # RootGuard deployment.
+  # RootGuard deployment. The analogous power-loss test for the guided
+  # installation path (internal/installer) needs no real Docker - it is Go-
+  # only (mocked Run/Bootstrap) and already runs in the `test` job above via
+  # plain `go test ./...`.
   updater-rollback-integration:
     runs-on: ubuntu-latest
     steps:
@@ -47,4 +52,4 @@ jobs:
           go-version-file: rootguard-core/go.mod
           cache-dependency-path: rootguard-core/go.sum
       - working-directory: rootguard-core
-        run: go test -tags integration ./internal/updater/... -run TestRollback -v
+        run: go test -tags integration ./internal/updater/... -run "TestRollback|TestUpdatePowerLoss" -v
