@@ -960,7 +960,7 @@ Milestone completion snapshot:
   errors review
   ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)) both
   landed - see "Delivered and verified" above for both.
-- **0.6 beta release engineering** - 3 of 10 items open (issue templates
+- **0.6 beta release engineering** - 2 of 10 items open (issue templates
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
   release on 2026-08-10). This is the actual gate to cut `0.6.0-beta.1`.
@@ -1007,6 +1007,19 @@ Milestone completion snapshot:
   through `v0.1.0-alpha.8`. Confirmed working by manually running that exact
   dispatch command, which also retroactively completed the phantom
   `v0.1.0-alpha.9` release.
+  Migration framework
+  ([rootguard#237](https://github.com/foxly-it/rootguard/issues/237))
+  landed, scoped deliberately to schema-version + fail-closed consistency
+  rather than a full transform-function framework: every persisted JSON
+  file across `rootguard-core`/`rootguard-updater` was audited, and only
+  two genuine gaps were found (the rest already had adequate cheap
+  validity checks). The updater's per-backup `manifest.json` now carries a
+  `SchemaVersion`, matching its sibling `backupexport.Manifest`. Unbound's
+  `settings.json` gets a `schema_version` envelope kept off the `Settings`
+  type itself (also the guided-settings HTTP API response shape); `Load`
+  refuses only a version *newer* than the build knows, leaving the
+  existing additive-field migration (`jsonFieldExists`) untouched for an
+  absent or older version.
   Website/Wiki CI check
   ([rootguard#240](https://github.com/foxly-it/rootguard/issues/240))
   landed, scoped to hard verifiable facts rather than content review:

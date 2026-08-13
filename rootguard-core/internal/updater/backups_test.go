@@ -236,13 +236,43 @@ func TestVerifyBackupManifestRefusesSymlinksAndMismatchedService(t *testing.T) {
 	}
 }
 
+func TestVerifyBackupManifestRejectsUnsupportedSchemaVersion(t *testing.T) {
+	directory := t.TempDir()
+	if err := os.WriteFile(filepath.Join(directory, "AdGuardHome.yaml"), []byte("original"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	spec := ServiceSpec{Name: "adguard", Container: "rootguard-adguard"}
+	if err := writeBackupManifest(directory, spec); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(directory, manifestFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest backupManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		t.Fatal(err)
+	}
+	manifest.SchemaVersion = backupManifestSchemaVersion + 1
+	data, err = json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, manifestFileName), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyBackupManifest(directory, spec); err == nil {
+		t.Fatal("expected an unsupported schema version to fail verification")
+	}
+}
+
 func writeManagedBackup(t *testing.T, dataDir, timestamp, service, container, content string) string {
 	t.Helper()
 	directory := filepath.Join(dataDir, "backups", timestamp, service)
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := json.Marshal(map[string]string{"service": service, "container": container, "image": "test"})
+	manifest, err := json.Marshal(map[string]any{"schema_version": backupManifestSchemaVersion, "service": service, "container": container, "image": "test"})
 	if err != nil {
 		t.Fatal(err)
 	}
