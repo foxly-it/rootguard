@@ -1,16 +1,25 @@
 name: Cut next alpha release
 
 # Computes the next version, generates the changelog section for everything
-# merged since the last tag, and pushes a new v0.1.0-alpha.N tag - which in
-# turn triggers release-alpha.yml's existing tag-push publish pipeline
-# unchanged. Manually triggered rather than automatic on every push to main:
-# a human still decides *when* to cut a release, this only removes having to
+# merged since the last tag, pushes a new v0.1.0-alpha.N tag, and explicitly
+# dispatches release-alpha.yml's existing publish pipeline for it (unchanged
+# itself). Manually triggered rather than automatic on every push to main: a
+# human still decides *when* to cut a release, this only removes having to
 # type or remember the next version number by hand.
+#
+# GitHub Actions never auto-triggers another workflow's "on: push: tags"
+# from a push made with the built-in GITHUB_TOKEN (an anti-recursion
+# safeguard) - confirmed live: v0.1.0-alpha.9's tag push produced no
+# release-alpha.yml run at all. Dispatching it explicitly with the computed
+# version as input sidesteps that entirely, reusing the exact same
+# workflow_dispatch path a maintainer already used by hand for every alpha
+# release through v0.1.0-alpha.8.
 on:
   workflow_dispatch: {}
 
 permissions:
   contents: write
+  actions: write
 
 env:
   GIT_CLIFF_VERSION: "2.13.1"
@@ -82,3 +91,12 @@ jobs:
             --title "${{ steps.next.outputs.version }}" \
             --notes-file /tmp/release-notes.md \
             --prerelease
+
+      - name: Dispatch the image-publishing release pipeline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run release-alpha.yml \
+            --repo "${{ github.repository }}" \
+            --ref main \
+            -f version="${{ steps.next.outputs.version }}"
