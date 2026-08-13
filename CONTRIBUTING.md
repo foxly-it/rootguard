@@ -1,22 +1,25 @@
-# Zu RootGuard beitragen
+**English** · [Deutsch](CONTRIBUTING.de.md)
 
-Danke für dein Interesse an RootGuard. Beiträge können Code, Tests,
-Dokumentation, Übersetzungen oder reproduzierbare Fehlerberichte sein.
+# Contributing to RootGuard
 
-## Einstieg
+Thanks for your interest in RootGuard. Contributions can be code, tests,
+documentation, translations, or reproducible bug reports.
 
-1. Prüfe bestehende [Issues](https://github.com/foxly-it/rootguard/issues) und
-   die [Roadmap](ROADMAP.md).
-2. Für den ersten Beitrag eignen sich insbesondere
-   [`good first issue`](https://github.com/foxly-it/rootguard/labels/good%20first%20issue)
-   und [`help wanted`](https://github.com/foxly-it/rootguard/labels/help%20wanted).
-3. Beschreibe bei größeren Änderungen vor der Umsetzung kurz den geplanten
-   Lösungsweg im Issue.
+## Getting started
 
-Sicherheitslücken gehören nicht in öffentliche Issues. Verwende dafür den in
-[SECURITY.md](SECURITY.md) beschriebenen vertraulichen Meldeweg.
+1. Check existing [issues](https://github.com/foxly-it/rootguard/issues) and
+   the [roadmap](ROADMAP.md).
+2. [`good first issue`](https://github.com/foxly-it/rootguard/labels/good%20first%20issue)
+   and [`help wanted`](https://github.com/foxly-it/rootguard/labels/help%20wanted)
+   are good starting points for a first contribution.
+3. For larger changes, briefly describe your planned approach in the issue
+   before implementing it.
 
-## Entwicklungsumgebung
+Security vulnerabilities don't belong in public issues. Use the
+confidential reporting path described in [SECURITY.md](SECURITY.md)
+instead.
+
+## Development environment
 
 ```sh
 git clone https://github.com/foxly-it/rootguard.git
@@ -24,89 +27,89 @@ cd rootguard
 cp .env.example .env
 ```
 
-Setze in `.env` ein starkes Admin-Passwort sowie getrennte zufällige API- und
-Recovery-Token. Anschließend lässt sich der Entwicklungsstack bauen:
+Set a strong administrator password plus separate random API and recovery
+tokens in `.env`. You can then build the development stack:
 
 ```sh
 docker compose up --build -d
 ```
 
-## Das richtige Verzeichnis wählen
+## Choosing the right directory
 
-RootGuard ist ein Monorepo. Anwendungscode gehört in das jeweilige
-Komponentenverzeichnis, jedes mit eigenem Dockerfile und eigenem
-pfadgefiltertem CI-Workflow:
+RootGuard is a monorepo. Application code belongs in its component
+directory, each with its own Dockerfile and path-filtered CI workflow:
 
-- `rootguard-core` – Orchestrierung und interne API
-- `rootguard-webapp` – Benutzeroberfläche und Anmeldung
-- `rootguard-updater` – kontrollierte Core-/WebApp-Updates
-- `rootguard-unbound` – Unbound-Image und Resolver-Basis
+- `rootguard-core` – orchestration and internal API
+- `rootguard-webapp` – user interface and authentication
+- `rootguard-updater` – controlled Core/WebApp updates
+- `rootguard-unbound` – Unbound image and resolver base
 
-Ein Pull Request kann ein oder mehrere dieser Verzeichnisse gemeinsam mit den
-zugehörigen Doku-Updates (`ROADMAP.md`, `docs/project-state.md`) in einem
-Schritt ändern.
+A pull request can change one or more of these directories together with
+the matching doc updates (`ROADMAP.md`, `docs/project-state.md`) in one
+step.
 
-## Änderungen umsetzen
+## Making changes
 
-- Halte einen Pull Request auf ein klar abgegrenztes Problem beschränkt.
-- Ergänze oder aktualisiere Tests für geändertes Verhalten.
-- Aktualisiere Handbuch, Wiki und Projektstatus, wenn sich sichtbares Verhalten
-  oder der dokumentierte Funktionsumfang ändert.
-- Veröffentliche keine Zugangsdaten, `.env`-Dateien, Tokens oder privaten
-  Netzwerkdetails.
-- Verwende für neue Texte die deutsche und englische Variante, wenn die
-  betroffene Oberfläche zweisprachig ist.
+- Keep a pull request scoped to one clearly defined problem.
+- Add or update tests for changed behavior.
+- Update the manual, Wiki, and project status when visible behavior or the
+  documented feature set changes.
+- Never publish credentials, `.env` files, tokens, or private network
+  details.
+- Provide both the German and English text for new UI copy when the
+  affected surface is bilingual.
 
-## Commit-Nachrichten
+## Commit messages
 
-Der Titel jedes Commits (bzw. bei einem gesquashten Pull Request: der
-Merge-Commit-Titel) folgt [Conventional Commits](https://www.conventionalcommits.org/):
+Every commit's title (or, for a squashed pull request, the merge commit's
+title) follows [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-<typ>(<optionaler bereich>): <kurze beschreibung>
+<type>(<optional scope>): <short description>
 ```
 
-Gebräuchliche Typen: `feat` (neues Verhalten), `fix` (Bugfix), `docs`
-(Dokumentation), `refactor`, `perf`, `test`, `ci`, `chore`. Ein
-`!` nach dem Typ/Bereich (z. B. `feat!:`) oder eine `BREAKING CHANGE:`-Zeile
-im Commit-Body markiert eine rückwärtsinkompatible Änderung.
+Common types: `feat` (new behavior), `fix` (bug fix), `docs`
+(documentation), `refactor`, `perf`, `test`, `ci`, `chore`. A `!` after the
+type/scope (e.g. `feat!:`) or a `BREAKING CHANGE:` line in the commit body
+marks a backwards-incompatible change.
 
-Daraus generiert `cliff.toml` bei jedem Release automatisch den Abschnitt in
-[CHANGELOG.md](CHANGELOG.md) - ein Commit ohne passenden Typ landet dort
-lediglich unter „Other" statt in der passenden Kategorie, bricht aber nichts.
+`cliff.toml` generates the [CHANGELOG.md](CHANGELOG.md) section for each
+release from this history automatically - a commit without a matching type
+just lands under "Other" instead of the right category, without breaking
+anything.
 
-## Vor dem Pull Request
+## Before the pull request
 
-Für Änderungen im Hauptrepository:
+For changes in the main repository:
 
 ```sh
 git diff --check
 docker compose config
 ```
 
-Führe zusätzlich die Tests des betroffenen Komponentenverzeichnisses aus. Die
-Integrations-CI startet zudem einen vollständigen Stack und prüft Login,
-Setup, DNS-Auflösung und DNSSEC.
+Also run the tests for the affected component directory. The integration
+CI additionally starts a complete stack and checks login, setup, DNS
+resolution, and DNSSEC.
 
-## Pull Request
+## Pull request
 
-Ein Pull Request sollte enthalten:
+A pull request should include:
 
-- eine kurze Erklärung des Problems und der Lösung;
-- die ausgeführten Prüfungen;
-- Screenshots bei sichtbaren Änderungen;
-- Hinweise zu Migration, Konfiguration oder bekannten Einschränkungen;
-- eine Verknüpfung zum zugehörigen Issue, sofern vorhanden.
+- a short explanation of the problem and the solution;
+- the checks you ran;
+- screenshots for visible changes;
+- notes on migration, configuration, or known limitations;
+- a link to the related issue, if one exists.
 
-Mit einem Beitrag erklärst du dich damit einverstanden, ihn unter der
-Projektlizenz [AGPL-3.0-or-later](LICENSE) zu veröffentlichen.
+By contributing, you agree to release your contribution under the
+project's [AGPL-3.0-or-later](LICENSE) license.
 
-## Release-Prozess (nur Maintainer)
+## Release process (maintainers only)
 
-Ein neuer Alpha-Release wird über den Workflow „Cut next alpha release"
-(`.github/workflows/release-version-bump.yml`, manuell per
-`workflow_dispatch` ausgelöst) angestoßen. Er ermittelt die nächste
-Versionsnummer selbst, generiert den passenden Abschnitt in
-[CHANGELOG.md](CHANGELOG.md) aus der Commit-Historie seit dem letzten Tag,
-committet und taggt - der bestehende `release-alpha.yml`-Workflow übernimmt
-danach unverändert Build, Signierung und Veröffentlichung wie bisher.
+A new alpha release is triggered through the "Cut next alpha release"
+workflow (`.github/workflows/release-version-bump.yml`, manually invoked
+via `workflow_dispatch`). It determines the next version number itself,
+generates the matching section in [CHANGELOG.md](CHANGELOG.md) from the
+commit history since the last tag, commits, and tags - the existing
+`release-alpha.yml` workflow then takes over build, signing, and
+publishing exactly as before.
