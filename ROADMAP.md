@@ -986,7 +986,21 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       `v0.1.0-alpha.9`'s changelog section and GitHub Release were both
       generated correctly
       ([rootguard#234](https://github.com/foxly-it/rootguard/issues/234))
-- [ ] Website status and Wiki updated as a required CI/release check
+- [x] Website status and Wiki updated as a required CI/release check -
+      scoped, per explicit user direction, to hard verifiable facts rather
+      than content review: `scripts/check-site-facts.sh` compares every
+      `0.1.0-alpha.N` mention in `site/*.html` against the latest real
+      release tag (excluding deliberate historical references like
+      "Starting with 0.1.0-alpha.2, ..."), and verifies every local
+      `href`/`src` resolves to a real file. Runs on every push/PR to `main`
+      via `ci-site-facts.yml`, not path-filtered to `site/**` - the site can
+      go stale purely because a release was cut elsewhere with no
+      `site/*.html` edit to trigger a path-filtered check. Building this
+      surfaced real drift, fixed in the same change: `site/*.html` still
+      said `0.1.0-alpha.7` in the status badge, quick-start `curl` commands,
+      pinned `.env` image digests, and version labels, even though
+      `v0.1.0-alpha.8`/`v0.1.0-alpha.9` had already shipped
+      ([rootguard#240](https://github.com/foxly-it/rootguard/issues/240))
 
 Exit: publish `0.6.0-beta.1` for broader self-hosted testing.
 

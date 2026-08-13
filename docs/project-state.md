@@ -960,7 +960,7 @@ Milestone completion snapshot:
   errors review
   ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)) both
   landed - see "Delivered and verified" above for both.
-- **0.6 beta release engineering** - 4 of 10 items open (issue templates
+- **0.6 beta release engineering** - 3 of 10 items open (issue templates
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
   release on 2026-08-10). This is the actual gate to cut `0.6.0-beta.1`.
@@ -1007,6 +1007,17 @@ Milestone completion snapshot:
   through `v0.1.0-alpha.8`. Confirmed working by manually running that exact
   dispatch command, which also retroactively completed the phantom
   `v0.1.0-alpha.9` release.
+  Website/Wiki CI check
+  ([rootguard#240](https://github.com/foxly-it/rootguard/issues/240))
+  landed, scoped to hard verifiable facts rather than content review:
+  `scripts/check-site-facts.sh` (new `ci-site-facts.yml`, running on every
+  push/PR to `main`, not path-filtered to `site/**`) compares every
+  `0.1.0-alpha.N` mention in `site/*.html` against the latest real release
+  tag and verifies every local link/asset reference resolves to a real
+  file. Building it surfaced real drift, fixed in the same change:
+  `site/*.html` still said `0.1.0-alpha.7` in the status badge, quick-start
+  `curl` commands, pinned `.env` image digests, and version labels, even
+  though `v0.1.0-alpha.8`/`v0.1.0-alpha.9` had already shipped.
 
 **Working order: top-to-bottom through the roadmap document**, per explicit
 user direction (2026-08-09) - not "closest-to-done first" as this section
@@ -1014,11 +1025,9 @@ previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
 1. **0.4 operations/backup/recovery** - **complete**, see above.
 2. **0.5 security/HTTPS/accessibility** - complete, see above.
-3. **0.6 release engineering** - current, 8 items open, in document order: automated
-   semantic versioning, signed multi-arch manifest digests (property already
-   holds, automating the update after each release is the open part), SBOM/
-   provenance, image signing/verification, compatibility matrix, upgrade
-   tests, migration framework, changelog generation, website/Wiki CI check.
+3. **0.6 release engineering** - current, 2 items open, in document order: a
+   compatibility matrix for RootGuard/Docker/AdGuard/Unbound versions, and
+   upgrade tests from every supported previous RootGuard release.
 
 **2026-08-12 update:** 0.5 was picked up directly, ahead of 0.4 in the
 working order above, per explicit user direction to resume specifically in

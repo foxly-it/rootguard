@@ -1,0 +1,26 @@
+name: Site facts check
+
+# Checks the checkable facts in site/*.html against reality: every mentioned
+# RootGuard version string matches the latest release tag, and every local
+# href/src resolves to a real file. Runs on every push/PR to main (not just
+# changes under site/**) since the site can go stale purely because a
+# release was cut elsewhere, with no site/*.html edit to trigger a
+# path-filtered check - exactly what caught site/*.html still saying
+# 0.1.0-alpha.7 after v0.1.0-alpha.9 had already shipped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: ./scripts/check-site-facts.sh
