@@ -960,7 +960,7 @@ Milestone completion snapshot:
   errors review
   ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)) both
   landed - see "Delivered and verified" above for both.
-- **0.6 beta release engineering** - 6 of 10 items open (issue templates
+- **0.6 beta release engineering** - 4 of 10 items open (issue templates
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
   release on 2026-08-10). This is the actual gate to cut `0.6.0-beta.1`.
@@ -984,20 +984,29 @@ Milestone completion snapshot:
   ([rootguard#233](https://github.com/foxly-it/rootguard/issues/233)) and
   changelog generation
   ([rootguard#234](https://github.com/foxly-it/rootguard/issues/234)) are
-  implemented together, since both flow from the same mechanism: RootGuard
-  now follows Conventional Commits (documented in `CONTRIBUTING.md`), a new
-  manually-triggered `release-version-bump.yml` computes the next
-  `v0.1.0-alpha.N` tag and pushes it (letting the existing `release-alpha.yml`
-  tag-push trigger take over unchanged), and `cliff.toml`
-  ([git-cliff](https://git-cliff.org/)) generates that release's `CHANGELOG.md`
-  section plus a real GitHub Release from the commits since the last tag.
-  `CHANGELOG.md` is seeded with the full history across all 8 existing alpha
-  releases, deliberately scoped to the real `v0.1.0-alpha.N` tag pattern
-  rather than a bare `v*` glob - the repository also carries a few stray,
-  non-release tags (`v1.0.0`, `v0.1.0`, `v0.2.0-service-discovery`) that
-  would otherwise interleave into the changelog out of chronological order.
-  Both roadmap checkboxes stay unchecked pending live verification against a
-  real release, same as #229/#230 above.
+  implemented together and now verified live, since both flow from the same
+  mechanism: RootGuard follows Conventional Commits (documented in
+  `CONTRIBUTING.md`), a manually-triggered `release-version-bump.yml`
+  computes the next `v0.1.0-alpha.N` tag, refuses an empty release, and
+  pushes it, and `cliff.toml` ([git-cliff](https://git-cliff.org/)) generates
+  that release's `CHANGELOG.md` section plus a real GitHub Release from the
+  commits since the last tag. `CHANGELOG.md` is seeded with the full history
+  across all 8 pre-existing alpha releases, scoped to the real
+  `v0.1.0-alpha.N` tag pattern rather than a bare `v*` glob - the repository
+  also carries a few stray, non-release tags (`v1.0.0`, `v0.1.0`,
+  `v0.2.0-service-discovery`) that would otherwise interleave into the
+  changelog out of order. First live run (`v0.1.0-alpha.9`) got version
+  computation, changelog generation, and the GitHub Release all correct, but
+  surfaced a real bug: GitHub Actions never auto-triggers another workflow's
+  `on: push: tags` from a push made with the built-in `GITHUB_TOKEN` (an
+  anti-recursion safeguard undocumented enough to miss writing the original
+  workflow), so the pushed tag alone never started `release-alpha.yml` - a
+  "phantom" release existed (tag + GitHub Release, no images) until fixed to
+  explicitly dispatch `release-alpha.yml` with the computed version, the
+  same `workflow_dispatch` path already used by hand for every alpha release
+  through `v0.1.0-alpha.8`. Confirmed working by manually running that exact
+  dispatch command, which also retroactively completed the phantom
+  `v0.1.0-alpha.9` release.
 
 **Working order: top-to-bottom through the roadmap document**, per explicit
 user direction (2026-08-09) - not "closest-to-done first" as this section
