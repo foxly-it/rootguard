@@ -905,8 +905,8 @@ Milestone completion snapshot:
   just targeting `rootguard-adguard:53` instead of Unbound's own port.
   AdGuard being unpinned on that network at the time was later found to be a
   real bug - see the 0.4 network-addressing fix below.
-- **0.4 operations/backup/recovery** - 1 of 14 items open: a
-  disaster-recovery runbook. Clean-install full restore landed in
+- **0.4 operations/backup/recovery** - **complete**. Clean-install full
+  restore landed in
   [rootguard#199](https://github.com/foxly-it/rootguard/pull/199).
   Pre-update snapshot and post-update restore verification landed
   ([rootguard#223](https://github.com/foxly-it/rootguard/issues/223)): the
@@ -930,6 +930,20 @@ Milestone completion snapshot:
   interrupted-operation diagnostic, whatever was already captured before the
   kill stays intact, and a retried operation afterward completes
   successfully rather than leaving the appliance stuck.
+  The disaster-recovery runbook landed
+  ([rootguard#227](https://github.com/foxly-it/rootguard/issues/227)):
+  `docs/disaster-recovery.md` covers total host loss, a failed update that
+  didn't roll back cleanly, lost administrator credentials, a stuck
+  deployment/update after a crash, and DNS-outage triage, each mapped to an
+  existing mechanism rather than new capability. The total-host-loss
+  scenario was drilled for real - an encrypted backup from a live
+  installation restored on an entirely separate, freshly provisioned host,
+  reaching `installed` through all seven restore steps, with the
+  replacement host's own resolver independently verified (`ad`-flagged
+  recursive resolution, `SERVFAIL` for a broken DNSSEC chain). The drill
+  also surfaced a real gap, now noted in the runbook: the backup/restore
+  feature landed on `main` after the published `v0.1.0-alpha.7` release, so
+  the current public alpha doesn't have it yet.
   Logging/versioning/history, the automatic cleanup-safety work, and a
   network-addressing fix ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
   have landed - AdGuard had no pinned address on the internal `rootguard-dns`
@@ -955,11 +969,9 @@ Milestone completion snapshot:
 user direction (2026-08-09) - not "closest-to-done first" as this section
 previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
-1. **0.4 operations/backup/recovery** - current: only the disaster-recovery
-   runbook remains (pre-update snapshot verification and power-loss tests
-   are done, see above).
+1. **0.4 operations/backup/recovery** - **complete**, see above.
 2. **0.5 security/HTTPS/accessibility** - complete, see above.
-3. **0.6 release engineering** - 8 items open, in document order: automated
+3. **0.6 release engineering** - current, 8 items open, in document order: automated
    semantic versioning, signed multi-arch manifest digests (property already
    holds, automating the update after each release is the open part), SBOM/
    provenance, image signing/verification, compatibility matrix, upgrade
@@ -977,9 +989,12 @@ review ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)).
 **2026-08-13 update:** 0.4's pre-update snapshot/restore verification
 ([rootguard#223](https://github.com/foxly-it/rootguard/issues/223)) and
 power-loss/interrupted-write tests
-([rootguard#225](https://github.com/foxly-it/rootguard/issues/225)) both
-landed, worked through autonomously per explicit user direction to complete
-0.4. Only the disaster-recovery runbook remains before 0.4 is fully closed.
+([rootguard#225](https://github.com/foxly-it/rootguard/issues/225)) landed,
+followed by the disaster-recovery runbook
+([rootguard#227](https://github.com/foxly-it/rootguard/issues/227), see
+above) - all worked through autonomously per explicit user direction to
+complete 0.4. **0.4 is now fully complete.** 0.6 release engineering is next
+in the recommended top-to-bottom order if not otherwise directed.
 
 **Immediate next item when resuming (0.2, if not directed elsewhere):**
 0.2's conflict-detection checkbox
@@ -1050,6 +1065,7 @@ public, digest-pinned `amd64`/`arm64` images for all four RootGuard components.
 Release workflow run `31081554868` built and attested all four components
 directly from the monorepo (the first release since the migration) before
 installing the released stack and verifying recursive DNS plus DNSSEC
-rejection. RootGuard remains in active alpha development:
-update safety, backup/restore, broader authentication hardening and roles, and
-bare-metal support are not yet production complete.
+rejection. RootGuard remains in active alpha development. Update safety and
+backup/restore recovery (0.4) are now complete; broader authentication
+hardening and roles, and bare-metal support, are not yet production
+complete.
