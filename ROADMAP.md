@@ -780,7 +780,23 @@ manual Docker forensics.
       the installer test needs no Docker and already runs in the plain
       `go test ./...` job
       ([rootguard#225](https://github.com/foxly-it/rootguard/issues/225))
-- [ ] Disaster-recovery runbook tested on a separate host
+- [x] Disaster-recovery runbook tested on a separate host -
+      `docs/disaster-recovery.md` covers total host loss, a failed update
+      that didn't roll back cleanly, lost administrator credentials, a
+      stuck deployment/update after a crash, and DNS-outage triage, each
+      mapped to the actual existing mechanism rather than introducing new
+      recovery capability. The total-host-loss scenario was drilled for
+      real: an encrypted backup exported from a live installation was
+      restored on an entirely separate, freshly provisioned host with no
+      prior RootGuard state, reaching `installed` through all seven restore
+      steps, with the replacement host's own resolver independently
+      verified (`ad`-flagged recursive resolution, `SERVFAIL` for a broken
+      DNSSEC chain) - proof the restored DNS chain actually works, not only
+      that files were copied. The drill also surfaced a real gap: the
+      backup/restore feature landed on `main` after the published
+      `v0.1.0-alpha.7` release, so the current public alpha doesn't have it
+      yet - noted directly in the runbook
+      ([rootguard#227](https://github.com/foxly-it/rootguard/issues/227))
 
 Exit: backup export/import and failed-update recovery are automated and tested.
 

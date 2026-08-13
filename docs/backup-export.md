@@ -55,8 +55,9 @@ immediately before apply. Plaintext staging and rollback copies are removed on
 every exit; the passphrase is neither logged nor persisted.
 
 This workflow is for a clean replacement installation, not an in-place import
-over a running appliance. Transactional live snapshots and post-update restore
-verification remain separate 0.4 work.
+over a running appliance. For a step-by-step recovery checklist covering
+total host loss and other disaster scenarios, see
+[disaster-recovery.md](disaster-recovery.md).
 
 ## Command-line decryption
 
