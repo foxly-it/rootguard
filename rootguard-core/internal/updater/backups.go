@@ -203,17 +203,27 @@ func (m *Manager) validBackupManifest(directory, service string) bool {
 		return false
 	}
 	var manifest backupManifest
-	return json.Unmarshal(data, &manifest) == nil && manifest.Service == service && manifest.Container == spec.Container
+	return json.Unmarshal(data, &manifest) == nil && manifest.SchemaVersion == backupManifestSchemaVersion &&
+		manifest.Service == service && manifest.Container == spec.Container
 }
+
+// backupManifestSchemaVersion mirrors the pattern already used for the
+// portable backup export (backupexport.SchemaVersion) and the Unbound
+// config bundle (unbound.BundleSchemaVersion) - this manifest authorizes
+// restoring files into a live container during rollback, so a future
+// incompatible shape change must be rejected outright rather than silently
+// misread.
+const backupManifestSchemaVersion = 1
 
 // backupManifest records the files copied into a pre-update snapshot so a
 // later restore can detect a partial or corrupted docker cp before trusting
 // it, instead of silently restoring bad data.
 type backupManifest struct {
-	Service   string       `json:"service"`
-	Container string       `json:"container"`
-	Image     string       `json:"image"`
-	Files     []backupFile `json:"files"`
+	SchemaVersion int          `json:"schema_version"`
+	Service       string       `json:"service"`
+	Container     string       `json:"container"`
+	Image         string       `json:"image"`
+	Files         []backupFile `json:"files"`
 }
 
 type backupFile struct {
@@ -230,7 +240,10 @@ func writeBackupManifest(directory string, spec ServiceSpec) error {
 	if err != nil {
 		return fmt.Errorf("checksum backup: %w", err)
 	}
-	manifest := backupManifest{Service: spec.Name, Container: spec.Container, Image: spec.TargetImage, Files: files}
+	manifest := backupManifest{
+		SchemaVersion: backupManifestSchemaVersion,
+		Service:       spec.Name, Container: spec.Container, Image: spec.TargetImage, Files: files,
+	}
 	data, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return err
@@ -249,6 +262,9 @@ func verifyBackupManifest(directory string, spec ServiceSpec) error {
 	var manifest backupManifest
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return fmt.Errorf("parse backup manifest: %w", err)
+	}
+	if manifest.SchemaVersion != backupManifestSchemaVersion {
+		return fmt.Errorf("backup manifest schema version %d is not supported (expected %d)", manifest.SchemaVersion, backupManifestSchemaVersion)
 	}
 	if manifest.Service != spec.Name || manifest.Container != spec.Container {
 		return fmt.Errorf("backup manifest does not match %s", spec.Name)

@@ -2,8 +2,10 @@ package unbound
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +67,40 @@ func TestLoadMigratesGuidedControls(t *testing.T) {
 	}
 	if settings.LogVerbosity != 1 {
 		t.Fatalf("legacy logging setting was not migrated: %#v", settings)
+	}
+}
+
+func TestLoadReadsSchemaVersionedSettings(t *testing.T) {
+	directory := t.TempDir()
+	data, err := json.Marshal(persistedSettings{SchemaVersion: settingsSchemaVersion, Settings: DefaultSettings()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(directory+"/settings.json", data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(directory, "/etc/unbound/unbound.d", "rootguard-unbound")
+	settings, err := manager.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(settings, DefaultSettings()) {
+		t.Fatalf("schema-versioned settings round-tripped incorrectly: %#v", settings)
+	}
+}
+
+func TestLoadRefusesNewerSchemaVersion(t *testing.T) {
+	directory := t.TempDir()
+	data, err := json.Marshal(persistedSettings{SchemaVersion: settingsSchemaVersion + 1, Settings: DefaultSettings()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(directory+"/settings.json", data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(directory, "/etc/unbound/unbound.d", "rootguard-unbound")
+	if _, err := manager.Load(); err == nil {
+		t.Fatal("expected a newer settings.json schema version to be refused")
 	}
 }
 

@@ -68,6 +68,22 @@ type LocalZone struct {
 	Hosts []LocalHost `json:"hosts"`
 }
 
+// settingsSchemaVersion guards settings.json against a downgrade: it is
+// written alongside Settings' own fields (see persistedSettings) but
+// deliberately kept off the Settings type itself, which is also the shape
+// of the guided-settings HTTP API - a persistence concern has no business
+// leaking into that response body. Load only refuses a *newer* version than
+// this build knows (the one case blind unmarshal is genuinely dangerous:
+// fields could have been repurposed with a different meaning); an older or
+// absent version is still handled by the additive-field defaulting below,
+// exactly as before this existed.
+const settingsSchemaVersion = 1
+
+type persistedSettings struct {
+	SchemaVersion int `json:"schema_version"`
+	Settings
+}
+
 type Settings struct {
 	QnameMinimisation         bool                `json:"qname_minimisation"`
 	Prefetch                  bool                `json:"prefetch"`
@@ -576,11 +592,26 @@ func (m *Manager) Load() (Settings, error) {
 	if err != nil {
 		return Settings{}, err
 	}
+	if version, ok := peekSchemaVersion(data); ok && version > settingsSchemaVersion {
+		return Settings{}, fmt.Errorf("settings.json schema_version %d is newer than this build supports (%d) - refusing to reinterpret it; upgrade RootGuard Core before reusing this data", version, settingsSchemaVersion)
+	}
 
 	var settings Settings
 	if err := json.Unmarshal(data, &settings); err != nil {
 		return Settings{}, fmt.Errorf("decode saved settings: %w", err)
 	}
+	settings = applyLegacyFieldDefaults(settings, data)
+	return settings, settings.Validate()
+}
+
+// applyLegacyFieldDefaults backfills fields that didn't exist yet when a
+// persisted settings.json was written, distinguishing "field absent" (apply
+// the default introduced when it was added) from "field present as its zero
+// value" (an explicit choice, leave it alone) via jsonFieldExists. This is
+// the additive-change half of settings.json's migration story; a genuinely
+// incompatible change is instead caught earlier by the schema_version check
+// in Load.
+func applyLegacyFieldDefaults(settings Settings, data []byte) Settings {
 	if settings.ForwardZones == nil {
 		settings.ForwardZones = []ForwardZone{}
 	}
@@ -617,7 +648,22 @@ func (m *Manager) Load() (Settings, error) {
 	if !jsonFieldExists(data, "log_verbosity") {
 		settings.LogVerbosity = 1
 	}
-	return settings, settings.Validate()
+	return settings
+}
+
+// peekSchemaVersion reads settings.json's envelope schema_version field
+// without needing to fully decode it into Settings - absent (pre-versioning
+// files) is reported as not-ok, same as jsonFieldExists treats a missing
+// field, so older persisted files fall through to the additive defaulting
+// above exactly as they did before this existed.
+func peekSchemaVersion(data []byte) (int, bool) {
+	var envelope struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if json.Unmarshal(data, &envelope) != nil || envelope.SchemaVersion == 0 {
+		return 0, false
+	}
+	return envelope.SchemaVersion, true
 }
 
 func jsonFieldExists(data []byte, field string) bool {
@@ -717,7 +763,7 @@ func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custo
 		return fmt.Errorf("record current unbound version: %w", err)
 	}
 
-	settingsData, err := json.MarshalIndent(settings, "", "  ")
+	settingsData, err := json.MarshalIndent(persistedSettings{SchemaVersion: settingsSchemaVersion, Settings: settings}, "", "  ")
 	if err != nil {
 		return err
 	}

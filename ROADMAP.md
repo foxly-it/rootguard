@@ -964,7 +964,25 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       ([rootguard#230](https://github.com/foxly-it/rootguard/issues/230))
 - [ ] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions
 - [ ] Upgrade tests from every supported previous RootGuard release
-- [ ] Migration framework for persistent state and configuration schemas
+- [x] Migration framework for persistent state and configuration schemas -
+      scoped deliberately, per explicit user direction, to schema-version +
+      fail-closed consistency rather than a full transform-function
+      framework: RootGuard doesn't yet have a real breaking-schema-change
+      history that would justify one. Every persisted JSON file across
+      `rootguard-core`/`rootguard-updater` was audited; two genuine gaps
+      were found and closed (the rest already had adequate cheap validity
+      checks and low-consequence failure modes, where adding versioning
+      would have been ceremony, not a real improvement). The updater's
+      per-backup `manifest.json` - which authorizes restoring files into a
+      live container during rollback - now carries a `schema_version`,
+      matching its sibling `backupexport.Manifest` which already had one.
+      Unbound's `settings.json` gets a `schema_version` envelope kept
+      deliberately off the `Settings` type itself (also the guided-settings
+      HTTP API response shape); `Load` refuses only a *newer* version than
+      the build knows, while an absent or older version still flows through
+      the existing hand-rolled additive-field migration
+      (`jsonFieldExists`) unchanged
+      ([rootguard#237](https://github.com/foxly-it/rootguard/issues/237))
 - [x] GitHub issue templates for bugs, installations, security, and features -
       `.github/ISSUE_TEMPLATE/bug_report.yml` (its "Betroffene Komponente"
       dropdown includes "Compose / Installation" as a category, covering
