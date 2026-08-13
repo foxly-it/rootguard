@@ -213,6 +213,31 @@ jobs:
           git rebase origin/main
           git push origin HEAD:main
 
+      # The release tag is created before this job ever runs (by
+      # release-version-bump.yml, or by hand for a workflow_dispatch run),
+      # so without this step it permanently points at a commit whose
+      # compose.alpha.yaml still pins the *previous* release's images -
+      # confirmed live: v0.1.0-alpha.7's and v0.1.0-alpha.8's own tags both
+      # resolve to a compose.alpha.yaml pinned one release behind their own
+      # name. Anyone following the documented quick start
+      # ("curl .../v0.1.0-alpha.N/compose.alpha.yaml") got the wrong images.
+      # Moving the tag here, once, right after the pin commit that
+      # completes *this* release, keeps it self-consistent going forward.
+      # Idempotent: a no-op if the tag already points at the pinned commit.
+      - name: Point the release tag at the pin-update commit
+        run: |
+          set -euo pipefail
+          tag="v${{ needs.version.outputs.value }}"
+          git fetch origin main
+          target="$(git rev-parse origin/main)"
+          if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1 && \
+             [ "$(git rev-parse "refs/tags/${tag}")" = "${target}" ]; then
+            echo "Tag ${tag} already points at the correctly pinned commit"
+            exit 0
+          fi
+          git tag -f -a "${tag}" -m "${{ needs.version.outputs.value }}" "${target}"
+          git push --force origin "refs/tags/${tag}"
+
   smoke-test:
     needs: [version, publish]
     runs-on: ubuntu-latest
@@ -277,4 +302,159 @@ jobs:
         run: docker compose -f compose.alpha.yaml logs --no-color
       - name: Stop stack
         if: always()
+        run: docker compose -f compose.alpha.yaml down --volumes
+
+  # Proves the actual upgrade path an operator running the previous release
+  # would take, not just a fresh install of the new one: deploy the
+  # immediately preceding published release exactly as it shipped, verify
+  # its DNS chain, then upgrade it in place through the real control-plane
+  # updater (never a synthetic fixture) to the version just published here,
+  # and verify DNS still works afterward. "Previous" is scoped to the one
+  # release directly before this one - RootGuard is pre-1.0 alpha and
+  # doesn't yet promise compatibility further back than that.
+  upgrade-test:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Determine the previous published release
+        id: previous
+        run: |
+          set -euo pipefail
+          previous_version="$(git tag --list 'v0.1.0-alpha.*' \
+            | grep -v "^v${{ needs.version.outputs.value }}\$" \
+            | sort -t. -k4 -n | tail -1 | sed 's/^v//')"
+          if [ -z "${previous_version}" ]; then
+            echo "No previous alpha release exists yet - nothing to upgrade from"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Not the tag itself: it points at the commit where the release was
+          # cut, before the pin-update commit that follows it - so, absent
+          # this release's own "Point the release tag at the pin-update
+          # commit" step (only self-healing for releases cut after that step
+          # existed), the tag's own compose.alpha.yaml can still be pinned to
+          # the release *before* it. Searching history for the actual pin
+          # commit is correct regardless of whether the tag was ever moved.
+          pin_commit="$(git log --format='%H %s' -- compose.alpha.yaml \
+            | grep -F "pin compose.alpha.yaml to ${previous_version} image digests" \
+            | head -1 | cut -d' ' -f1)"
+          if [ -z "${pin_commit}" ]; then
+            echo "No pin-update commit found for ${previous_version} - nothing to upgrade from"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "commit=${pin_commit}" >> "$GITHUB_OUTPUT"
+
+      - name: Extract the previous release's correctly pinned Compose model
+        if: steps.previous.outputs.skip != 'true'
+        run: git show "${{ steps.previous.outputs.commit }}:compose.alpha.yaml" > compose.alpha.yaml
+
+      - uses: docker/login-action@v4
+        if: steps.previous.outputs.skip != 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy the previous release exactly as it shipped
+        if: steps.previous.outputs.skip != 'true'
+        env:
+          # No *_IMAGE overrides here - the previous release's own compose
+          # file already pins its own images by digest. Only the *_UPDATE_IMAGE
+          # pair is overridden, to the version just published, so the
+          # upgrade step below has something real to move to.
+          ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.value }}
+          ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.value }}
+          ROOTGUARD_API_TOKEN: alpha-upgrade-test-token
+          ROOTGUARD_ADMIN_USER: admin
+          ROOTGUARD_ADMIN_PASSWORD: alpha-upgrade-test-password
+          ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token
+          ROOTGUARD_WEB_BIND: 127.0.0.1
+          ROOTGUARD_WEB_PORT: "18082"
+        run: docker compose -f compose.alpha.yaml up -d
+
+      - name: Install the previous release and verify DNS
+        if: steps.previous.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for attempt in {1..60}; do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --cookie-jar /tmp/rootguard-upgrade-cookies.txt \
+              --header 'Content-Type: application/json' \
+              --data '{"username":"admin","password":"alpha-upgrade-test-password"}' \
+              http://127.0.0.1:18082/api/auth/login || true)"
+            if [ "$code" = 200 ]; then break; fi
+            sleep 2
+          done
+          test "$code" = 200
+          config='{"dns_bind_address":"127.0.0.1","dns_port":1055}'
+          test "$(curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+            --header 'Content-Type: application/json' --data "$config" \
+            http://127.0.0.1:18082/api/installation/preflight | jq -r .ready)" = true
+          curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+            --header 'Content-Type: application/json' --data "$config" \
+            http://127.0.0.1:18082/api/installation/deploy >/dev/null
+          for attempt in {1..90}; do
+            installation="$(curl --fail --silent \
+              --cookie /tmp/rootguard-upgrade-cookies.txt \
+              http://127.0.0.1:18082/api/installation)"
+            state="$(jq -r .state <<<"$installation")"
+            if [ "$state" = installed ]; then break; fi
+            if [ "$state" = failed ]; then echo "$installation"; exit 1; fi
+            sleep 2
+          done
+          test "$state" = installed
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 example.com A)"
+
+      - name: Upgrade in place through the real control-plane updater
+        if: steps.previous.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+            --request POST http://127.0.0.1:18082/api/control-plane-updates/check >/dev/null
+          curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+            --request POST http://127.0.0.1:18082/api/control-plane-updates/install >/dev/null
+          for attempt in {1..90}; do
+            status="$(curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+              http://127.0.0.1:18082/api/control-plane-updates)"
+            state="$(jq -r .state <<<"$status")"
+            if [ "$state" = idle ]; then break; fi
+            if [ "$state" = failed ]; then echo "$status"; exit 1; fi
+            sleep 2
+          done
+          test "$state" = idle
+          echo "$status" | jq -r '.history[0].outcome' | grep -qx success
+
+      - name: Verify the running images match the newly published version
+        if: steps.previous.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for pair in "rootguard-core:core" "rootguard-webapp:webapp"; do
+            container="${pair%%:*}"
+            image="${pair##*:}"
+            expected="$(docker image inspect "ghcr.io/${{ github.repository_owner }}/rootguard-${image}:${{ needs.version.outputs.value }}" --format '{{.Id}}')"
+            actual="$(docker inspect "$container" --format '{{.Image}}')"
+            test "$actual" = "$expected"
+          done
+
+      - name: Verify DNS still works after the upgrade
+        if: steps.previous.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 example.com A)"
+          test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1055 \
+            dnssec-failed.org A | sed -n \
+            's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
+
+      - name: Show logs after failure
+        if: failure() && steps.previous.outputs.skip != 'true'
+        run: docker compose -f compose.alpha.yaml logs --no-color
+
+      - name: Stop stack
+        if: always() && steps.previous.outputs.skip != 'true'
         run: docker compose -f compose.alpha.yaml down --volumes
