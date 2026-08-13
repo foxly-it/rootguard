@@ -3,6 +3,17 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-alpha.9] - 2026-08-13
+
+### CI
+
+- Pin compose.alpha.yaml to 0.1.0-alpha.8 image digests [skip ci]
+
+### Other
+
+- Verify SBOM/provenance/attestation live against v0.1.0-alpha.8 (#229, #230) ([#232](https://github.com/foxly-it/rootguard/pull/232))
+- Automate release versioning and changelog generation ([#235](https://github.com/foxly-it/rootguard/pull/235))
+
 
 ## [0.1.0-alpha.8] - 2026-08-13
 
