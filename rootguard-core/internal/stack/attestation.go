@@ -17,12 +17,25 @@ type attestationPolicy struct {
 	identity    string
 }
 
+// releaseRepository and releaseWorkflowIdentity describe the single signer
+// every RootGuard-built image shares: all 5 components are published by the
+// same release-alpha.yml matrix build in the monorepo, so only the image
+// itself differs between policies below.
+const (
+	releaseRepository       = "foxly-it/rootguard"
+	releaseWorkflowIdentity = `^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$`
+)
+
+func releasePolicy(image string) attestationPolicy {
+	return attestationPolicy{
+		imagePrefix: "ghcr.io/foxly-it/" + image,
+		repository:  releaseRepository,
+		identity:    releaseWorkflowIdentity,
+	}
+}
+
 var attestationPolicies = map[string]attestationPolicy{
-	"core": {
-		imagePrefix: "ghcr.io/foxly-it/rootguard-core",
-		repository:  "foxly-it/rootguard",
-		identity:    `^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$`,
-	},
+	"core": releasePolicy("rootguard-core"),
 	// Stale until now: this still pointed at the archived, read-only
 	// per-component repo and its build.yml, both gone since the monorepo
 	// migration - webapp is published by release-alpha.yml in
@@ -30,11 +43,10 @@ var attestationPolicies = map[string]attestationPolicy{
 	// release image would have failed this policy's repository/workflow
 	// check, since cosign's actual certificate identity names the
 	// monorepo, not the archived repo this used to require.
-	"webapp": {
-		imagePrefix: "ghcr.io/foxly-it/rootguard-webapp",
-		repository:  "foxly-it/rootguard",
-		identity:    `^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$`,
-	},
+	"webapp":    releasePolicy("rootguard-webapp"),
+	"updater":   releasePolicy("rootguard-updater"),
+	"unbound":   releasePolicy("rootguard-unbound"),
+	"blockpage": releasePolicy("rootguard-blockpage"),
 }
 
 type attestationResult struct {

@@ -964,6 +964,21 @@ Milestone completion snapshot:
   landed as a stale-checkbox fix; the digest-pin automation from #165 is
   now also checked off, proven in production by the `v0.1.0-alpha.7`
   release on 2026-08-10). This is the actual gate to cut `0.6.0-beta.1`.
+  SBOM/provenance for every image
+  ([rootguard#229](https://github.com/foxly-it/rootguard/issues/229)) and
+  release-image attestation verification extended from core/webapp to all 5
+  components
+  ([rootguard#230](https://github.com/foxly-it/rootguard/issues/230)) are
+  implemented and unit-tested, but deliberately left unchecked in
+  `ROADMAP.md` pending live verification against a real `release-alpha.yml`
+  run - per this roadmap's own rule, a checkbox is only marked done once its
+  acceptance criteria actually pass, not once the code merges. Both flow
+  from the same discovery: `release-alpha.yml` never set `sbom:`/
+  `provenance: mode=max` on `docker/build-push-action` for any of its 5
+  matrix components (only `ci-unbound.yml` did, for unbound specifically,
+  outside the actual release path), and `attestation.go`'s policy map only
+  ever covered core/webapp even though updater/unbound/blockpage are
+  published by the identical signer.
 
 **Working order: top-to-bottom through the roadmap document**, per explicit
 user direction (2026-08-09) - not "closest-to-done first" as this section
