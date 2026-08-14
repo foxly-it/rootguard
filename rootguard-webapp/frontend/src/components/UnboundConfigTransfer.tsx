@@ -8,11 +8,8 @@ import {
   type UnboundConfigBundle,
 } from "../api/client";
 import { useI18n } from "../i18n";
+import { errorMessage } from "../utils/errors";
 import "../styles/unbound-expert.css";
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
 
 function isConfigBundle(value: unknown): value is UnboundConfigBundle {
   if (typeof value !== "object" || value === null) return false;

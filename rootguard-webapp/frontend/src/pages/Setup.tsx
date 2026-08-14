@@ -10,6 +10,7 @@ import {
 } from "../api/client";
 import "../styles/setup.css";
 import { useI18n } from "../i18n";
+import { errorMessage as messageFrom } from "../utils/errors";
 import { AlertTriangle, ArrowRight, Check, ExternalLink, Filter, Network, RotateCcw, ServerCog, ShieldCheck } from "lucide-react";
 
 const defaultConfig: InstallationConfig = {
@@ -366,8 +367,4 @@ function diagnosticText(
   const key = `setup.diagnostic.${code}.${field}`;
   const translated = t(key, { detail: detail ? ` (${detail})` : "" });
   return translated === key ? fallback : translated;
-}
-
-function messageFrom(cause: unknown, fallback: string): string {
-  return cause instanceof Error ? cause.message : fallback;
 }

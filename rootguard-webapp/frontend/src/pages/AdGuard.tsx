@@ -15,6 +15,7 @@ import {
 import ContentModal from "../components/ContentModal";
 import "../styles/adguard.css";
 import { useI18n } from "../i18n";
+import { errorMessage } from "../utils/errors";
 
 export default function AdGuard() {
   const { t } = useI18n();
@@ -294,7 +295,3 @@ function StatusRow({ label, active, activeText, inactiveText, adguardHash, adgua
   );
 }
 
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
-}

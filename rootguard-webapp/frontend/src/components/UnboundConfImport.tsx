@@ -11,12 +11,9 @@ import {
   type UnboundImportResult,
 } from "../api/client";
 import { useI18n } from "../i18n";
+import { errorMessage } from "../utils/errors";
 import GuidedFlowSteps from "./GuidedFlowSteps";
 import "../styles/unbound-expert.css";
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
 
 const dispositionClass: Record<string, string> = {
   guided: "success",

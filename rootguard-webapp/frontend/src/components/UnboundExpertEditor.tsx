@@ -11,6 +11,7 @@ import {
 } from "../api/client";
 import "../styles/unbound-expert.css";
 import { useI18n } from "../i18n";
+import { errorMessage } from "../utils/errors";
 import ContentModal from "./ContentModal";
 
 const templates = [
@@ -245,8 +246,4 @@ function highlightConfig(content: string) {
     const valueClass = /\b(yes|no|allow|deny|refuse|static|transparent)\b/i.test(value) ? "syntax-keyword" : /\d/.test(value) ? "syntax-number" : "syntax-value";
     return <span key={index}>{key.slice(0, key.length - key.trimStart().length)}<span className="syntax-directive">{key.trim()}</span>:<span className={valueClass}>{value}</span>{comment && <span className="syntax-comment">{comment}</span>}{"\n"}</span>;
   });
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }

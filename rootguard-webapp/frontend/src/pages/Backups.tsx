@@ -13,6 +13,7 @@ import {
   type UpdateStatus,
 } from "../api/client";
 import { useI18n } from "../i18n";
+import { errorMessage } from "../utils/errors";
 import { formatBytes } from "../utils/format";
 import "../styles/stack.css";
 
@@ -229,8 +230,4 @@ export default function Backups() {
       </section>
     </div>
   );
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }
