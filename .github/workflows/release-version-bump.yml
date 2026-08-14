@@ -1,11 +1,16 @@
-name: Cut next alpha release
+name: Cut next release
 
 # Computes the next version, generates the changelog section for everything
-# merged since the last tag, pushes a new v0.1.0-alpha.N tag, and explicitly
-# dispatches release-alpha.yml's existing publish pipeline for it (unchanged
-# itself). Manually triggered rather than automatic on every push to main: a
-# human still decides *when* to cut a release, this only removes having to
-# type or remember the next version number by hand.
+# merged since the last tag, pushes a new tag, and explicitly dispatches
+# release-alpha.yml's existing publish pipeline for it (unchanged itself).
+# Manually triggered rather than automatic on every push to main: a human
+# still decides *when* to cut a release, this only removes having to type
+# or remember the next version number by hand.
+#
+# Defaults to the next v0.1.0-alpha.N. Pass the optional "version" input to
+# override it (e.g. 0.1.0-beta.1) for a series transition that isn't a bare
+# alpha increment - release-alpha.yml itself gates on *-alpha.*/*-beta.* and
+# will refuse anything else.
 #
 # GitHub Actions never auto-triggers another workflow's "on: push: tags"
 # from a push made with the built-in GITHUB_TOKEN (an anti-recursion
@@ -15,7 +20,12 @@ name: Cut next alpha release
 # workflow_dispatch path a maintainer already used by hand for every alpha
 # release through v0.1.0-alpha.8.
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Override version, e.g. 0.1.0-beta.1 (leave empty for the automatic next alpha)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -34,6 +44,8 @@ jobs:
 
       - name: Determine next version
         id: next
+        env:
+          VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
           set -euo pipefail
           latest_tag="$(git tag --list 'v0.1.0-alpha.*' | sort -t. -k4 -n | tail -1)"
@@ -41,11 +53,19 @@ jobs:
             echo "No existing v0.1.0-alpha.* tag found" >&2
             exit 1
           fi
-          latest_n="${latest_tag##*.}"
-          next_n=$((latest_n + 1))
-          next_version="0.1.0-alpha.${next_n}"
-          if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ]; then
+          if [ -n "$VERSION_OVERRIDE" ]; then
+            next_version="$VERSION_OVERRIDE"
+          else
+            latest_n="${latest_tag##*.}"
+            next_n=$((latest_n + 1))
+            next_version="0.1.0-alpha.${next_n}"
+          fi
+          if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ] && [ -z "$VERSION_OVERRIDE" ]; then
             echo "No commits since ${latest_tag} - nothing to release" >&2
+            exit 1
+          fi
+          if git rev-parse "refs/tags/v${next_version}" >/dev/null 2>&1; then
+            echo "Tag v${next_version} already exists" >&2
             exit 1
           fi
           echo "latest_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
