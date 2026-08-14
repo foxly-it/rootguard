@@ -37,6 +37,16 @@ const (
 
 var rootGuardDNSNetwork = netip.MustParsePrefix("172.29.53.0/24")
 
+// isReservedForwardAddress rejects a forward-zone server address that's
+// unspecified, loopback, multicast, link-local, or RootGuard's own internal
+// DNS network - shared by Settings.Validate() and validForwardTarget
+// (import.go), which apply the identical check at two different points in
+// the guided-config lifecycle.
+func isReservedForwardAddress(address netip.Addr) bool {
+	return address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() ||
+		address.IsLinkLocalUnicast() || rootGuardDNSNetwork.Contains(address)
+}
+
 type ForwardZone struct {
 	Name                  string   `json:"name"`
 	Servers               []string `json:"servers"`
@@ -196,8 +206,7 @@ func (s Settings) Validate() error {
 			if err != nil || address.String() != server {
 				return fmt.Errorf("%w: forward_zones[%d].servers[%d] must be a canonical IPv4 or IPv6 address", ErrInvalidSettings, zoneIndex, serverIndex)
 			}
-			routedAddress := address.Unmap()
-			if routedAddress.IsUnspecified() || routedAddress.IsLoopback() || routedAddress.IsMulticast() || routedAddress.IsLinkLocalUnicast() || rootGuardDNSNetwork.Contains(routedAddress) {
+			if isReservedForwardAddress(address.Unmap()) {
 				return fmt.Errorf("%w: forward_zones[%d].servers[%d] points to a local or reserved RootGuard resolver address", ErrInvalidSettings, zoneIndex, serverIndex)
 			}
 			if _, exists := servers[address]; exists {
