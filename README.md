@@ -117,7 +117,7 @@ diesem Einstieg ausgelagert:
 - [Architektur](docs/architecture.md)
 - [Aktueller Projektstand](docs/project-state.md)
 - [Roadmap bis 1.0](ROADMAP.md)
-- [Release Notes v0.1.0-alpha.6](RELEASE_NOTES_0.1.0-alpha.6.md)
+- [Changelog](CHANGELOG.md)
 - [Image-Digests und Aufbewahrungsregeln](docs/image-retention-policy.md)
 - [Geprüfte Installationsplattformen](docs/platform-support.md)
 
@@ -260,7 +260,7 @@ Further technical information:
 - [Architecture and trust boundaries](docs/architecture.md)
 - [Current project state](docs/project-state.md)
 - [Roadmap to 1.0](ROADMAP.md)
-- [Release notes for v0.1.0-alpha.6](RELEASE_NOTES_0.1.0-alpha.6.md)
+- [Changelog](CHANGELOG.md)
 - [Image digests and retention policy](docs/image-retention-policy.md)
 - [Verified installation platforms](docs/platform-support.md)
 
