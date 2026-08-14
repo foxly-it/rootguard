@@ -21,10 +21,26 @@ type ServiceStatus struct {
 	Error           string    `json:"error,omitempty"`
 }
 
+type CleanupResult struct {
+	RemovedImages  []string `json:"removed_images,omitempty"`
+	RemovedVolumes []string `json:"removed_volumes,omitempty"`
+	Skipped        []string `json:"skipped,omitempty"`
+}
+
+type HistoryEntry struct {
+	Outcome   string            `json:"outcome"`
+	FromIDs   map[string]string `json:"from_ids,omitempty"`
+	ToIDs     map[string]string `json:"to_ids,omitempty"`
+	Message   string            `json:"message"`
+	Cleanup   CleanupResult     `json:"cleanup"`
+	CreatedAt time.Time         `json:"created_at"`
+}
+
 type Status struct {
 	State     string          `json:"state"`
 	Message   string          `json:"message"`
 	Services  []ServiceStatus `json:"services"`
+	History   []HistoryEntry  `json:"history,omitempty"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
