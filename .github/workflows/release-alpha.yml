@@ -441,6 +441,14 @@ jobs:
             sleep 1
           done
           call POST /api/control-plane-updates/check >/dev/null
+          for attempt in {1..90}; do
+            status="$(call GET /api/control-plane-updates)"
+            state="$(jq -r .state <<<"$status")"
+            if [ "$state" = idle ]; then break; fi
+            if [ "$state" = failed ]; then echo "$status"; exit 1; fi
+            sleep 2
+          done
+          test "$state" = idle
           call POST /api/control-plane-updates/install >/dev/null
           for attempt in {1..90}; do
             status="$(call GET /api/control-plane-updates)"
