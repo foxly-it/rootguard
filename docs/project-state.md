@@ -960,12 +960,11 @@ Milestone completion snapshot:
   errors review
   ([rootguard#221](https://github.com/foxly-it/rootguard/issues/221)) both
   landed - see "Delivered and verified" above for both.
-- **0.6 beta release engineering** - 2 of 10 items open (issue templates
-  landed as a stale-checkbox fix; the digest-pin automation from #165 is
-  now also checked off, proven in production by the `v0.1.0-alpha.7`
-  release on 2026-08-10). This is the actual gate to cut `0.1.0-beta.1`
-  (continuing the existing `0.1.0-alpha.N` series - "0.6" is this
-  roadmap's own milestone label, not the software's version number).
+- **0.6 beta release engineering** - **complete**, all 10 items delivered
+  and live-verified (see the 2026-08-14 update below for the final two).
+  This was the actual gate to cut `0.1.0-beta.1` (continuing the existing
+  `0.1.0-alpha.N` series - "0.6" is this roadmap's own milestone label, not
+  the software's version number).
   SBOM/provenance for every image
   ([rootguard#229](https://github.com/foxly-it/rootguard/issues/229)) and
   release-image attestation verification extended from core/webapp to all 5
@@ -1037,26 +1036,37 @@ Milestone completion snapshot:
   ([rootguard#242](https://github.com/foxly-it/rootguard/issues/242)) and
   the compatibility matrix
   ([rootguard#243](https://github.com/foxly-it/rootguard/issues/243)) are
-  implemented but deliberately left unchecked pending live verification,
-  same as the earlier SBOM/attestation/versioning items - a new
-  `upgrade-test` job in `release-alpha.yml` deploys the previous published
-  release exactly as it shipped, completes guided setup, verifies DNS, then
-  upgrades Core/WebApp in place through the real control-plane updater
-  (never a synthetic fixture) to the version being published, and verifies
-  the running images and DNS resolution afterward.
+  now live-verified passing (`v0.1.0-alpha.16`) - a new `upgrade-test` job
+  in `release-alpha.yml` deploys the previous published release exactly as
+  it shipped, completes guided setup, verifies DNS, then upgrades
+  Core/WebApp in place through the real control-plane updater (never a
+  synthetic fixture) to the version being published, and verifies the
+  running images and DNS resolution afterward.
   `docs/compatibility-matrix.md` consolidates this RootGuard-version axis
   with three that already had independent CI proof (Docker platform/engine,
   AdGuard channel, Unbound - RootGuard pins its own build, not an operator
-  choice). Building the upgrade test surfaced a real, independent bug, now
-  fixed in the same change: the release tag is created *before* the
-  pin-update commit that follows it, so every existing tag (confirmed live:
-  `v0.1.0-alpha.7`, `v0.1.0-alpha.8`) has always pointed at a
-  `compose.alpha.yaml` still pinned to the *previous* release's images - the
-  documented quick start fetched the wrong images for every past release.
-  `update-alpha-pins` now moves the tag to the pin-update commit it just
-  created going forward; historical tags remain stale unless retroactively
-  fixed, which needs the user's call since it touches already-published
-  external references.
+  choice). Building the upgrade test surfaced two classes of real bug:
+  - The release tag is created *before* the pin-update commit that follows
+    it, so every existing tag pointed at a `compose.alpha.yaml` still
+    pinned to the *previous* release's images - the documented quick start
+    fetched the wrong images for every past release.
+    `update-alpha-pins` now moves the tag to the pin-update commit it just
+    created; `v0.1.0-alpha.7` through `.9` were retroactively force-moved to
+    their correct commits (`.1`-`.6` predate the automation and have no
+    correct target).
+  - The job's first live runs failed six times in a row, each fix
+    uncovering the next real problem: silently swallowed curl errors (twice
+    - the second time from the fix's own `>/dev/null` redirect discarding
+    its own error message), a check/install race, and a poll loop that
+    didn't tolerate the WebApp being briefly unreachable while the
+    control-plane updater swaps its container. The sixth and final fix
+    surfaced a genuine, independent, previously-untested product bug: after
+    a real successful control-plane update, `GET /api/control-plane-updates`
+    reported success with no `history` entry at all -
+    `rootguard-core/internal/controlplane/client.go`'s `Status` struct had
+    no `History` field, so Core silently dropped it while proxying the
+    updater's response. Fixed with a matching type and a new regression
+    test (that package had zero test coverage before).
 
 **Working order: top-to-bottom through the roadmap document**, per explicit
 user direction (2026-08-09) - not "closest-to-done first" as this section
@@ -1064,9 +1074,8 @@ previously recommended. 0.1 and 0.3 are fully closed, so the order is:
 
 1. **0.4 operations/backup/recovery** - **complete**, see above.
 2. **0.5 security/HTTPS/accessibility** - complete, see above.
-3. **0.6 release engineering** - current, 2 items open, in document order: a
-   compatibility matrix for RootGuard/Docker/AdGuard/Unbound versions, and
-   upgrade tests from every supported previous RootGuard release.
+3. **0.6 release engineering** - **complete**, see above. This closes the
+   gate to cut `0.1.0-beta.1`.
 
 **2026-08-12 update:** 0.5 was picked up directly, ahead of 0.4 in the
 working order above, per explicit user direction to resume specifically in
@@ -1086,6 +1095,21 @@ followed by the disaster-recovery runbook
 above) - all worked through autonomously per explicit user direction to
 complete 0.4. **0.4 is now fully complete.** 0.6 release engineering is next
 in the recommended top-to-bottom order if not otherwise directed.
+
+**2026-08-14 update:** 0.6's last two items, the compatibility matrix
+([rootguard#243](https://github.com/foxly-it/rootguard/issues/243)) and
+upgrade tests ([rootguard#242](https://github.com/foxly-it/rootguard/issues/242)),
+are live-verified passing as of `v0.1.0-alpha.16` (see above for the six
+rounds of `upgrade-test` fixes this took, including the real
+`controlplane.Client` history-dropping bug the job surfaced). **0.6 is now
+fully complete - the gate to cut `0.1.0-beta.1` is clear.** The public site
+(`site/*.html`) also got a pass this session: version references brought
+current, a compact single-dropdown mobile header replacing one that
+silently failed to open on real iOS Safari (`.links`' `backdrop-filter`
+turned it into a containing block for the dropdown's `position:fixed`,
+which a `overflow-x:auto` fix then clipped), and the roadmap page's
+"Release-Zug" status labels corrected to match this document (0.4/0.5 were
+showing stale "in progress" copy despite being complete for a session).
 
 **Immediate next item when resuming (0.2, if not directed elsewhere):**
 0.2's conflict-detection checkbox

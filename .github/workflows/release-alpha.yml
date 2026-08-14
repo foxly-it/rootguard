@@ -415,20 +415,75 @@ jobs:
         if: steps.previous.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
-            --request POST http://127.0.0.1:18082/api/control-plane-updates/check >/dev/null
-          curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
-            --request POST http://127.0.0.1:18082/api/control-plane-updates/install >/dev/null
+          call() {
+            local method="$1" path="$2"
+            local body code curl_status
+            set +e
+            body="$(curl --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+              --write-out '\n%{http_code}' --request "$method" "http://127.0.0.1:18082${path}")"
+            curl_status=$?
+            set -e
+            if [ "$curl_status" -ne 0 ]; then
+              echo "::error::${method} ${path}: curl failed with exit code ${curl_status} (could not reach the WebApp)" >&2
+              exit 1
+            fi
+            code="${body##*$'\n'}"
+            body="${body%$'\n'*}"
+            if [ "${code:0:1}" != 2 ]; then
+              echo "::error::${method} ${path} returned HTTP ${code}: ${body}" >&2
+              exit 1
+            fi
+            echo "$body"
+          }
+          poll_status() {
+            local body code curl_status
+            set +e
+            body="$(curl --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+              --write-out '\n%{http_code}' http://127.0.0.1:18082/api/control-plane-updates)"
+            curl_status=$?
+            set -e
+            if [ "$curl_status" -ne 0 ]; then
+              return 0
+            fi
+            code="${body##*$'\n'}"
+            body="${body%$'\n'*}"
+            if [ "${code:0:1}" != 2 ]; then
+              echo "::error::GET /api/control-plane-updates returned HTTP ${code}: ${body}" >&2
+              exit 1
+            fi
+            echo "$body"
+          }
+          for attempt in {1..30}; do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18082/ || true)"
+            if [ -n "$code" ] && [ "$code" != "000" ]; then break; fi
+            sleep 1
+          done
+          call POST /api/control-plane-updates/check >/dev/null
+          state=""
           for attempt in {1..90}; do
-            status="$(curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
-              http://127.0.0.1:18082/api/control-plane-updates)"
+            status="$(poll_status)"
+            if [ -z "$status" ]; then sleep 2; continue; fi
             state="$(jq -r .state <<<"$status")"
             if [ "$state" = idle ]; then break; fi
             if [ "$state" = failed ]; then echo "$status"; exit 1; fi
             sleep 2
           done
           test "$state" = idle
-          echo "$status" | jq -r '.history[0].outcome' | grep -qx success
+          call POST /api/control-plane-updates/install >/dev/null
+          # The install swaps the Core and WebApp containers themselves, so
+          # the WebApp is expected to be briefly unreachable mid-poll here -
+          # unlike everywhere else in this step, that's not a failure.
+          state=""
+          for attempt in {1..90}; do
+            status="$(poll_status)"
+            if [ -z "$status" ]; then sleep 2; continue; fi
+            state="$(jq -r .state <<<"$status")"
+            if [ "$state" = idle ]; then break; fi
+            if [ "$state" = failed ]; then echo "$status"; exit 1; fi
+            sleep 2
+          done
+          test "$state" = idle
+          echo "$status" | jq -r '.history[0].outcome' | grep -qx success || { echo "$status"; exit 1; }
 
       - name: Verify the running images match the newly published version
         if: steps.previous.outputs.skip != 'true'
@@ -453,8 +508,26 @@ jobs:
 
       - name: Show logs after failure
         if: failure() && steps.previous.outputs.skip != 'true'
+        env:
+          ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.value }}
+          ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.value }}
+          ROOTGUARD_API_TOKEN: alpha-upgrade-test-token
+          ROOTGUARD_ADMIN_USER: admin
+          ROOTGUARD_ADMIN_PASSWORD: alpha-upgrade-test-password
+          ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token
+          ROOTGUARD_WEB_BIND: 127.0.0.1
+          ROOTGUARD_WEB_PORT: "18082"
         run: docker compose -f compose.alpha.yaml logs --no-color
 
       - name: Stop stack
         if: always() && steps.previous.outputs.skip != 'true'
+        env:
+          ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.value }}
+          ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.value }}
+          ROOTGUARD_API_TOKEN: alpha-upgrade-test-token
+          ROOTGUARD_ADMIN_USER: admin
+          ROOTGUARD_ADMIN_PASSWORD: alpha-upgrade-test-password
+          ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token
+          ROOTGUARD_WEB_BIND: 127.0.0.1
+          ROOTGUARD_WEB_PORT: "18082"
         run: docker compose -f compose.alpha.yaml down --volumes

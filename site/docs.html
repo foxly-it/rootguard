@@ -21,17 +21,7 @@
     <header class="topbar">
       <a class="brand" href="index.html" aria-label="RootGuard Startseite"><img class="brand-logo" src="rootguard-icon.svg" alt=""><span>Root<span>Guard</span></span></a>
       <div class="nav-group">
-        <nav class="links" aria-label="Hauptnavigation">
-          <a href="index.html" data-de="Startseite" data-en="Home">Startseite</a>
-          <a href="index.html#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a>
-          <a class="active" href="docs.html" aria-current="page" data-de="Docs" data-en="Documentation">Docs</a>
-          <details class="nav-dropdown"><summary data-de="Projekt" data-en="Project">Projekt</summary><div class="nav-dropdown-menu"><a href="index.html#project-status" data-de="Projektstatus" data-en="Project status">Projektstatus</a><a href="wiki.html">Wiki</a><a href="roadmap.html">Roadmap</a></div></details>
-
-          <div class="language-switch nav-language" aria-label="Sprache">
-          <button class="lang-button" id="btn-de" type="button" data-language="de">DE</button>
-          <button class="lang-button" id="btn-en" type="button" data-language="en">EN</button>
-          </div>
-        </nav><a class="github-button" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" aria-label="RootGuard auf GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.2.8-.5v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.3 11.3 0 0 0 12 .7Z"/></svg></a>
+        <nav class="links" aria-label="Hauptnavigation"><a class="nav-home" href="index.html" aria-label="Startseite" title="Startseite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg></a><details class="nav-dropdown active"><summary aria-current="page" data-de="Menü" data-en="Menu">Menü</summary><div class="nav-dropdown-menu"><a href="index.html#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a><a class="active" href="docs.html" aria-current="page" data-de="Docs" data-en="Documentation">Docs</a><a href="index.html#project-status" data-de="Projektstatus" data-en="Project status">Projektstatus</a><a href="wiki.html">Wiki</a><a href="roadmap.html">Roadmap</a></div></details><div class="language-switch nav-language" aria-label="Sprache"><button class="lang-button" id="btn-de" type="button" data-language="de">DE</button><button class="lang-button" id="btn-en" type="button" data-language="en">EN</button></div></nav><a class="github-button" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" aria-label="RootGuard auf GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.2.8-.5v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.3 11.3 0 0 0 12 .7Z"/></svg></a>
       </div>
     </header>
 
@@ -121,8 +111,8 @@
             <h2 data-de="Control Plane starten" data-en="Start the control plane">Control Plane starten</h2>
             <div class="code-block"><div>shell</div><pre><code>mkdir rootguard-alpha &amp;&amp; cd rootguard-alpha
 
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.9/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.9/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.16/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.16/.env.alpha.example
 
 # Zwei unabhängige Sicherheitsschlüssel erzeugen
 openssl rand -hex 32
@@ -212,8 +202,8 @@ dig +dnssec @192.168.178.10 dnssec-failed.org A</code></pre></div>
             <p data-de="Die zentrale Seite Logs &amp; Diagnose liest ausschließlich die fünf fest freigegebenen Dienste. Core begrenzt jede Ausgabe auf die letzten 30 Minuten, 100 Zeilen und 64 KiB, entfernt Steuerzeichen und redigiert häufige Zugangsdatenmuster; der Browser kann keine freien Container- oder Pfadnamen übergeben." data-en="The central Logs & Diagnostics page reads only the five explicitly allowlisted services. Core limits every response to the last 30 minutes, 100 lines, and 64 KiB, removes control characters, and redacts common credential patterns; the browser cannot provide arbitrary container or path names.">Die zentrale Seite Logs &amp; Diagnose liest ausschließlich die fünf fest freigegebenen Dienste. Core begrenzt jede Ausgabe auf die letzten 30 Minuten, 100 Zeilen und 64 KiB, entfernt Steuerzeichen und redigiert häufige Zugangsdatenmuster; der Browser kann keine freien Container- oder Pfadnamen übergeben.</p>
             <p data-de="Bei unveränderlich referenzierten Core- und WebApp-Releases prüft RootGuard außerdem den signierten SLSA-Herkunftsnachweis, die erwartete GitHub-Workflowidentität und die Sigstore-Transparenzdaten. Fehlende oder ungültige Nachweise und vorübergehende Netzfehler werden getrennt angezeigt." data-en="For immutable Core and WebApp releases, RootGuard also verifies signed SLSA provenance, the expected GitHub workflow identity, and Sigstore transparency data. Missing or invalid attestations and temporary network failures are displayed separately.">Bei unveränderlich referenzierten Core- und WebApp-Releases prüft RootGuard außerdem den signierten SLSA-Herkunftsnachweis, die erwartete GitHub-Workflowidentität und die Sigstore-Transparenzdaten. Fehlende oder ungültige Nachweise und vorübergehende Netzfehler werden getrennt angezeigt.</p>
             <div class="manual-callout"><b data-de="Unveränderliche Release-Images" data-en="Immutable release images">Unveränderliche Release-Images</b><span data-de="Der öffentliche Alpha-Stack kombiniert lesbare Versions-Tags mit geprüften Multi-Arch-Digests. Docker startet damit exakt das veröffentlichte Artefakt, selbst wenn ein Tag später verändert würde." data-en="The public alpha stack combines readable version tags with verified multi-architecture digests. Docker therefore starts the exact published artifact even if a tag were changed later.">Der öffentliche Alpha-Stack kombiniert lesbare Versions-Tags mit geprüften Multi-Arch-Digests. Docker startet damit exakt das veröffentlichte Artefakt, selbst wenn ein Tag später verändert würde.</span></div>
-            <div class="code-block"><div>.env</div><pre><code>ROOTGUARD_CORE_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.9@sha256:f3585e4a77bf4f76ed387e9a342e9ea2f32c566440d0779ed36adcc7cc9ef5b9
-ROOTGUARD_WEBAPP_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.9@sha256:1423d472aa9ef4f56e70e5b1107d9807d36a689f0ac99cd8d7aaa8328b3ae1d3</code></pre></div>
+            <div class="code-block"><div>.env</div><pre><code>ROOTGUARD_CORE_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.16@sha256:bc24fb98cf542a80c3edca773831fdf13d8afc44dfbf809bce55d8b8ed2c86f3
+ROOTGUARD_WEBAPP_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.16@sha256:0268864b8ea62585d4376411bf30c2d00ef895e709f6f72ffc3b64cf248787bb</code></pre></div>
           </section>
 
           <section id="security" class="manual-section">

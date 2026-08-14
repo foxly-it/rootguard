@@ -3,6 +3,47 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-alpha.16] - 2026-08-14
+
+### Fixed
+
+- Stop dropping control-plane update history in the API response ([#256](https://github.com/foxly-it/rootguard/pull/256))
+
+## [0.1.0-alpha.15] - 2026-08-14
+
+### Fixed
+
+- Tolerate the WebApp being briefly unreachable mid-install ([#255](https://github.com/foxly-it/rootguard/pull/255))
+
+## [0.1.0-alpha.14] - 2026-08-14
+
+### Fixed
+
+- Wait for the check to finish before starting the install ([#254](https://github.com/foxly-it/rootguard/pull/254))
+
+## [0.1.0-alpha.13] - 2026-08-14
+
+### Fixed
+
+- Stop swallowing the upgrade test's own error diagnostics ([#253](https://github.com/foxly-it/rootguard/pull/253))
+
+## [0.1.0-alpha.12] - 2026-08-14
+
+### Fixed
+
+- Catch curl connection failures in the upgrade test, not just bad HTTP status ([#251](https://github.com/foxly-it/rootguard/pull/251))
+
+## [0.1.0-alpha.11] - 2026-08-14
+
+### Documentation
+
+- Update public site to 0.1.0-alpha.10 ([#248](https://github.com/foxly-it/rootguard/pull/248))
+
+### Fixed
+
+- Surface real HTTP errors from the control-plane upgrade test ([#247](https://github.com/foxly-it/rootguard/pull/247))
+- Clean up mobile header nav and animate the status dot ([#249](https://github.com/foxly-it/rootguard/pull/249))
+
 ## [0.1.0-alpha.9] - 2026-08-13
 
 ### CI

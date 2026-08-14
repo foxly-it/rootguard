@@ -962,18 +962,17 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       (run from inside a live `rootguard-core` container, the exact binary
       and policy Core itself uses) reports `verified` for all 5 images
       ([rootguard#230](https://github.com/foxly-it/rootguard/issues/230))
-- [ ] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions -
+- [x] Compatibility matrix for RootGuard, Docker, AdGuard, and Unbound versions -
       implemented (`docs/compatibility-matrix.md` consolidates all four
       axes: three already had real, independent CI proof - Docker
       platform/engine via `docs/platform-support.md`'s clean-install
       matrix, AdGuard channel via `ci-adguard-compat.yml`'s stable/beta
       matrix, Unbound via `ci-unbound.yml`'s native-arch and scenario
       checks - RootGuard pins its own Unbound build, not an operator
-      choice), but left unchecked pending the same live verification as
-      the upgrade-test item directly below, since its fourth axis depends
-      on that job actually passing for real
+      choice. Its fourth axis (the `upgrade-test` job) is now live-verified
+      passing against `v0.1.0-alpha.16`, see below
       ([rootguard#243](https://github.com/foxly-it/rootguard/issues/243))
-- [ ] Upgrade tests from every supported previous RootGuard release -
+- [x] Upgrade tests from every supported previous RootGuard release -
       scoped to the one release directly before the current one (N-1 -> N):
       RootGuard is pre-1.0 alpha and doesn't yet promise compatibility
       further back. `release-alpha.yml`'s new `upgrade-test` job deploys
@@ -991,9 +990,16 @@ Goal: releases are immutable, traceable, upgradeable, and easy to evaluate.
       images for every past release. `update-alpha-pins` now moves the tag
       to the pin-update commit it just created; the `upgrade-test` job
       itself doesn't depend on that fix, since it locates the correct
-      pin-update commit directly rather than trusting the tag. Left
-      unchecked pending live verification against a real release, per this
-      roadmap's own rule
+      pin-update commit directly rather than trusting the tag. Diagnosing
+      the job's first live runs took six rounds of fixes to the job itself
+      (silently swallowed curl errors, a check/install race, and a
+      poll loop that didn't tolerate the WebApp's brief restart mid-swap),
+      the last of which surfaced a genuine, independent, previously
+      untested product bug: Core's `controlplane.Client` had no `History`
+      field, so it silently dropped the updater's update-outcome history
+      while proxying its status - fixed with a matching type and a new
+      regression test. Live-verified passing end to end against
+      `v0.1.0-alpha.16`
       ([rootguard#242](https://github.com/foxly-it/rootguard/issues/242))
 - [x] Migration framework for persistent state and configuration schemas -
       scoped deliberately, per explicit user direction, to schema-version +
