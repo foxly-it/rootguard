@@ -25,7 +25,7 @@ jobs:
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet
 
-      - name: Validate public alpha Compose model
+      - name: Validate public release Compose model
         run: |
           docker compose -f compose.alpha.yaml config --quiet
           model="$(docker compose -f compose.alpha.yaml config --format json)"

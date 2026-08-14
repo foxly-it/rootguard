@@ -7,10 +7,10 @@ name: Cut next release
 # still decides *when* to cut a release, this only removes having to type
 # or remember the next version number by hand.
 #
-# Defaults to the next v0.1.0-alpha.N. Pass the optional "version" input to
-# override it (e.g. 0.1.0-beta.1) for a series transition that isn't a bare
-# alpha increment - release-alpha.yml itself gates on *-alpha.*/*-beta.* and
-# will refuse anything else.
+# Defaults to incrementing the latest v0.1.0-{alpha,beta}.N tag's own series.
+# Pass the optional "version" input to override it (e.g. 0.1.0-beta.1) for a
+# series transition that isn't a bare increment - release-alpha.yml itself
+# gates on *-alpha.*/*-beta.* and will refuse anything else.
 #
 # GitHub Actions never auto-triggers another workflow's "on: push: tags"
 # from a push made with the built-in GITHUB_TOKEN (an anti-recursion
@@ -23,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Override version, e.g. 0.1.0-beta.1 (leave empty for the automatic next alpha)"
+        description: "Override version, e.g. 0.1.0-beta.2 (leave empty to auto-increment the current series)"
         required: false
         default: ""
 
@@ -48,17 +48,18 @@ jobs:
           VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          latest_tag="$(git tag --list 'v0.1.0-alpha.*' | sort -t. -k4 -n | tail -1)"
+          latest_tag="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate --format='%(refname:short)' | head -1)"
           if [ -z "$latest_tag" ]; then
-            echo "No existing v0.1.0-alpha.* tag found" >&2
+            echo "No existing v0.1.0-* tag found" >&2
             exit 1
           fi
           if [ -n "$VERSION_OVERRIDE" ]; then
             next_version="$VERSION_OVERRIDE"
           else
+            series="${latest_tag%.*}"
             latest_n="${latest_tag##*.}"
             next_n=$((latest_n + 1))
-            next_version="0.1.0-alpha.${next_n}"
+            next_version="${series#v}.${next_n}"
           fi
           if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ] && [ -z "$VERSION_OVERRIDE" ]; then
             echo "No commits since ${latest_tag} - nothing to release" >&2

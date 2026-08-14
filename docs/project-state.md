@@ -486,7 +486,7 @@ Trustworthy Stack Center and production visibility:
 - real service state, health, image reference, immutable image ID, start time,
   restart count, and published ports, presented with plain-language guidance;
 - completed data-plane updates and paired Core/WebApp updates through the
-  separate helper; the public alpha Compose now records and pins every
+  separate helper; the public beta Compose now records and pins every
   RootGuard and AdGuard multi-architecture manifest digest;
 - bounded update and rollback history survives restarts and is shown in the
   Stack Center together with each automatic cleanup result;
@@ -517,9 +517,9 @@ Trustworthy Stack Center and production visibility:
 - guided AdGuard Home release-channel selection with Stable as the
   backward-compatible default and an explicit bilingual Beta warning. Core
   accepts only the `stable`/`beta` enum and resolves both to administrator-set,
-  allowlisted image references; the public alpha Beta reference is pinned to
-  its verified multi-architecture manifest.
-- guarded public-alpha clean-install verifier shared by Docker Desktop and
+  allowlisted image references; the public beta's AdGuard Beta reference is
+  pinned to its verified multi-architecture manifest.
+- guarded public clean-install verifier shared by Docker Desktop and
   native GitHub-hosted Linux `amd64`/`arm64` jobs; it refuses existing
   RootGuard resources, validates login, AIO deployment, recursive DNS and
   DNSSEC rejection, then removes only resources created by the test. Docker
@@ -941,9 +941,9 @@ Milestone completion snapshot:
   reaching `installed` through all seven restore steps, with the
   replacement host's own resolver independently verified (`ad`-flagged
   recursive resolution, `SERVFAIL` for a broken DNSSEC chain). The drill
-  also surfaced a real gap, now noted in the runbook: the backup/restore
-  feature landed on `main` after the published `v0.1.0-alpha.7` release, so
-  the current public alpha doesn't have it yet.
+  originally surfaced a real gap, since closed: the backup/restore feature
+  landed on `main` after the published `v0.1.0-alpha.7` release but is
+  included starting with the current `v0.1.0-beta.1` release.
   Logging/versioning/history, the automatic cleanup-safety work, and a
   network-addressing fix ([rootguard#182](https://github.com/foxly-it/rootguard/pull/182))
   have landed - AdGuard had no pinned address on the internal `rootguard-dns`
@@ -1175,12 +1175,9 @@ on the untracked guided access-rules surface).
 
 ## Release status
 
-`v0.1.0-alpha.6` was published on 2026-08-06 as a GitHub pre-release with
-public, digest-pinned `amd64`/`arm64` images for all four RootGuard components.
-Release workflow run `31081554868` built and attested all four components
-directly from the monorepo (the first release since the migration) before
-installing the released stack and verifying recursive DNS plus DNSSEC
-rejection. RootGuard remains in active alpha development. Update safety and
-backup/restore recovery (0.4) are now complete; broader authentication
-hardening and roles, and bare-metal support, are not yet production
-complete.
+`v0.1.0-beta.1` is the current public release, published with digest-pinned
+`amd64`/`arm64` images for all five RootGuard components and a live-verified
+`upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
+complete and verified; the remaining gates before 1.0 are 0.9 (release
+candidate) and the 1.0.0 stable-appliance checklist itself (see
+`ROADMAP.md`).

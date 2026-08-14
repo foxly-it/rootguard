@@ -8,7 +8,7 @@ Items are completed only when their acceptance criteria are verified.
 
 ## Status and scope
 
-RootGuard is in **pre-release alpha development**. The end-to-end DNS path,
+RootGuard is in **pre-release beta development**. The end-to-end DNS path,
 guided setup, authenticated WebGUI, Unbound configuration lifecycle, AdGuard
 bootstrap, and guarded update paths exist. Use in a production environment requires
 recovery, immutable releases, broader system tests, and operational hardening.

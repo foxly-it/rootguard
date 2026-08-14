@@ -37,7 +37,7 @@ DNS-Filterung, rekursive DNS-Auflösung und DNSSEC-Validierung.
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
 > [!IMPORTANT]
-> RootGuard befindet sich in einer öffentlichen Alpha. Die Version ist zum
+> RootGuard befindet sich in einer öffentlichen Beta. Die Version ist zum
 > Ausprobieren und für reproduzierbare Rückmeldungen gedacht. Sie ist noch nicht
 > für den Einsatz als einziger DNS-Dienst in einer Produktivumgebung vorgesehen.
 
@@ -66,14 +66,14 @@ Geräte im Netzwerk → AdGuard Home → Unbound → DNS-Hierarchie
 
 ## Quick Start
 
-Voraussetzung ist ein Rechner mit Docker Compose v2. Die öffentliche Alpha
+Voraussetzung ist ein Rechner mit Docker Compose v2. Die öffentliche Beta
 verwendet fertige Images für `amd64` und `arm64`; ein lokaler Build ist nicht
 notwendig.
 
 ```sh
-mkdir rootguard-alpha && cd rootguard-alpha
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.6/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.6/.env.alpha.example
+mkdir rootguard && cd rootguard
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/.env.alpha.example
 ```
 
 Erzeuge zwei voneinander unabhängige Sicherheitsschlüssel:
@@ -185,7 +185,7 @@ and DNSSEC validation.
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
 > [!IMPORTANT]
-> RootGuard is a public alpha intended for evaluation and reproducible
+> RootGuard is a public beta intended for evaluation and reproducible
 > feedback. It is not yet recommended as the only DNS service for a production
 > network.
 
@@ -214,13 +214,13 @@ Network devices → AdGuard Home → Unbound → DNS hierarchy
 
 ### Quick start
 
-RootGuard requires Docker Compose v2. The public alpha provides ready-made
+RootGuard requires Docker Compose v2. The public beta provides ready-made
 `amd64` and `arm64` container images, so no local build is required.
 
 ```sh
-mkdir rootguard-alpha && cd rootguard-alpha
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.6/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-alpha.6/.env.alpha.example
+mkdir rootguard && cd rootguard
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/.env.alpha.example
 ```
 
 Generate two independent random security tokens:

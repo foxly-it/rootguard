@@ -2,7 +2,7 @@
 
 Tracked by [issue #39](https://github.com/foxly-it/rootguard/issues/39).
 
-RootGuard's public alpha uses one immutable Compose model on every supported
+RootGuard's public beta uses one immutable Compose model on every supported
 Docker platform. The clean-install verifier proves more than image
 availability: it starts the control plane, signs in, runs the AIO preflight,
 deploys AdGuard Home and Unbound, resolves a public name, and verifies that an
@@ -22,7 +22,7 @@ deployment, returned a recursive IPv4 answer, and rejected
 `dnssec-failed.org` with `SERVFAIL`.
 
 Docker Desktop on Intel uses the same published `amd64` manifests but is not a
-separately verified platform in the current alpha matrix.
+separately verified platform in the current verification matrix.
 
 ## Repeat the test
 
@@ -46,7 +46,7 @@ images, networks, or volumes.
 
 ## Automated evidence
 
-The `Public alpha clean install` workflow executes the verifier on native
+The `Public clean install` workflow executes the verifier on native
 GitHub-hosted `amd64` and `arm64` Linux runners. Each job records the runner,
 Docker architecture, Docker Engine version, and Compose version in its job
 summary. A failed install prints bounded control-plane and DNS-service logs
