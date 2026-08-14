@@ -435,14 +435,34 @@ jobs:
             fi
             echo "$body"
           }
+          poll_status() {
+            local body code curl_status
+            set +e
+            body="$(curl --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
+              --write-out '\n%{http_code}' http://127.0.0.1:18082/api/control-plane-updates)"
+            curl_status=$?
+            set -e
+            if [ "$curl_status" -ne 0 ]; then
+              return 0
+            fi
+            code="${body##*$'\n'}"
+            body="${body%$'\n'*}"
+            if [ "${code:0:1}" != 2 ]; then
+              echo "::error::GET /api/control-plane-updates returned HTTP ${code}: ${body}" >&2
+              exit 1
+            fi
+            echo "$body"
+          }
           for attempt in {1..30}; do
             code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18082/ || true)"
             if [ -n "$code" ] && [ "$code" != "000" ]; then break; fi
             sleep 1
           done
           call POST /api/control-plane-updates/check >/dev/null
+          state=""
           for attempt in {1..90}; do
-            status="$(call GET /api/control-plane-updates)"
+            status="$(poll_status)"
+            if [ -z "$status" ]; then sleep 2; continue; fi
             state="$(jq -r .state <<<"$status")"
             if [ "$state" = idle ]; then break; fi
             if [ "$state" = failed ]; then echo "$status"; exit 1; fi
@@ -450,8 +470,13 @@ jobs:
           done
           test "$state" = idle
           call POST /api/control-plane-updates/install >/dev/null
+          # The install swaps the Core and WebApp containers themselves, so
+          # the WebApp is expected to be briefly unreachable mid-poll here -
+          # unlike everywhere else in this step, that's not a failure.
+          state=""
           for attempt in {1..90}; do
-            status="$(call GET /api/control-plane-updates)"
+            status="$(poll_status)"
+            if [ -z "$status" ]; then sleep 2; continue; fi
             state="$(jq -r .state <<<"$status")"
             if [ "$state" = idle ]; then break; fi
             if [ "$state" = failed ]; then echo "$status"; exit 1; fi
