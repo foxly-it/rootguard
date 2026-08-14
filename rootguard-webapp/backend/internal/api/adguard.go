@@ -8,30 +8,15 @@ import (
 )
 
 func HandleGetAdGuardStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.AdGuardStatus(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyFixed(w, r, http.StatusBadGateway, core.AdGuardStatus)
 }
 
 func HandleBootstrapAdGuard(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.BootstrapAdGuard(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyFixed(w, r, http.StatusBadGateway, core.BootstrapAdGuard)
 }
 
 func HandleGetAdGuardFilterReport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	report, err := core.AdGuardFilterReport(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	writeJSON(w, http.StatusOK, report)
+	proxyFixed(w, r, http.StatusBadGateway, core.AdGuardFilterReport)
 }
 
 func HandleSetAdGuardFiltering(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {

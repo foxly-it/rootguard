@@ -10,21 +10,11 @@ import (
 )
 
 func HandleUpdateStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.UpdateStatus(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyCore(w, r, http.StatusOK, core.UpdateStatus)
 }
 
 func HandleBackupStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.BackupStatus(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyCore(w, r, http.StatusOK, core.BackupStatus)
 }
 
 func HandlePutBackupSettings(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -47,21 +37,11 @@ func HandlePutBackupSettings(w http.ResponseWriter, r *http.Request, core *corec
 }
 
 func HandleCleanupPreview(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	preview, err := core.CleanupPreview(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, preview)
+	proxyCore(w, r, http.StatusOK, core.CleanupPreview)
 }
 
 func HandleRunCleanup(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	result, err := core.RunCleanup(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	proxyCore(w, r, http.StatusOK, core.RunCleanup)
 }
 
 func HandleBackupExport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -114,12 +94,7 @@ func HandleBackupRestore(w http.ResponseWriter, r *http.Request, core *coreclien
 }
 
 func HandleUpdateCheck(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.CheckUpdates(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusAccepted, status)
+	proxyCore(w, r, http.StatusAccepted, core.CheckUpdates)
 }
 
 func HandleUpdateService(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {

@@ -8,12 +8,7 @@ import (
 )
 
 func HandleInstallationStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.InstallationStatus(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyCore(w, r, http.StatusOK, core.InstallationStatus)
 }
 
 func HandleInstallationPreflight(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {

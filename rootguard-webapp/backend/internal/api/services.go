@@ -22,19 +22,9 @@ import (
 // -----------------------------------------------------
 
 func HandleServices(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-
-	// Only allow GET
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	serviceList, err := core.Services(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, http.StatusOK, serviceList)
+	// The router (see httpapi.NewRouter) already gates this path to GET
+	// before calling in.
+	proxyFixed(w, r, http.StatusInternalServerError, core.Services)
 }
 
 func HandleServiceLogs(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {

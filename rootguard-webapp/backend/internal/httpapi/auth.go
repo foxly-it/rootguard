@@ -234,6 +234,22 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"reset": true})
 }
 
+// setSessionCookie writes the session cookie shared shape used both to set
+// a fresh session (handleLogin) and to clear one (handleLogout, value=""
+// and an already-expired Expires/MaxAge=-1).
+func (a *SessionAuth) setSessionCookie(w http.ResponseWriter, r *http.Request, value string, expires time.Time, maxAge int) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   requestIsHTTPS(r),
+		SameSite: http.SameSiteStrictMode,
+		Expires:  expires,
+		MaxAge:   maxAge,
+	})
+}
+
 func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
@@ -303,16 +319,7 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	a.mu.Unlock()
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   requestIsHTTPS(r),
-		SameSite: http.SameSiteStrictMode,
-		Expires:  expiresAt,
-		MaxAge:   int(a.ttl.Seconds()),
-	})
+	a.setSessionCookie(w, r, token, expiresAt, int(a.ttl.Seconds()))
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": input.Username})
 }
@@ -332,15 +339,7 @@ func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
 			a.recordAudit(auditLogout, entry.Username, clientAddress(r))
 		}
 	}
-	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   requestIsHTTPS(r),
-		SameSite: http.SameSiteStrictMode,
-		MaxAge:   -1,
-		Expires:  time.Unix(1, 0),
-	})
+	a.setSessionCookie(w, r, "", time.Unix(1, 0), -1)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": false})
 }
