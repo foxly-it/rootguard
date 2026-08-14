@@ -34,6 +34,7 @@ import {
 } from "../api/client";
 import "../styles/stack.css";
 import { useI18n } from "../i18n";
+import { errorMessage } from "../utils/errors";
 import { formatBytes } from "../utils/format";
 
 export default function Stack() {
@@ -474,8 +475,4 @@ function imageVersion(image?: string) {
   const slash = image.lastIndexOf("/");
   const colon = image.lastIndexOf(":");
   return colon > slash ? image.slice(colon + 1) : "latest";
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }

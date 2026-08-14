@@ -9,6 +9,7 @@ import {
 import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftWorkflow";
 import GuidedFlowSteps from "./GuidedFlowSteps";
 import { useI18n } from "../i18n";
+import { normalizeZoneName, validIPv4 } from "../utils/dnsNames";
 import "../styles/unbound-forwarding.css";
 
 const maxZones = 32;
@@ -270,7 +271,7 @@ function normalizeSettings(settings: UnboundSettings): UnboundSettings {
 }
 
 function normalizeForwardZone(zone: UnboundForwardZone, t: (key: string, values?: Record<string, string | number>) => string): UnboundForwardZone {
-  const name = normalizeZoneName(zone.name, t);
+  const name = normalizeZoneName(zone.name, t("forward.validation.rootZone"), t("forward.validation.invalidZone"));
   if (zone.servers.length === 0) throw new Error(t("forward.validation.serverRequired"));
   const servers = zone.servers.map((server) => normalizeIPAddress(server, t));
   if (new Set(servers).size !== servers.length) throw new Error(t("forward.validation.duplicateServer"));
@@ -281,16 +282,6 @@ function normalizeForwardZone(zone: UnboundForwardZone, t: (key: string, values?
     allow_unsigned: zone.allow_unsigned,
     allow_private_addresses: zone.allow_private_addresses,
   };
-}
-
-function normalizeZoneName(value: string, t: (key: string) => string) {
-  const normalized = value.trim().toLowerCase().replace(/\.*$/, "") + ".";
-  if (normalized === ".") throw new Error(t("forward.validation.rootZone"));
-  const labels = normalized.slice(0, -1).split(".");
-  if (normalized.length > 254 || !labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
-    throw new Error(t("forward.validation.invalidZone"));
-  }
-  return normalized;
 }
 
 function normalizeIPAddress(value: string, t: (key: string, values?: Record<string, string | number>) => string) {
@@ -308,11 +299,6 @@ function normalizeIPAddress(value: string, t: (key: string, values?: Record<stri
     throw new Error(t("forward.validation.reservedAddress", { address: ipv6 }));
   }
   return ipv6;
-}
-
-function validIPv4(value: string) {
-  const parts = value.split(".");
-  return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
 }
 
 function canonicalIPv6(value: string) {

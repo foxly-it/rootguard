@@ -45,6 +45,7 @@ import UnboundPrivateDomains from "../components/UnboundPrivateDomains";
 import ContentModal from "../components/ContentModal";
 import { useI18n } from "../i18n";
 import { useSidebarSubNav, type SidebarSubNavItem } from "../layout/SidebarSubNav";
+import { errorMessage } from "../utils/errors";
 
 export default function Unbound() {
   const { t, formatDate } = useI18n();
@@ -101,18 +102,24 @@ export default function Unbound() {
     setDiagnosticLogging(loadedDiagnosticLogging);
   }, []);
 
-  async function checkNetworkCapabilities() {
+  async function withBusy(action: () => Promise<void>, fallback: string) {
     if (busy) return;
     setBusy(true);
     clearFeedback();
     try {
-      setNetworkCapabilities(await fetchUnboundNetworkCapabilities());
-      setMessage(t("network.checked"));
+      await action();
     } catch (err) {
-      setError(errorMessage(err, t("network.checkError")));
+      setError(errorMessage(err, t(fallback)));
     } finally {
       setBusy(false);
     }
+  }
+
+  function checkNetworkCapabilities() {
+    return withBusy(async () => {
+      setNetworkCapabilities(await fetchUnboundNetworkCapabilities());
+      setMessage(t("network.checked"));
+    }, "network.checkError");
   }
 
   useEffect(() => {
@@ -225,47 +232,26 @@ export default function Unbound() {
     }
   }
 
-  async function runDiagnostics() {
-    if (busy) return;
-    setBusy(true);
-    clearFeedback();
-    try {
+  function runDiagnostics() {
+    return withBusy(async () => {
       setDiagnostics(await fetchUnboundDiagnostics());
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.diagnosticError")));
-    } finally {
-      setBusy(false);
-    }
+    }, "unbound.diagnosticError");
   }
 
-  async function runPathDiagnostics() {
-    if (busy) return;
-    setBusy(true);
-    clearFeedback();
-    try {
+  function runPathDiagnostics() {
+    return withBusy(async () => {
       setPathDiagnostics(await fetchUnboundPathDiagnostics());
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.pathDiagnosticError")));
-    } finally {
-      setBusy(false);
-    }
+    }, "unbound.pathDiagnosticError");
   }
 
-  async function toggleDiagnosticLogging() {
-    if (busy) return;
-    setBusy(true);
-    clearFeedback();
-    try {
+  function toggleDiagnosticLogging() {
+    return withBusy(async () => {
       const status = diagnosticLogging?.active
         ? await stopUnboundDiagnosticLogging()
         : await startUnboundDiagnosticLogging();
       setDiagnosticLogging(status);
       setMessage(t(status.active ? "unbound.diagnosticLoggingStarted" : "unbound.diagnosticLoggingStopped"));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.diagnosticLoggingError")));
-    } finally {
-      setBusy(false);
-    }
+    }, "unbound.diagnosticLoggingError");
   }
 
   function clearFeedback() {
@@ -655,8 +641,4 @@ function adviceText(id: string, field: "title" | "description" | "suggestion", t
   const key = `unbound.recommendation.${id}.${field}`;
   const translated = t(key);
   return translated === key ? fallback : translated;
-}
-
-function errorMessage(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
 }

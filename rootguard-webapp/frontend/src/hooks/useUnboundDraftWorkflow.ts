@@ -6,10 +6,9 @@ import {
   type UnboundPreview,
   type UnboundSettings,
 } from "../api/client";
+import { errorMessage } from "../utils/errors";
 
-export function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
+export { errorMessage };
 
 interface UseUnboundDraftWorkflowOptions {
   version?: string;

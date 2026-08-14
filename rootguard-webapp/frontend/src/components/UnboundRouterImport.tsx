@@ -11,10 +11,10 @@ import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftW
 import GuidedFlowSteps from "./GuidedFlowSteps";
 import { useI18n } from "../i18n";
 import "../styles/unbound-router-import.css";
+import { localZoneSection, normalizeHostLabel, normalizeZoneName } from "../utils/dnsNames";
 
 const defaultZoneName = "home.lab.";
 const maxHostsPerImport = 256;
-const hostLabelPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
 interface DraftHost {
   key: string;
@@ -109,7 +109,7 @@ export default function UnboundRouterImport({
       return;
     }
     try {
-      const canonicalZone = normalizeZoneName(zoneName, t);
+      const canonicalZone = normalizeZoneName(zoneName, t("routerImport.validation.zoneRoot"), t("routerImport.validation.zoneName"));
       const existingIndex = zones.findIndex((zone) => zone.name === canonicalZone);
       const totalAfter = (existingIndex >= 0 ? zones[existingIndex].hosts.length : 0)
         + zones.filter((_, index) => index !== existingIndex).reduce((sum, zone) => sum + zone.hosts.length, 0)
@@ -120,7 +120,7 @@ export default function UnboundRouterImport({
       const seen = new Set<string>();
       const newHosts: UnboundLocalHost[] = [];
       for (const draft of selected) {
-        const hostname = normalizeHostLabel(draft.hostname, t);
+        const hostname = normalizeHostLabel(draft.hostname, t("routerImport.validation.hostname"));
         if (existingHostnames.has(hostname) || seen.has(hostname)) {
           throw new Error(t("routerImport.duplicateHostname", { name: hostname }));
         }
@@ -334,30 +334,4 @@ function suggestHostname(raw: string, index: number): string {
     .replace(/^-+|-+$/g, "")
     .slice(0, 63);
   return sanitized || `host-${index + 1}`;
-}
-
-function normalizeHostLabel(value: string, t: (key: string) => string): string {
-  const normalized = value.trim().toLowerCase();
-  if (!hostLabelPattern.test(normalized)) throw new Error(t("routerImport.validation.hostname"));
-  return normalized;
-}
-
-function normalizeZoneName(value: string, t: (key: string) => string): string {
-  const normalized = value.trim().toLowerCase().replace(/\.*$/, "") + ".";
-  if (normalized === ".") throw new Error(t("routerImport.validation.zoneRoot"));
-  const labels = normalized.slice(0, -1).split(".");
-  if (normalized.length > 254 || !labels.every((label) => hostLabelPattern.test(label))) {
-    throw new Error(t("routerImport.validation.zoneName"));
-  }
-  return normalized;
-}
-
-function localZoneSection(config: string): string {
-  const lines = config.split("\n").filter((line) =>
-    line.includes("# Local host inventory:") ||
-    line.trimStart().startsWith("local-zone:") ||
-    line.trimStart().startsWith("local-data:") ||
-    line.trimStart().startsWith("local-data-ptr:"),
-  );
-  return lines.length > 0 ? `server:\n${lines.join("\n")}` : "# No local-zone directives.";
 }
