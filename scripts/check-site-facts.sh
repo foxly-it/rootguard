@@ -11,9 +11,10 @@ set -Eeuo pipefail
 repository_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repository_dir}"
 
-latest_tag="$(git tag --list 'v0.1.0-alpha.*' | sort -t. -k4 -n | tail -1)"
+latest_tag="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate --format='%(refname:short)' \
+  | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' | head -1)"
 if [[ -z "${latest_tag}" ]]; then
-  echo "No v0.1.0-alpha.* tag found - cannot determine the current version" >&2
+  echo "No v0.1.0-alpha.*/beta.* tag found - cannot determine the current version" >&2
   exit 1
 fi
 latest_version="${latest_tag#v}"
@@ -30,10 +31,10 @@ echo "== Version references =="
 # bilingual data-de/data-en pair for a historical reference always carries
 # the marker phrase on the same physical (minified, one-element-per-line)
 # line as the version number itself.
-historical_reference_pattern='([Aa]b |Starting with |required from )0\.1\.0-alpha\.[0-9]+'
+historical_reference_pattern='([Aa]b |Starting with |required from )0\.1\.0-(alpha|beta)\.[0-9]+'
 version_matches=""
 for file in site/*.html; do
-  matches="$(grep -vE "${historical_reference_pattern}" "${file}" | grep -Eo '0\.1\.0-alpha\.[0-9]+' | sed "s#^#${file}:#" || true)"
+  matches="$(grep -vE "${historical_reference_pattern}" "${file}" | grep -Eo '0\.1\.0-(alpha|beta)\.[0-9]+' | sed "s#^#${file}:#" || true)"
   if [[ -n "${matches}" ]]; then
     version_matches+="${matches}"$'\n'
   fi
