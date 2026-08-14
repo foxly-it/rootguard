@@ -1,299 +1,296 @@
-# Bedrohungsmodell
+**English** · [Deutsch](threat-model.de.md)
 
-Stand: 2026-08-08. Ergänzt `docs/architecture.md` um eine explizite
-Betrachtung, wem RootGuard wie weit vertraut, was ein kompromittierter
-Akteur jeweils erreichen kann, welche Gegenmaßnahmen bereits greifen und
-welche Restrisiken bewusst offen oder nicht Ziel dieses Projekts sind.
+# Threat model
 
-## Geltungsbereich
+As of 2026-08-08. Extends `docs/architecture.md` with an explicit look at
+who RootGuard trusts and how far, what a compromised actor can each reach,
+which countermeasures already apply, and which residual risks are
+deliberately left open or out of scope for this project.
 
-Betrachtet werden die sechs in [ROADMAP.md](../ROADMAP.md) 0.5 benannten
-Akteure/Grenzen: Docker-Socket-Inhaber, Browser, interne Netzwerke,
-Update-Supply-Chain, Backups und das AdGuard-Gateway. Außerhalb des
-Geltungsbereichs: Kompromittierung des Hosts selbst (physischer Zugriff,
-Kernel-Exploits, kompromittierte Basis-Images von Debian/Alpine/Docker) -
-RootGuard vertraut dem Host-Betriebssystem und der Docker-Engine, auf denen
-es läuft, so wie jede containerisierte Anwendung.
+## Scope
 
-## Akteure und Vertrauensgrenzen
+This covers the six actors/boundaries named in [ROADMAP.md](../ROADMAP.md)
+0.5: Docker socket holders, the browser, internal networks, the update
+supply chain, backups, and the AdGuard gateway. Out of scope: compromise
+of the host itself (physical access, kernel exploits, compromised
+Debian/Alpine/Docker base images) - RootGuard trusts the host operating
+system and Docker engine it runs on, like any containerized application.
 
-### 1. Docker-Socket-Inhaber (Core, Updater)
+## Actors and trust boundaries
 
-**Zugriff:** `rootguard-core` und `rootguard-updater` haben `/var/run/docker.sock`
-gemountet. Wer diesen Socket kontrolliert, kontrolliert effektiv den Host -
-ein neuer privilegierter Container mit beliebigem Bind-Mount ist daraus
-trivial erreichbar.
+### 1. Docker socket holders (Core, Updater)
 
-**Wenn kompromittiert:** Vollständige Host-Kompromittierung. Das ist die mit
-Abstand größte Einzel-Vertrauensgrenze im System.
+**Access:** `rootguard-core` and `rootguard-updater` have
+`/var/run/docker.sock` mounted. Whoever controls this socket effectively
+controls the host - a new privileged container with an arbitrary bind
+mount is trivially reachable from there.
 
-**Bestehende Gegenmaßnahmen:**
-- Beide Images laufen aktuell als `root` (siehe die Begründung direkt im
-  jeweiligen `Dockerfile`) - kein zusätzlicher Privilege-Escalation-Schritt
-  nötig, aber auch keine Reduktion der Angriffsfläche innerhalb des
-  Containers selbst.
-- Core spricht nur mit einem fest definierten, kontrollierten Satz von
-  Images, Volumes, Netzwerken und Befehlen; Browser-Anfragen können weder
-  Image-Namen noch Compose-Argumente oder Container frei wählen (siehe
-  `docs/architecture.md`, Abschnitte „Kontrollierte Container-Updates" und
-  „AIO-Bootstrap"). Ein kompromittierter Browser oder eine kompromittierte
-  WebApp kann Core also nicht direkt zu beliebigen Docker-Befehlen bewegen -
-  nur zu den engen, typisierten Operationen, die die Core-API tatsächlich
-  anbietet.
-- Der Updater kennt ausschließlich `core` und `webapp` als Austauschziele,
-  zieht nur konfigurierte Ziel-Images und bleibt vom Host aus nicht
-  erreichbar (`docs/architecture.md`, „Kontrollierte Container-Updates").
-- Manuelle Docker-Bereinigung akzeptiert keine Ressourcennamen aus dem Browser:
-  Core leitet Kandidaten ausschließlich aus seiner erfolgreichen Update-Historie
-  oder dem festen Volume-Label `io.rootguard.cleanup=true` ab, prüft die Nutzung
-  vor Vorschau und Ausführung erneut und ruft keine globalen Prune-Befehle auf.
-- Digest-gepinnte Core-/WebApp-Releases durchlaufen vor der Aktivierung eine
-  Cosign-/SLSA-Provenienzprüfung gegen den erwarteten GitHub-Workflow-
-  Unterzeichner (siehe Abschnitt 4).
+**If compromised:** Full host compromise. This is by far the largest
+single trust boundary in the system.
 
-**Bekannte Restrisiken / offen:**
-- Ein Bug oder eine Schwachstelle *innerhalb* von Core oder Updater, der
-  einem Angreifer erlaubt, eigene Docker-API-Aufrufe statt der
-  vorgesehenen engen Operationen abzusetzen, würde direkt zur
-  Host-Kompromittierung führen - es gibt keine zweite Verteidigungslinie
-  zwischen „Code-Fehler in Core" und „voller Docker-Zugriff".
-- Konkreter geplanter Härtungsschritt: ein dediziertes
-  `docker-socket-proxy`-Sidecar, das den Socket selbst hält und nur eine
-  eng allowlistete Teilmenge der Docker-API durchlässt, während Core und
-  Updater selbst unprivilegiert laufen. Noch nicht umgesetzt - siehe die
-  Kommentare in `rootguard-core/Dockerfile` und
-  `rootguard-updater/Dockerfile`.
+**Existing countermeasures:**
+- Both images currently run as `root` (see the reasoning directly in the
+  respective `Dockerfile`) - no additional privilege-escalation step
+  needed, but also no reduction of the attack surface within the
+  container itself.
+- Core only talks to a fixed, controlled set of images, volumes,
+  networks, and commands; browser requests can choose neither image names
+  nor Compose arguments nor containers freely (see `docs/architecture.md`,
+  "Controlled container updates" and "AIO bootstrap" sections). A
+  compromised browser or compromised WebApp therefore cannot move Core
+  directly to arbitrary Docker commands - only to the narrow, typed
+  operations the Core API actually offers.
+- The updater only knows `core` and `webapp` as replacement targets, only
+  pulls configured target images, and isn't reachable from the host
+  (`docs/architecture.md`, "Controlled container updates").
+- Manual Docker cleanup accepts no resource names from the browser: Core
+  derives candidates exclusively from its successful update history or the
+  fixed volume label `io.rootguard.cleanup=true`, re-verifies usage before
+  preview and execution, and never calls global prune commands.
+- Digest-pinned Core/WebApp releases go through a Cosign/SLSA provenance
+  check against the expected GitHub workflow signer before activation
+  (see section 4).
 
-### 2. Browser / authentifizierter Nutzer
+**Known residual risks / open:**
+- A bug or vulnerability *inside* Core or Updater that lets an attacker
+  issue their own Docker API calls instead of the intended narrow
+  operations would lead directly to host compromise - there is no second
+  line of defense between "code bug in Core" and "full Docker access".
+- Concrete planned hardening step: a dedicated `docker-socket-proxy`
+  sidecar that holds the socket itself and only lets a narrowly
+  allowlisted subset of the Docker API through, while Core and Updater
+  themselves run unprivileged. Not yet implemented - see the comments in
+  `rootguard-core/Dockerfile` and `rootguard-updater/Dockerfile`.
 
-**Zugriff:** HttpOnly-/SameSite=Strict-Session gegen die WebApp; darüber
-alle geführten und Experten-Funktionen der Oberfläche.
+### 2. Browser / authenticated user
 
-**Wenn kompromittiert (gestohlene Session, XSS, o.ä.):** Voller
-Administrator-Zugriff auf alle RootGuard-Funktionen - Konfigurationsänderung,
-Updates, AdGuard-Verwaltung.
+**Access:** HttpOnly/SameSite=Strict session against the WebApp; through
+it, every guided and expert function of the interface.
 
-**Bestehende Gegenmaßnahmen:**
-- PBKDF2-SHA256 mit 600.000 Iterationen für das Admin-Passwort, konstante
-  Vergleichszeit, HttpOnly-/SameSite=Strict-Cookies mit `Secure` sobald HTTPS
-  aktiv ist (`rootguard-webapp/backend/internal/httpapi/auth.go`).
-- Mutierende Anfragen müssen vom gleichen Origin stammen (Same-Origin-Write-
-  Check) - klassisches CSRF über ein fremdes Origin greift damit nicht.
-- Der Experteneditor für Unbound ist auf eine einzelne Datei
-  (`90-rootguard-custom.conf`) begrenzt; Includes, Listener, Remote Control,
-  Containerpfade und Trust-Anker bleiben gesperrt (`docs/architecture.md`,
-  „Unbound-Expertenkonfiguration") - selbst ein vollständig kompromittierter
-  Browser-Zugang kann darüber nicht auf Host-Dateien oder beliebige
-  Unbound-Direktiven zugreifen.
-- Der separate `ROOTGUARD_RECOVERY_TOKEN` für Passwort-Reset gewährt für
-  sich genommen weder Session noch Zugriff auf Core oder AdGuard.
+**If compromised (stolen session, XSS, etc.):** Full administrator access
+to every RootGuard function - configuration changes, updates, AdGuard
+management.
 
-**Bestehende Gegenmaßnahmen (ergänzt):**
-- Session-Inventar mit gezielter Revocation: `GET /api/auth/sessions` /
-  `DELETE /api/auth/sessions/{id}`, erreichbar über "Aktive Sitzungen" im
-  Kontomenü - eine gestohlene Session muss nicht mehr bis zum TTL-Ablauf
-  gültig bleiben.
-- Rate-Limiting auf Login und Passwort-Recovery: 5 Fehlversuche pro
-  5-Minuten-Fenster sperren weitere Versuche - auch ein danach korrektes
-  Passwort wird während einer aktiven Sperre abgelehnt, damit eine Sperre
-  nicht durch schlichtes Weiterprobieren umgangen werden kann.
-- Ein begrenztes, persistiertes Audit-Log (`GET /api/auth/audit`,
-  max. 500 Einträge) zeichnet Login-Erfolg/-Fehlschlag, Rate-Limiting,
-  Logout, Passwort-Recovery und Session-Revocation auf - sichtbar im
-  selben "Aktive Sitzungen"-Panel.
-- Dasselbe Rate-Limit-/Audit-Prinzip deckt jetzt auch destruktive Aktionen
-  außerhalb der Authentifizierung ab: ein gemeinsames, sitzungsbasiertes
-  Sliding-Window-Budget (30 Anfragen / 5 Minuten über alle geschützten
-  Routen hinweg, kein separates Budget pro Route) begrenzt Unbound-
-  Aktivierung/-Restore/-Custom-Config/-Import/-Diagnose-Logging,
-  Service-Start/Stop/Restart und -Updates, Backup-Einstellungen/-Export/
-  -Restore, manuelles Cleanup, Control-Plane-Update-Installation,
-  Installations-Deploy sowie AdGuard-Bootstrap und Filter-Toggle. Alle
-  betroffenen Routen sind reine Proxies der WebApp zu Core, wodurch der
-  Schutz am einzigen browserseitigen Einstiegspunkt greift, ohne Core
-  selbst ändern zu müssen. Erfolg, Fehlschlag und Rate-Limiting erscheinen
-  im selben `GET /api/auth/audit`-Log
+**Existing countermeasures:**
+- PBKDF2-SHA256 with 600,000 iterations for the admin password, constant-
+  time comparison, HttpOnly/SameSite=Strict cookies with `Secure` once
+  HTTPS is active (`rootguard-webapp/backend/internal/httpapi/auth.go`).
+- Mutating requests must originate from the same origin (same-origin write
+  check) - classic CSRF from a foreign origin doesn't work as a result.
+- The Unbound expert editor is limited to a single file
+  (`90-rootguard-custom.conf`); includes, listeners, remote control,
+  container paths, and trust anchors stay locked (`docs/architecture.md`,
+  "Unbound expert configuration") - even a fully compromised browser
+  session can't reach host files or arbitrary Unbound directives through
+  it.
+- The separate `ROOTGUARD_RECOVERY_TOKEN` for password reset grants
+  neither a session nor access to Core or AdGuard by itself.
+
+**Existing countermeasures (extended):**
+- Session inventory with targeted revocation: `GET /api/auth/sessions` /
+  `DELETE /api/auth/sessions/{id}`, reachable via "Active sessions" in the
+  user menu - a stolen session no longer has to stay valid until TTL
+  expiry.
+- Rate limiting on login and password recovery: 5 failed attempts in a
+  5-minute window locks out further attempts - even a subsequently correct
+  password is rejected during an active lockout, so a lockout can't be
+  bypassed by simply continuing to guess.
+- A bounded, persisted audit log (`GET /api/auth/audit`, max. 500 entries)
+  records login success/failure, rate limiting, logout, password recovery,
+  and session revocation - visible in the same "Active sessions" panel.
+- The same rate-limit/audit principle now also covers destructive actions
+  outside authentication: a shared, per-session sliding-window budget (30
+  requests / 5 minutes across every protected route, not a separate
+  budget per route) limits Unbound activation/restore/custom-config/
+  import/diagnostic-logging, service start/stop/restart and updates,
+  backup settings/export/restore, manual cleanup, control-plane update
+  installation, installation deploy, and AdGuard bootstrap and filter
+  toggle. All affected routes are plain proxies from the WebApp to Core,
+  so the protection takes effect at the single browser-facing entry point
+  without needing to change Core itself. Success, failure, and rate
+  limiting appear in the same `GET /api/auth/audit` log
   ([rootguard#219](https://github.com/foxly-it/rootguard/issues/219)).
 
-**Bekannte Restrisiken / offen:**
-- Das geteilte Budget schützt vor massenhaftem Missbrauch einer einzelnen
-  (z. B. kompromittierten) Session, nicht vor einem einzelnen gezielten
-  destruktiven Aufruf durch einen legitim authentifizierten Nutzer - das
-  ist erwartetes Verhalten, kein Bug: Auth-gestützte Autorisierung bleibt
-  die eigentliche Zugriffskontrolle, das Rate-Limit ist eine zusätzliche
-  Schadensbegrenzung.
+**Known residual risks / open:**
+- The shared budget protects against mass abuse of a single (e.g.
+  compromised) session, not against a single targeted destructive call by
+  a legitimately authenticated user - that is expected behavior, not a
+  bug: auth-backed authorization remains the actual access control, the
+  rate limit is an additional damage-limitation layer.
 
-### 3. Interne Netzwerke (control, edge, DNS-Netz)
+### 3. Internal networks (control, edge, DNS network)
 
-**Zugriff:** Drei Docker-Netzwerke trennen Zuständigkeiten: `edge`
-(WebApp-Host-Port), `control` (WebApp↔Core↔Updater), und das interne
-DNS-Netz (AdGuard↔Unbound). Nur WebApp und der DNS-Port erhalten Host-Ports;
-AdGuards native Administration bleibt ausschließlich intern erreichbar.
+**Access:** Three Docker networks separate responsibilities: `edge`
+(WebApp host port), `control` (WebApp↔Core↔Updater), and the internal DNS
+network (AdGuard↔Unbound). Only the WebApp and the DNS port get host
+ports; AdGuard's native administration stays reachable only internally.
 
-**Wenn kompromittiert (z.B. ein anderer Container im selben
-Docker-Host/-Netzwerk):** Zugriff auf interne, eigentlich nicht öffentlich
-gedachte Schnittstellen (AdGuard-Admin-API, Core-Bearer-Token-API).
+**If compromised (e.g. another container on the same Docker host/
+network):** Access to internal interfaces that aren't meant to be public
+(AdGuard admin API, Core's bearer-token API).
 
-**Bestehende Gegenmaßnahmen:**
-- Netzsegmentierung wie oben; Core erreicht Unbound nur über eine fest
-  definierte interne Adresse (`172.29.53.2:5335`), kein öffentlicher
-  Fallback.
-- Core-API ist bearer-token-geschützt (`ROOTGUARD_API_TOKEN`), nicht nur
-  netzwerk-isoliert.
+**Existing countermeasures:**
+- Network segmentation as above; Core only reaches Unbound over a fixed
+  internal address (`172.29.53.2:5335`), no public fallback.
+- The Core API is bearer-token protected (`ROOTGUARD_API_TOKEN`), not just
+  network-isolated.
 
-**Bekannte Restrisiken / offen:**
-- Wer bereits *im selben Docker-Host* beliebige Container starten kann, kann
-  sich in der Regel auch in `control`/das interne DNS-Netz hängen (ohne
-  zusätzliche Docker-Netzwerkrichtlinien/Firewalling auf Host-Ebene) - die
-  Netzsegmentierung schützt vor externen Angreifern und vor anderen,
-  nicht-privilegierten Workloads auf demselben Host, nicht vor einem
-  Angreifer, der bereits Docker-Zugriff auf demselben Host hat. Das deckt
-  sich mit Akteur 1: Wer den Docker-Socket kontrolliert, kontrolliert auch
-  die Netzwerke.
+**Known residual risks / open:**
+- Whoever can already start arbitrary containers *on the same Docker
+  host* can generally also attach to `control`/the internal DNS network
+  (absent additional Docker network policies/host-level firewalling) -
+  network segmentation protects against external attackers and against
+  other, non-privileged workloads on the same host, not against an
+  attacker who already has Docker access on the same host. This overlaps
+  with actor 1: whoever controls the Docker socket also controls the
+  networks.
 
-### 4. Update-Supply-Chain
+### 4. Update supply chain
 
-**Zugriff:** GHCR-Images für alle fünf Komponenten; der Updater-Helper zieht
-und aktiviert neue Core-/WebApp-/AdGuard-/Unbound-Images.
+**Access:** GHCR images for all five components; the updater helper pulls
+and activates new Core/WebApp/AdGuard/Unbound images.
 
-**Wenn kompromittiert (z.B. gestohlene GHCR-Publish-Credentials, kompromittierter
-CI-Runner):** Ein bösartiges Image könnte als legitimes RootGuard-Release
-verteilt und von bestehenden Installationen automatisch übernommen werden -
-letztlich gleichbedeutend mit Akteur 1 (Host-Kompromittierung), nur über den
-Update-Pfad statt direkt.
+**If compromised (e.g. stolen GHCR publish credentials, a compromised CI
+runner):** A malicious image could be distributed as a legitimate
+RootGuard release and automatically adopted by existing installations -
+ultimately equivalent to actor 1 (host compromise), just via the update
+path instead of directly.
 
-**Bestehende Gegenmaßnahmen:**
-- Digest-gepinnte Core-/WebApp-Releases werden vor der Aktivierung per
-  Cosign gegen die signierte SLSA-Provenienz geprüft: erwarteter
-  GitHub-Repository- und Workflow-Unterzeichner, erwarteter
-  GitHub-Actions-OIDC-Aussteller, Prüfung der Sigstore-Transparenzdaten
-  (`docs/architecture.md`, „AIO-Bootstrap"). Der eingebettete
-  Cosign-Verifier selbst ist per Digest gepinnt - keine bewegliche
-  Abhängigkeit an dieser Stelle.
-- Lokale Builds, veränderliche Tags (`:latest` o.ä.) und Fremdimages
-  erhalten explizit keine RootGuard-Vertrauensfreigabe.
-- Ein Update-Fehlschlag (Healthcheck nach Austausch) pinnt automatisch die
-  vorherige Image-ID zurück und prüft erneut (`docs/architecture.md`,
-  „Kontrollierte Container-Updates").
-- CI-seitig: `trivy` prüft alle fünf Komponenten-Images/-Dockerfiles auf
-  bekannte Schwachstellen und Fehlkonfigurationen, `govulncheck` und
-  `staticcheck` laufen gegen jedes Go-Modul, `gitleaks` gegen die gesamte
-  Git-Historie (`.github/workflows/ci-security.yml`) - reduziert das
-  Risiko, dass eine bekannte Schwachstelle oder ein versehentlich
-  committetes Secret unbemerkt in ein veröffentlichtes Release gelangt.
+**Existing countermeasures:**
+- Digest-pinned Core/WebApp releases are checked via Cosign against the
+  signed SLSA provenance before activation: expected GitHub repository and
+  workflow signer, expected GitHub Actions OIDC issuer, verification of
+  the Sigstore transparency data (`docs/architecture.md`, "AIO bootstrap").
+  The embedded Cosign verifier itself is pinned by digest - no moving
+  dependency at this point.
+- Local builds, mutable tags (`:latest` etc.), and third-party images
+  explicitly receive no RootGuard trust approval.
+- An update failure (health check after swap) automatically pins the
+  previous image ID back and re-verifies (`docs/architecture.md`,
+  "Controlled container updates").
+- On the CI side: `trivy` checks all five component images/Dockerfiles for
+  known vulnerabilities and misconfigurations, `govulncheck` and
+  `staticcheck` run against every Go module, `gitleaks` against the entire
+  git history (`.github/workflows/ci-security.yml`) - reduces the risk of
+  a known vulnerability or an accidentally committed secret reaching a
+  published release unnoticed.
 
-**Bekannte Restrisiken / offen:**
-- AdGuard Home und Unbound (Basis-Images von Drittanbietern bzw. eigener
-  Reproducible Build) durchlaufen aktuell keine Cosign-Provenienzprüfung wie
-  Core/WebApp - Vertrauen basiert hier auf Digest-Pinning und der
-  Upstream-Signatur/dem eigenen SHA-256-verifizierten Reproducible-Build,
-  nicht auf einer RootGuard-eigenen Signaturkette.
-- Kein SBOM/keine Provenance für jedes Release (ROADMAP.md 0.6) - erschwert
-  aktuell eine nachträgliche forensische Analyse eines betroffenen Releases.
-- Kein Image-Signing im eigentlichen Sinn über Cosign hinaus für alle fünf
-  Komponenten einheitlich (ROADMAP.md 0.6).
+**Known residual risks / open:**
+- AdGuard Home and Unbound (a third-party base image and a
+  RootGuard-owned reproducible build, respectively) currently don't go
+  through a Cosign provenance check like Core/WebApp - trust here is based
+  on digest pinning and the upstream signature/RootGuard's own
+  SHA-256-verified reproducible build, not on a RootGuard-owned signature
+  chain.
+- No SBOM/provenance for every release - now delivered, see
+  `docs/compatibility-matrix.md` and ROADMAP.md 0.6 - which makes forensic
+  analysis of an affected release possible after the fact.
+- Image signing beyond Cosign, applied consistently across all five
+  components - now delivered as well, see ROADMAP.md 0.6.
 
 ### 5. Backups
 
-**Zugriff:** Persistente RootGuard-Volumes (Konfigurationshistorie,
-Sessions, AdGuard-Zugangsdaten, Installationszustand) und deren Sicherungen
-vor jedem Update/Austausch.
+**Access:** Persistent RootGuard volumes (configuration history, sessions,
+AdGuard credentials, installation state) and their safeguards before every
+update/swap.
 
-**Wenn kompromittiert (Zugriff auf ein Backup/Volume-Snapshot):** Offenlegung
-aller darin enthaltenen Zugangsdaten und Konfiguration - AdGuard-Admin-
-Zugangsdaten liegen mit Besitzerrechten im persistenten Volume
-(`docs/architecture.md`, „Laufzeitarchitektur"), Sessions liegen serverseitig
-im Session-Volume.
+**If compromised (access to a backup/volume snapshot):** Disclosure of
+every credential and configuration it contains - AdGuard admin credentials
+live with owner-only permissions in the persistent volume
+(`docs/architecture.md`, "Runtime architecture"), sessions live server-side
+in the session volume.
 
-**Bestehende Gegenmaßnahmen:**
-- Backups/Snapshots entstehen ausschließlich serverseitig vor einem
-  kontrollierten Austausch, nicht browserseitig abrufbar.
-- Interne Update-Backups sind pro Dienst auf konfigurierbare 2–50
-  Wiederherstellungspunkte begrenzt (Standard 5); Speichernutzung und
-  nicht erkannte Daten bleiben auf der Backups-Seite sichtbar.
-- Automatische Bereinigung akzeptiert nur kanonische Zeitstempel-/Dienstpfade
-  mit einem Manifest, das zum erlaubten Dienst und Container passt. Unbekannte
-  Daten und Symlinks werden nicht gelöscht.
-- Passwort-Hashes sind PBKDF2-SHA256-gesalzen, nicht im Klartext.
-- Portable Vollbackups werden vor dem Download interoperabel mit age-v1 und
-  einer scrypt-abgeleiteten Passwortidentität authentifiziert verschlüsselt.
-  Ein versioniertes Manifest enthält SHA-256-Prüfsummen; Sitzungen und externe
-  `.env`-Geheimnisse sind nicht Teil des Exports. Fest verdrahtete Quellen,
-  Symlink-Ablehnung und privates, immer entferntes Klartext-Staging begrenzen
-  Pfad- und Restdatenrisiken.
-- Der geführte Restore prüft vor jeder Änderung Schema, Pflichtdateien,
-  erlaubte Pfade/Typen, exaktes Manifest, Größen und SHA-256 sowie harte
-  Upload-/Entpack-/Dateigrenzen. Apply validiert erneut, verlangt Bestätigung
-  und scheitert geschlossen, wenn Installation oder verwaltete Docker-
-  Ressourcen nicht sauber sind. Klartext- und Rollback-Staging werden immer
-  entfernt; partielle neue Docker-Ressourcen werden nach Fehlern abgebaut.
+**Existing countermeasures:**
+- Backups/snapshots are created exclusively server-side before a
+  controlled swap, not retrievable from the browser.
+- Internal update backups are limited per service to a configurable 2-50
+  restore points (default 5); storage usage and unrecognized data stay
+  visible on the Backups page.
+- Automatic cleanup only accepts canonical timestamp/service paths with a
+  manifest matching the allowed service and container. Unknown data and
+  symlinks are never deleted.
+- Password hashes are PBKDF2-SHA256 salted, never stored in plaintext.
+- Portable full backups are encrypted, authenticated, and interoperable
+  with age-v1 and a scrypt-derived passphrase identity before download. A
+  versioned manifest contains SHA-256 checksums; sessions and external
+  `.env` secrets aren't part of the export. Fixed sources, symlink
+  rejection, and private, always-removed plaintext staging bound path and
+  leftover-data risks.
+- The guided restore validates schema, required files, allowed
+  paths/types, the exact manifest, sizes, and SHA-256, plus hard
+  upload/expansion/file-count limits before any change. Apply validates
+  again, requires confirmation, and fails closed if the installation or
+  managed Docker resources aren't clean. Plaintext and rollback staging
+  are always removed; partial new Docker resources are torn down after
+  failures.
 
-**Bekannte Restrisiken / offen:**
-- Das Exportpasswort wird nicht gespeichert und muss für jede Vorschau und
-  Wiederherstellung erneut eingegeben werden. Über reines HTTP ist das fertige
-  Archiv verschlüsselt, das Passwort auf dem Weg vom Browser zur lokalen
-  WebApp jedoch nicht transportgeschützt; die Oberfläche warnt sichtbar und
-  `docs/https-reverse-proxy.md` beschreibt den unterstützten HTTPS-Betrieb.
-- Live-Daten können sich während einzelner Dateikopien verändern. Updates sind
-  zwar ausgeschlossen, ein transaktionsartiger Dienst-Snapshot und seine
-  Restore-Verifikation bleiben jedoch eigene offene 0.4-Punkte.
+**Known residual risks / open:**
+- The export passphrase isn't stored and must be re-entered for every
+  preview and restore. Over plain HTTP, the finished archive is encrypted,
+  but the passphrase isn't transport-protected on its way from the browser
+  to the local WebApp; the interface warns visibly and
+  `docs/https-reverse-proxy.md` describes the supported HTTPS operation.
+- Live data can change during individual file copies. Updates are
+  excluded, but a transaction-like service snapshot and its restore
+  verification were, until recently, still separate open 0.4 items - now
+  delivered, see ROADMAP.md 0.4.
 
-### 6. AdGuard-Gateway
+### 6. AdGuard gateway
 
-**Zugriff:** RootGuard proxied die native AdGuard-Home-Oberfläche unter dem
-festen Pfad `/adguard-ui/`; Core setzt dabei die internen
-AdGuard-Zugangsdaten ein.
+**Access:** RootGuard proxies the native AdGuard Home interface under the
+fixed path `/adguard-ui/`; Core supplies the internal AdGuard credentials
+for it.
 
-**Wenn kompromittiert (Schwachstelle in AdGuard Home selbst oder im
-Proxy-Pfad):** Zugriff auf AdGuards Filterregeln, DNS-Anfrage-Logs (soweit
-aktiviert) und die AdGuard-Konfiguration - nicht jedoch auf Core, Unbound
-oder den Docker-Socket, da AdGuard selbst keinen dieser Zugriffe besitzt.
+**If compromised (a vulnerability in AdGuard Home itself or in the proxy
+path):** Access to AdGuard's filter rules, DNS query logs (if enabled),
+and the AdGuard configuration - but not to Core, Unbound, or the Docker
+socket, since AdGuard itself has none of that access.
 
-**Bestehende Gegenmaßnahmen:**
-- AdGuards native Administration ist ausschließlich intern erreichbar, nie
-  über einen Host-Port (`docs/architecture.md`, „Laufzeitarchitektur").
-- Nur der feste, authentifizierte Proxy-Pfad existiert; frei wählbare Ziele
-  und ein öffentlicher Administrationsport sind ausgeschlossen
-  (`docs/architecture.md`, „AdGuard-Ersteinrichtung").
-- Der Reverse-Proxy migrierte von `Director` auf `Rewrite`
+**Existing countermeasures:**
+- AdGuard's native administration is reachable only internally, never via
+  a host port (`docs/architecture.md`, "Runtime architecture").
+- Only the fixed, authenticated proxy path exists; freely chosen targets
+  and a public administration port are excluded (`docs/architecture.md`,
+  "AdGuard first-time setup").
+- The reverse proxy migrated from `Director` to `Rewrite`
   (`rootguard-core/internal/adguard/proxy.go`,
-  `rootguard-webapp/backend/internal/coreclient/client.go`): client-seitig
-  gesetzte `X-Forwarded-*`-Header werden vor dem Weiterreichen verworfen und
-  serverseitig neu gesetzt statt unverändert durchgereicht - schließt einen
-  Header-Spoofing-Pfad, der zuvor offen war.
-- Mutierende Anfragen über den Proxy-Pfad müssen ebenfalls vom gleichen
-  Origin stammen.
+  `rootguard-webapp/backend/internal/coreclient/client.go`):
+  client-supplied `X-Forwarded-*` headers are discarded before forwarding
+  and set again server-side instead of being passed through unchanged -
+  closes a header-spoofing path that was previously open.
+- Mutating requests via the proxy path likewise must originate from the
+  same origin.
 
-**Bekannte Restrisiken / offen:**
-- AdGuard Home selbst liegt außerhalb der RootGuard-Codebasis - eine
-  Schwachstelle in AdGuard Home wirkt sich über diesen Pfad direkt auf
-  RootGuard-Installationen aus. Mitigiert nur durch Digest-Pinning und
-  zeitnahes Nachziehen von AdGuard-Releases, nicht durch eine
-  RootGuard-eigene zusätzliche Schutzschicht.
+**Known residual risks / open:**
+- AdGuard Home itself lives outside the RootGuard codebase - a
+  vulnerability in AdGuard Home directly affects RootGuard installations
+  through this path. Mitigated only by digest pinning and promptly
+  following up on AdGuard releases, not by an additional RootGuard-owned
+  protection layer.
 
-## Bewusst nicht Ziel (Non-Goals)
+## Deliberately out of scope (non-goals)
 
-- **Böswilliger Administrator:** Wer legitime Admin-Zugangsdaten besitzt,
-  ist per Definition vertrauenswürdig - RootGuard schützt nicht vor einem
-  autorisierten, aber böswillig handelnden Betreiber.
-- **Physischer Host-Zugriff:** Wer physischen oder Hypervisor-Zugriff auf
-  den Host hat, kann jede containerisierte Anwendung umgehen.
-- **Kompromittierte Basis-Images/Registries selbst** (Docker Hub, GHCR,
-  Debian/Alpine-Paketquellen) - RootGuard verifiziert, was es referenziert
-  (Digest-Pinning, Cosign wo verfügbar), vertraut aber letztlich denselben
-  Wurzeln wie jede andere containerisierte Anwendung.
-- **Mehrbenutzer-/Rollenmodell und externe Identity-Provider** - laut
-  ROADMAP.md 0.5 „Later", nur bei echtem 1.0-Bedarf.
-- **HTTPS/TLS-Terminierung durch RootGuard selbst** - bewusste
-  Scope-Entscheidung, siehe ROADMAP.md 0.5: dokumentierter Betrieb hinter
-  einem etablierten Reverse-Proxy (Caddy, Zoraxy, Nginx Proxy Manager,
-  HAProxy) statt einer eigenen TLS-Implementierung.
+- **A malicious administrator:** whoever holds legitimate admin
+  credentials is trusted by definition - RootGuard doesn't protect against
+  an authorized but maliciously acting operator.
+- **Physical host access:** whoever has physical or hypervisor access to
+  the host can bypass any containerized application.
+- **Compromised base images/registries themselves** (Docker Hub, GHCR,
+  Debian/Alpine package sources) - RootGuard verifies what it references
+  (digest pinning, Cosign where available), but ultimately trusts the same
+  roots as any other containerized application.
+- **A multi-user/roles model and external identity providers** - per
+  ROADMAP.md 0.5, "Later", only if real 1.0 demand requires it.
+- **HTTPS/TLS termination by RootGuard itself** - a deliberate scope
+  decision, see ROADMAP.md 0.5: documented operation behind an established
+  reverse proxy (Caddy, Zoraxy, Nginx Proxy Manager, HAProxy) instead of a
+  RootGuard-native TLS implementation.
 
-## Verweise
+## References
 
-- `docs/architecture.md` - detaillierte Beschreibung der hier referenzierten
-  Mechanismen.
-- `SECURITY.md` - Meldeweg für Sicherheitslücken.
-- `ROADMAP.md`, Abschnitt 0.5 - offene Punkte, die direkt aus diesem Modell
-  folgen (Docker-Socket-Proxy, Session-Revocation, Rate-Limits,
-  Audit-Events, Backup-Verschlüsselung).
+- `docs/architecture.md` - detailed description of the mechanisms
+  referenced here.
+- `SECURITY.md` - the vulnerability reporting path.
+- `ROADMAP.md`, section 0.5 - open items that follow directly from this
+  model (Docker socket proxy, session revocation, rate limits, audit
+  events, backup encryption).

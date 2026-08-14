@@ -1,28 +1,29 @@
+**English** · [Deutsch](SECURITY.de.md)
+
 # Security Policy
 
-## Sicherheitslücken melden
+## Reporting a vulnerability
 
-Bitte veröffentliche vermutete Sicherheitslücken nicht als Issue, Discussion
-oder Pull Request. Nutze stattdessen GitHubs vertrauliche
+Please do not publish a suspected security vulnerability as an issue,
+discussion, or pull request. Instead, use GitHub's confidential
 [Private Vulnerability Reporting](https://github.com/foxly-it/rootguard/security/advisories/new).
 
-Eine hilfreiche Meldung enthält:
+A helpful report includes:
 
-- die betroffene RootGuard-Version und Komponente;
-- Voraussetzungen und reproduzierbare Schritte;
-- die mögliche Auswirkung;
-- einen Vorschlag zur Behebung, falls vorhanden.
+- the affected RootGuard version and component;
+- prerequisites and reproducible steps;
+- the potential impact;
+- a suggested fix, if you have one.
 
-Entferne Passwörter, Tokens, öffentliche IP-Adressen und andere persönliche
-oder vertrauliche Daten aus Anhängen und Logs.
+Remove passwords, tokens, public IP addresses, and other personal or
+confidential data from attachments and logs.
 
-## Unterstützte Versionen
+## Supported versions
 
-RootGuard befindet sich in einer öffentlichen Alpha. Sicherheitskorrekturen
-werden für den jeweils neuesten veröffentlichten Alpha-Stand bereitgestellt.
-Ältere Alpha-Versionen erhalten keine eigenen Backports.
+RootGuard is in public alpha. Security fixes are provided for the most
+recently published alpha release. Older alpha releases do not receive their
+own backports.
 
-Nach Eingang bestätigen wir die Meldung, prüfen Auswirkung und Reproduzierbarkeit
-und koordinieren eine Korrektur sowie die anschließende Veröffentlichung. Bitte
-gib dem Projekt vor einer öffentlichen Bekanntgabe angemessene Zeit für Analyse
-und Update.
+We acknowledge reports on receipt, assess impact and reproducibility, and
+coordinate a fix and its subsequent release. Please give the project
+reasonable time for analysis and an update before any public disclosure.

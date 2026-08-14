@@ -1,8 +1,10 @@
-# Repository-Struktur
+**English** · [Deutsch](architecture.de.md)
 
-Das RootGuard-Hauptrepository koordiniert die Versionen der eigenständigen
-Komponenten. Jede Komponente behält ihre eigene Historie, Abhängigkeiten,
-Releases und Entwicklungsabläufe.
+# Repository structure
+
+The RootGuard main repository coordinates the versions of the independent
+components. Each component keeps its own history, dependencies, releases,
+and development workflows.
 
 ```text
 rootguard/
@@ -13,246 +15,243 @@ rootguard/
 └── rootguard-unbound/
 ```
 
-Ein Commit im Hauptrepository verweist auf genau einen Commit je Submodule.
-Dadurch lässt sich jederzeit nachvollziehen, welche Kombination der
-Komponenten gemeinsam verwendet wurde.
+A commit in the main repository references exactly one commit per
+submodule. This makes it possible to trace which combination of components
+was used together at any point.
 
-Lokale Sicherungen und veraltete Arbeitskopien sind bewusst nicht Bestandteil
-des Hauptrepositories.
+Local backups and stale working copies are deliberately not part of the
+main repository.
 
-## Laufzeitarchitektur
+## Runtime architecture
 
 ```text
 Browser
-  │ Login + HttpOnly-Session
+  │ Login + HttpOnly session
   ▼
 RootGuard WebApp
-  │ internes Bearer-Token
+  │ internal bearer token
   ▼
 RootGuard Core ────── Docker API ─── AdGuard Home + Unbound
   │
-  │ enge, interne Update-Aufträge
+  │ narrow, internal update jobs
   ▼
-Updater-Helper ────── Docker API ─── Core + WebApp
+Updater helper ────── Docker API ─── Core + WebApp
   │
-  └── persistenter Status und atomarer Image-Pin
-Persistente RootGuard-Daten
+  └── persistent status and atomic image pin
+Persistent RootGuard data
 ```
 
-Nur Webapp und DNS erhalten Host-Ports. AdGuard Home ist ausschließlich in den
-internen Netzen für Core erreichbar; seine zufällig erzeugten Zugangsdaten
-liegen mit Besitzerrechten im persistenten RootGuard-Volume. Core und der
-separate, intern erreichbare Updater-Helper besitzen Docker-Zugriff für
-unterschiedliche, fest freigegebene Aufgaben. Die Webapp kennt weder den Socket
-noch Host-Systembefehle.
+Only the WebApp and DNS get host ports. AdGuard Home is reachable
+exclusively on internal networks for Core; its randomly generated
+credentials live with owner-only permissions in the persistent RootGuard
+volume. Core and the separate, internally reachable updater helper each
+have Docker access for different, narrowly scoped tasks. The WebApp knows
+neither the socket nor host system commands.
 
-## Anmeldung und lokales Passwort-Recovery
+## Login and local password recovery
 
-Die WebApp verwaltet HttpOnly-/SameSite-Strict-Sitzungen serverseitig im
-geschützten Session-Volume. Ein separater `ROOTGUARD_RECOVERY_TOKEN` ermöglicht
-auf der Login-Seite ausschließlich das Setzen eines neuen Admin-Passworts. Er
-gewährt weder eine Sitzung noch Zugriff auf Core oder AdGuard und muss
-unabhängig von Admin-Passwort und internem API-Token erzeugt werden.
+The WebApp manages HttpOnly/SameSite-Strict sessions server-side in the
+protected session volume. A separate `ROOTGUARD_RECOVERY_TOKEN` enables
+only setting a new admin password on the login page. It grants neither a
+session nor access to Core or AdGuard, and must be generated independently
+of the admin password and internal API token.
 
-Nach einem erfolgreichen Reset liegt nur ein gesalzener
-PBKDF2-SHA256-Verifier mit 600.000 Iterationen im Session-Volume. Alle
-bestehenden Sitzungen werden ungültig. Ohne konfigurierten Recovery-Schlüssel
-bleibt der lokale Betreiberpfad über `.env` und eine kontrollierte Neuerstellung
-des WebApp-Containers; es gibt bewusst keinen E-Mail- oder Cloud-Recovery-Dienst.
+After a successful reset, only a salted PBKDF2-SHA256 verifier with
+600,000 iterations is stored in the session volume. Every existing session
+becomes invalid. Without a configured recovery key, the local operator
+path remains via `.env` and a controlled recreation of the WebApp
+container; there is deliberately no email or cloud recovery service.
 
-## AIO-Bootstrap und Stack-Lebenszyklus
+## AIO bootstrap and stack lifecycle
 
-Die öffentliche `compose.yaml` startet die dauerhafte Control Plane aus WebApp,
-Core und dem internen Updater-Helper. Die DNS Data Plane wird erst nach einer
-authentifizierten Einrichtung erzeugt:
+The public `compose.yaml` starts the persistent control plane consisting
+of WebApp, Core, and the internal updater helper. The DNS data plane is
+only created after an authenticated setup:
 
 ```text
 Bootstrap Compose
-  → WebApp + Core + Updater-Helper
-  → IP-/Port-Preflight
-  → fest definierte DNS-Compose-Spezifikation
-  → Image Pull
-  → Unbound + Healthcheck
-  → AdGuard Home + geschützter Bootstrap
+  → WebApp + Core + updater helper
+  → IP/port preflight
+  → fixed DNS Compose specification
+  → image pull
+  → Unbound + health check
+  → AdGuard Home + protected bootstrap
 ```
 
-Core speichert Konfiguration, Einzelschritte und Fehler atomar unter
-`/var/lib/rootguard/installation`. Die WebApp sendet nur typisierte
-Netzwerkangaben und den erlaubten AdGuard-Release-Kanal `stable` oder `beta`.
-Fehlende Kanalangaben älterer Installationen werden als `stable` behandelt;
-andere Werte weist Core zurück. Image-Namen, Containerprivilegien, Volumes, Netzwerke und
-Kommandos stammen aus der kontrollierten Core-Spezifikation und sind nicht
-über die Browser-API frei wählbar.
+Core persists configuration, individual steps, and errors atomically under
+`/var/lib/rootguard/installation`. The WebApp only sends typed network
+details and the allowed AdGuard release channel `stable` or `beta`. A
+missing channel value from older installations is treated as `stable`;
+other values are rejected by Core. Image names, container privileges,
+volumes, networks, and commands come from the controlled Core
+specification and cannot be freely chosen via the browser API.
 
-Der Controller wird nach der Installation mit dem privaten DNS-Netz verbunden.
-Beim Neustart oder Austausch des Core-Containers stellt er diese Verbindung
-anhand des persistenten Installationszustands wieder her. AdGuard veröffentlicht
-weiterhin ausschließlich TCP/UDP 53; seine native Administration bleibt privat.
-Der Bootstrap wartet begrenzt auf die tatsächliche AdGuard-Installer-API; ein
-laufender Container allein gilt noch nicht als betriebsbereit.
+The controller is connected to the private DNS network after
+installation. On restart or replacement of the Core container, it
+re-establishes this connection based on the persisted installation state.
+AdGuard continues to publish only TCP/UDP 53; its native administration
+stays private. Bootstrap waits, with a bound, for the actual AdGuard
+installer API - a running container alone doesn't yet count as ready.
 
-Für unveränderlich per Digest referenzierte Core- und WebApp-Releases prüft
-Core zusätzlich die signierte SLSA-Provenienz. Der eingebettete, selbst per
-Digest gepinnte Cosign-Verifier erzwingt den erwarteten GitHub-Repository- und
-Workflow-Unterzeichner sowie den GitHub-Actions-OIDC-Aussteller und prüft die
-Sigstore-Transparenzdaten. Die Ergebnisse werden zehn Minuten gecacht. Ein
-fehlender Nachweis, eine kryptografisch ungültige Attestierung und eine
-vorübergehend nicht erreichbare Registry werden absichtlich getrennt
-ausgewiesen. Lokale Builds, veränderliche Tags und Fremdimages erhalten keine
-RootGuard-Vertrauensfreigabe.
+For Core and WebApp releases referenced immutably by digest, Core
+additionally verifies the signed SLSA provenance. The embedded Cosign
+verifier, itself pinned by digest, enforces the expected GitHub repository
+and workflow signer identity plus the GitHub Actions OIDC issuer, and
+checks the Sigstore transparency data. Results are cached for ten minutes.
+A missing attestation, a cryptographically invalid one, and a temporarily
+unreachable registry are deliberately reported as distinct states. Local
+builds, mutable tags, and third-party images never receive RootGuard trust
+approval.
 
-## AdGuard-Ersteinrichtung
+## AdGuard first-time setup
 
-Die Webapp bietet ausschließlich Status und den expliziten Bootstrap-Vorgang
-an. Core nutzt dafür die typisierten AdGuard-Installer- und DNS-Endpunkte,
-prüft Unbounds feste Adresse `172.29.53.2:5335` im internen DNS-Netz vor der
-Aktivierung und konfiguriert keinen öffentlichen Fallback. Für die native
-Oberfläche existiert ausschließlich der feste, authentifizierte Pfad
-`/adguard-ui/`: WebApp und Core leiten ihn an das fest konfigurierte interne
-Ziel weiter, Core setzt die internen AdGuard-Zugangsdaten ein und mutierende
-Browser-Anfragen müssen vom gleichen Origin stammen. Frei wählbare Ziele,
-AdGuard-Zugangsdaten und ein öffentlicher Administrationsport bleiben
-ausgeschlossen.
+The WebApp offers only status and the explicit bootstrap action. Core uses
+the typed AdGuard installer and DNS endpoints for this, verifies Unbound's
+fixed address `172.29.53.2:5335` on the internal DNS network before
+activation, and configures no public fallback. The only path to the
+native interface is the fixed, authenticated `/adguard-ui/` route: WebApp
+and Core forward it to the fixed, internally configured target, Core
+supplies the internal AdGuard credentials, and mutating browser requests
+must originate from the same origin. Freely chosen targets, AdGuard
+credentials, and a public administration port remain excluded.
 
-## Kontrollierte Container-Updates
+## Controlled container updates
 
-Der Stack-Bereich kann ausschließlich die fest in Core freigegebenen
-DNS-Dienste AdGuard Home und Unbound prüfen und aktualisieren. Browser-Anfragen
-können weder Image-Namen noch Compose-Argumente oder Container festlegen.
-Eine Prüfung lädt das serverseitig konfigurierte Ziel-Image und vergleicht
-dessen tatsächliche Image-ID mit dem laufenden Container.
+The Stack area can only check and update the DNS services AdGuard Home
+and Unbound, both fixed in Core's allowlist. Browser requests can specify
+neither image names, Compose arguments, nor containers. A check pulls the
+server-side configured target image and compares its actual image ID
+against the running container.
 
-Vor einem Austausch kopiert Core die persistenten Dienstpfade in sein
-geschütztes Daten-Volume. Anschließend wird genau ein Compose-Dienst ersetzt
-und die vollständige dienstspezifische Gesundheitsprüfung ausgeführt. Bei
-einem Fehler pinnt Core wieder die vorherige Image-ID, stellt die Sicherung
-wieder her und prüft den zurückgerollten Dienst erneut.
+Before a swap, Core copies the persistent service paths into its
+protected data volume. Exactly one Compose service is then replaced and
+the complete service-specific health check runs. On failure, Core pins the
+previous image ID again, restores the backup, and re-verifies the rolled
+back service.
 
-Core und WebApp werden ausschließlich als gemeinsame Control Plane durch den
-separaten Updater-Helper ersetzt. Der Browser kann weder Images noch Compose-
-Dienste oder Argumente angeben. Der Helper kennt nur `core` und `webapp`, zieht
-die konfigurierten Ziel-Images, schreibt ein enges Compose-Override und prüft
-anschließend beide tatsächlichen Image-IDs sowie Core- und WebApp-Health.
-Scheitert eine Prüfung, werden beide vorherigen Image-IDs gemeinsam gepinnt und
-erneut geprüft. Der Helper selbst bleibt während des Vorgangs unverändert und
-ist nicht vom Host aus erreichbar. WebApp-Sitzungen liegen in einem eigenen
-Volume und überstehen den kontrollierten WebApp-Austausch.
+Core and WebApp are only ever replaced together, as a shared control
+plane, by the separate updater helper. The browser can specify neither
+images, Compose services, nor arguments. The helper only knows `core` and
+`webapp`, pulls the configured target images, writes a narrow Compose
+override, and then verifies both actual image IDs plus Core and WebApp
+health. If a check fails, both previous image IDs are pinned together and
+re-verified. The helper itself stays unchanged during the process and is
+not reachable from the host. WebApp sessions live in their own volume and
+survive a controlled WebApp replacement.
 
-Die automatische und manuelle Docker-Bereinigung teilen dieselbe serverseitige
-Kandidatenermittlung. Images werden nur aus erfolgreichen, persistenten
-RootGuard-Update-Einträgen abgeleitet; das aktive und das vorherige erfolgreiche
-Image bleiben je Dienst geschützt. Volumes benötigen zusätzlich das feste Label
-`io.rootguard.cleanup=true` und dürfen von keinem Container verwendet werden.
-Die manuelle Vorschau zeigt Dockers gerundete `UniqueSize`-/Volume-Schätzung und
-übersprungene Ressourcen. Nach der Bestätigung wird die Auswahl vollständig neu
-berechnet, statt einer möglicherweise veralteten Browser-Vorschau zu vertrauen.
-Globale Prune-Befehle und frei übergebene Ressourcennamen bleiben ausgeschlossen.
+Automatic and manual Docker cleanup share the same server-side candidate
+determination. Images are only derived from successful, persistent
+RootGuard update entries; the active and the previous successful image
+stay protected per service. Volumes additionally require the fixed
+`io.rootguard.cleanup=true` label and must not be used by any container.
+The manual preview shows Docker's rounded `UniqueSize`/volume size
+estimate and skipped resources. After confirmation, the selection is
+fully recomputed rather than trusting a possibly stale browser preview.
+Global prune commands and freely supplied resource names remain excluded.
 
-## Backup- und Restore-Zuständigkeit für AdGuard Home
+## Backup and restore ownership for AdGuard Home
 
-AdGuards Zustand liegt in zwei separaten, benannten Docker-Volumes statt in
-Core-eigenen Pfaden:
+AdGuard's state lives in two separate, named Docker volumes rather than in
+Core-owned paths:
 
-- `rootguard-adguard-config` (`/opt/adguardhome/conf`) - Filterlisten,
-  Zulassungslisten, DNS-Umschreibungen, Client-/DHCP-Einstellungen,
-  Verschlüsselungskonfiguration; alles, was der Betreiber über die native
-  AdGuard-Oberfläche einstellt.
-- `rootguard-adguard-work` (`/opt/adguardhome/work`) - Abfrageprotokoll und
-  Statistiken.
+- `rootguard-adguard-config` (`/opt/adguardhome/conf`) - filter lists,
+  allow lists, DNS rewrites, client/DHCP settings, encryption
+  configuration; everything the operator configures through the native
+  AdGuard interface.
+- `rootguard-adguard-work` (`/opt/adguardhome/work`) - query log and
+  statistics.
 
-Beide Pfade sind über `BackupPaths` Teil desselben Sicherungsmechanismus wie
-oben beschrieben: Vor jedem AdGuard-Update kopiert Core sie in sein
-geschütztes Daten-Volume; schlägt die anschließende Gesundheitsprüfung fehl,
-stellt Core beide Pfade automatisch wieder her und rollt auf die vorherige
-Image-ID zurück. Diese Sicherung ist ausschließlich ein interner
-Update-Schutz - kein vom Betreiber auslösbarer, herunterladbarer oder über
-die WebApp direkt wiederherstellbarer Export. RootGuard bewahrt standardmäßig
-die fünf neuesten Update-Restore-Punkte je Dienst auf; auf der Backups-Seite kann
-der Betreiber diesen Wert zwischen 2 und 50 konfigurieren und Anzahl,
-Speichernutzung sowie den neuesten Zeitpunkt pro Dienst einsehen. Bereinigt
-werden ausschließlich kanonische, per passendem Manifest eindeutig RootGuard
-und dem erlaubten Dienst zugeordnete Verzeichnisse. Unbekannte Dateien,
-Verzeichnisse und Symlinks werden separat als nicht verwalteter Speicher
-angezeigt und niemals gelöscht.
+Both paths are part of the same backup mechanism described above via
+`BackupPaths`: before every AdGuard update, Core copies them into its
+protected data volume; if the subsequent health check fails, Core
+automatically restores both paths and rolls back to the previous image
+ID. This backup is exclusively an internal update safeguard - not an
+operator-triggered, downloadable, or directly WebApp-restorable export.
+RootGuard retains the five most recent update restore points per service
+by default; on the Backups page, the operator can configure this value
+between 2 and 50 and see the count, storage usage, and most recent
+timestamp per service. Only canonical directories uniquely matched to
+RootGuard and the allowed service via a matching manifest are pruned.
+Unknown files, directories, and symlinks are shown separately as
+unmanaged storage and are never deleted.
 
-Für Datensicherung über den reinen Update-Schutz hinaus erzeugt die
-Backups-Seite ein portables, passwortverschlüsseltes age-v1-Archiv. Es enthält
-RootGuards Unbound-/AdGuard-/Installationszustand, AdGuards live Konfigurations-
-und Arbeitsdaten sowie Unbounds Laufzeitstatus. Browser-Sitzungen, externe
-`.env`-Geheimnisse, interne Update-Restore-Punkte und temporäre Exportdaten
-bleiben ausgeschlossen. Ein versioniertes Manifest erfasst jede reguläre Datei
-mit Größe und SHA-256-Prüfsumme. Sämtliche Quellpfade und Container sind fest in
-Core definiert; Symlinks werden abgelehnt. Docker-Kopien liegen nur während der
-Erstellung in einem privaten `0700`-Verzeichnis im geschützten Core-Volume und
-werden auf jedem Erfolgs-/Fehlerpfad entfernt. Der Download wird direkt durch
-age/scrypt verschlüsselt und blockiert parallel laufende Daten-Updates. Der
-geführte Restore validiert dasselbe Artefakt vollständig, akzeptiert nur eine
-saubere Installation ohne kollidierende verwaltete Docker-Ressourcen, befüllt
-neu angelegte gestoppte Service-Volumes und startet anschließend die
-gesundheitsgeprüfte DNS-Kette. Ein Fehler entfernt die neuen Docker-Ressourcen
-und stellt zuvor vorhandene lokale Volume-Inhalte wieder her.
+For data protection beyond the plain update safeguard, the Backups page
+creates a portable, password-encrypted age-v1 archive. It contains
+RootGuard's Unbound/AdGuard/installation state, AdGuard's live
+configuration and work data, and Unbound's runtime state. Browser
+sessions, external `.env` secrets, internal update restore points, and
+temporary export data remain excluded. A versioned manifest records every
+regular file with its size and SHA-256 checksum. All source paths and
+containers are fixed in Core; symlinks are rejected. Docker copies exist
+only during creation, in a private `0700` directory in the protected Core
+volume, and are removed on every success/failure path. The download is
+encrypted directly via age/scrypt and blocks concurrent data-plane
+updates. The guided restore fully validates the same artifact, only
+accepts a clean installation with no colliding managed Docker resources,
+populates newly created, stopped service volumes, and then starts the
+health-checked DNS chain. A failure removes the new Docker resources and
+restores previously existing local volume contents.
 
-## Unbound-Konfigurationszyklus
+## Unbound configuration lifecycle
 
 ```text
-WebGUI-Entwurf
-  → Vorschau und Feldvergleich
-  → unbound-checkconf im Resolver
-  → atomare Aktivierung
-  → Resolver-Neustart
-  → versionierter Snapshot
+WebGUI draft
+  → preview and field comparison
+  → unbound-checkconf in the resolver
+  → atomic activation
+  → resolver restart
+  → versioned snapshot
 ```
 
-Core speichert maximal 20 validierte Versionen. Ein manueller Rollback wird
-wie jede andere Änderung erneut gerendert und validiert. Scheitert ein Neustart
-nach der Aktivierung, stellt Core die zuvor gelesenen Konfigurations- und
-Einstellungsdateien wieder her und startet Unbound erneut. Die Webapp erhält
-keinen generischen Datei- oder Kommandozugriff.
+Core retains at most 20 validated versions. A manual rollback is
+re-rendered and validated just like any other change. If a restart fails
+after activation, Core restores the previously read configuration and
+settings files and restarts Unbound again. The WebApp gets no generic
+file or command access.
 
-Die Live-Ansicht besitzt ebenfalls keinen generischen Dateizugriff. Core liest
-ausschließlich die fest vorgegebenen Unbound-Basis- und Managed-Dateien aus dem
-laufenden Resolver und liefert sie read-only an die authentifizierte Webapp.
-Dadurch zeigt die Oberfläche den effektiven Containerstand statt lediglich
-einen erneut gerenderten Entwurf.
+The live view likewise has no generic file access. Core only reads the
+fixed Unbound base and managed files from the running resolver and
+delivers them read-only to the authenticated WebApp. This lets the
+interface show the effective container state instead of just a
+re-rendered draft.
 
-Vordefinierte Betriebsprofile und der RootGuard Advisor arbeiten ausschließlich
-auf dem Entwurf. Die Empfehlungen sind deterministisch, verändern keine Dateien
-und werden vor ihrer Rückgabe gegen dieselben Wertebereiche wie eine spätere
-Aktivierung geprüft. Dadurch umgehen weder Profile noch Vorschläge die
-Sicherheitskette.
+Predefined operating profiles and the RootGuard Advisor operate
+exclusively on the draft. Recommendations are deterministic, change no
+files, and are checked against the same value ranges as a later activation
+before being returned. This means neither profiles nor suggestions bypass
+the safety chain.
 
-Conditional Forwarding ist Teil der typisierten Managed Config. Zonen müssen
-kanonische FQDNs sein; Zielserver sind kanonische IPv4-/IPv6-Adressen. Root-Zone,
-Loopback, Link-Local, Multicast, das interne RootGuard-DNS-Netz, Duplikate und
-parallele Experten-`forward-zone`-Blöcke werden abgewiesen. Ein
-authentifizierter Reachability-Endpunkt führt ausschließlich DNS-SOA-Proben per
-`dig` aus dem laufenden Unbound-Container aus. Nur `NOERROR` zusammen mit einem
-SOA-Eintrag für die konfigurierte Zone gilt als erfolgreich; `NXDOMAIN`,
-`REFUSED`, Transportfehler und leere erfolgreiche Antworten bleiben
-Diagnoseergebnisse, geben die Aktivierung aber nicht frei. Anzahl, Parallelität,
-Ausgabe und Laufzeit sind begrenzt; der Endpunkt schreibt keine Konfiguration.
-Die spätere Aktivierung durchläuft weiterhin den vollständigen Checkconf-,
-Snapshot- und Rollback-Zyklus. DNSSEC bleibt für jede Weiterleitungszone
-standardmäßig aktiv.
-Nur ein explizites `allow_unsigned` rendert innerhalb des `server`-Blocks eine
-zonenspezifische `domain-insecure`-Direktive. Damit funktionieren
-vertrauenswürdige unsignierte Split-DNS-Zonen, ohne die globale
-DNSSEC-Validierung abzuschalten. Entsprechend rendert nur
-`allow_private_addresses` eine zonenspezifische `private-domain`-Direktive.
-Unbounds Rebinding-Schutz bleibt damit global aktiv, während ausdrücklich
-vertrauenswürdige interne Zonen RFC1918- und andere geschützte private
-Adressantworten liefern dürfen.
+Conditional forwarding is part of the typed managed config. Zones must be
+canonical FQDNs; target servers must be canonical IPv4/IPv6 addresses. The
+root zone, loopback, link-local, multicast, the internal RootGuard DNS
+network, duplicates, and parallel expert `forward-zone` blocks are
+rejected. An authenticated reachability endpoint runs only DNS SOA probes
+via `dig` from the running Unbound container. Only `NOERROR` together with
+an SOA record for the configured zone counts as success; `NXDOMAIN`,
+`REFUSED`, transport errors, and empty successful responses remain
+diagnostic results but don't clear activation. Count, concurrency, output,
+and runtime are bounded; the endpoint writes no configuration. The later
+activation still goes through the complete checkconf, snapshot, and
+rollback cycle. DNSSEC stays enabled by default for every forwarding zone.
+Only an explicit `allow_unsigned` renders a zone-specific
+`domain-insecure` directive inside the `server` block. This makes trusted
+unsigned split-DNS zones work without disabling global DNSSEC validation.
+Correspondingly, only `allow_private_addresses` renders a zone-specific
+`private-domain` directive. Unbound's rebinding protection thus stays
+globally active, while explicitly trusted internal zones may return
+RFC1918 and other protected private address answers.
 
-## Unbound-Expertenkonfiguration
+## Unbound expert configuration
 
-Die unveränderliche `/etc/unbound/unbound.conf` bindet Konfigurationsmodule aus
-`/etc/unbound/unbound.d/*.conf` ein. Der Experteneditor besitzt ausschließlich
-die Datei `90-rootguard-custom.conf`; `50-rootguard.conf` bleibt der typisierten
-WebGUI vorbehalten. Includes, Listener, Remote Control, Containerpfade,
-Trust-Anker und geführte Werte sind im freien Editor gesperrt.
+The immutable `/etc/unbound/unbound.conf` includes configuration modules
+from `/etc/unbound/unbound.d/*.conf`. The expert editor only owns the file
+`90-rootguard-custom.conf`; `50-rootguard.conf` stays reserved for the
+typed WebGUI. Includes, listeners, remote control, container paths, trust
+anchors, and guided values are locked in the free-form editor.
 
-Vor einer Aktivierung prüft Core eine kombinierte Kandidatendatei. Danach werden
-Settings, Managed Config und Custom Config atomar geschrieben und die effektive
-`/etc/unbound/unbound.conf` erneut mit `unbound-checkconf` geprüft. Bei einem
-Prüf- oder Neustartfehler stellt Core alle drei vorherigen Dateien wieder her.
-Ein History-Eintrag bildet deshalb stets den gemeinsamen Resolverzustand ab.
+Before activation, Core validates a combined candidate file. Settings,
+managed config, and custom config are then written atomically, and the
+effective `/etc/unbound/unbound.conf` is re-verified with
+`unbound-checkconf`. On a validation or restart failure, Core restores all
+three previous files. A history entry therefore always represents the
+combined resolver state.
