@@ -9,21 +9,11 @@ import (
 )
 
 func HandleGetUnboundSettings(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	settings, err := core.UnboundSettings(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
-	}
-	writeJSON(w, http.StatusOK, settings)
+	proxyFixed(w, r, http.StatusBadGateway, core.UnboundSettings)
 }
 
 func HandleGetUnboundConfiguration(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	configuration, err := core.UnboundActiveConfiguration(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, configuration)
+	proxyCore(w, r, http.StatusOK, core.UnboundActiveConfiguration)
 }
 
 func HandlePutUnboundSettings(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -38,12 +28,7 @@ func HandlePutUnboundSettings(w http.ResponseWriter, r *http.Request, core *core
 
 	updated, err := core.UpdateUnboundSettings(r.Context(), settings)
 	if err != nil {
-		status := http.StatusBadGateway
-		var apiError *coreclient.APIError
-		if errors.As(err, &apiError) && apiError.StatusCode >= 400 && apiError.StatusCode < 500 {
-			status = apiError.StatusCode
-		}
-		http.Error(w, err.Error(), status)
+		writeCoreError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, updated)
@@ -63,12 +48,7 @@ func HandlePreviewUnboundSettings(w http.ResponseWriter, r *http.Request, core *
 }
 
 func HandleUnboundHistory(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	history, err := core.UnboundHistory(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, history)
+	proxyCore(w, r, http.StatusOK, core.UnboundHistory)
 }
 
 func HandleRestoreUnboundVersion(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -81,57 +61,27 @@ func HandleRestoreUnboundVersion(w http.ResponseWriter, r *http.Request, core *c
 }
 
 func HandleUnboundDiagnostics(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	report, err := core.UnboundDiagnostics(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, report)
+	proxyCore(w, r, http.StatusOK, core.UnboundDiagnostics)
 }
 
 func HandleUnboundPathDiagnostics(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	report, err := core.UnboundPathDiagnostics(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, report)
+	proxyCore(w, r, http.StatusOK, core.UnboundPathDiagnostics)
 }
 
 func HandleUnboundDiagnosticLoggingStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.UnboundDiagnosticLoggingStatus(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyCore(w, r, http.StatusOK, core.UnboundDiagnosticLoggingStatus)
 }
 
 func HandleStartUnboundDiagnosticLogging(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.StartUnboundDiagnosticLogging(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyCore(w, r, http.StatusOK, core.StartUnboundDiagnosticLogging)
 }
 
 func HandleStopUnboundDiagnosticLogging(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	status, err := core.StopUnboundDiagnosticLogging(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, status)
+	proxyCore(w, r, http.StatusOK, core.StopUnboundDiagnosticLogging)
 }
 
 func HandleUnboundPresets(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	presets, err := core.UnboundPresets(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, presets)
+	proxyCore(w, r, http.StatusOK, core.UnboundPresets)
 }
 
 func HandleUnboundAdvice(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -169,12 +119,7 @@ func HandleUnboundForwardCheck(w http.ResponseWriter, r *http.Request, core *cor
 }
 
 func HandleUnboundNetworkCapabilities(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	result, err := core.UnboundNetworkCapabilities(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
+	proxyCore(w, r, http.StatusOK, core.UnboundNetworkCapabilities)
 }
 
 type customConfigRequest struct {
@@ -182,12 +127,7 @@ type customConfigRequest struct {
 }
 
 func HandleGetUnboundCustom(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	document, err := core.UnboundCustom(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, document)
+	proxyCore(w, r, http.StatusOK, core.UnboundCustom)
 }
 
 func HandlePreviewUnboundCustom(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -217,12 +157,7 @@ func HandlePutUnboundCustom(w http.ResponseWriter, r *http.Request, core *corecl
 }
 
 func HandleGetUnboundExport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	bundle, err := core.UnboundExport(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, bundle)
+	proxyCore(w, r, http.StatusOK, core.UnboundExport)
 }
 
 func HandlePreviewUnboundImport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -277,12 +212,7 @@ func HandleClassifyUnboundImportConf(w http.ResponseWriter, r *http.Request, cor
 }
 
 func HandleUnboundDirectives(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	directives, err := core.UnboundDirectives(r.Context())
-	if err != nil {
-		writeCoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, directives)
+	proxyCore(w, r, http.StatusOK, core.UnboundDirectives)
 }
 
 func decodeCustomConfig(w http.ResponseWriter, r *http.Request) (customConfigRequest, bool) {

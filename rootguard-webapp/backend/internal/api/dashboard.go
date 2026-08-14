@@ -17,10 +17,5 @@ import (
 // -----------------------------------------------------
 
 func HandleDashboard(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	stats, err := core.Dashboard(r.Context())
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	writeJSON(w, http.StatusOK, stats)
+	proxyFixed(w, r, http.StatusInternalServerError, core.Dashboard)
 }
