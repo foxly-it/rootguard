@@ -3,6 +3,21 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.1] - 2026-08-14
+
+### Added
+
+- Let the release pipeline cut a beta, not just alpha.N+1 ([#259](https://github.com/foxly-it/rootguard/pull/259))
+
+### Documentation
+
+- Mark 0.6 beta release engineering complete ([#257](https://github.com/foxly-it/rootguard/pull/257))
+- Update public site to 0.1.0-alpha.16 ([#258](https://github.com/foxly-it/rootguard/pull/258))
+
+### Other
+
+- Make German-only markdown docs bilingual ([#246](https://github.com/foxly-it/rootguard/pull/246))
+
 ## [0.1.0-alpha.16] - 2026-08-14
 
 ### Fixed
