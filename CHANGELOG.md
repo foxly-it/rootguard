@@ -3,6 +3,12 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-alpha.16] - 2026-08-14
+
+### Fixed
+
+- Stop dropping control-plane update history in the API response ([#256](https://github.com/foxly-it/rootguard/pull/256))
+
 ## [0.1.0-alpha.15] - 2026-08-14
 
 ### Fixed
