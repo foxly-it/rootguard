@@ -3,6 +3,17 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-alpha.11] - 2026-08-14
+
+### Documentation
+
+- Update public site to 0.1.0-alpha.10 ([#248](https://github.com/foxly-it/rootguard/pull/248))
+
+### Fixed
+
+- Surface real HTTP errors from the control-plane upgrade test ([#247](https://github.com/foxly-it/rootguard/pull/247))
+- Clean up mobile header nav and animate the status dot ([#249](https://github.com/foxly-it/rootguard/pull/249))
+
 ## [0.1.0-alpha.9] - 2026-08-13
 
 ### CI
