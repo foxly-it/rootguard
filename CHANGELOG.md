@@ -3,6 +3,12 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-alpha.15] - 2026-08-14
+
+### Fixed
+
+- Tolerate the WebApp being briefly unreachable mid-install ([#255](https://github.com/foxly-it/rootguard/pull/255))
+
 ## [0.1.0-alpha.14] - 2026-08-14
 
 ### Fixed
