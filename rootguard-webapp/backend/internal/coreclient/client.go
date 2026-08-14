@@ -443,120 +443,82 @@ type ControlPlaneUpdateStatus struct {
 }
 
 func (c *Client) Dashboard(ctx context.Context) (Dashboard, error) {
-	var result Dashboard
-	err := c.do(ctx, http.MethodGet, "/api/dashboard", nil, &result)
-	return result, err
+	return doJSON[Dashboard](ctx, c, http.MethodGet, "/api/dashboard", nil)
 }
 
 func (c *Client) System(ctx context.Context) (map[string]string, error) {
-	var result map[string]string
-	err := c.do(ctx, http.MethodGet, "/api/system", nil, &result)
-	return result, err
+	return doJSON[map[string]string](ctx, c, http.MethodGet, "/api/system", nil)
 }
 
 func (c *Client) Services(ctx context.Context) ([]Service, error) {
-	var result []Service
-	err := c.do(ctx, http.MethodGet, "/api/services", nil, &result)
-	return result, err
+	return doJSON[[]Service](ctx, c, http.MethodGet, "/api/services", nil)
 }
 
 func (c *Client) ServiceLogs(ctx context.Context, service string) (ServiceLogs, error) {
-	var result ServiceLogs
-	err := c.do(ctx, http.MethodGet, "/api/services/"+service+"/logs", nil, &result)
-	return result, err
+	return doJSON[ServiceLogs](ctx, c, http.MethodGet, "/api/services/"+service+"/logs", nil)
 }
 
 func (c *Client) ServiceAction(ctx context.Context, service, action string) (ServiceActionResponse, error) {
-	var result ServiceActionResponse
-	err := c.do(ctx, http.MethodPost, "/api/services/"+service+"/"+action, nil, &result)
-	return result, err
+	return doJSON[ServiceActionResponse](ctx, c, http.MethodPost, "/api/services/"+service+"/"+action, nil)
 }
 
 func (c *Client) UnboundSettings(ctx context.Context) (UnboundSettings, error) {
-	var result UnboundSettings
-	err := c.do(ctx, http.MethodGet, "/api/unbound/settings", nil, &result)
-	return result, err
+	return doJSON[UnboundSettings](ctx, c, http.MethodGet, "/api/unbound/settings", nil)
 }
 
 func (c *Client) UnboundActiveConfiguration(ctx context.Context) (UnboundActiveConfiguration, error) {
-	var result UnboundActiveConfiguration
-	err := c.do(ctx, http.MethodGet, "/api/unbound/config", nil, &result)
-	return result, err
+	return doJSON[UnboundActiveConfiguration](ctx, c, http.MethodGet, "/api/unbound/config", nil)
 }
 
 func (c *Client) UpdateUnboundSettings(ctx context.Context, settings UnboundSettings) (UnboundSettings, error) {
-	var result UnboundSettings
-	err := c.do(ctx, http.MethodPut, "/api/unbound/settings", settings, &result)
-	return result, err
+	return doJSON[UnboundSettings](ctx, c, http.MethodPut, "/api/unbound/settings", settings)
 }
 
 func (c *Client) PreviewUnboundSettings(ctx context.Context, settings UnboundSettings) (UnboundPreview, error) {
-	var result UnboundPreview
-	err := c.do(ctx, http.MethodPost, "/api/unbound/preview", settings, &result)
-	return result, err
+	return doJSON[UnboundPreview](ctx, c, http.MethodPost, "/api/unbound/preview", settings)
 }
 
 func (c *Client) UnboundHistory(ctx context.Context) ([]UnboundHistoryEntry, error) {
-	var result []UnboundHistoryEntry
-	err := c.do(ctx, http.MethodGet, "/api/unbound/history", nil, &result)
-	return result, err
+	return doJSON[[]UnboundHistoryEntry](ctx, c, http.MethodGet, "/api/unbound/history", nil)
 }
 
 func (c *Client) RestoreUnboundVersion(ctx context.Context, id string) (UnboundSettings, error) {
-	var result UnboundSettings
-	err := c.do(ctx, http.MethodPost, "/api/unbound/history/"+id+"/restore", nil, &result)
-	return result, err
+	return doJSON[UnboundSettings](ctx, c, http.MethodPost, "/api/unbound/history/"+id+"/restore", nil)
 }
 
 func (c *Client) UnboundDiagnostics(ctx context.Context) (UnboundDiagnosticReport, error) {
-	var result UnboundDiagnosticReport
-	err := c.do(ctx, http.MethodGet, "/api/unbound/diagnostics", nil, &result)
-	return result, err
+	return doJSON[UnboundDiagnosticReport](ctx, c, http.MethodGet, "/api/unbound/diagnostics", nil)
 }
 
 // UnboundPathDiagnostics reuses UnboundDiagnosticReport/UnboundDiagnosticCheck
 // - same shape, different checks (resolution and DNSSEC rejection through
 // AdGuard's own listener rather than Unbound's).
 func (c *Client) UnboundPathDiagnostics(ctx context.Context) (UnboundDiagnosticReport, error) {
-	var result UnboundDiagnosticReport
-	err := c.do(ctx, http.MethodGet, "/api/unbound/path-diagnostics", nil, &result)
-	return result, err
+	return doJSON[UnboundDiagnosticReport](ctx, c, http.MethodGet, "/api/unbound/path-diagnostics", nil)
 }
 
 func (c *Client) UnboundDiagnosticLoggingStatus(ctx context.Context) (UnboundDiagnosticLoggingStatus, error) {
-	var result UnboundDiagnosticLoggingStatus
-	err := c.do(ctx, http.MethodGet, "/api/unbound/diagnostic-logging", nil, &result)
-	return result, err
+	return doJSON[UnboundDiagnosticLoggingStatus](ctx, c, http.MethodGet, "/api/unbound/diagnostic-logging", nil)
 }
 
 func (c *Client) StartUnboundDiagnosticLogging(ctx context.Context) (UnboundDiagnosticLoggingStatus, error) {
-	var result UnboundDiagnosticLoggingStatus
-	err := c.do(ctx, http.MethodPost, "/api/unbound/diagnostic-logging", nil, &result)
-	return result, err
+	return doJSON[UnboundDiagnosticLoggingStatus](ctx, c, http.MethodPost, "/api/unbound/diagnostic-logging", nil)
 }
 
 func (c *Client) StopUnboundDiagnosticLogging(ctx context.Context) (UnboundDiagnosticLoggingStatus, error) {
-	var result UnboundDiagnosticLoggingStatus
-	err := c.do(ctx, http.MethodDelete, "/api/unbound/diagnostic-logging", nil, &result)
-	return result, err
+	return doJSON[UnboundDiagnosticLoggingStatus](ctx, c, http.MethodDelete, "/api/unbound/diagnostic-logging", nil)
 }
 
 func (c *Client) UnboundPresets(ctx context.Context) ([]UnboundPreset, error) {
-	var result []UnboundPreset
-	err := c.do(ctx, http.MethodGet, "/api/unbound/presets", nil, &result)
-	return result, err
+	return doJSON[[]UnboundPreset](ctx, c, http.MethodGet, "/api/unbound/presets", nil)
 }
 
 func (c *Client) UnboundAdvice(ctx context.Context, settings UnboundSettings) (UnboundAdvice, error) {
-	var result UnboundAdvice
-	err := c.do(ctx, http.MethodPost, "/api/unbound/advice", settings, &result)
-	return result, err
+	return doJSON[UnboundAdvice](ctx, c, http.MethodPost, "/api/unbound/advice", settings)
 }
 
 func (c *Client) CheckUnboundForwardTargets(ctx context.Context, zones []UnboundForwardZone) ([]UnboundForwardTargetCheck, error) {
-	var result []UnboundForwardTargetCheck
-	err := c.do(ctx, http.MethodPost, "/api/unbound/forward-check", map[string]any{"zones": zones}, &result)
-	return result, err
+	return doJSON[[]UnboundForwardTargetCheck](ctx, c, http.MethodPost, "/api/unbound/forward-check", map[string]any{"zones": zones})
 }
 
 type DiscoveredHost struct {
@@ -576,99 +538,68 @@ type RouterDiscoveryResult struct {
 }
 
 func (c *Client) DiscoverReverseDNSHosts(ctx context.Context, networks []string) (RouterDiscoveryResult, error) {
-	var result RouterDiscoveryResult
-	err := c.do(ctx, http.MethodPost, "/api/router-import/reverse-dns/discover", map[string]any{"networks": networks}, &result)
-
-	return result, err
+	return doJSON[RouterDiscoveryResult](ctx, c, http.MethodPost, "/api/router-import/reverse-dns/discover", map[string]any{"networks": networks})
 }
 
 func (c *Client) DiscoverFritzBoxHosts(ctx context.Context, address, username, password string) (RouterDiscoveryResult, error) {
-	var result RouterDiscoveryResult
-	err := c.do(ctx, http.MethodPost, "/api/router-import/fritzbox/discover", map[string]string{
+	return doJSON[RouterDiscoveryResult](ctx, c, http.MethodPost, "/api/router-import/fritzbox/discover", map[string]string{
 		"address": address, "username": username, "password": password,
-	}, &result)
-	return result, err
+	})
 }
 
 func (c *Client) UnboundNetworkCapabilities(ctx context.Context) (UnboundNetworkCapabilities, error) {
-	var result UnboundNetworkCapabilities
-	err := c.do(ctx, http.MethodGet, "/api/unbound/network-capabilities", nil, &result)
-	return result, err
+	return doJSON[UnboundNetworkCapabilities](ctx, c, http.MethodGet, "/api/unbound/network-capabilities", nil)
 }
 
 func (c *Client) UnboundCustom(ctx context.Context) (UnboundCustomDocument, error) {
-	var result UnboundCustomDocument
-	err := c.do(ctx, http.MethodGet, "/api/unbound/custom", nil, &result)
-	return result, err
+	return doJSON[UnboundCustomDocument](ctx, c, http.MethodGet, "/api/unbound/custom", nil)
 }
 
 func (c *Client) PreviewUnboundCustom(ctx context.Context, content string) (UnboundCustomPreview, error) {
-	var result UnboundCustomPreview
-	err := c.do(ctx, http.MethodPost, "/api/unbound/custom/preview", map[string]string{"content": content}, &result)
-	return result, err
+	return doJSON[UnboundCustomPreview](ctx, c, http.MethodPost, "/api/unbound/custom/preview", map[string]string{"content": content})
 }
 
 func (c *Client) UpdateUnboundCustom(ctx context.Context, content string) (UnboundCustomDocument, error) {
-	var result UnboundCustomDocument
-	err := c.do(ctx, http.MethodPut, "/api/unbound/custom", map[string]string{"content": content}, &result)
-	return result, err
+	return doJSON[UnboundCustomDocument](ctx, c, http.MethodPut, "/api/unbound/custom", map[string]string{"content": content})
 }
 
 func (c *Client) UnboundExport(ctx context.Context) (UnboundConfigBundle, error) {
-	var result UnboundConfigBundle
-	err := c.do(ctx, http.MethodGet, "/api/unbound/export", nil, &result)
-	return result, err
+	return doJSON[UnboundConfigBundle](ctx, c, http.MethodGet, "/api/unbound/export", nil)
 }
 
 func (c *Client) PreviewUnboundImport(ctx context.Context, bundle UnboundConfigBundle) (UnboundBundlePreview, error) {
-	var result UnboundBundlePreview
-	err := c.do(ctx, http.MethodPost, "/api/unbound/import/preview", bundle, &result)
-	return result, err
+	return doJSON[UnboundBundlePreview](ctx, c, http.MethodPost, "/api/unbound/import/preview", bundle)
 }
 
 func (c *Client) ApplyUnboundImport(ctx context.Context, bundle UnboundConfigBundle) (UnboundSettings, error) {
-	var result UnboundSettings
-	err := c.do(ctx, http.MethodPost, "/api/unbound/import", bundle, &result)
-	return result, err
+	return doJSON[UnboundSettings](ctx, c, http.MethodPost, "/api/unbound/import", bundle)
 }
 
 func (c *Client) ClassifyUnboundImportConf(ctx context.Context, content string) (UnboundImportResult, error) {
-	var result UnboundImportResult
-	err := c.do(ctx, http.MethodPost, "/api/unbound/import-conf", map[string]string{"content": content}, &result)
-	return result, err
+	return doJSON[UnboundImportResult](ctx, c, http.MethodPost, "/api/unbound/import-conf", map[string]string{"content": content})
 }
 
 func (c *Client) UnboundDirectives(ctx context.Context) ([]UnboundDirectiveReference, error) {
-	var result []UnboundDirectiveReference
-	err := c.do(ctx, http.MethodGet, "/api/unbound/directives", nil, &result)
-	return result, err
+	return doJSON[[]UnboundDirectiveReference](ctx, c, http.MethodGet, "/api/unbound/directives", nil)
 }
 
 func (c *Client) AdGuardStatus(ctx context.Context) (AdGuardStatus, error) {
-	var result AdGuardStatus
-	err := c.do(ctx, http.MethodGet, "/api/adguard/status", nil, &result)
-	return result, err
+	return doJSON[AdGuardStatus](ctx, c, http.MethodGet, "/api/adguard/status", nil)
 }
 
 func (c *Client) SetAdGuardFiltering(ctx context.Context, enabled bool) (AdGuardStatus, error) {
-	var result AdGuardStatus
 	body := struct {
 		Enabled bool `json:"enabled"`
 	}{Enabled: enabled}
-	err := c.do(ctx, http.MethodPost, "/api/adguard/filtering", body, &result)
-	return result, err
+	return doJSON[AdGuardStatus](ctx, c, http.MethodPost, "/api/adguard/filtering", body)
 }
 
 func (c *Client) BootstrapAdGuard(ctx context.Context) (AdGuardStatus, error) {
-	var result AdGuardStatus
-	err := c.do(ctx, http.MethodPost, "/api/adguard/bootstrap", nil, &result)
-	return result, err
+	return doJSON[AdGuardStatus](ctx, c, http.MethodPost, "/api/adguard/bootstrap", nil)
 }
 
 func (c *Client) AdGuardFilterReport(ctx context.Context) (AdGuardFilterReport, error) {
-	var result AdGuardFilterReport
-	err := c.do(ctx, http.MethodGet, "/api/adguard/filter-report", nil, &result)
-	return result, err
+	return doJSON[AdGuardFilterReport](ctx, c, http.MethodGet, "/api/adguard/filter-report", nil)
 }
 
 func (c *Client) AdGuardUIHandler() http.Handler {
@@ -703,70 +634,41 @@ func (c *Client) AdGuardUIHandler() http.Handler {
 }
 
 func (c *Client) InstallationStatus(ctx context.Context) (InstallationStatus, error) {
-	var result InstallationStatus
-	err := c.do(ctx, http.MethodGet, "/api/installation", nil, &result)
-	return result, err
+	return doJSON[InstallationStatus](ctx, c, http.MethodGet, "/api/installation", nil)
 }
 
 func (c *Client) InstallationPreflight(ctx context.Context, config InstallationConfig) (InstallationPreflight, error) {
-	var result InstallationPreflight
-	err := c.do(ctx, http.MethodPost, "/api/installation/preflight", config, &result)
-	return result, err
+	return doJSON[InstallationPreflight](ctx, c, http.MethodPost, "/api/installation/preflight", config)
 }
 
 func (c *Client) DeployInstallation(ctx context.Context, config InstallationConfig) (InstallationStatus, error) {
-	var result InstallationStatus
-	err := c.do(ctx, http.MethodPost, "/api/installation/deploy", config, &result)
-	return result, err
+	return doJSON[InstallationStatus](ctx, c, http.MethodPost, "/api/installation/deploy", config)
 }
 
 func (c *Client) UpdateStatus(ctx context.Context) (UpdateStatus, error) {
-	var result UpdateStatus
-	err := c.do(ctx, http.MethodGet, "/api/updates", nil, &result)
-	return result, err
+	return doJSON[UpdateStatus](ctx, c, http.MethodGet, "/api/updates", nil)
 }
 
 func (c *Client) BackupStatus(ctx context.Context) (BackupStatus, error) {
-	var result BackupStatus
-	err := c.do(ctx, http.MethodGet, "/api/backups", nil, &result)
-	return result, err
+	return doJSON[BackupStatus](ctx, c, http.MethodGet, "/api/backups", nil)
 }
 
 func (c *Client) SetBackupRetention(ctx context.Context, retention int) (BackupStatus, error) {
-	var result BackupStatus
-	err := c.do(ctx, http.MethodPut, "/api/backups/settings", map[string]int{"retention_per_service": retention}, &result)
-	return result, err
+	return doJSON[BackupStatus](ctx, c, http.MethodPut, "/api/backups/settings", map[string]int{"retention_per_service": retention})
 }
 
 func (c *Client) CleanupPreview(ctx context.Context) (CleanupPreview, error) {
-	var result CleanupPreview
-	err := c.do(ctx, http.MethodGet, "/api/cleanup/preview", nil, &result)
-	return result, err
+	return doJSON[CleanupPreview](ctx, c, http.MethodGet, "/api/cleanup/preview", nil)
 }
 
 func (c *Client) RunCleanup(ctx context.Context) (UpdateCleanupResult, error) {
-	var result UpdateCleanupResult
-	err := c.do(ctx, http.MethodPost, "/api/cleanup", nil, &result)
-	return result, err
+	return doJSON[UpdateCleanupResult](ctx, c, http.MethodPost, "/api/cleanup", nil)
 }
 
-func (c *Client) ExportBackup(ctx context.Context, passphrase string) (*http.Response, error) {
-	data, err := json.Marshal(map[string]string{"passphrase": passphrase})
-	if err != nil {
-		return nil, err
-	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/backups/export", bytes.NewReader(data))
-	if err != nil {
-		return nil, err
-	}
-	request.Header.Set("Authorization", "Bearer "+c.token)
-	request.Header.Set("Content-Type", "application/json")
-	client := *c.http
-	client.Timeout = 10 * time.Minute
-	return client.Do(request)
-}
-
-func (c *Client) RestoreBackupRequest(ctx context.Context, path, contentType string, body io.Reader) (*http.Response, error) {
+// rawRequest issues a raw, non-JSON-decoded POST against Core with the
+// long timeout backup export/restore need - shared by ExportBackup and
+// RestoreBackupRequest, which just supply the path, content type, and body.
+func (c *Client) rawRequest(ctx context.Context, path, contentType string, body io.Reader) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, body)
 	if err != nil {
 		return nil, err
@@ -778,33 +680,44 @@ func (c *Client) RestoreBackupRequest(ctx context.Context, path, contentType str
 	return client.Do(request)
 }
 
+func (c *Client) ExportBackup(ctx context.Context, passphrase string) (*http.Response, error) {
+	data, err := json.Marshal(map[string]string{"passphrase": passphrase})
+	if err != nil {
+		return nil, err
+	}
+	return c.rawRequest(ctx, "/api/backups/export", "application/json", bytes.NewReader(data))
+}
+
+func (c *Client) RestoreBackupRequest(ctx context.Context, path, contentType string, body io.Reader) (*http.Response, error) {
+	return c.rawRequest(ctx, path, contentType, body)
+}
+
 func (c *Client) CheckUpdates(ctx context.Context) (UpdateStatus, error) {
-	var result UpdateStatus
-	err := c.do(ctx, http.MethodPost, "/api/updates/check", nil, &result)
-	return result, err
+	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/updates/check", nil)
 }
 
 func (c *Client) UpdateService(ctx context.Context, service string) (UpdateStatus, error) {
-	var result UpdateStatus
-	err := c.do(ctx, http.MethodPost, "/api/updates/"+service, nil, &result)
-	return result, err
+	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/updates/"+service, nil)
 }
 
 func (c *Client) ControlPlaneUpdateStatus(ctx context.Context) (ControlPlaneUpdateStatus, error) {
-	var result ControlPlaneUpdateStatus
-	err := c.do(ctx, http.MethodGet, "/api/control-plane-updates", nil, &result)
-	return result, err
+	return doJSON[ControlPlaneUpdateStatus](ctx, c, http.MethodGet, "/api/control-plane-updates", nil)
 }
 
 func (c *Client) CheckControlPlaneUpdates(ctx context.Context) (ControlPlaneUpdateStatus, error) {
-	var result ControlPlaneUpdateStatus
-	err := c.do(ctx, http.MethodPost, "/api/control-plane-updates/check", nil, &result)
-	return result, err
+	return doJSON[ControlPlaneUpdateStatus](ctx, c, http.MethodPost, "/api/control-plane-updates/check", nil)
 }
 
 func (c *Client) InstallControlPlaneUpdates(ctx context.Context) (ControlPlaneUpdateStatus, error) {
-	var result ControlPlaneUpdateStatus
-	err := c.do(ctx, http.MethodPost, "/api/control-plane-updates/install", nil, &result)
+	return doJSON[ControlPlaneUpdateStatus](ctx, c, http.MethodPost, "/api/control-plane-updates/install", nil)
+}
+
+// doJSON is the shared shape behind every simple proxy method on Client:
+// decode Core's JSON response into T, or propagate the error. Kept next to
+// do, which it wraps.
+func doJSON[T any](ctx context.Context, c *Client, method, path string, body any) (T, error) {
+	var result T
+	err := c.do(ctx, method, path, body, &result)
 	return result, err
 }
 
