@@ -161,12 +161,15 @@ jobs:
           name: digest-${{ matrix.component }}
           path: /tmp/digests/${{ matrix.image }}.digest
 
-  # compose.alpha.yaml is the pinned, no-build public alpha model - its
-  # default image references need to track whatever publish just pushed, or
-  # every fresh clone silently keeps running the *previous* release's
-  # digests forever. blockpage is excluded: it isn't referenced in
-  # compose.alpha.yaml at all (Core provisions it dynamically), so there's
-  # nothing here to update for it.
+  # compose.alpha.yaml and .env.alpha.example are the pinned, no-build public
+  # release model - their default/documented image references need to track
+  # whatever publish just pushed, or every fresh clone silently keeps running
+  # the *previous* release's digests forever. .env.alpha.example is what the
+  # quick start actually tells users to download as their .env, and its
+  # values there take precedence over compose.alpha.yaml's own defaults - so
+  # both files must be kept in lockstep, not just the compose file. blockpage
+  # is excluded: it isn't referenced in either file at all (Core provisions
+  # it dynamically), so there's nothing here to update for it.
   update-alpha-pins:
     needs: [version, publish]
     runs-on: ubuntu-latest
@@ -181,35 +184,39 @@ jobs:
           path: /tmp/digests
           merge-multiple: true
 
-      - name: Update compose.alpha.yaml digest pins
+      - name: Update digest pins
         env:
           VERSION: ${{ needs.version.outputs.value }}
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound; do
-            digest="$(cat "/tmp/digests/${image}.digest")"
-            test -n "$digest"
-            sed -i -E "s#(ghcr\.io/${OWNER}/${image}:)[^@\"]+(@sha256:[0-9a-f]+)?#\1${VERSION}@${digest}#g" compose.alpha.yaml
+          for file in compose.alpha.yaml .env.alpha.example; do
+            for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound; do
+              digest="$(cat "/tmp/digests/${image}.digest")"
+              test -n "$digest"
+              sed -i -E "s#(ghcr\.io/${OWNER}/${image}:)[^@\"]+(@sha256:[0-9a-f]+)?#\1${VERSION}@${digest}#g" "$file"
+            done
+            # Keep the descriptive header comment's version number in sync too -
+            # left stale after alpha.7 since only the image pins were automated.
+            # Matches any -<series>.<N> suffix (alpha/beta/rc/...), not just
+            # alpha, so it keeps working across series transitions. Delimiter
+            # is | rather than the usual # since # is both the sed delimiter
+            # convention used above and a literal character in the comment
+            # line itself being matched here.
+            sed -i -E "s|^(# RootGuard )[0-9]+\.[0-9]+\.[0-9]+-[a-z]+\.[0-9]+|\1${VERSION}|" "$file"
           done
-          # Keep the descriptive header comment's version number in sync too -
-          # left stale after alpha.7 since only the image pins were automated.
-          # Delimiter is | rather than the usual # since # is both the sed
-          # delimiter convention used above and a literal character in the
-          # comment line itself being matched here.
-          sed -i -E "s|^(# RootGuard )[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+( public evaluation stack\.)|\1${VERSION}\2|" compose.alpha.yaml
 
       - name: Commit updated pins
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- compose.alpha.yaml; then
-            echo "compose.alpha.yaml already pins the published digests, nothing to commit"
+          if git diff --quiet -- compose.alpha.yaml .env.alpha.example; then
+            echo "compose.alpha.yaml and .env.alpha.example already pin the published digests, nothing to commit"
             exit 0
           fi
-          git add compose.alpha.yaml
-          git commit -m "ci: pin compose.alpha.yaml to ${{ needs.version.outputs.value }} image digests [skip ci]"
+          git add compose.alpha.yaml .env.alpha.example
+          git commit -m "ci: pin compose.alpha.yaml and .env.alpha.example to ${{ needs.version.outputs.value }} image digests [skip ci]"
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
