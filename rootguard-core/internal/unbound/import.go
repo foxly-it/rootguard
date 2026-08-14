@@ -302,11 +302,7 @@ func validForwardTarget(value string) bool {
 	if err != nil || address.String() != value {
 		return false
 	}
-	routedAddress := address.Unmap()
-	if routedAddress.IsUnspecified() || routedAddress.IsLoopback() || routedAddress.IsMulticast() || routedAddress.IsLinkLocalUnicast() || rootGuardDNSNetwork.Contains(routedAddress) {
-		return false
-	}
-	return true
+	return !isReservedForwardAddress(address.Unmap())
 }
 
 // reservedReverseZoneNames returns every RFC1918 reverse-zone name RootGuard
@@ -341,6 +337,20 @@ func reservedReverseZoneNames() map[string]struct{} {
 // group. A group that doesn't map cleanly is left entirely unconsumed, so
 // the caller's main loop offers each of its lines for expert adoption
 // individually instead of silently dropping anything.
+func markConsumed(consumed map[int]map[int]bool, blockIndex, directiveIndex int) {
+	if consumed[blockIndex] == nil {
+		consumed[blockIndex] = map[int]bool{}
+	}
+	consumed[blockIndex][directiveIndex] = true
+}
+
+func appendGuidedFinding(findings *[]ImportFinding, line int, directive, value, detail string) {
+	*findings = append(*findings, ImportFinding{
+		Section: "server", Line: line, Directive: directive, Value: value,
+		Disposition: ImportGuided, Detail: detail,
+	})
+}
+
 func extractLocalZones(blocks []parsedBlock) (zones []LocalZone, consumed map[int]map[int]bool, findings []ImportFinding) {
 	consumed = map[int]map[int]bool{}
 	reserved := reservedReverseZoneNames()
@@ -373,43 +383,24 @@ func extractLocalZones(blocks []parsedBlock) (zones []LocalZone, consumed map[in
 				continue
 			}
 			zones = append(zones, zone)
-			if consumed[blockIndex] == nil {
-				consumed[blockIndex] = map[int]bool{}
-			}
 			for _, idx := range usedIndexes {
-				consumed[blockIndex][idx] = true
+				markConsumed(consumed, blockIndex, idx)
 			}
-			findings = append(findings, ImportFinding{
-				Section: "server", Line: d.line, Directive: "local-zone", Value: name,
-				Disposition: ImportGuided, Detail: "applied as a guided local host inventory zone",
-			})
+			appendGuidedFinding(&findings, d.line, "local-zone", name, "applied as a guided local host inventory zone")
 		}
 	}
 	return zones, consumed, findings
 }
 
-// validCanonicalLocalAddress mirrors the structural checks in
-// validateLocalHostAddress (canonical address, correct family, not
-// unspecified/loopback/multicast) - checked up front for the same reason as
-// validForwardTarget above. Cross-zone PTR-address uniqueness is a
+// validCanonicalLocalAddress mirrors validateLocalHostAddress's structural
+// checks (canonical address, correct family, not unspecified/loopback/
+// multicast), skipping only the caller-supplied PTR-uniqueness check by
+// never setting ptr=true. Cross-zone PTR-address uniqueness is a
 // candidate-wide concern already re-checked by the normal validate/preview
 // lifecycle once this result is submitted, so it's deliberately not
 // duplicated here.
 func validCanonicalLocalAddress(value string, wantIPv4 bool) bool {
-	address, err := netip.ParseAddr(value)
-	if err != nil || address.String() != value {
-		return false
-	}
-	if wantIPv4 && !address.Is4() {
-		return false
-	}
-	if !wantIPv4 && (address.Is4() || address.Is4In6()) {
-		return false
-	}
-	if address.IsUnspecified() || address.IsLoopback() || address.IsMulticast() {
-		return false
-	}
-	return true
+	return validateLocalHostAddress(value, wantIPv4, false, nil) == nil
 }
 
 // buildLocalZoneCandidate turns one local-zone group (group[0] is the
@@ -635,15 +626,9 @@ func extractReverseZonePolicies(blocks []parsedBlock) (policies map[string]strin
 		}
 		policies[network] = mode
 		for _, h := range matched {
-			if consumed[h.blockIndex] == nil {
-				consumed[h.blockIndex] = map[int]bool{}
-			}
-			consumed[h.blockIndex][h.directiveIndex] = true
-			findings = append(findings, ImportFinding{
-				Section: "server", Line: h.line, Directive: "local-zone", Value: network,
-				Disposition: ImportGuided,
-				Detail:      fmt.Sprintf("applied as part of the guided RFC1918 reverse-zone policy for %s (%s)", network, mode),
-			})
+			markConsumed(consumed, h.blockIndex, h.directiveIndex)
+			appendGuidedFinding(&findings, h.line, "local-zone", network,
+				fmt.Sprintf("applied as part of the guided RFC1918 reverse-zone policy for %s (%s)", network, mode))
 		}
 	}
 	return policies, consumed, findings
@@ -689,14 +674,9 @@ func extractNetworkMode(blocks []parsedBlock) (mode string, consumed map[int]map
 		key string
 		h   hit
 	}{{"do-ip4", ip4}, {"do-ip6", ip6}, {"prefer-ip6", prefer6}} {
-		if consumed[item.h.blockIndex] == nil {
-			consumed[item.h.blockIndex] = map[int]bool{}
-		}
-		consumed[item.h.blockIndex][item.h.directiveIndex] = true
-		findings = append(findings, ImportFinding{
-			Section: "server", Line: item.h.line, Directive: item.key, Value: item.h.value,
-			Disposition: ImportGuided, Detail: fmt.Sprintf("applied as part of the guided network mode (%s)", mode),
-		})
+		markConsumed(consumed, item.h.blockIndex, item.h.directiveIndex)
+		appendGuidedFinding(&findings, item.h.line, item.key, item.h.value,
+			fmt.Sprintf("applied as part of the guided network mode (%s)", mode))
 	}
 	return mode, consumed, findings
 }
@@ -739,14 +719,9 @@ func extractResourceProfile(blocks []parsedBlock) (profile string, consumed map[
 		key string
 		h   hit
 	}{{"rrset-cache-size", rrset}, {"msg-cache-size", msg}} {
-		if consumed[item.h.blockIndex] == nil {
-			consumed[item.h.blockIndex] = map[int]bool{}
-		}
-		consumed[item.h.blockIndex][item.h.directiveIndex] = true
-		findings = append(findings, ImportFinding{
-			Section: "server", Line: item.h.line, Directive: item.key, Value: item.h.value,
-			Disposition: ImportGuided, Detail: fmt.Sprintf("applied as the guided resource profile (%s)", profile),
-		})
+		markConsumed(consumed, item.h.blockIndex, item.h.directiveIndex)
+		appendGuidedFinding(&findings, item.h.line, item.key, item.h.value,
+			fmt.Sprintf("applied as the guided resource profile (%s)", profile))
 	}
 	return profile, consumed, findings
 }
