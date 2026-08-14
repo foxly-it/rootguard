@@ -1111,9 +1111,24 @@ which a `overflow-x:auto` fix then clipped), and the roadmap page's
 "Release-Zug" status labels corrected to match this document (0.4/0.5 were
 showing stale "in progress" copy despite being complete for a session).
 
-**Immediate next item when resuming (0.2, if not directed elsewhere):**
+**Superseded (2026-08-14):** milestones 0.1 through 0.6 are now ALL complete
+and verified per `ROADMAP.md` (every checkbox in each of those sections is
+`[x]`); `v0.1.0-beta.1` is the current public release. The "immediate next
+item" pointer below, describing 0.2 as still open, is historical narrative
+from when that was true - kept for context, not as current direction.
+**Immediate next item when resuming is now 0.9 (release candidate)**: the
+30-day continuous DNS/update/restore endurance test is running unattended
+via `scripts/soak/*.sh` + systemd timers on a dedicated host (see that
+directory's README), started 2026-08-14; the other seven 0.9 checklist
+items (CI matrix gap check for backup/restore, performance/memory medium
+baseline, final accessibility/security review, non-developer documentation
+walkthrough, platform/support-policy freeze, 1.0 migration instructions,
+release-blocking-defect review) are worked in parallel with that clock.
+
+---
+
 0.2's conflict-detection checkbox
-stays unchecked, but the only concrete gap left under it is a guided surface
+stays unchecked at the time this paragraph was written, but the only concrete gap left under it is a guided surface
 for access rules (currently expert-only) - a separate, larger feature (see
 "Tracked editor follow-ups" below), not a conflict-detection bug. Cross-zone
 hostname uniqueness is now enforced (mirrors the existing PTR-address
