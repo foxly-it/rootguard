@@ -1,12 +1,12 @@
 name: rootguard
 
-# RootGuard 0.1.0-alpha.14 public evaluation stack.
+# RootGuard 0.1.0-alpha.15 public evaluation stack.
 # Every release image is pinned to its verified multi-architecture manifest.
 # Copy .env.alpha.example to .env and replace all placeholder secrets.
 
 services:
   core:
-    image: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.14@sha256:5d644947418fa179eaf7a6e3875ad238a340c4911a5bf3d1830b4d64c0304296}"
+    image: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.15@sha256:e272499994aa5e79bb98ef73a22d2f214295b2e8c5f9c276b9e7c7fa1e462c5c}"
     container_name: rootguard-core
     restart: unless-stopped
     depends_on:
@@ -17,11 +17,11 @@ services:
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_CORE_CONTAINER: rootguard-core
       ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
-      ROOTGUARD_UNBOUND_IMAGE: "${ROOTGUARD_UNBOUND_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:0.1.0-alpha.14@sha256:c65a2b216e9dedac1d040faa188abe86447cac7066d0ac59ea69e439958e43c6}"
+      ROOTGUARD_UNBOUND_IMAGE: "${ROOTGUARD_UNBOUND_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:0.1.0-alpha.15@sha256:adcb3e60b1a27e2905859a10f65cac2fb0941ff5bfe1ae39d933c9aa393ffcd5}"
       ROOTGUARD_ADGUARD_IMAGE: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.78@sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5}"
       ROOTGUARD_ADGUARD_BETA_IMAGE: "${ROOTGUARD_ADGUARD_BETA_IMAGE:-adguard/adguardhome:beta@sha256:2b77703b27730d5c0c7045fcd6c98834169cd5c69af5f86a43947425f2d367fd}"
       ROOTGUARD_ADGUARD_UPDATE_IMAGE: "${ROOTGUARD_ADGUARD_UPDATE_IMAGE:-adguard/adguardhome:v0.107.78@sha256:1ea34eafe5dc691007946e8eaab7bf46b0de9412f39213d8c06e48b53bf9a6c5}"
-      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:0.1.0-alpha.14@sha256:c65a2b216e9dedac1d040faa188abe86447cac7066d0ac59ea69e439958e43c6}"
+      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:0.1.0-alpha.15@sha256:adcb3e60b1a27e2905859a10f65cac2fb0941ff5bfe1ae39d933c9aa393ffcd5}"
       ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
@@ -46,7 +46,7 @@ services:
       retries: 5
 
   webapp:
-    image: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.14@sha256:88a365fcf77e6df7a491f511a509f10c9ca2060bef896963d39688e87e8ec629}"
+    image: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.15@sha256:1b480b217dcc482dce1af4f0fec52a91184cbb80e9b89499f5a5d32987c54ae9}"
     container_name: rootguard-webapp
     restart: unless-stopped
     depends_on:
@@ -69,7 +69,7 @@ services:
       - edge
 
   updater:
-    image: "${ROOTGUARD_UPDATER_IMAGE:-ghcr.io/foxly-it/rootguard-updater:0.1.0-alpha.14@sha256:ac369ed52a765864c09ef9cba73fb19bda3e73cb9bb3f5633d163b8749abfeda}"
+    image: "${ROOTGUARD_UPDATER_IMAGE:-ghcr.io/foxly-it/rootguard-updater:0.1.0-alpha.15@sha256:6a9287f57f78b75e047bc086e59fe96aa8aa4c64e173fa6d503d82d29948c936}"
     container_name: rootguard-updater
     restart: unless-stopped
     environment:
@@ -77,16 +77,16 @@ services:
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.alpha.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard
-      ROOTGUARD_CORE_UPDATE_IMAGE: "${ROOTGUARD_CORE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.14@sha256:5d644947418fa179eaf7a6e3875ad238a340c4911a5bf3d1830b4d64c0304296}"
-      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "${ROOTGUARD_WEBAPP_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.14@sha256:88a365fcf77e6df7a491f511a509f10c9ca2060bef896963d39688e87e8ec629}"
+      ROOTGUARD_CORE_UPDATE_IMAGE: "${ROOTGUARD_CORE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.15@sha256:e272499994aa5e79bb98ef73a22d2f214295b2e8c5f9c276b9e7c7fa1e462c5c}"
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "${ROOTGUARD_WEBAPP_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.15@sha256:1b480b217dcc482dce1af4f0fec52a91184cbb80e9b89499f5a5d32987c54ae9}"
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
       ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
       ROOTGUARD_WEB_BIND: "${ROOTGUARD_WEB_BIND:-0.0.0.0}"
       ROOTGUARD_WEB_PORT: "${ROOTGUARD_WEB_PORT:-8080}"
-      ROOTGUARD_CORE_IMAGE: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.14@sha256:5d644947418fa179eaf7a6e3875ad238a340c4911a5bf3d1830b4d64c0304296}"
-      ROOTGUARD_WEBAPP_IMAGE: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.14@sha256:88a365fcf77e6df7a491f511a509f10c9ca2060bef896963d39688e87e8ec629}"
+      ROOTGUARD_CORE_IMAGE: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-alpha.15@sha256:e272499994aa5e79bb98ef73a22d2f214295b2e8c5f9c276b9e7c7fa1e462c5c}"
+      ROOTGUARD_WEBAPP_IMAGE: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-alpha.15@sha256:1b480b217dcc482dce1af4f0fec52a91184cbb80e9b89499f5a5d32987c54ae9}"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
