@@ -417,9 +417,16 @@ jobs:
           set -euo pipefail
           call() {
             local method="$1" path="$2"
-            local body code
+            local body code curl_status
+            set +e
             body="$(curl --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
               --write-out '\n%{http_code}' --request "$method" "http://127.0.0.1:18082${path}")"
+            curl_status=$?
+            set -e
+            if [ "$curl_status" -ne 0 ]; then
+              echo "::error::${method} ${path}: curl failed with exit code ${curl_status} (could not reach the WebApp)"
+              exit 1
+            fi
             code="${body##*$'\n'}"
             body="${body%$'\n'*}"
             if [ "${code:0:1}" != 2 ]; then
@@ -428,6 +435,11 @@ jobs:
             fi
             echo "$body"
           }
+          for attempt in {1..30}; do
+            code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18082/ || true)"
+            if [ -n "$code" ] && [ "$code" != "000" ]; then break; fi
+            sleep 1
+          done
           call POST /api/control-plane-updates/check >/dev/null
           call POST /api/control-plane-updates/install >/dev/null
           for attempt in {1..90}; do
