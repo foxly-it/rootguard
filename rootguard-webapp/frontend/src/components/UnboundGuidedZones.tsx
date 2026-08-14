@@ -8,8 +8,7 @@ import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftW
 import GuidedFlowSteps from "./GuidedFlowSteps";
 import "../styles/unbound-guided.css";
 import { useI18n } from "../i18n";
-
-const hostLabelPattern = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+import { localZoneSection, normalizeHostLabel, normalizeZoneName, validIPv4 } from "../utils/dnsNames";
 
 interface DraftHost {
   hostname: string;
@@ -230,11 +229,11 @@ export default function UnboundGuidedZones({
 }
 
 function normalizeDraftZone(zone: DraftZone, t: (key: string, values?: Record<string, string | number>) => string): UnboundLocalZone {
-  const name = normalizeZoneName(zone.name, t);
+  const name = normalizeZoneName(zone.name, t("zones.validation.zoneRoot"), t("zones.validation.zoneName"));
   if (zone.hosts.length === 0) throw new Error(t("zones.validation.hostRequired"));
   const seen = new Set<string>();
   const hosts: UnboundLocalHost[] = zone.hosts.map((host) => {
-    const hostname = normalizeHostLabel(host.hostname, t);
+    const hostname = normalizeHostLabel(host.hostname, t("zones.validation.hostname"));
     if (seen.has(hostname)) throw new Error(t("zones.validation.duplicateHostname", { name: hostname }));
     seen.add(hostname);
     const ipv4 = host.ipv4.trim();
@@ -271,37 +270,6 @@ function validatePTRUniqueness(zones: UnboundLocalZone[], t: (key: string, value
   }
 }
 
-function normalizeHostLabel(value: string, t: (key: string) => string): string {
-  const normalized = value.trim().toLowerCase();
-  if (!hostLabelPattern.test(normalized)) throw new Error(t("zones.validation.hostname"));
-  return normalized;
-}
-
-function normalizeZoneName(value: string, t: (key: string) => string): string {
-  const normalized = value.trim().toLowerCase().replace(/\.*$/, "") + ".";
-  if (normalized === ".") throw new Error(t("zones.validation.zoneRoot"));
-  const labels = normalized.slice(0, -1).split(".");
-  if (normalized.length > 254 || !labels.every((label) => hostLabelPattern.test(label))) {
-    throw new Error(t("zones.validation.zoneName"));
-  }
-  return normalized;
-}
-
-function validIPv4(value: string) {
-  const parts = value.split(".");
-  return parts.length === 4 && parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) <= 255);
-}
-
 function validIPv6(value: string) {
   return value.includes(":") && /^[0-9a-f:]+$/i.test(value) && value.length <= 45;
-}
-
-function localZoneSection(config: string): string {
-  const lines = config.split("\n").filter((line) =>
-    line.includes("# Local host inventory:") ||
-    line.trimStart().startsWith("local-zone:") ||
-    line.trimStart().startsWith("local-data:") ||
-    line.trimStart().startsWith("local-data-ptr:"),
-  );
-  return lines.length > 0 ? `server:\n${lines.join("\n")}` : "# No local-zone directives.";
 }

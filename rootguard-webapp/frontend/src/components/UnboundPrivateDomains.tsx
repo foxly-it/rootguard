@@ -7,6 +7,7 @@ import {
 import { errorMessage, useUnboundDraftWorkflow } from "../hooks/useUnboundDraftWorkflow";
 import GuidedFlowSteps from "./GuidedFlowSteps";
 import { useI18n } from "../i18n";
+import { normalizeZoneName as normalizeDomain } from "../utils/dnsNames";
 import "../styles/unbound-private.css";
 
 const maxPrivateDomains = 32;
@@ -53,7 +54,7 @@ export default function UnboundPrivateDomains({
   function addDomain() {
     workflow.setError("");
     try {
-      const domain = normalizeDomain(draft, t);
+      const domain = normalizeDomain(draft, t("private.validation.root"), t("private.validation.name"));
       if (domains.includes(domain)) throw new Error(t("private.duplicate", { name: domain }));
       if (domains.length >= maxPrivateDomains) throw new Error(t("private.limit", { count: maxPrivateDomains }));
       setDomains([...domains, domain]);
@@ -191,16 +192,6 @@ function normalizeSettings(settings: UnboundSettings): UnboundSettings {
     private_domains: settings.private_domains ?? [],
     reverse_zones: reverseNetworks.map((network) => ({ network, mode: policies.get(network) ?? "nxdomain" })),
   };
-}
-
-function normalizeDomain(value: string, t: (key: string) => string) {
-  const normalized = value.trim().toLowerCase().replace(/\.*$/, "") + ".";
-  if (normalized === ".") throw new Error(t("private.validation.root"));
-  const labels = normalized.slice(0, -1).split(".");
-  if (normalized.length > 254 || !labels.every((label) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label))) {
-    throw new Error(t("private.validation.name"));
-  }
-  return normalized;
 }
 
 function privateSection(config: string) {
