@@ -424,13 +424,13 @@ jobs:
             curl_status=$?
             set -e
             if [ "$curl_status" -ne 0 ]; then
-              echo "::error::${method} ${path}: curl failed with exit code ${curl_status} (could not reach the WebApp)"
+              echo "::error::${method} ${path}: curl failed with exit code ${curl_status} (could not reach the WebApp)" >&2
               exit 1
             fi
             code="${body##*$'\n'}"
             body="${body%$'\n'*}"
             if [ "${code:0:1}" != 2 ]; then
-              echo "::error::${method} ${path} returned HTTP ${code}: ${body}"
+              echo "::error::${method} ${path} returned HTTP ${code}: ${body}" >&2
               exit 1
             fi
             echo "$body"
