@@ -1,4 +1,4 @@
-name: Public alpha clean install
+name: Public clean install
 
 on:
   pull_request:

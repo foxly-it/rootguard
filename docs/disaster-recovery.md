@@ -10,11 +10,8 @@ mechanism. This document does not introduce new recovery capability; it is
 the checklist for finding and using the right one under pressure.
 
 The encrypted full backup/restore feature this document leans on most
-(`docs/backup-export.md`) landed on `main` after the `v0.1.0-alpha.7`
-publish - the current public alpha release does not include it yet. It will
-be available starting with the next tagged release; until then, this
-scenario only applies to a deployment built from `main` (or a later
-release once one ships).
+(`docs/backup-export.md`) is included starting with `v0.1.0-beta.1`, the
+current public release.
 
 ## Before you need this
 

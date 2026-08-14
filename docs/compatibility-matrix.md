@@ -6,7 +6,7 @@ verified test run - not a claim without evidence.
 
 ## RootGuard version (upgrade continuity)
 
-Upgrading from the immediately preceding published alpha release to the
+Upgrading from the immediately preceding published pre-release to the
 current one is exercised on every release: `release-alpha.yml`'s
 `upgrade-test` job deploys the previous release exactly as it shipped
 (its own pinned Compose model and images), completes guided setup, verifies
@@ -14,7 +14,7 @@ DNS, then upgrades Core and WebApp in place through the real control-plane
 updater - never a synthetic fixture - to the version being published, and
 verifies the running images and DNS resolution afterward.
 
-Scoped to N-1 -> N: RootGuard is pre-1.0 alpha and doesn't yet promise
+Scoped to N-1 -> N: RootGuard is pre-1.0 and doesn't yet promise
 compatibility further back than the one release directly before the
 current one.
 
