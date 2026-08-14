@@ -198,30 +198,24 @@ func (m *manager) Status() status {
 }
 
 func (m *manager) StartCheck() (status, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.busyLocked() {
-		return status{}, errBusy
-	}
-	m.status.State = stateChecking
-	m.status.Message = "Core- und WebApp-Images werden geprüft."
-	m.status.UpdatedAt = time.Now().UTC()
-	_ = m.persistLocked()
-	go m.check()
-	return cloneStatus(m.status), nil
+	return m.start(stateChecking, "Core- und WebApp-Images werden geprüft.", m.check)
 }
 
 func (m *manager) StartUpdate() (status, error) {
+	return m.start(stateUpdating, "Das atomare Control-Plane-Update wird vorbereitet.", m.update)
+}
+
+func (m *manager) start(state, message string, fn func()) (status, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.busyLocked() {
 		return status{}, errBusy
 	}
-	m.status.State = stateUpdating
-	m.status.Message = "Das atomare Control-Plane-Update wird vorbereitet."
+	m.status.State = state
+	m.status.Message = message
 	m.status.UpdatedAt = time.Now().UTC()
 	_ = m.persistLocked()
-	go m.update()
+	go fn()
 	return cloneStatus(m.status), nil
 }
 
@@ -264,12 +258,11 @@ func (m *manager) update() {
 	candidateImages := map[string]string{}
 	candidateIDs := map[string]string{}
 	for _, spec := range m.specs {
-		currentImage, oldID, err := m.inspectContainer(ctx, spec.Container)
+		_, oldID, err := m.inspectContainer(ctx, spec.Container)
 		if err != nil {
 			m.fail(err)
 			return
 		}
-		_ = currentImage
 		oldImages[spec.Name] = oldID
 		m.progress("Lade " + spec.DisplayName + ".")
 		if !m.skipPull {
