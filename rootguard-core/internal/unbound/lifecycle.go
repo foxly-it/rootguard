@@ -107,7 +107,7 @@ func settingsChanges(before, after Settings) []Change {
 			After: formatJSON(after.PrivateDomains),
 		})
 	}
-	if !reverseZonesEqual(before.ReverseZones, after.ReverseZones) {
+	if !slicesEqual(before.ReverseZones, after.ReverseZones) {
 		changes = append(changes, Change{
 			Field: "reverse_zones", Before: formatJSON(before.ReverseZones),
 			After: formatJSON(after.ReverseZones),
@@ -122,19 +122,7 @@ func settingsChanges(before, after Settings) []Change {
 	return changes
 }
 
-func slicesEqual(left, right []string) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for index := range left {
-		if left[index] != right[index] {
-			return false
-		}
-	}
-	return true
-}
-
-func reverseZonesEqual(left, right []ReverseZonePolicy) bool {
+func slicesEqual[T comparable](left, right []T) bool {
 	if len(left) != len(right) {
 		return false
 	}
@@ -251,22 +239,35 @@ func (m *Manager) diagnosticCommand(ctx context.Context, name string, args ...st
 
 const digTimeout = "+time=5"
 
-func (m *Manager) diagnosticResolution(ctx context.Context) DiagnosticCheck {
-	check := m.diagnosticCommand(ctx, "resolution", "dig", "+short", digTimeout, "+tries=1", "@127.0.0.1", "-p", "5335", "example.com", "A")
+// resolutionCheck and dnssecCheck hold the shared dig-and-interpret logic
+// behind diagnosticResolution/diagnosticPathResolution and
+// diagnosticDNSSEC/diagnosticPathDNSSEC respectively - the pairs differ only
+// in which host/port they query, the retry count, and the fallback detail
+// text on failure.
+func (m *Manager) resolutionCheck(ctx context.Context, name, host, port, tries, noAddressDetail string) DiagnosticCheck {
+	check := m.diagnosticCommand(ctx, name, "dig", "+short", digTimeout, tries, "@"+host, "-p", port, "example.com", "A")
 	check.Passed = check.Passed && strings.TrimSpace(check.Detail) != "" && check.Detail != "OK"
 	if !check.Passed && check.Detail == "OK" {
-		check.Detail = "resolver returned no address"
+		check.Detail = noAddressDetail
 	}
 	return check
 }
 
-func (m *Manager) diagnosticDNSSEC(ctx context.Context) DiagnosticCheck {
-	check := m.diagnosticCommand(ctx, "dnssec", "dig", "+dnssec", digTimeout, "+tries=1", "@127.0.0.1", "-p", "5335", "dnssec-failed.org", "A")
+func (m *Manager) dnssecCheck(ctx context.Context, name, host, port, tries, rejectedDetailPrefix string) DiagnosticCheck {
+	check := m.diagnosticCommand(ctx, name, "dig", "+dnssec", digTimeout, tries, "@"+host, "-p", port, "dnssec-failed.org", "A")
 	check.Passed = check.Passed && strings.Contains(check.Detail, "status: SERVFAIL")
 	if !check.Passed && !strings.Contains(check.Detail, "SERVFAIL") {
-		check.Detail = "invalid DNSSEC response was not rejected: " + check.Detail
+		check.Detail = rejectedDetailPrefix + check.Detail
 	}
 	return check
+}
+
+func (m *Manager) diagnosticResolution(ctx context.Context) DiagnosticCheck {
+	return m.resolutionCheck(ctx, "resolution", "127.0.0.1", "5335", "+tries=1", "resolver returned no address")
+}
+
+func (m *Manager) diagnosticDNSSEC(ctx context.Context) DiagnosticCheck {
+	return m.dnssecCheck(ctx, "dnssec", "127.0.0.1", "5335", "+tries=1", "invalid DNSSEC response was not rejected: ")
 }
 
 // DiagnosePath verifies the DNS path a real client actually uses - through
@@ -296,12 +297,7 @@ func (m *Manager) diagnosticPathResolution(ctx context.Context, adguardAddress s
 	if err != nil {
 		return DiagnosticCheck{Name: "adguard-resolution", Passed: false, Detail: fmt.Sprintf("invalid AdGuard DNS address %q: %v", adguardAddress, err)}
 	}
-	check := m.diagnosticCommand(ctx, "adguard-resolution", "dig", "+short", digTimeout, "+tries=2", "@"+host, "-p", port, "example.com", "A")
-	check.Passed = check.Passed && strings.TrimSpace(check.Detail) != "" && check.Detail != "OK"
-	if !check.Passed && check.Detail == "OK" {
-		check.Detail = "AdGuard returned no address"
-	}
-	return check
+	return m.resolutionCheck(ctx, "adguard-resolution", host, port, "+tries=2", "AdGuard returned no address")
 }
 
 func (m *Manager) diagnosticPathDNSSEC(ctx context.Context, adguardAddress string) DiagnosticCheck {
@@ -309,12 +305,7 @@ func (m *Manager) diagnosticPathDNSSEC(ctx context.Context, adguardAddress strin
 	if err != nil {
 		return DiagnosticCheck{Name: "adguard-dnssec", Passed: false, Detail: fmt.Sprintf("invalid AdGuard DNS address %q: %v", adguardAddress, err)}
 	}
-	check := m.diagnosticCommand(ctx, "adguard-dnssec", "dig", "+dnssec", digTimeout, "+tries=2", "@"+host, "-p", port, "dnssec-failed.org", "A")
-	check.Passed = check.Passed && strings.Contains(check.Detail, "status: SERVFAIL")
-	if !check.Passed && !strings.Contains(check.Detail, "SERVFAIL") {
-		check.Detail = "invalid DNSSEC response was not rejected via AdGuard: " + check.Detail
-	}
-	return check
+	return m.dnssecCheck(ctx, "adguard-dnssec", host, port, "+tries=2", "invalid DNSSEC response was not rejected via AdGuard: ")
 }
 
 func (m *Manager) recordSnapshot(settings Settings, config, custom []byte) error {
