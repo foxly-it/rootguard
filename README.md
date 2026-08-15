@@ -121,6 +121,7 @@ diesem Einstieg ausgelagert:
 - [Image-Digests und Aufbewahrungsregeln](docs/image-retention-policy.md)
 - [Geprüfte Installationsplattformen](docs/platform-support.md)
 - [Performance- und Speicher-Baseline](docs/performance-baseline.md)
+- [Barrierefreiheits- und Sicherheits-Review](docs/accessibility-security-review.md)
 
 ## Entwicklung
 
@@ -265,6 +266,7 @@ Further technical information:
 - [Image digests and retention policy](docs/image-retention-policy.md)
 - [Verified installation platforms](docs/platform-support.md)
 - [Performance and memory baseline](docs/performance-baseline.md)
+- [Accessibility and security review](docs/accessibility-security-review.md)
 
 ### Development and contributions
 
