@@ -29,7 +29,7 @@ func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http
 		remoteIP := clientAddress(r)
 		key := username
 		if key == "" {
-			key = remoteIP
+			key = rateLimitKey(r)
 		}
 
 		if a.destructiveLimiter.blocked(key) {

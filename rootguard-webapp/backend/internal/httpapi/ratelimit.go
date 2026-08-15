@@ -53,6 +53,22 @@ func (rl *rateLimiter) reset(key string) {
 	delete(rl.failures, key)
 }
 
+// sweep prunes every key, not just one that's currently being queried -
+// blocked/recordFailure only ever prune the single key they're called with,
+// so a key that's queried exactly once (e.g. an attacker source IP that
+// never returns) would otherwise sit in the map forever. Called
+// periodically from a background goroutine (see auth.go) rather than on
+// every request, since it's O(distinct keys) and doesn't need per-request
+// freshness.
+func (rl *rateLimiter) sweep() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	for key := range rl.failures {
+		rl.pruneLocked(key, now)
+	}
+}
+
 func (rl *rateLimiter) pruneLocked(key string, now time.Time) {
 	cutoff := now.Add(-rl.window)
 	kept := rl.failures[key][:0]

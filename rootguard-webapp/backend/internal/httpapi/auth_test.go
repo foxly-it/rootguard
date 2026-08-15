@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -149,6 +150,40 @@ func TestPasswordRecoveryPersistsPasswordAndInvalidatesSessions(t *testing.T) {
 	restarted.Handler(http.NotFoundHandler()).ServeHTTP(newLogin, newLoginRequest)
 	if newLogin.Code != http.StatusOK {
 		t.Fatalf("expected persisted reset password to work, got %d", newLogin.Code)
+	}
+}
+
+func TestPasswordRecoveryRollsBackOnCredentialPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	sessionFile := filepath.Join(dir, "sessions.json")
+	// Force the credentials write to fail at the final os.Rename step: a
+	// directory already sitting at the exact path persistCredentialsLocked
+	// needs to rename its temp file onto.
+	if err := os.MkdirAll(filepath.Join(dir, "credentials.json"), 0700); err != nil {
+		t.Fatalf("failed to set up credentials.json as a directory: %v", err)
+	}
+
+	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, sessionFile)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	resetBody := []byte(`{"recovery_token":"recovery-secret","new_password":"new-password-123"}`)
+	resetRequest := httptest.NewRequest(http.MethodPost, "/api/auth/recovery", bytes.NewReader(resetBody))
+	resetRequest.Header.Set("Origin", "http://example.com")
+	resetRequest.Host = "example.com"
+	reset := httptest.NewRecorder()
+	handler.ServeHTTP(reset, resetRequest)
+	if reset.Code != http.StatusInternalServerError {
+		t.Fatalf("expected the reset to fail when credentials can't persist, got %d: %s", reset.Code, reset.Body.String())
+	}
+
+	// A failed credential persist must not leave the new password active in
+	// memory only - the old password must still work afterward.
+	oldLoginBody := []byte(`{"username":"admin","password":"old-password"}`)
+	oldLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(oldLoginBody))
+	oldLogin := httptest.NewRecorder()
+	handler.ServeHTTP(oldLogin, oldLoginRequest)
+	if oldLogin.Code != http.StatusOK {
+		t.Fatalf("expected the old password to still work after a failed recovery, got %d", oldLogin.Code)
 	}
 }
 
@@ -325,6 +360,41 @@ func TestLoginRateLimitBlocksRepeatedFailuresAndResetsOnSuccess(t *testing.T) {
 	handler.ServeHTTP(stillBlockedResponse, stillBlockedRequest)
 	if stillBlockedResponse.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected the correct password to still be blocked during an active lockout, got %d", stillBlockedResponse.Code)
+	}
+}
+
+func TestLoginRateLimitIgnoresSpoofedForwardedForHeader(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
+
+	// A different X-Forwarded-For value on every request must not let an
+	// attacker bypass the limit or grow the limiter's failure map without
+	// bound - only the real TCP peer address (httptest.NewRequest's default
+	// RemoteAddr, constant across these requests) is allowed to count.
+	for i := range auth.loginLimiter.maxFailure {
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(wrongBody))
+		request.Header.Set("X-Forwarded-For", fmt.Sprintf("10.0.0.%d", i))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusUnauthorized {
+			t.Fatalf("attempt %d: expected 401 before the limit is hit, got %d", i, response.Code)
+		}
+	}
+
+	blockedRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(wrongBody))
+	blockedRequest.Header.Set("X-Forwarded-For", "10.0.0.99")
+	blockedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(blockedResponse, blockedRequest)
+	if blockedResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 once the failure limit is hit despite a fresh X-Forwarded-For value each time, got %d", blockedResponse.Code)
+	}
+
+	auth.loginLimiter.mu.Lock()
+	keyCount := len(auth.loginLimiter.failures)
+	auth.loginLimiter.mu.Unlock()
+	if keyCount != 1 {
+		t.Fatalf("expected exactly one rate-limiter key (the real peer address) regardless of X-Forwarded-For, got %d", keyCount)
 	}
 }
 
