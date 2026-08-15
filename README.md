@@ -120,6 +120,7 @@ diesem Einstieg ausgelagert:
 - [Changelog](CHANGELOG.md)
 - [Image-Digests und Aufbewahrungsregeln](docs/image-retention-policy.md)
 - [Geprüfte Installationsplattformen](docs/platform-support.md)
+- [Performance- und Speicher-Baseline](docs/performance-baseline.md)
 
 ## Entwicklung
 
@@ -263,6 +264,7 @@ Further technical information:
 - [Changelog](CHANGELOG.md)
 - [Image digests and retention policy](docs/image-retention-policy.md)
 - [Verified installation platforms](docs/platform-support.md)
+- [Performance and memory baseline](docs/performance-baseline.md)
 
 ### Development and contributions
 
