@@ -18,16 +18,26 @@ soak_admin_password() {
   grep -E '^ROOTGUARD_ADMIN_PASSWORD=' "$ROOTGUARD_SOAK_ENV" | head -1 | cut -d= -f2-
 }
 
+# Defaults to "admin", matching compose.alpha.yaml's own
+# ${ROOTGUARD_ADMIN_USER:-admin} default when the .env doesn't set it.
+soak_admin_user() {
+  local value
+  value="$(grep -E '^ROOTGUARD_ADMIN_USER=' "$ROOTGUARD_SOAK_ENV" 2>/dev/null | head -1 | cut -d= -f2-)"
+  printf '%s' "${value:-admin}"
+}
+
 # Logs in and refreshes the shared cookie jar. Returns non-zero if the
 # WebApp never became reachable/healthy within the retry budget.
 soak_login() {
-  local password code
+  local user password body code
+  user="$(soak_admin_user)"
   password="$(soak_admin_password)"
+  body="$(jq -nc --arg u "$user" --arg p "$password" '{username:$u, password:$p}')"
   for _ in $(seq 1 30); do
     code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
       --cookie-jar "$ROOTGUARD_SOAK_COOKIE_JAR" \
       --header 'Content-Type: application/json' \
-      --data "{\"username\":\"admin\",\"password\":\"${password}\"}" \
+      --data "$body" \
       "http://127.0.0.1:${ROOTGUARD_SOAK_WEB_PORT}/api/auth/login" 2>/dev/null || true)"
     [ "$code" = "200" ] && return 0
     sleep 2

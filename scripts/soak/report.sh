@@ -16,14 +16,14 @@ summarize_probes() {
   [ -f "$probe_log" ] || { echo "no probes recorded yet"; return; }
   jq -s '
     length as $total
-    | ([.[] | select(.resolve_ok and .dnssec_reject_ok and .api_ok)] | length) as $pass
+    | ([.[] | select(.resolve_ok and .dnssec_reject_ok and .block_ok and .api_ok)] | length) as $pass
     | {
         total: $total,
         pass: $pass,
         pass_rate: (if $total > 0 then ($pass / $total * 100 | round) else 0 end),
         first_ts: (.[0].ts // null),
         last_ts: (.[-1].ts // null),
-        incidents: [.[] | select(.resolve_ok != true or .dnssec_reject_ok != true or .api_ok != true) | .ts]
+        incidents: [.[] | select(.resolve_ok != true or .dnssec_reject_ok != true or .block_ok != true or .api_ok != true) | .ts]
       }' "$probe_log"
 }
 
