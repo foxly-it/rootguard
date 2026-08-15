@@ -1,0 +1,72 @@
+name: Backup and restore
+
+on:
+  pull_request:
+    paths:
+      - "compose.alpha.yaml"
+      - ".env.alpha.example"
+      - "scripts/verify-backup-restore.sh"
+      - ".github/workflows/backup-restore.yml"
+      - "rootguard-core/internal/backupexport/**"
+      - "rootguard-core/internal/backuprestore/**"
+      - "rootguard-core/internal/api/backup_restore.go"
+      - "rootguard-core/internal/api/backups.go"
+      - "rootguard-core/internal/installer/**"
+  push:
+    branches: [main]
+    paths:
+      - "compose.alpha.yaml"
+      - ".env.alpha.example"
+      - "scripts/verify-backup-restore.sh"
+      - ".github/workflows/backup-restore.yml"
+      - "rootguard-core/internal/backupexport/**"
+      - "rootguard-core/internal/backuprestore/**"
+      - "rootguard-core/internal/api/backup_restore.go"
+      - "rootguard-core/internal/api/backups.go"
+      - "rootguard-core/internal/installer/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup-restore-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install DNS test client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes dnsutils
+
+      - name: Verify backup export and restore
+        env:
+          ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
+        run: ./scripts/verify-backup-restore.sh
+
+      - name: Record platform evidence
+        if: always()
+        run: |
+          {
+            echo "### Linux ${{ matrix.arch }}"
+            echo
+            echo "- Runner: \`${{ matrix.runner }}\`"
+            echo "- Docker architecture: \`$(docker info --format '{{.Architecture}}')\`"
+            echo "- Docker Engine: \`$(docker version --format '{{.Server.Version}}')\`"
+            echo "- Docker Compose: \`$(docker compose version --short)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
