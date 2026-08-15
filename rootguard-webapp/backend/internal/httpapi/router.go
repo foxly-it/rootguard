@@ -400,5 +400,9 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 
 	})
 
-	return RequireSameOriginWrites(mux)
+	// Same-origin write protection is applied once, by the caller, around
+	// this router together with SessionAuth.Handler - see main.go. Wrapping
+	// it here too would be inert: that outer wrap already rejects any
+	// cross-origin write before it reaches this handler at all.
+	return mux
 }

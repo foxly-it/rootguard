@@ -4,17 +4,18 @@
 // =====================================================
 
 /**
- * Generic API helper
+ * Generic API helper - returns the raw Response, e.g. for a binary body or
+ * response headers that request<T> below can't expose (JSON-only).
  */
-async function request<T>(
-  url: string,
-  options?: RequestInit
-): Promise<T> {
+async function requestRaw(url: string, options?: RequestInit): Promise<Response> {
+  // A FormData body must not get an explicit Content-Type: the browser sets
+  // its own multipart boundary automatically, and overriding it breaks the
+  // upload.
+  const defaultHeaders =
+    options?.body instanceof FormData ? undefined : { "Content-Type": "application/json" };
   const response = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-    },
     ...options,
+    headers: { ...defaultHeaders, ...options?.headers },
   });
 
   if (response.status === 401) {
@@ -26,7 +27,14 @@ async function request<T>(
     throw new Error(detail || `API Error: ${response.status}`);
   }
 
-  return response.json();
+  return response;
+}
+
+/**
+ * Generic API helper
+ */
+async function request<T>(url: string, options?: RequestInit): Promise<T> {
+  return (await requestRaw(url, options)).json();
 }
 
 // =====================================================
@@ -707,12 +715,10 @@ export async function runManualCleanup(): Promise<UpdateCleanupResult> {
 }
 
 export async function exportEncryptedBackup(passphrase: string): Promise<{ blob: Blob; filename: string }> {
-  const response = await fetch("/api/backups/export", {
+  const response = await requestRaw("/api/backups/export", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ passphrase }),
   });
-  if (!response.ok) throw new Error((await response.text()) || "backup_export_failed");
   const disposition = response.headers.get("Content-Disposition") ?? "";
   const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "rootguard-backup.tar.gz.age";
   return { blob: await response.blob(), filename };
@@ -737,15 +743,17 @@ function restoreForm(file: File, passphrase: string, config?: InstallationConfig
 }
 
 export async function previewEncryptedBackup(file: File, passphrase: string, config?: InstallationConfig): Promise<BackupRestorePreview> {
-  const response = await fetch("/api/backups/restore/preview", { method: "POST", body: restoreForm(file, passphrase, config) });
-  if (!response.ok) throw new Error((await response.text()) || "backup_restore_preview_failed");
-  return response.json() as Promise<BackupRestorePreview>;
+  return request<BackupRestorePreview>("/api/backups/restore/preview", {
+    method: "POST",
+    body: restoreForm(file, passphrase, config),
+  });
 }
 
 export async function restoreEncryptedBackup(file: File, passphrase: string, config: InstallationConfig): Promise<InstallationStatus> {
-  const response = await fetch("/api/backups/restore", { method: "POST", body: restoreForm(file, passphrase, config, "RESTORE") });
-  if (!response.ok) throw new Error((await response.text()) || "backup_restore_failed");
-  return response.json() as Promise<InstallationStatus>;
+  return request<InstallationStatus>("/api/backups/restore", {
+    method: "POST",
+    body: restoreForm(file, passphrase, config, "RESTORE"),
+  });
 }
 
 export async function fetchUpdateStatus(): Promise<UpdateStatus> {
