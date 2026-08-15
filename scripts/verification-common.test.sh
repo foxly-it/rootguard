@@ -13,14 +13,32 @@ failures=0
 pass() { echo "PASS: $1"; }
 fail() { echo "FAIL: $1" >&2; failures=$((failures + 1)); }
 
-# Runs body (a snippet of shell code) in one subshell with a fake `docker`
+# Test bodies are real functions, called by name - not strings passed
+# through `eval`. `eval "trap handler EXIT; ..."` turned out to leave the
+# trap's own errexit propagation broken on bash 5.x (this repo's CI
+# runners) in a way it isn't when the exact same code is literal source:
+# a `docker` call inside the trap handler that itself fails silently
+# aborted the whole subshell instead of continuing past its `|| true`,
+# skipping every step after it (observed: cleanup's own teardown call
+# never ran). Reproduced and root-caused against a real bash 5.3 (this
+# repo's local dev bash on macOS is the ancient stock 3.2, which never
+# showed the bug) before settling on named functions as the fix, since
+# that's the one invocation form that behaved identically on both.
+case_guard_refuses() { guard_no_existing_resources; }
+case_guard_passes() { guard_no_existing_resources; }
+case_cleanup_no_ownership() { owns_managed_resources=false; cleanup; }
+case_cleanup_with_ownership() { owns_managed_resources=true; cleanup; }
+case_install_stack_tears_down() { trap cleanup EXIT; install_stack; }
+case_guard_refusal_via_trap() { trap cleanup EXIT; guard_no_existing_resources; }
+
+# Runs case_fn (a function name) in one subshell with a fake `docker`
 # recording every call to docker_log, then asserts the subshell's exit
 # code and, optionally, whether a teardown-style call (rm/volume rm/
 # network rm) happened. Everything lives in a single subshell - no nested
-# `bash -c` - so the fake function and every variable it closes over are
-# naturally in scope without needing export.
+# `bash -c`, no `eval` - so the fake function, every variable it closes
+# over, and case_fn itself are naturally in scope without needing export.
 run_case() {
-  local name="$1" body="$2" expect_exit="$3" expect_teardown="$4" mode="${5:-}"
+  local name="$1" case_fn="$2" expect_exit="$3" expect_teardown="$4" mode="${5:-}"
   local docker_log cookie archive exit_code=0
   docker_log="$(mktemp)"
   cookie="$(mktemp)"
@@ -42,26 +60,45 @@ run_case() {
 
     docker() {
       echo "$*" >>"${docker_log}"
+      # Deliberately `if`/`fi`, not `[[ ]] && { ...; }` as a bare loop-body
+      # statement: under `set -e`, bash treats a failing (false) `&&`-list
+      # used as a plain statement inside a `for` loop as a real command
+      # failure and aborts right there on bash 5.x (observed live; bash
+      # 3.2 tolerated it). `if`'s own condition is exempt from errexit
+      # regardless of its truth value, so this form is safe everywhere.
       if [[ "$1" == "compose" ]]; then
         for arg in "$@"; do
-          [[ "${arg}" == "up" ]] && { [[ "${FAKE_DOCKER_MODE}" == "compose-up-fails" ]] && return 1 || return 0; }
+          if [[ "${arg}" == "up" ]]; then
+            if [[ "${FAKE_DOCKER_MODE}" == "compose-up-fails" ]]; then
+              return 1
+            fi
+            return 0
+          fi
         done
         return 0
       fi
       case "$1 $2" in
         "container inspect")
-          [[ "${FAKE_DOCKER_MODE}" == "existing-container" && "$3" == "rootguard-core" ]] && return 0
+          if [[ "${FAKE_DOCKER_MODE}" == "existing-container" && "$3" == "rootguard-core" ]]; then
+            return 0
+          fi
           return 1 ;;
         "volume inspect") return 1 ;;
         "network inspect") return 1 ;;
       esac
-      [[ "$1" == "info" ]] && { [[ "${FAKE_DOCKER_MODE}" == "arch-mismatch" ]] && echo "{{.Architecture}}" || echo "x86_64"; }
+      if [[ "$1" == "info" ]]; then
+        if [[ "${FAKE_DOCKER_MODE}" == "arch-mismatch" ]]; then
+          echo "{{.Architecture}}"
+        else
+          echo "x86_64"
+        fi
+      fi
       return 0
     }
 
     # shellcheck source=verification-common.sh
     . "${script_dir}/verification-common.sh"
-    eval "${body}"
+    "${case_fn}"
   )
   exit_code=$?
   set -e
@@ -83,23 +120,23 @@ run_case() {
 
 # 1. Existing resource detected -> guard exits 1, no teardown at all.
 run_case "guard refuses on existing container, no teardown" \
-  "guard_no_existing_resources" 1 false "existing-container"
+  case_guard_refuses 1 false "existing-container"
 
 # 2. No existing resources -> guard passes cleanly.
 run_case "guard passes when nothing pre-exists" \
-  "guard_no_existing_resources" 0 false ""
+  case_guard_passes 0 false ""
 
 # 3. cleanup with owns_managed_resources still false (a failure before
 #    install_stack ever marked ownership) must not tear anything down.
 run_case "cleanup before ownership is set removes nothing" \
-  "owns_managed_resources=false; cleanup" 0 false ""
+  case_cleanup_no_ownership 0 false ""
 
 # 4. cleanup with owns_managed_resources true must tear down - this is
 #    exactly the state install_stack now sets *before* `compose up`, so a
 #    `compose up` that starts creating resources and then fails still
 #    gets torn down instead of orphaned (the timing bug this replaces).
 run_case "cleanup after ownership is set tears down" \
-  "owns_managed_resources=true; cleanup" 0 true ""
+  case_cleanup_with_ownership 0 true ""
 
 # 5. install_stack itself, not just cleanup in isolation: a failing
 #    `compose up` must still leave the run torn down rather than orphaned
@@ -108,7 +145,7 @@ run_case "cleanup after ownership is set tears down" \
 #    owns_managed_resources false and any partial resources it created
 #    behind for the next run's guard check to trip over).
 run_case "install_stack tears down after compose up fails" \
-  "trap cleanup EXIT; install_stack" 1 true "compose-up-fails"
+  case_install_stack_tears_down 1 true "compose-up-fails"
 
 # 6. A guard refusal must still clean up the temp cookie/archive files
 #    even though it never touches Docker resources, now that the trap is
@@ -129,8 +166,7 @@ set +e
   }
   # shellcheck source=verification-common.sh
   . "${script_dir}/verification-common.sh"
-  trap cleanup EXIT
-  guard_no_existing_resources
+  case_guard_refusal_via_trap
 )
 exit_code=$?
 set -e
