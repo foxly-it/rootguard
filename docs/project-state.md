@@ -1116,14 +1116,45 @@ and verified per `ROADMAP.md` (every checkbox in each of those sections is
 `[x]`); `v0.1.0-beta.1` is the current public release. The "immediate next
 item" pointer below, describing 0.2 as still open, is historical narrative
 from when that was true - kept for context, not as current direction.
-**Immediate next item when resuming is now 0.9 (release candidate)**: the
-30-day continuous DNS/update/restore endurance test is running unattended
-via `scripts/soak/*.sh` + systemd timers on a dedicated host (see that
-directory's README), started 2026-08-14; the other seven 0.9 checklist
-items (CI matrix gap check for backup/restore, performance/memory medium
-baseline, final accessibility/security review, non-developer documentation
-walkthrough, platform/support-policy freeze, 1.0 migration instructions,
-release-blocking-defect review) are worked in parallel with that clock.
+**0.9 status as of 2026-08-15**: six of eight checklist items are done, see
+`ROADMAP.md`'s own 0.9 section for the full evidence citations per item
+(PRs #274/#276/#277/#279/#280/#281). Summary:
+
+- [x] Fresh install/upgrade/rollback/backup/restore matrix is green - the
+  backup/restore CI gap (previously only mocked-Docker unit tests) is now
+  closed with a real live export/teardown/restore/verify cycle
+  (`scripts/verify-backup-restore.sh` + `backup-restore.yml`).
+- [x] Performance/memory baseline (`docs/performance-baseline.md`).
+- [x] Final accessibility/security review (`docs/
+  accessibility-security-review.md`) - also where this cycle's auth
+  hardening landed: rate limiting no longer trusts `X-Forwarded-For`,
+  password recovery is now failure-safe, logout surfaces persistence
+  errors, the static-file guard no longer misreads `[ ] * ?` as glob
+  patterns.
+- [x] Documentation walkthrough - caught a leftover "Alpha" mention the
+  earlier grep-based sweep missed (inside a `<pre><code>` block, not a
+  `data-de` string) plus a confusing unset-variable-looking placeholder.
+- [x] Platform/support policy frozen (`docs/platform-support.md`).
+- [ ] **In progress**: the 30-day endurance test itself
+  (`scripts/soak/*.sh` + systemd timers on a dedicated host, started
+  2026-08-14, 100% probe pass rate so far) - closes around 2026-09-13
+  ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
+- [ ] **Deferred on purpose**: release-blocking-defect review (do it once,
+  right before cutting `1.0.0-rc.1`, not now) and the 1.0 migration
+  guide (the mechanism is already built/tested/documented, but 1.0.0's
+  own 10 checklist items aren't final yet - writing version-specific
+  instructions now would risk describing a release that doesn't exist).
+
+Also found and fixed along the way, not originally part of any checklist:
+`.env.alpha.example` had been silently stale since `v0.1.0-alpha.5` (PR
+#70) - `update-alpha-pins` only ever updated `compose.alpha.yaml`'s own
+pins, so every release from alpha.6 through the current beta.1 shipped a
+documented quick start that deployed alpha.5 images regardless of the
+release name. Fixed going forward plus a retroactive correction and tag
+move for the already-published `v0.1.0-beta.1` tag (PR #270). The LICENSE
+file was also a hand-written paraphrase of AGPL-3.0 instead of the actual
+license text, which is why GitHub's license detector showed "unknown" -
+replaced with the full canonical text (PR #273).
 
 ---
 
