@@ -19,6 +19,7 @@
 set -Eeuo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 . ./common.sh
+soak_acquire_mutation_lock
 
 ts="$(soak_now)"
 archive="${ROOTGUARD_SOAK_DIR}/drill-backup.age"

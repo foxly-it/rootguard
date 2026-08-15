@@ -6,24 +6,20 @@ on:
       - "compose.alpha.yaml"
       - ".env.alpha.example"
       - "scripts/verify-backup-restore.sh"
+      - "scripts/verification-common.sh"
       - ".github/workflows/backup-restore.yml"
-      - "rootguard-core/internal/backupexport/**"
-      - "rootguard-core/internal/backuprestore/**"
-      - "rootguard-core/internal/api/backup_restore.go"
-      - "rootguard-core/internal/api/backups.go"
-      - "rootguard-core/internal/installer/**"
+      - "rootguard-core/**"
+      - "rootguard-webapp/**"
   push:
     branches: [main]
     paths:
       - "compose.alpha.yaml"
       - ".env.alpha.example"
       - "scripts/verify-backup-restore.sh"
+      - "scripts/verification-common.sh"
       - ".github/workflows/backup-restore.yml"
-      - "rootguard-core/internal/backupexport/**"
-      - "rootguard-core/internal/backuprestore/**"
-      - "rootguard-core/internal/api/backup_restore.go"
-      - "rootguard-core/internal/api/backups.go"
-      - "rootguard-core/internal/installer/**"
+      - "rootguard-core/**"
+      - "rootguard-webapp/**"
   workflow_dispatch:
 
 permissions:
@@ -45,7 +41,7 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
 
@@ -54,9 +50,23 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes dnsutils
 
+      # Backup/restore logic lives in both rootguard-core (backupexport,
+      # backuprestore, installer) and rootguard-webapp (the HTTP proxy and
+      # multipart handling for it) - building both from this checkout,
+      # rather than letting the test fall through to the pinned published
+      # images, is what makes this job actually test the pull request
+      # instead of just re-testing the last release on every run.
+      - name: Build rootguard-core from this checkout
+        run: docker build -t rootguard-core:e2e ./rootguard-core
+
+      - name: Build rootguard-webapp from this checkout
+        run: docker build -t rootguard-webapp:e2e ./rootguard-webapp
+
       - name: Verify backup export and restore
         env:
           ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
+          ROOTGUARD_CORE_IMAGE: rootguard-core:e2e
+          ROOTGUARD_WEBAPP_IMAGE: rootguard-webapp:e2e
         run: ./scripts/verify-backup-restore.sh
 
       - name: Record platform evidence

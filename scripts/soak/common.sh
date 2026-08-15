@@ -9,10 +9,30 @@
 : "${ROOTGUARD_SOAK_DNS_PORT:=53}"
 : "${ROOTGUARD_SOAK_LOG_DIR:=/var/log/rootguard-soak}"
 : "${ROOTGUARD_SOAK_COOKIE_JAR:=${ROOTGUARD_SOAK_DIR}/cookies.txt}"
+: "${ROOTGUARD_SOAK_MUTATION_LOCK:=/run/lock/rootguard-soak-mutation.lock}"
 
 mkdir -p "$ROOTGUARD_SOAK_LOG_DIR"
 
 soak_now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+# soak_acquire_mutation_lock ensures only one mutating exercise
+# (update-exercise.sh, backup-restore-drill.sh) runs at a time. Without it,
+# an overlapping update-exercise and backup-restore-drill fight over the
+# same containers and cookie jar - one can be mid-swap of Core/WebApp while
+# the other tears the whole stack down, and both get logged as a failure
+# that's actually just the two racing each other, or worse leave the host
+# in a hard-to-diagnose in-between state. Exits 0 (not a failure) when the
+# lock is already held, since that just means the other exercise is doing
+# its job and this run should quietly defer to it. probe.sh deliberately
+# does NOT take this lock - it already tolerates the brief restart window
+# either mutating exercise causes.
+soak_acquire_mutation_lock() {
+  exec 9>"$ROOTGUARD_SOAK_MUTATION_LOCK"
+  if ! flock -n 9; then
+    echo "Another soak mutation exercise is already running, skipping this run" >&2
+    exit 0
+  fi
+}
 
 soak_admin_password() {
   grep -E '^ROOTGUARD_ADMIN_PASSWORD=' "$ROOTGUARD_SOAK_ENV" | head -1 | cut -d= -f2-
