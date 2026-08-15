@@ -7,6 +7,11 @@ dedicated, long-lived host against a real `v0.1.0-*` release deployed from
 Claude session.
 
 - `common.sh` - shared login/call/log helpers, sourced by the others.
+  Also provides `soak_acquire_mutation_lock`, used by the two mutating
+  exercises below (not `probe.sh`, which is read-only and already
+  tolerates the brief restart window either one causes) so an
+  update-exercise and a backup-restore-drill overlapping in time can't
+  fight over the same containers and cookie jar.
 - `probe.sh` - every ~10 min: DNS resolution, DNSSEC rejection, AdGuard
   filtering, WebGUI liveness, and per-container `docker stats` (doubles as
   the "small network" performance/memory baseline data). Logs to
