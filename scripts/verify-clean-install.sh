@@ -14,10 +14,11 @@ cookie_file="$(mktemp "${TMPDIR:-/tmp}/rootguard-clean-install.XXXXXX")"
 
 require_commands curl dig docker jq
 
-# Must run before the cleanup trap is registered - see
-# verification-common.sh's own comment on guard_no_existing_resources.
-guard_no_existing_resources
+# Registered before the guard check: cleanup is safe to run at any point
+# (see its own comment in verification-common.sh) and this way a guard
+# refusal also removes the temp cookie file instead of leaking it.
 trap cleanup EXIT
+guard_no_existing_resources
 
 normalized_arch="$(detect_arch)"
 export ROOTGUARD_API_TOKEN="clean-install-api-token-${normalized_arch}"
