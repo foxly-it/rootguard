@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -122,7 +123,21 @@ func NewSessionAuth(expectedUser, expectedPassword, recoveryToken string, ttl ti
 	auth.loadCredentials()
 	auth.loadSessions()
 	auth.loadAudit()
+	go auth.sweepLimitersPeriodically()
 	return auth
+}
+
+// sweepLimitersPeriodically bounds long-run memory growth from rate-limiter
+// keys that are only ever queried once (see rateLimiter.sweep) - runs for
+// the lifetime of the process, same as the server itself.
+func (a *SessionAuth) sweepLimitersPeriodically() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		a.loginLimiter.sweep()
+		a.recoveryLimiter.sweep()
+		a.destructiveLimiter.sweep()
+	}
 }
 
 func (a *SessionAuth) Handler(next http.Handler) http.Handler {
@@ -183,7 +198,8 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	}
 
 	remoteIP := clientAddress(r)
-	if a.recoveryLimiter.blocked(remoteIP) {
+	limiterKey := rateLimitKey(r)
+	if a.recoveryLimiter.blocked(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
@@ -198,7 +214,7 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	}
 	tokenHash := sha256.Sum256([]byte(input.RecoveryToken))
 	if subtle.ConstantTimeCompare(tokenHash[:], a.recoveryTokenHash[:]) != 1 {
-		a.recoveryLimiter.recordFailure(remoteIP)
+		a.recoveryLimiter.recordFailure(limiterKey)
 		a.recordAudit(auditRecoveryFailure, "", remoteIP)
 		time.Sleep(250 * time.Millisecond)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_recovery_token"})
@@ -214,22 +230,37 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unable to secure credentials", http.StatusInternalServerError)
 		return
 	}
+	// Order matters for failure safety: apply and persist the session wipe
+	// first, then the new password, rolling each back individually on a
+	// write failure - so a partial failure can only ever leave the *old*
+	// password in effect (safe: sessions get needlessly cleared, forcing a
+	// re-login, never a security regression) and can never leave a *new*
+	// password active in memory without it having actually reached disk.
+	// The previous unconditional order (mutate both, then persist both)
+	// could do the opposite: hold a new password in memory that failed to
+	// persist (reverts on restart while accepted until then), or persist
+	// the new password while a stale sessions.json survives to revive
+	// invalidated sessions after a future restart.
 	a.mu.Lock()
-	a.expectedPasswordHash = passwordHash
-	a.passwordSalt = passwordSalt
-	clear(a.sessions)
-	if err := a.persistCredentialsLocked(); err != nil {
-		a.mu.Unlock()
-		http.Error(w, "Unable to persist credentials", http.StatusInternalServerError)
-		return
-	}
+	oldSessions := a.sessions
+	a.sessions = make(map[string]session)
 	if err := a.persistLocked(); err != nil {
+		a.sessions = oldSessions
 		a.mu.Unlock()
 		http.Error(w, "Unable to invalidate sessions", http.StatusInternalServerError)
 		return
 	}
+	oldPasswordHash, oldPasswordSalt := a.expectedPasswordHash, a.passwordSalt
+	a.expectedPasswordHash = passwordHash
+	a.passwordSalt = passwordSalt
+	if err := a.persistCredentialsLocked(); err != nil {
+		a.expectedPasswordHash, a.passwordSalt = oldPasswordHash, oldPasswordSalt
+		a.mu.Unlock()
+		http.Error(w, "Unable to persist credentials", http.StatusInternalServerError)
+		return
+	}
 	a.mu.Unlock()
-	a.recoveryLimiter.reset(remoteIP)
+	a.recoveryLimiter.reset(limiterKey)
 	a.recordAudit(auditRecoverySuccess, "", remoteIP)
 	writeJSON(w, http.StatusOK, map[string]bool{"reset": true})
 }
@@ -257,7 +288,8 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	remoteIP := clientAddress(r)
-	if a.loginLimiter.blocked(remoteIP) {
+	limiterKey := rateLimitKey(r)
+	if a.loginLimiter.blocked(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
@@ -281,13 +313,13 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 		err == nil &&
 		subtle.ConstantTimeCompare(passwordHash, expectedPasswordHash) == 1
 	if !valid {
-		a.loginLimiter.recordFailure(remoteIP)
+		a.loginLimiter.recordFailure(limiterKey)
 		a.recordAudit(auditLoginFailure, input.Username, remoteIP)
 		time.Sleep(250 * time.Millisecond)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_credentials"})
 		return
 	}
-	a.loginLimiter.reset(remoteIP)
+	a.loginLimiter.reset(limiterKey)
 	a.recordAudit(auditLoginSuccess, input.Username, remoteIP)
 
 	token, err := randomSessionToken()
@@ -333,8 +365,17 @@ func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
 		entry, existed := a.sessions[cookie.Value]
 		delete(a.sessions, cookie.Value)
-		_ = a.persistLocked()
+		persistErr := a.persistLocked()
 		a.mu.Unlock()
+		// Mirrors handleRevokeSession: a failed persist here can leave a
+		// stale sessions.json that revives this exact session on the next
+		// restart, even though the browser's own cookie is already gone -
+		// worth surfacing as an error rather than silently reporting a
+		// clean logout that isn't durable yet.
+		if persistErr != nil {
+			http.Error(w, "Unable to persist session revocation", http.StatusInternalServerError)
+			return
+		}
 		if existed {
 			a.recordAudit(auditLogout, entry.Username, clientAddress(r))
 		}
@@ -615,11 +656,10 @@ func requestIsHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-// clientAddress is purely descriptive - shown in the session inventory so
-// an operator can recognize their own devices - never used for any
-// access-control decision, so trusting a client-spoofable header here (when
-// no reverse proxy overwrites it first) carries none of the risk it would
-// for an actual security check.
+// clientAddress is purely descriptive - shown in the session inventory and
+// audit log so an operator can recognize their own devices - never used for
+// any access-control decision. See rateLimitKey for the address actually
+// used to make a decision.
 func clientAddress(r *http.Request) string {
 	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 		if first, _, ok := strings.Cut(forwarded, ","); ok {
@@ -628,6 +668,23 @@ func clientAddress(r *http.Request) string {
 		return strings.TrimSpace(forwarded)
 	}
 	return r.RemoteAddr
+}
+
+// rateLimitKey is the actual TCP peer address, used to key every rate
+// limiter. Unlike clientAddress, this must never trust a client-controlled
+// header: RootGuard's WebApp container publishes its port directly (no
+// built-in reverse proxy hop), and none of the documented reverse-proxy
+// setups (docs/https-reverse-proxy.md) ask an operator to forward
+// X-Forwarded-For - only X-Forwarded-Proto, for the session cookie's Secure
+// flag. Trusting X-Forwarded-For here would let a caller send a different
+// value on every request, both bypassing the limit entirely and growing the
+// limiter's failure map without bound.
+func rateLimitKey(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

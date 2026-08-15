@@ -23,7 +23,9 @@ package httpapi
 
 import (
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/api"
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
@@ -370,7 +372,7 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 
 		// If request is API → ignore
-		if len(r.URL.Path) >= 4 && r.URL.Path[:4] == "/api" {
+		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)
 			return
 		}
@@ -388,7 +390,7 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		}
 
 		assetPath := filepath.Join("web", filepath.Clean(r.URL.Path))
-		if info, err := filepath.Glob(assetPath); err == nil && len(info) > 0 {
+		if _, err := os.Stat(assetPath); err == nil {
 			fileServer.ServeHTTP(w, r)
 			return
 		}
