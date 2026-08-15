@@ -1156,6 +1156,25 @@ file was also a hand-written paraphrase of AGPL-3.0 instead of the actual
 license text, which is why GitHub's license detector showed "unknown" -
 replaced with the full canonical text (PR #273).
 
+**2026-08-15:** real end-user feedback (first-ever Docker Compose user)
+surfaced two more issues, tracked and fixed together
+([rootguard#286](https://github.com/foxly-it/rootguard/issues/286)). First,
+a deploy failed with "address already in use" on port 53 even though the
+`dns_port_available` preflight check re-runs server-side immediately before
+`compose up -d` - a `docker ps`-based check can't see a just-stopped
+container's port-53 socket (or a lingering `docker-proxy` process) that
+hasn't fully released yet, a transient race no point-in-time check can rule
+out. `deploy()`/`restoreDeploy()` now retry `compose up -d` up to 3 times
+(2s apart) specifically for that error class instead of failing outright.
+Second, the user read the Backups page's HTTP-transport warning as an
+outright refusal to export ("das verweigert er mir, wegen fehlendem https
+Protokoll") - there is no such block anywhere in the stack (checked
+frontend button state, backend handlers, and the session cookie's `Secure`
+flag), so the warning text was reworded to lead with "note, not a blocker."
+Also fixed stale `site/docs.html` copy describing the occupied-port check
+and collapsible technical-details UI as "next release" when both already
+shipped in `v0.1.0-beta.1`.
+
 ---
 
 0.2's conflict-detection checkbox

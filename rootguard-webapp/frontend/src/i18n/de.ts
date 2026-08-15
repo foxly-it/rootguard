@@ -278,7 +278,7 @@ export const de: LocaleDefinition = {
     "stack.exportEyebrow": "PORTABLES WIEDERHERSTELLUNGSARCHIV",
     "stack.exportTitle": "Verschlüsseltes Vollbackup",
     "stack.exportIntro": "Lade RootGuards Konfiguration sowie die live persistenten Daten von AdGuard Home und Unbound als passwortverschlüsseltes age-Archiv herunter. Sitzungen und externe Umgebungsgeheimnisse sind ausgeschlossen.",
-    "stack.exportTransportWarning": "Diese Seite verwendet HTTP. Das Archiv ist verschlüsselt, das Passwort wird jedoch ohne HTTPS-Transportschutz an diesen lokalen Server übertragen.",
+    "stack.exportTransportWarning": "Hinweis, kein Hindernis: Der Export funktioniert auch über HTTP. Diese Seite verwendet HTTP, daher wird das Backup-Passwort ohne zusätzlichen HTTPS-Transportschutz an diesen lokalen Server übertragen – im eigenen lokalen Netzwerk unbedenklich. Das Archiv selbst ist ohnehin verschlüsselt.",
     "stack.exportPassphrase": "Backup-Passwort",
     "stack.exportPassphraseHelp": "Mindestens 12 Zeichen. Verwende ein einmaliges, langes Passwort.",
     "stack.exportPassphraseConfirm": "Backup-Passwort bestätigen",
