@@ -86,6 +86,7 @@
             <h2 data-de="Bevor du beginnst" data-en="Before you begin">Bevor du beginnst</h2>
             <ul class="checklist">
               <li data-de="Docker Engine oder Docker Desktop mit Docker Compose v2" data-en="Docker Engine or Docker Desktop with Docker Compose v2">Docker Engine oder Docker Desktop mit Docker Compose v2</li>
+              <li data-de="Empfohlen mindestens 2 vCPU und 2 GB RAM für den Docker-Host" data-en="At least 2 vCPUs and 2 GB RAM recommended for the Docker host">Empfohlen mindestens 2 vCPU und 2 GB RAM für den Docker-Host</li>
               <li data-de="Eine feste LAN-IP oder DHCP-Reservierung für den RootGuard-Host" data-en="A fixed LAN IP or DHCP reservation for the RootGuard host">Eine feste LAN-IP oder DHCP-Reservierung für den RootGuard-Host</li>
               <li data-de="Freier TCP- und UDP-Port 53 auf der gewählten Host-Adresse" data-en="Available TCP and UDP port 53 on the selected host address">Freier TCP- und UDP-Port 53 auf der gewählten Host-Adresse</li>
               <li data-de="Git für das Repository" data-en="Git for the repository">Git für das Repository</li>
@@ -234,11 +235,11 @@ docker compose -f compose.alpha.yaml logs --tail=200 core webapp updater
 # Control Plane neu starten
 docker compose -f compose.alpha.yaml restart core webapp updater
 
-# Gestoppte Alpha wieder starten
+# Gestoppten Stack wieder starten
 docker compose -f compose.alpha.yaml start
 
 # DNS testen
-dig @ROOTGUARD_LAN_IP example.com A</code></pre></div>
+dig @192.168.178.10 example.com A  # durch die eigene Host-IP ersetzen</code></pre></div>
             <p data-de="Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entferne Volumes nicht mit docker compose down --volumes, solange du keine bewusste Neuinstallation durchführen willst." data-en="Configuration and installation state is stored in named Docker volumes. Do not remove volumes with docker compose down --volumes unless you intentionally want a clean installation.">Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entferne Volumes nicht mit docker compose down --volumes, solange du keine bewusste Neuinstallation durchführen willst.</p>
             <div class="manual-callout warning"><b data-de="Saubere Neuinstallation" data-en="Clean reinstall">Saubere Neuinstallation</b><span data-de="Der Setup-Controller erzeugt zusätzliche benannte DNS-Volumes außerhalb der Control-Plane-Compose. Ein normales Stoppen löscht keine Daten. Entferne Container und Volumes nur bewusst nach einem Backup und anhand der versionsgleichen Release-Hinweise." data-en="Setup creates additional named DNS volumes outside the control-plane Compose project. A normal stop deletes no data. Remove containers and volumes only intentionally, after a backup, and by following the matching release notes.">Der Setup-Controller erzeugt zusätzliche benannte DNS-Volumes außerhalb der Control-Plane-Compose. Ein normales Stoppen löscht keine Daten. Entferne Container und Volumes nur bewusst nach einem Backup und anhand der versionsgleichen Release-Hinweise.</span></div>
           </section>
