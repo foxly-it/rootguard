@@ -1068,14 +1068,78 @@ number.
 
 Goal: freeze features and prove reliability.
 
-- [ ] No unresolved release-blocking defect
-- [ ] Thirty-day continuous DNS test with update and restore exercises
-- [ ] Fresh install, upgrade, rollback, backup, and restore matrix is green
-- [ ] Performance and memory baselines for small and medium networks
-- [ ] Final accessibility and security review
-- [ ] Documentation tested by a user without development context
-- [ ] Supported platforms, limitations, and support policy frozen
-- [ ] Versioned 1.0 migration and rollback instructions complete
+- [ ] No unresolved release-blocking defect - deferred to a final `gh issue
+      list` sweep immediately before cutting `1.0.0-rc.1`, not before; doing
+      it earlier would just need repeating.
+- [ ] Thirty-day continuous DNS test with update and restore exercises -
+      **in progress**, started 2026-08-14 on a dedicated host
+      (`scripts/soak/*.sh` + systemd timers, see that directory's README).
+      Live status as of 2026-08-15: 100% probe pass rate (DNS resolution,
+      DNSSEC rejection, AdGuard filtering, WebGUI liveness), one clean
+      update-exercise cycle, one clean backup/restore drill with no
+      fallback needed. Closes with the final `report.sh` rollup around
+      2026-09-13 ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
+- [x] Fresh install, upgrade, rollback, backup, and restore matrix is green -
+      fresh install (`clean-install.yml`), upgrade
+      (`release-alpha.yml`'s `upgrade-test`), and rollback
+      (`ci-core.yml`/`ci-updater.yml`'s rollback-integration jobs) already
+      had real CI coverage against live containers; backup/restore only had
+      unit tests against a mocked `docker` command runner until now. Added
+      `scripts/verify-backup-restore.sh` + `backup-restore.yml`, mirroring
+      `verify-clean-install.sh`'s own conventions, running a real
+      export → teardown → fresh install → restore → verify-DNS cycle on
+      `amd64`/`arm64` GitHub-hosted runners
+      ([rootguard#276](https://github.com/foxly-it/rootguard/pull/276)).
+- [x] Performance and memory baselines for small and medium networks -
+      `docs/performance-baseline.md`. Small network: passive `docker
+      stats` sampling from the endurance test's own probe (100% pass rate
+      at write time). Medium network (defined here as 20 sustained QPS,
+      since no prior definition existed): a live `dnsperf` run against the
+      running instance, 95.9% completion, sub-millisecond average latency,
+      no leak signature
+      ([rootguard#277](https://github.com/foxly-it/rootguard/pull/277)).
+- [x] Final accessibility and security review - `docs/
+      accessibility-security-review.md`. `@axe-core/playwright` against a
+      real `v0.1.0-beta.1` instance, all 11 routes (including the three
+      Unbound sub-sections, specifically re-checked since that's where the
+      0.5 audit's real bugs were) x both themes = 22 scans, 0 violations.
+      Security: every mutating route cross-referenced against
+      `guardDestructive` coverage, a common-anti-pattern sweep (TLS bypass,
+      shell-interpolated `exec`, `dangerouslySetInnerHTML`, `eval`,
+      hardcoded credentials - all clean), and a threat-model currency
+      check. Builds on this cycle's own auth hardening: rate limiting no
+      longer trusts `X-Forwarded-For` (bypass + unbounded memory growth),
+      password recovery writes are now failure-safe (sessions-then-
+      credentials ordering with rollback on either write failing), logout
+      surfaces persistence errors like session revocation already did, and
+      the static-file guard no longer misinterprets `[ ] * ?` as glob
+      patterns
+      ([rootguard#274](https://github.com/foxly-it/rootguard/pull/274),
+      [#279](https://github.com/foxly-it/rootguard/pull/279)).
+- [x] Documentation tested by a user without development context - a
+      fresh read-through of the public `docs.html` manual (Requirements
+      through Operations) surfaced three real issues: a leftover "Gestoppte
+      Alpha wieder starten" from the alpha→beta sweep that grep missed
+      because it's inside a `<pre><code>` block rather than a
+      `data-de`/`data-en` string, a `dig @ROOTGUARD_LAN_IP` example that
+      read as a real shell variable nobody ever told the reader to set, and
+      no CPU/RAM guidance in the Requirements checklist. All three fixed
+      ([rootguard#281](https://github.com/foxly-it/rootguard/pull/281)).
+- [x] Supported platforms, limitations, and support policy frozen -
+      `docs/platform-support.md` extended with explicit supported-platform
+      statements, minimum requirements grounded in the real
+      performance-baseline numbers (2 vCPU/2 GB as the practical floor,
+      not a guess), known limitations cross-referencing the docs that
+      already cover each in depth, and a pre-1.0 support policy that's
+      explicitly deferred to a real support window once 1.0 ships
+      ([rootguard#280](https://github.com/foxly-it/rootguard/pull/280)).
+- [ ] Versioned 1.0 migration and rollback instructions complete -
+      deliberately deferred: the underlying mechanism (the control-plane
+      updater's upgrade/rollback path) is already fully built, tested, and
+      documented, but 1.0.0 itself still has 10 open checklist items below
+      that could still change its exact shape. Writing version-specific
+      migration instructions now would risk describing a release that
+      doesn't exist yet - stays open until 1.0's scope is actually final.
 
 Exit: publish `1.0.0-rc.1`; only bug fixes and documentation may follow.
 
