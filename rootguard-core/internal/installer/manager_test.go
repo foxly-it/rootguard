@@ -126,6 +126,58 @@ func TestPreflightReportsOccupiedDockerDNSPort(t *testing.T) {
 	}
 }
 
+// TestRunComposeUpRetriesTransientPortBindConflict covers the race a static
+// `docker ps` preflight check cannot rule out: a container that just
+// stopped can hold its published port for a moment after it's gone from
+// `docker ps`, so the very next `up -d` on that port needs a short retry
+// instead of failing the whole deployment outright.
+func TestRunComposeUpRetriesTransientPortBindConflict(t *testing.T) {
+	var attempts int
+	manager := NewManager(Options{
+		DataDir:                t.TempDir(),
+		ComposeUpRetryAttempts: 3,
+		ComposeUpRetryDelay:    time.Millisecond,
+		Run: func(_ context.Context, _ ...string) ([]byte, error) {
+			attempts++
+			if attempts < 3 {
+				return nil, errors.New("Bind for 0.0.0.0:53 failed: port is already allocated")
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	if _, err := manager.runComposeUp(context.Background(), "compose", "up", "-d"); err != nil {
+		t.Fatalf("expected the third attempt to succeed, got: %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected exactly 3 attempts, got %d", attempts)
+	}
+}
+
+// TestRunComposeUpDoesNotRetryUnrelatedErrors ensures the retry is scoped
+// to the specific transient port-bind race - any other failure (a bad
+// image reference, a misconfigured mount, ...) must fail immediately
+// rather than silently retrying and delaying the user's error by seconds.
+func TestRunComposeUpDoesNotRetryUnrelatedErrors(t *testing.T) {
+	var attempts int
+	manager := NewManager(Options{
+		DataDir:                t.TempDir(),
+		ComposeUpRetryAttempts: 3,
+		ComposeUpRetryDelay:    time.Millisecond,
+		Run: func(_ context.Context, _ ...string) ([]byte, error) {
+			attempts++
+			return nil, errors.New("no such image: adguard:missing")
+		},
+	})
+
+	if _, err := manager.runComposeUp(context.Background(), "compose", "up", "-d"); err == nil {
+		t.Fatal("expected the unrelated error to be returned")
+	}
+	if attempts != 1 {
+		t.Fatalf("expected exactly 1 attempt for a non-port-bind error, got %d", attempts)
+	}
+}
+
 func TestDeploymentErrorsUseStableDiagnosticCodes(t *testing.T) {
 	tests := []struct {
 		phase string

@@ -89,20 +89,27 @@ type Options struct {
 	DNSNetworkCIDR   string
 	Run              CommandRunner
 	Bootstrap        BootstrapFunc
+	// ComposeUpRetryAttempts/ComposeUpRetryDelay bound retries of a
+	// transient port-bind race on `compose up` (see runComposeUp). Default
+	// to 3 attempts / 2s when unset; tests may override for faster runs.
+	ComposeUpRetryAttempts int
+	ComposeUpRetryDelay    time.Duration
 }
 
 type Manager struct {
-	mu               sync.RWMutex
-	status           Status
-	dataDir          string
-	coreContainer    string
-	unboundImage     string
-	adGuardImage     string
-	adGuardBetaImage string
-	blockpageImage   string
-	dnsNetworkCIDR   string
-	run              CommandRunner
-	bootstrap        BootstrapFunc
+	mu                     sync.RWMutex
+	status                 Status
+	dataDir                string
+	coreContainer          string
+	unboundImage           string
+	adGuardImage           string
+	adGuardBetaImage       string
+	blockpageImage         string
+	dnsNetworkCIDR         string
+	run                    CommandRunner
+	bootstrap              BootstrapFunc
+	composeUpRetryAttempts int
+	composeUpRetryDelay    time.Duration
 }
 
 func NewManager(options Options) *Manager {
@@ -112,16 +119,24 @@ func NewManager(options Options) *Manager {
 	if options.Bootstrap == nil {
 		options.Bootstrap = func(context.Context, string) error { return nil }
 	}
+	if options.ComposeUpRetryAttempts <= 0 {
+		options.ComposeUpRetryAttempts = 3
+	}
+	if options.ComposeUpRetryDelay <= 0 {
+		options.ComposeUpRetryDelay = 2 * time.Second
+	}
 	manager := &Manager{
-		dataDir:          options.DataDir,
-		coreContainer:    options.CoreContainer,
-		unboundImage:     options.UnboundImage,
-		adGuardImage:     options.AdGuardImage,
-		adGuardBetaImage: options.AdGuardBetaImage,
-		blockpageImage:   options.BlockpageImage,
-		dnsNetworkCIDR:   options.DNSNetworkCIDR,
-		run:              options.Run,
-		bootstrap:        options.Bootstrap,
+		dataDir:                options.DataDir,
+		coreContainer:          options.CoreContainer,
+		unboundImage:           options.UnboundImage,
+		adGuardImage:           options.AdGuardImage,
+		adGuardBetaImage:       options.AdGuardBetaImage,
+		blockpageImage:         options.BlockpageImage,
+		dnsNetworkCIDR:         options.DNSNetworkCIDR,
+		run:                    options.Run,
+		bootstrap:              options.Bootstrap,
+		composeUpRetryAttempts: options.ComposeUpRetryAttempts,
+		composeUpRetryDelay:    options.ComposeUpRetryDelay,
 		status: Status{
 			State:     StateNotInstalled,
 			Steps:     []Step{},
@@ -358,7 +373,7 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 	}
 	_ = m.setStep("restore", "done", "Verified backup data is restored")
 	_ = m.setStep("start", "running", "Starting restored Unbound and AdGuard Home")
-	if _, err = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
+	if _, err = m.runComposeUp(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
 		return fail("start", err)
 	}
 	_ = m.setStep("start", "done", "Restored DNS containers are running")
@@ -421,7 +436,7 @@ func (m *Manager) deploy(config Config) {
 	_ = m.setStep("pull", "done", "Service images are available")
 
 	_ = m.setStep("start", "running", "Starting Unbound and AdGuard Home")
-	if _, err := m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
+	if _, err := m.runComposeUp(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
 		m.fail("start", fmt.Errorf("start RootGuard DNS stack: %w", err))
 		return
 	}
@@ -776,8 +791,7 @@ func classifyDeploymentError(phase string, err error) Diagnostic {
 		diagnostic.Code = "host_address_unavailable"
 		diagnostic.Message = "The selected DNS address is not available on the Docker host."
 		diagnostic.Action = "Choose an IPv4 address assigned to this host or use 0.0.0.0, then retry."
-	case strings.Contains(lower, "port is already allocated") || strings.Contains(lower, "address already in use") ||
-		(strings.Contains(lower, "bind") && strings.Contains(lower, "port")):
+	case isPortBindConflict(lower):
 		diagnostic.Code = "dns_port_occupied"
 		diagnostic.Message = "The selected DNS port is already in use."
 		diagnostic.Action = "Stop or reconfigure the conflicting DNS service, then retry the deployment."
@@ -800,6 +814,34 @@ func classifyDeploymentError(phase string, err error) Diagnostic {
 func validNetworkConfig(config Config) bool {
 	ip := net.ParseIP(config.DNSBindAddress)
 	return ip != nil && ip.To4() != nil && config.DNSPort >= 1 && config.DNSPort <= 65535
+}
+
+func isPortBindConflict(lowerErr string) bool {
+	return strings.Contains(lowerErr, "port is already allocated") || strings.Contains(lowerErr, "address already in use") ||
+		(strings.Contains(lowerErr, "bind") && strings.Contains(lowerErr, "port"))
+}
+
+// runComposeUp absorbs a transient port-bind race that no preflight check
+// can rule out ahead of time: a container that just stopped can leave its
+// published port's kernel socket (or a lingering docker-proxy process) held
+// for a moment after `docker ps` - and even Preflight's own docker-ps-based
+// port check - already show it as gone, so the very next `up -d` for the
+// same port can still lose the bind.
+func (m *Manager) runComposeUp(ctx context.Context, args ...string) ([]byte, error) {
+	var output []byte
+	var err error
+	for attempt := 1; attempt <= m.composeUpRetryAttempts; attempt++ {
+		output, err = m.run(ctx, args...)
+		if err == nil || attempt == m.composeUpRetryAttempts || !isPortBindConflict(strings.ToLower(err.Error())) {
+			return output, err
+		}
+		select {
+		case <-ctx.Done():
+			return output, ctx.Err()
+		case <-time.After(m.composeUpRetryDelay):
+		}
+	}
+	return output, err
 }
 
 var publishedPortPattern = regexp.MustCompile(`([0-9.]+|\[::\]):([0-9]+)->[0-9]+/(?:tcp|udp)`)

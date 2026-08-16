@@ -278,7 +278,7 @@ export const en: LocaleDefinition = {
     "stack.exportEyebrow": "PORTABLE RECOVERY ARCHIVE",
     "stack.exportTitle": "Encrypted full backup",
     "stack.exportIntro": "Download RootGuard configuration plus live persistent AdGuard Home and Unbound data as a passphrase-encrypted age archive. Sessions and external environment secrets are excluded.",
-    "stack.exportTransportWarning": "This page is using HTTP. The archive is encrypted, but the passphrase travels to this local server without HTTPS transport protection.",
+    "stack.exportTransportWarning": "A note, not a blocker: the export still works over HTTP. This page is using HTTP, so the passphrase travels to this local server without extra HTTPS transport protection – fine on your own local network. The archive itself is encrypted either way.",
     "stack.exportPassphrase": "Backup passphrase",
     "stack.exportPassphraseHelp": "At least 12 characters. Use a unique, long passphrase.",
     "stack.exportPassphraseConfirm": "Confirm passphrase",
