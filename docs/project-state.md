@@ -1205,6 +1205,15 @@ changes; the help text under the field now explains the pre-fill and that
 `0.0.0.0` remains available to bind every host address instead. Suggested
 directly by foxly-it
 ([rootguard#290](https://github.com/foxly-it/rootguard/issues/290)).
+A follow-up audit pass caught the help text overclaiming - it read as if a
+LAN address is always pre-filled, when a hostname/`localhost`/IPv6 access
+still falls back to `0.0.0.0` - reworded to "if opened over an IPv4
+address" in both languages. `detectDefaultBindAddress` also moved out of
+`Setup.tsx` into `src/utils/network.ts` with its first real unit tests -
+the frontend had no test runner at all until now; added a minimal Vitest
+setup (`npm test`, wired into `ci-webapp.yml`) rather than growing a
+second, uncoordinated test convention alongside the existing Playwright/
+axe-core E2E suite.
 
 ---
 

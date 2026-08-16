@@ -133,7 +133,7 @@ export const en: LocaleDefinition = {
     "setup.network": "Network binding",
     "setup.networkHelp": "The address must already exist on the Docker host.",
     "setup.address": "DNS bind address",
-    "setup.addressHelp": "The detected LAN address of this device is pre-filled. Use 0.0.0.0 instead to listen on every host address.",
+    "setup.addressHelp": "If RootGuard was opened over an IPv4 address, it's pre-filled. Use 0.0.0.0 to listen on every host address.",
     "setup.port": "DNS port",
     "setup.portHelp": "Routers and clients normally require port 53.",
     "setup.channel.title": "AdGuard Home version",
