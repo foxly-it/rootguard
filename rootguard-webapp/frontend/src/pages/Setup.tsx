@@ -20,9 +20,26 @@ const defaultConfig: InstallationConfig = {
   blockpage_enabled: true,
 };
 
+// The browser already reached this page over the host's LAN IP (RootGuard's
+// documented access pattern is http://<host-LAN-IP>:8080, not localhost) -
+// window.location.hostname is that address, so it's a better setup default
+// than 0.0.0.0. Falls back to 0.0.0.0 for anything not directly usable as a
+// DNS bind address: a hostname instead of an IP, an IPv6 literal (Core only
+// accepts IPv4), or loopback (unreachable for other devices on the network).
+function detectDefaultBindAddress(): string {
+  const host = window.location.hostname;
+  const octets = host.split(".");
+  const isIPv4 =
+    octets.length === 4 && octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255);
+  return isIPv4 && !host.startsWith("127.") ? host : "0.0.0.0";
+}
+
 export default function Setup() {
   const { t } = useI18n();
-  const [config, setConfig] = useState<InstallationConfig>(defaultConfig);
+  const [config, setConfig] = useState<InstallationConfig>(() => ({
+    ...defaultConfig,
+    dns_bind_address: detectDefaultBindAddress(),
+  }));
   const [status, setStatus] = useState<InstallationStatus | null>(null);
   const [preflight, setPreflight] = useState<InstallationPreflight | null>(null);
   const [busy, setBusy] = useState(false);

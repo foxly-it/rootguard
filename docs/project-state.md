@@ -1175,6 +1175,18 @@ Also fixed stale `site/docs.html` copy describing the occupied-port check
 and collapsible technical-details UI as "next release" when both already
 shipped in `v0.1.0-beta.1`.
 
+**2026-08-16:** the Setup wizard's DNS bind address field defaulted to
+`0.0.0.0` even though the browser reaches the page over the exact LAN IP
+RootGuard's own docs already tell people to use
+(`http://<host-LAN-IP>:8080`, never `localhost`). `Setup.tsx` now defaults
+`dns_bind_address` to `window.location.hostname` when it's a usable IPv4
+address (not loopback, not a hostname, not IPv6 - Core only accepts IPv4),
+falling back to `0.0.0.0` otherwise. Pure client-side default, no backend
+changes; the help text under the field now explains the pre-fill and that
+`0.0.0.0` remains available to bind every host address instead. Suggested
+directly by foxly-it
+([rootguard#290](https://github.com/foxly-it/rootguard/issues/290)).
+
 ---
 
 0.2's conflict-detection checkbox
