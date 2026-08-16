@@ -39,8 +39,12 @@ export ROOTGUARD_RECOVERY_TOKEN="backup-restore-recovery-token-${normalized_arch
 export ROOTGUARD_WEB_BIND="127.0.0.1"
 export ROOTGUARD_WEB_PORT="${web_port}"
 
+# blockpage_enabled:true matches install_stack's own config below - the
+# primary instance is installed with the blockpage on, so the restore
+# config must agree, or the restored config disagrees with what the
+# exported archive actually contains.
 deploy_config="$(jq -n --arg address "127.0.0.1" --argjson port "${dns_port}" \
-  '{dns_bind_address:$address,dns_port:$port}')"
+  '{dns_bind_address:$address,dns_port:$port,blockpage_enabled:true}')"
 
 echo "Installing the primary instance to back up"
 install_stack
