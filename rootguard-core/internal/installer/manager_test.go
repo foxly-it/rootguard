@@ -131,6 +131,12 @@ func TestPreflightReportsOccupiedDockerDNSPort(t *testing.T) {
 // hold the requested port without ever showing up as a container. The
 // real-publish probe must catch it even though the docker-ps-based check
 // alone would have reported the port free.
+//
+// The fake runner deliberately returns a generic error ("exit status 1")
+// with the actual diagnostic text only in the output bytes, mirroring
+// os/exec's CombinedOutput() split - the production runDocker happens to
+// fold output into err.Error() too, but the CommandRunner contract doesn't
+// require that, so the classification must work from output alone.
 func TestPreflightProbesHostPortWhenDockerPsIsClean(t *testing.T) {
 	manager := NewManager(Options{
 		DataDir:       t.TempDir(),
@@ -140,7 +146,7 @@ func TestPreflightProbesHostPortWhenDockerPsIsClean(t *testing.T) {
 			case arguments[0] == "ps":
 				return []byte(""), nil
 			case arguments[0] == "run":
-				return nil, errors.New("Bind for 0.0.0.0:53 failed: port is already allocated")
+				return []byte("Bind for 0.0.0.0:53 failed: port is already allocated"), errors.New("exit status 1")
 			}
 			return []byte("ok"), nil
 		},
@@ -174,6 +180,11 @@ func TestPreflightPassesWhenHostPortIsFree(t *testing.T) {
 // stopped can hold its published port for a moment after it's gone from
 // `docker ps`, so the very next `up -d` on that port needs a short retry
 // instead of failing the whole deployment outright.
+//
+// As in TestPreflightProbesHostPortWhenDockerPsIsClean, the diagnostic text
+// lives only in the output bytes, not err.Error(), to prove the retry
+// doesn't depend on the production runner's convention of folding output
+// into the error text.
 func TestRunComposeUpRetriesTransientPortBindConflict(t *testing.T) {
 	var attempts int
 	manager := NewManager(Options{
@@ -183,7 +194,7 @@ func TestRunComposeUpRetriesTransientPortBindConflict(t *testing.T) {
 		Run: func(_ context.Context, _ ...string) ([]byte, error) {
 			attempts++
 			if attempts < 3 {
-				return nil, errors.New("Bind for 0.0.0.0:53 failed: port is already allocated")
+				return []byte("Bind for 0.0.0.0:53 failed: port is already allocated"), errors.New("exit status 1")
 			}
 			return []byte("ok"), nil
 		},

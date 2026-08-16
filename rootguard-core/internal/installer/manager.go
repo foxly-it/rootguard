@@ -839,7 +839,15 @@ func (m *Manager) runComposeUp(ctx context.Context, args ...string) ([]byte, err
 	var err error
 	for attempt := 1; attempt <= m.composeUpRetryAttempts; attempt++ {
 		output, err = m.run(ctx, args...)
-		if err == nil || attempt == m.composeUpRetryAttempts || !isPortBindConflict(strings.ToLower(err.Error())) {
+		if err == nil {
+			return output, nil
+		}
+		// The CommandRunner contract returns output and err separately;
+		// the production runner happens to fold output into err.Error(),
+		// but an injected one isn't obligated to, so match against both
+		// rather than assuming err.Error() alone carries the detail.
+		detail := strings.ToLower(err.Error() + "\n" + string(output))
+		if attempt == m.composeUpRetryAttempts || !isPortBindConflict(detail) {
 			return output, err
 		}
 		select {
@@ -867,12 +875,17 @@ func (m *Manager) probeHostPortBusy(ctx context.Context, address string, port in
 		return false, ""
 	}
 	publish := fmt.Sprintf("%s:%d:1", address, port)
-	_, runErr := m.run(ctx, "run", "--rm", "--entrypoint", "true",
+	output, runErr := m.run(ctx, "run", "--rm", "--entrypoint", "true",
 		"-p", publish+"/tcp", "-p", publish+"/udp", strings.TrimSpace(string(imageID)))
 	if runErr == nil {
 		return false, ""
 	}
-	if !isPortBindConflict(strings.ToLower(runErr.Error())) {
+	// See runComposeUp: match against output and err.Error() together, not
+	// just err.Error() alone, since an injected CommandRunner isn't
+	// obligated to fold output into the error text the way the production
+	// runner does.
+	detail := strings.ToLower(runErr.Error() + "\n" + string(output))
+	if !isPortBindConflict(detail) {
 		return false, ""
 	}
 	return true, runErr.Error()
