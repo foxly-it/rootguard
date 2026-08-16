@@ -112,8 +112,8 @@
             <h2 data-de="Control Plane starten" data-en="Start the control plane">Control Plane starten</h2>
             <div class="code-block"><div>shell</div><pre><code>mkdir rootguard &amp;&amp; cd rootguard
 
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.2/compose.alpha.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.2/.env.alpha.example
 
 # Zwei unabhängige Sicherheitsschlüssel erzeugen
 openssl rand -hex 32
@@ -203,8 +203,8 @@ dig +dnssec @192.168.178.10 dnssec-failed.org A</code></pre></div>
             <p data-de="Die zentrale Seite Logs &amp; Diagnose liest ausschließlich die fünf fest freigegebenen Dienste. Core begrenzt jede Ausgabe auf die letzten 30 Minuten, 100 Zeilen und 64 KiB, entfernt Steuerzeichen und redigiert häufige Zugangsdatenmuster; der Browser kann keine freien Container- oder Pfadnamen übergeben." data-en="The central Logs & Diagnostics page reads only the five explicitly allowlisted services. Core limits every response to the last 30 minutes, 100 lines, and 64 KiB, removes control characters, and redacts common credential patterns; the browser cannot provide arbitrary container or path names.">Die zentrale Seite Logs &amp; Diagnose liest ausschließlich die fünf fest freigegebenen Dienste. Core begrenzt jede Ausgabe auf die letzten 30 Minuten, 100 Zeilen und 64 KiB, entfernt Steuerzeichen und redigiert häufige Zugangsdatenmuster; der Browser kann keine freien Container- oder Pfadnamen übergeben.</p>
             <p data-de="Bei unveränderlich referenzierten Core- und WebApp-Releases prüft RootGuard außerdem den signierten SLSA-Herkunftsnachweis, die erwartete GitHub-Workflowidentität und die Sigstore-Transparenzdaten. Fehlende oder ungültige Nachweise und vorübergehende Netzfehler werden getrennt angezeigt." data-en="For immutable Core and WebApp releases, RootGuard also verifies signed SLSA provenance, the expected GitHub workflow identity, and Sigstore transparency data. Missing or invalid attestations and temporary network failures are displayed separately.">Bei unveränderlich referenzierten Core- und WebApp-Releases prüft RootGuard außerdem den signierten SLSA-Herkunftsnachweis, die erwartete GitHub-Workflowidentität und die Sigstore-Transparenzdaten. Fehlende oder ungültige Nachweise und vorübergehende Netzfehler werden getrennt angezeigt.</p>
             <div class="manual-callout"><b data-de="Unveränderliche Release-Images" data-en="Immutable release images">Unveränderliche Release-Images</b><span data-de="Der öffentliche Release-Stack kombiniert lesbare Versions-Tags mit geprüften Multi-Arch-Digests. Docker startet damit exakt das veröffentlichte Artefakt, selbst wenn ein Tag später verändert würde." data-en="The public release stack combines readable version tags with verified multi-architecture digests. Docker therefore starts the exact published artifact even if a tag were changed later.">Der öffentliche Release-Stack kombiniert lesbare Versions-Tags mit geprüften Multi-Arch-Digests. Docker startet damit exakt das veröffentlichte Artefakt, selbst wenn ein Tag später verändert würde.</span></div>
-            <div class="code-block"><div>.env</div><pre><code>ROOTGUARD_CORE_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-core:0.1.0-beta.1@sha256:ea3a9c78953bf33f45bc274e0fb6520f9299abcef179d744b2ca45b3b231d1d8
-ROOTGUARD_WEBAPP_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-webapp:0.1.0-beta.1@sha256:5b2231ff950569d7d897a19a9d781fe6195609b93ab2710223a4e0650de2b811</code></pre></div>
+            <div class="code-block"><div>.env</div><pre><code>ROOTGUARD_CORE_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-core:0.1.0-beta.2@sha256:9281bb80e0ee77a15a634d71a609f0958f37ba9175db3d01c1e91f23231ac201
+ROOTGUARD_WEBAPP_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-webapp:0.1.0-beta.2@sha256:216af279592536202064d9f6aecd606273bd01dfc09305c0890deec26366a3a7</code></pre></div>
           </section>
 
           <section id="security" class="manual-section">

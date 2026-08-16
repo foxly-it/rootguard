@@ -120,10 +120,18 @@ jobs:
           sbom: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.value }}
+          # Deliberately no org.opencontainers.image.version here: every
+          # Dockerfile already sets it from a build-arg (VERSION below for
+          # core/webapp/updater/blockpage, whose own software version is the
+          # release version) - except rootguard-unbound's, which sets it from
+          # its own UNBOUND_VERSION default (the actual resolver version,
+          # e.g. 1.25.2). Passing it here as an extra label would win over
+          # the Dockerfile's own LABEL for the same key on every image,
+          # silently overwriting unbound's intentionally different value
+          # with the RootGuard release tag.
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ needs.version.outputs.value }}
             org.opencontainers.image.created=${{ steps.build-time.outputs.value }}
           build-args: |
             VERSION=${{ needs.version.outputs.value }}

@@ -1230,12 +1230,42 @@ blockpage left enabled. Root cause of the gap going undetected:
 `scripts/verification-common.sh`'s `install_stack` config never set
 `blockpage_enabled` at all, which Go unmarshals to `false` - so
 `clean-install.yml`'s CI job has been silently testing the
-blockpage-*disabled* path only, never the wizard's real default. Fixed
-both: `compose.alpha.yaml` now declares the `rootguard-adguard-auth`
-volume exactly like `compose.yaml` already did, and the shared
-verification config now explicitly sets `blockpage_enabled:true` so CI
-exercises the real default going forward
+blockpage-*disabled* path only, never the wizard's real default. Fixing
+this properly took three commits, not one: declaring the volume in
+`compose.alpha.yaml` alone wasn't enough - Compose only creates a
+top-level named volume when some service in that same file actually
+mounts it, so `core` needed the same `adguard-auth` mount and
+`ROOTGUARD_BLOCKPAGE_AUTH_DIR` env var `compose.yaml` (dev) already had,
+confirmed by a second live redeploy attempt failing identically. Fixing
+`install_stack`'s shared config then exposed the exact same gap a third
+time, in `verify-backup-restore.sh`'s own separate `deploy_config` for the
+`/api/backups/restore` call - the primary instance now installs with the
+blockpage on, so a restore config that still defaulted it to off
+disagreed with what the exported archive actually contained. Live-verified
+end to end on the `.7` host that surfaced it: full install with blockpage
+enabled reaches `installed`, DNS resolution and DNSSEC rejection both
+work, blockpage answers on `:80`
 ([rootguard#294](https://github.com/foxly-it/rootguard/issues/294)).
+
+The same redeploy also surfaced two independent findings: the Stack Center
+showed `0.1.0-beta.2` as Unbound's version instead of the actual resolver
+version (`1.25.2`) - `release-alpha.yml`'s shared image labels
+unconditionally set `org.opencontainers.image.version` to the RootGuard
+release tag for all five images, overwriting the one Dockerfile
+(`rootguard-unbound`) that deliberately sets it from its own
+`UNBOUND_VERSION` build-arg instead; core/webapp/updater/blockpage already
+set the same label themselves from the passed `VERSION` build-arg, so the
+shared override was pure redundancy for four images and silent data loss
+for the fifth - removed. Separately, `scripts/check-site-facts.sh` (a
+required CI check) had been failing unnoticed since the `v0.1.0-beta.2`
+tag was cut: `site/index.html`, `site/docs.html`, and `site/wiki.html`
+still named `0.1.0-beta.1` as current. Updated all three, including
+`docs.html`'s update-target image digests; reworded two genuinely
+historical `site/roadmap.html` claims ("superseded by 0.1.0-beta.1",
+"completed with the release of 0.1.0-beta.1") to use the checker's own
+recognized "starting with"/"ab " marker phrasing instead of just bumping
+their version number, since those facts are correctly pinned to beta.1
+regardless of which release is current.
 
 ---
 
