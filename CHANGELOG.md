@@ -3,6 +3,42 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.2] - 2026-08-16
+
+### Added
+
+- Add unattended 30-day endurance test harness ([#272](https://github.com/foxly-it/rootguard/pull/272))
+- Probe for non-Docker port occupants during preflight ([#289](https://github.com/foxly-it/rootguard/pull/289))
+- Default the setup DNS bind address to the detected LAN IP ([#291](https://github.com/foxly-it/rootguard/pull/291))
+
+### CI
+
+- Add a real end-to-end backup/restore CI job ([#276](https://github.com/foxly-it/rootguard/pull/276))
+
+### Changed
+
+- Compaction follow-ups from code review ([#275](https://github.com/foxly-it/rootguard/pull/275))
+
+### Documentation
+
+- Performance and memory baseline for small/medium networks ([#277](https://github.com/foxly-it/rootguard/pull/277))
+- Final accessibility and security review ([#279](https://github.com/foxly-it/rootguard/pull/279))
+- Freeze supported platforms, requirements, and support policy ([#280](https://github.com/foxly-it/rootguard/pull/280))
+- Fix friction points found in a no-context Quick Start walkthrough ([#281](https://github.com/foxly-it/rootguard/pull/281))
+- Catch up ROADMAP.md/project-state.md/roadmap.html bookkeeping ([#282](https://github.com/foxly-it/rootguard/pull/282))
+
+### Fixed
+
+- Use the full canonical AGPL-3.0 text ([#273](https://github.com/foxly-it/rootguard/pull/273))
+- Auth security hardening from code review ([#274](https://github.com/foxly-it/rootguard/pull/274))
+- Three real bugs in the soak harness found by review ([#278](https://github.com/foxly-it/rootguard/pull/278))
+- Drop the SPDX-License-Identifier line, it broke detection ([#283](https://github.com/foxly-it/rootguard/pull/283))
+- Destructive-guard bug, untested PR builds, and endurance race ([#284](https://github.com/foxly-it/rootguard/pull/284))
+- Retry transient port-53 bind race on deploy; reword HTTPS export warning ([#287](https://github.com/foxly-it/rootguard/pull/287))
+- Ownership-timing bug, temp-file leak on guard abort, add tests ([#285](https://github.com/foxly-it/rootguard/pull/285))
+- Return combined output+error as probeHostPortBusy's detail ([#292](https://github.com/foxly-it/rootguard/pull/292))
+- Precise setup address help text; add frontend unit tests ([#293](https://github.com/foxly-it/rootguard/pull/293))
+
 ## [0.1.0-beta.1] - 2026-08-14
 
 ### Added
