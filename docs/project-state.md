@@ -1175,7 +1175,26 @@ Also fixed stale `site/docs.html` copy describing the occupied-port check
 and collapsible technical-details UI as "next release" when both already
 shipped in `v0.1.0-beta.1`.
 
-**2026-08-16:** the Setup wizard's DNS bind address field defaulted to
+**2026-08-16:** the `dns_port_available` preflight check itself had a
+matching blind spot - it's `docker ps`-based, so it can't see a non-Docker
+process bound to the requested port (most plausibly `systemd-resolved`'s
+stub listener on Debian/Ubuntu hosts, a very common port-53 conflict for
+exactly this project's target audience). Added `probeHostPortBusy`: when
+the cheap `docker ps` scan finds nothing, RootGuard now also runs a
+throwaway container that actually publishes the requested address/port -
+the same mechanism `compose up` itself uses - reusing Core's own
+already-pulled image so no extra pull is needed. Live-verified on the `.7`
+test LXC against a real non-Docker occupant (`nc -l` on a test port
+outside Docker): the probe correctly failed while occupied and passed once
+freed, with the identical error text `deploy()`'s own retry logic already
+recognizes ([rootguard#288](https://github.com/foxly-it/rootguard/issues/288)).
+A second audit pass on that same change caught that its port-bind-conflict
+matching (and `runComposeUp`'s) relied on `err.Error()` alone, which only
+works because the production `CommandRunner` happens to fold
+`CombinedOutput()` into the error text - not a guarantee the interface
+itself makes. Both now match against output and `err.Error()` together.
+
+Also that day: the Setup wizard's DNS bind address field defaulted to
 `0.0.0.0` even though the browser reaches the page over the exact LAN IP
 RootGuard's own docs already tell people to use
 (`http://<host-LAN-IP>:8080`, never `localhost`). `Setup.tsx` now defaults
