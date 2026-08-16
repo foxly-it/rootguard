@@ -1241,10 +1241,19 @@ confirmed by a second live redeploy attempt failing identically. Fixing
 time, in `verify-backup-restore.sh`'s own separate `deploy_config` for the
 `/api/backups/restore` call - the primary instance now installs with the
 blockpage on, so a restore config that still defaulted it to off
-disagreed with what the exported archive actually contained. Live-verified
-end to end on the `.7` host that surfaced it: full install with blockpage
-enabled reaches `installed`, DNS resolution and DNSSEC rejection both
-work, blockpage answers on `:80`
+disagreed with what the exported archive actually contained. Fixing that
+still left `Backup and restore` CI failing at the restore call itself with
+a bare 409 and no visible reason - reproduced by hand on the `.7` host: a
+leftover `rootguard-blockpage` container survived
+`teardown_managed_resources` (its `managed_containers`/`managed_volumes`
+lists predate blockpage ever being exercised by these scripts, so neither
+it nor `rootguard-adguard-auth` were ever included), so the "fresh"
+restore-target instance wasn't actually clean and `RestorePreflight`
+correctly refused via `Restore()`'s hard `ErrNotClean` gate. Added both to
+the managed-resource lists. Live-verified end to end on the `.7` host that
+surfaced all of this, running the real `verify-backup-restore.sh`
+unmodified: install with blockpage enabled -> export -> full teardown ->
+fresh deploy -> restore -> DNS + DNSSEC verification, every step passing
 ([rootguard#294](https://github.com/foxly-it/rootguard/issues/294)).
 
 The same redeploy also surfaced two independent findings: the Stack Center
