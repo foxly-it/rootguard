@@ -1188,6 +1188,23 @@ test LXC against a real non-Docker occupant (`nc -l` on a test port
 outside Docker): the probe correctly failed while occupied and passed once
 freed, with the identical error text `deploy()`'s own retry logic already
 recognizes ([rootguard#288](https://github.com/foxly-it/rootguard/issues/288)).
+A second audit pass on that same change caught that its port-bind-conflict
+matching (and `runComposeUp`'s) relied on `err.Error()` alone, which only
+works because the production `CommandRunner` happens to fold
+`CombinedOutput()` into the error text - not a guarantee the interface
+itself makes. Both now match against output and `err.Error()` together.
+
+Also that day: the Setup wizard's DNS bind address field defaulted to
+`0.0.0.0` even though the browser reaches the page over the exact LAN IP
+RootGuard's own docs already tell people to use
+(`http://<host-LAN-IP>:8080`, never `localhost`). `Setup.tsx` now defaults
+`dns_bind_address` to `window.location.hostname` when it's a usable IPv4
+address (not loopback, not a hostname, not IPv6 - Core only accepts IPv4),
+falling back to `0.0.0.0` otherwise. Pure client-side default, no backend
+changes; the help text under the field now explains the pre-fill and that
+`0.0.0.0` remains available to bind every host address instead. Suggested
+directly by foxly-it
+([rootguard#290](https://github.com/foxly-it/rootguard/issues/290)).
 
 ---
 
