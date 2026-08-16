@@ -11,6 +11,7 @@ managed_containers=(
   rootguard-updater
   rootguard-adguard
   rootguard-unbound
+  rootguard-blockpage
 )
 managed_volumes=(
   rootguard-data
@@ -19,6 +20,7 @@ managed_volumes=(
   rootguard-unbound-state
   rootguard-adguard-work
   rootguard-adguard-config
+  rootguard-adguard-auth
 )
 
 # owns_managed_resources tracks whether *this* script instance actually
@@ -160,9 +162,14 @@ install_stack() {
   owns_managed_resources=true
   docker compose -f "${compose_file}" up -d
   wait_for_login
+  # blockpage_enabled:true matches the Setup wizard's own default
+  # (Setup.tsx's defaultConfig) - omitting it here left every clean-install
+  # run silently deploying with blockpage disabled (BlockpageEnabled's Go
+  # zero value), so the real default path - the one an actual first-time
+  # user gets - was never exercised at all.
   local config
   config="$(jq -n --arg address "127.0.0.1" --argjson port "${dns_port}" \
-    '{dns_bind_address:$address,dns_port:$port}')"
+    '{dns_bind_address:$address,dns_port:$port,blockpage_enabled:true}')"
   local preflight
   preflight="$(curl --fail --silent --cookie "${cookie_file}" \
     --header 'Content-Type: application/json' --data "${config}" \

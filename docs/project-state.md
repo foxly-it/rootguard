@@ -1215,6 +1215,67 @@ setup (`npm test`, wired into `ci-webapp.yml`) rather than growing a
 second, uncoordinated test convention alongside the existing Playwright/
 axe-core E2E suite.
 
+**2026-08-16, later the same day:** publishing `v0.1.0-beta.2` and
+redeploying it live on the `.7` test host (real end-user request: "bring
+the LXC up to date") surfaced a genuine, previously-undetected
+release-blocking defect. Deploying the DNS stack with the blockpage
+enabled - the Setup wizard's own default - failed outright with `external
+volume "rootguard-adguard-auth" not found`. Core's internally-rendered DNS
+stack compose declares that volume `external: true`, expecting the outer
+app-layer compose to have already created it - which the dev-only
+`compose.yaml` does, but the *public* `compose.alpha.yaml` never did. Any
+real first-time user following the actual public Quick Start with no
+pre-existing Docker state would hit this on every attempt with the
+blockpage left enabled. Root cause of the gap going undetected:
+`scripts/verification-common.sh`'s `install_stack` config never set
+`blockpage_enabled` at all, which Go unmarshals to `false` - so
+`clean-install.yml`'s CI job has been silently testing the
+blockpage-*disabled* path only, never the wizard's real default. Fixing
+this properly took three commits, not one: declaring the volume in
+`compose.alpha.yaml` alone wasn't enough - Compose only creates a
+top-level named volume when some service in that same file actually
+mounts it, so `core` needed the same `adguard-auth` mount and
+`ROOTGUARD_BLOCKPAGE_AUTH_DIR` env var `compose.yaml` (dev) already had,
+confirmed by a second live redeploy attempt failing identically. Fixing
+`install_stack`'s shared config then exposed the exact same gap a third
+time, in `verify-backup-restore.sh`'s own separate `deploy_config` for the
+`/api/backups/restore` call - the primary instance now installs with the
+blockpage on, so a restore config that still defaulted it to off
+disagreed with what the exported archive actually contained. Fixing that
+still left `Backup and restore` CI failing at the restore call itself with
+a bare 409 and no visible reason - reproduced by hand on the `.7` host: a
+leftover `rootguard-blockpage` container survived
+`teardown_managed_resources` (its `managed_containers`/`managed_volumes`
+lists predate blockpage ever being exercised by these scripts, so neither
+it nor `rootguard-adguard-auth` were ever included), so the "fresh"
+restore-target instance wasn't actually clean and `RestorePreflight`
+correctly refused via `Restore()`'s hard `ErrNotClean` gate. Added both to
+the managed-resource lists. Live-verified end to end on the `.7` host that
+surfaced all of this, running the real `verify-backup-restore.sh`
+unmodified: install with blockpage enabled -> export -> full teardown ->
+fresh deploy -> restore -> DNS + DNSSEC verification, every step passing
+([rootguard#294](https://github.com/foxly-it/rootguard/issues/294)).
+
+The same redeploy also surfaced two independent findings: the Stack Center
+showed `0.1.0-beta.2` as Unbound's version instead of the actual resolver
+version (`1.25.2`) - `release-alpha.yml`'s shared image labels
+unconditionally set `org.opencontainers.image.version` to the RootGuard
+release tag for all five images, overwriting the one Dockerfile
+(`rootguard-unbound`) that deliberately sets it from its own
+`UNBOUND_VERSION` build-arg instead; core/webapp/updater/blockpage already
+set the same label themselves from the passed `VERSION` build-arg, so the
+shared override was pure redundancy for four images and silent data loss
+for the fifth - removed. Separately, `scripts/check-site-facts.sh` (a
+required CI check) had been failing unnoticed since the `v0.1.0-beta.2`
+tag was cut: `site/index.html`, `site/docs.html`, and `site/wiki.html`
+still named `0.1.0-beta.1` as current. Updated all three, including
+`docs.html`'s update-target image digests; reworded two genuinely
+historical `site/roadmap.html` claims ("superseded by 0.1.0-beta.1",
+"completed with the release of 0.1.0-beta.1") to use the checker's own
+recognized "starting with"/"ab " marker phrasing instead of just bumping
+their version number, since those facts are correctly pinned to beta.1
+regardless of which release is current.
+
 ---
 
 0.2's conflict-detection checkbox
@@ -1280,7 +1341,7 @@ on the untracked guided access-rules surface).
 
 ## Release status
 
-`v0.1.0-beta.1` is the current public release, published with digest-pinned
+`v0.1.0-beta.2` is the current public release, published with digest-pinned
 `amd64`/`arm64` images for all five RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; the remaining gates before 1.0 are 0.9 (release

@@ -33,10 +33,12 @@ services:
       ADGUARD_DATA_DIR: /var/lib/rootguard/adguard
       ADGUARD_UPSTREAM: 172.29.53.2:5335
       ADGUARD_DNS_ADDRESS: rootguard-adguard:53
+      ROOTGUARD_BLOCKPAGE_AUTH_DIR: /var/lib/rootguard/adguard-auth
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - unbound-config:/var/lib/rootguard/unbound
+      - adguard-auth:/var/lib/rootguard/adguard-auth
     networks:
       - control
     healthcheck:
@@ -113,3 +115,5 @@ volumes:
     name: rootguard-data
   rootguard-sessions:
     name: rootguard-sessions
+  adguard-auth:
+    name: rootguard-adguard-auth
