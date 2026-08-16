@@ -22,6 +22,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Test verification-common.sh's resource-ownership state machine
+        run: ./scripts/verification-common.test.sh
+
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet
 

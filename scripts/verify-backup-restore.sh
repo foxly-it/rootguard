@@ -24,10 +24,12 @@ passphrase="verify-backup-restore-$(date +%s)-$$"
 
 require_commands curl dig docker jq
 
-# Must run before the cleanup trap is registered - see
-# verification-common.sh's own comment on guard_no_existing_resources.
-guard_no_existing_resources
+# Registered before the guard check: cleanup is safe to run at any point
+# (see its own comment in verification-common.sh) and this way a guard
+# refusal also removes the temp cookie/archive files instead of leaking
+# them.
 trap cleanup EXIT
+guard_no_existing_resources
 
 normalized_arch="$(detect_arch)"
 export ROOTGUARD_API_TOKEN="backup-restore-api-token-${normalized_arch}"

@@ -73,10 +73,12 @@ guard_no_existing_resources() {
   fi
 }
 
-# cleanup is meant to be registered via `trap cleanup EXIT` only *after*
-# guard_no_existing_resources has passed. It tears down managed resources
-# only when owns_managed_resources is true, so a failure before this run
-# ever started its own containers can never delete anything.
+# cleanup is safe to register via `trap cleanup EXIT` at any point, even
+# before guard_no_existing_resources runs - it only ever removes temp
+# files unconditionally and only tears down managed Docker resources when
+# owns_managed_resources is true, so a guard refusal or any failure before
+# this run started its own containers can never delete anything besides
+# its own cookie/archive files.
 cleanup() {
   result=$?
   trap - EXIT
@@ -141,12 +143,22 @@ wait_for_installed() {
   exit 1
 }
 
-# install_stack starts the compose stack, marks this run as owning the
-# managed resources (so cleanup is now allowed to tear them down), signs
-# in, and runs preflight + deploy through to "installed".
+# install_stack marks this run as owning the managed resources *before*
+# starting the compose stack, then signs in and runs preflight + deploy
+# through to "installed". The flag must flip before `compose up`, not
+# after: callers only ever reach this function once
+# guard_no_existing_resources has already confirmed nothing managed
+# exists yet, so anything that appears under the managed names from here
+# on unconditionally belongs to this run - including a partially created
+# network/volume/container left behind by a `compose up` that itself
+# fails (image pull error, port conflict, failed healthcheck, ...). With
+# the flag set only after a *successful* `compose up`, that exact failure
+# left such partial resources on disk with owns_managed_resources still
+# false, so cleanup skipped them entirely and the next run's own guard
+# check would then refuse to start against its own run's leftovers.
 install_stack() {
-  docker compose -f "${compose_file}" up -d
   owns_managed_resources=true
+  docker compose -f "${compose_file}" up -d
   wait_for_login
   local config
   config="$(jq -n --arg address "127.0.0.1" --argjson port "${dns_port}" \
