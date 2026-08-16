@@ -3,6 +3,12 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.3] - 2026-08-16
+
+### Fixed
+
+- Multiple beta.2 deploy/labeling/site-freshness bugs found live on .7 ([#295](https://github.com/foxly-it/rootguard/pull/295))
+
 ## [0.1.0-beta.2] - 2026-08-16
 
 ### Added
