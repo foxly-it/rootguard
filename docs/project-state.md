@@ -1175,6 +1175,20 @@ Also fixed stale `site/docs.html` copy describing the occupied-port check
 and collapsible technical-details UI as "next release" when both already
 shipped in `v0.1.0-beta.1`.
 
+**2026-08-16:** the `dns_port_available` preflight check itself had a
+matching blind spot - it's `docker ps`-based, so it can't see a non-Docker
+process bound to the requested port (most plausibly `systemd-resolved`'s
+stub listener on Debian/Ubuntu hosts, a very common port-53 conflict for
+exactly this project's target audience). Added `probeHostPortBusy`: when
+the cheap `docker ps` scan finds nothing, RootGuard now also runs a
+throwaway container that actually publishes the requested address/port -
+the same mechanism `compose up` itself uses - reusing Core's own
+already-pulled image so no extra pull is needed. Live-verified on the `.7`
+test LXC against a real non-Docker occupant (`nc -l` on a test port
+outside Docker): the probe correctly failed while occupied and passed once
+freed, with the identical error text `deploy()`'s own retry logic already
+recognizes ([rootguard#288](https://github.com/foxly-it/rootguard/issues/288)).
+
 ---
 
 0.2's conflict-detection checkbox

@@ -126,6 +126,49 @@ func TestPreflightReportsOccupiedDockerDNSPort(t *testing.T) {
 	}
 }
 
+// TestPreflightProbesHostPortWhenDockerPsIsClean covers a `docker ps` blind
+// spot: a non-Docker process (e.g. systemd-resolved's stub listener) can
+// hold the requested port without ever showing up as a container. The
+// real-publish probe must catch it even though the docker-ps-based check
+// alone would have reported the port free.
+func TestPreflightProbesHostPortWhenDockerPsIsClean(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir:       t.TempDir(),
+		CoreContainer: "rootguard-core",
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			switch {
+			case arguments[0] == "ps":
+				return []byte(""), nil
+			case arguments[0] == "run":
+				return nil, errors.New("Bind for 0.0.0.0:53 failed: port is already allocated")
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress: "192.168.1.2",
+		DNSPort:        53,
+	})
+	if report.Ready {
+		t.Fatal("expected the host-port probe to fail preflight")
+	}
+	check := report.Checks[len(report.Checks)-1]
+	if check.Code != "dns_port_occupied" || check.Detail == "" || check.Action == "" {
+		t.Fatalf("unexpected probe diagnostic: %#v", check)
+	}
+}
+
+// TestPreflightPassesWhenHostPortIsFree ensures the added probe doesn't
+// introduce a false positive on the ordinary clean-host path.
+func TestPreflightPassesWhenHostPortIsFree(t *testing.T) {
+	manager := NewManager(Options{DataDir: t.TempDir(), CoreContainer: "rootguard-core", Run: successfulDockerRun})
+	report := manager.Preflight(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53})
+	if !report.Ready {
+		t.Fatalf("expected a free port to pass preflight, got %#v", report)
+	}
+}
+
 // TestRunComposeUpRetriesTransientPortBindConflict covers the race a static
 // `docker ps` preflight check cannot rule out: a container that just
 // stopped can hold its published port for a moment after it's gone from

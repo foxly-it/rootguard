@@ -230,10 +230,17 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 				Detail:  owner,
 				Action:  "Stop or reconfigure the conflicting DNS service, then run the preflight again.",
 			})
+		} else if busy, detail := m.probeHostPortBusy(ctx, config.DNSBindAddress, config.DNSPort); busy {
+			checks = append(checks, Check{
+				ID: "dns_port_available", Code: "dns_port_occupied", OK: false,
+				Message: fmt.Sprintf("DNS port %s:%d is already in use on this host.", config.DNSBindAddress, config.DNSPort),
+				Detail:  detail,
+				Action:  "Stop or reconfigure the conflicting service - a non-Docker process such as systemd-resolved is a common cause - then run the preflight again.",
+			})
 		} else {
 			checks = append(checks, Check{
 				ID: "dns_port_available", Code: "dns_port_available", OK: true,
-				Message: "No conflicting Docker port publication was found.",
+				Message: "No conflicting port publication was found.",
 			})
 		}
 	}
@@ -842,6 +849,33 @@ func (m *Manager) runComposeUp(ctx context.Context, args ...string) ([]byte, err
 		}
 	}
 	return output, err
+}
+
+// probeHostPortBusy runs a throwaway container that actually publishes the
+// requested address/port - the same mechanism `compose up` uses - to catch
+// conflicts a `docker ps` scan can't see: a non-Docker process (most
+// commonly systemd-resolved's stub listener on Debian/Ubuntu hosts) holds
+// the port without ever appearing as a Docker container. Reuses Core's own
+// already-running image via its container's image ID, so the probe needs
+// no extra image pull; the container's entrypoint is overridden to exit
+// immediately since only the publish attempt itself matters, and Docker
+// performs that host-side bind at container start regardless of whether
+// anything inside the container ever uses the port.
+func (m *Manager) probeHostPortBusy(ctx context.Context, address string, port int) (bool, string) {
+	imageID, err := m.run(ctx, "inspect", "--format", "{{.Image}}", m.coreContainer)
+	if err != nil {
+		return false, ""
+	}
+	publish := fmt.Sprintf("%s:%d:1", address, port)
+	_, runErr := m.run(ctx, "run", "--rm", "--entrypoint", "true",
+		"-p", publish+"/tcp", "-p", publish+"/udp", strings.TrimSpace(string(imageID)))
+	if runErr == nil {
+		return false, ""
+	}
+	if !isPortBindConflict(strings.ToLower(runErr.Error())) {
+		return false, ""
+	}
+	return true, runErr.Error()
 }
 
 var publishedPortPattern = regexp.MustCompile(`([0-9.]+|\[::\]):([0-9]+)->[0-9]+/(?:tcp|udp)`)
