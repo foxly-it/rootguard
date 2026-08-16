@@ -113,3 +113,5 @@ volumes:
     name: rootguard-data
   rootguard-sessions:
     name: rootguard-sessions
+  adguard-auth:
+    name: rootguard-adguard-auth

@@ -1215,6 +1215,28 @@ setup (`npm test`, wired into `ci-webapp.yml`) rather than growing a
 second, uncoordinated test convention alongside the existing Playwright/
 axe-core E2E suite.
 
+**2026-08-16, later the same day:** publishing `v0.1.0-beta.2` and
+redeploying it live on the `.7` test host (real end-user request: "bring
+the LXC up to date") surfaced a genuine, previously-undetected
+release-blocking defect. Deploying the DNS stack with the blockpage
+enabled - the Setup wizard's own default - failed outright with `external
+volume "rootguard-adguard-auth" not found`. Core's internally-rendered DNS
+stack compose declares that volume `external: true`, expecting the outer
+app-layer compose to have already created it - which the dev-only
+`compose.yaml` does, but the *public* `compose.alpha.yaml` never did. Any
+real first-time user following the actual public Quick Start with no
+pre-existing Docker state would hit this on every attempt with the
+blockpage left enabled. Root cause of the gap going undetected:
+`scripts/verification-common.sh`'s `install_stack` config never set
+`blockpage_enabled` at all, which Go unmarshals to `false` - so
+`clean-install.yml`'s CI job has been silently testing the
+blockpage-*disabled* path only, never the wizard's real default. Fixed
+both: `compose.alpha.yaml` now declares the `rootguard-adguard-auth`
+volume exactly like `compose.yaml` already did, and the shared
+verification config now explicitly sets `blockpage_enabled:true` so CI
+exercises the real default going forward
+([rootguard#294](https://github.com/foxly-it/rootguard/issues/294)).
+
 ---
 
 0.2's conflict-detection checkbox
@@ -1280,7 +1302,7 @@ on the untracked guided access-rules surface).
 
 ## Release status
 
-`v0.1.0-beta.1` is the current public release, published with digest-pinned
+`v0.1.0-beta.2` is the current public release, published with digest-pinned
 `amd64`/`arm64` images for all five RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; the remaining gates before 1.0 are 0.9 (release
