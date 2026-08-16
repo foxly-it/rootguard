@@ -11,6 +11,7 @@ managed_containers=(
   rootguard-updater
   rootguard-adguard
   rootguard-unbound
+  rootguard-blockpage
 )
 managed_volumes=(
   rootguard-data
@@ -19,6 +20,7 @@ managed_volumes=(
   rootguard-unbound-state
   rootguard-adguard-work
   rootguard-adguard-config
+  rootguard-adguard-auth
 )
 
 # owns_managed_resources tracks whether *this* script instance actually
