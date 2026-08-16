@@ -884,11 +884,11 @@ func (m *Manager) probeHostPortBusy(ctx context.Context, address string, port in
 	// just err.Error() alone, since an injected CommandRunner isn't
 	// obligated to fold output into the error text the way the production
 	// runner does.
-	detail := strings.ToLower(runErr.Error() + "\n" + string(output))
-	if !isPortBindConflict(detail) {
+	combined := runErr.Error() + "\n" + string(output)
+	if !isPortBindConflict(strings.ToLower(combined)) {
 		return false, ""
 	}
-	return true, runErr.Error()
+	return true, strings.TrimSpace(combined)
 }
 
 var publishedPortPattern = regexp.MustCompile(`([0-9.]+|\[::\]):([0-9]+)->[0-9]+/(?:tcp|udp)`)
