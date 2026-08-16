@@ -63,6 +63,10 @@ jobs:
         working-directory: rootguard-webapp/frontend
         run: npm run lint
 
+      - name: Test frontend
+        working-directory: rootguard-webapp/frontend
+        run: npm test
+
       - name: Build frontend
         working-directory: rootguard-webapp/frontend
         run: npm run build
