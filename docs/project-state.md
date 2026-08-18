@@ -1276,6 +1276,34 @@ recognized "starting with"/"ab " marker phrasing instead of just bumping
 their version number, since those facts are correctly pinned to beta.1
 regardless of which release is current.
 
+All of #294's fixes landed in `v0.1.0-beta.3` (2026-08-16), cut the same
+day: full release pipeline green (all five images, signed, `upgrade-test`
+beta.2 -> beta.3, `smoke-test`), live-verified again end to end on the
+`.7` host with the real images - install with blockpage enabled, DNS
+resolution, DNSSEC rejection, and the Unbound version label now correctly
+reading `1.25.2` instead of the release tag.
+
+**2026-08-18:** a routine check ("why does RootGuard Unbound have errors
+on GitHub, and the site looks stale again") found two more independent,
+unrelated issues. First, the scheduled `Unbound CI` run started failing
+with `E: Version '2.8.2-1~deb13u1' for 'libexpat1' was not found` -
+`rootguard-unbound`'s Dockerfile pins exact Debian package versions for
+reproducibility, and Debian's `libexpat1`/`libexpat1-dev` received a
+security-patch bump to `2.8.3-1~deb13u1` that dropped the old version from
+the mirror entirely (Debian repos only ever serve the latest point
+release of a package). Checked every other pinned package in both build
+stages against the real `debian:13-slim` base image on `.7` - only expat
+had drifted; bumped both references, rebuilt the image on `.7` to confirm
+(Unbound 1.25.2, `unbound-checkconf` clean). Second, `site/*.html` had
+gone stale again the same way as before - the release pipeline updates
+`compose.alpha.yaml`/`.env.alpha.example` automatically but never touches
+the hardcoded site version strings, so cutting `v0.1.0-beta.3` without a
+manual site pass left it one release behind within two days. Updated the
+same three files (plus `roadmap.html`'s current-version badge) again.
+Worth a standing habit: re-run `scripts/check-site-facts.sh` immediately
+after any `release-version-bump.yml` run, not just when someone happens to
+notice.
+
 ---
 
 0.2's conflict-detection checkbox
@@ -1341,7 +1369,7 @@ on the untracked guided access-rules surface).
 
 ## Release status
 
-`v0.1.0-beta.2` is the current public release, published with digest-pinned
+`v0.1.0-beta.3` is the current public release, published with digest-pinned
 `amd64`/`arm64` images for all five RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; the remaining gates before 1.0 are 0.9 (release
