@@ -21,7 +21,7 @@ RUN apt-get update \
         ca-certificates=20250419 \
         curl=8.14.1-2+deb13u4 \
         libevent-dev=2.1.12-stable-10+b1 \
-        libexpat1-dev=2.8.2-1~deb13u1 \
+        libexpat1-dev=2.8.3-1~deb13u1 \
         libssl-dev=3.5.6-1~deb13u2 \
         pkg-config=1.8.1-4 \
     && rm -rf /var/lib/apt/lists/*
@@ -82,7 +82,7 @@ RUN apt-get update \
         ca-certificates=20250419 \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.12-stable-10+b1 \
-        libexpat1=2.8.2-1~deb13u1 \
+        libexpat1=2.8.3-1~deb13u1 \
         libssl3t64=3.5.6-1~deb13u2 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 101 unbound \
