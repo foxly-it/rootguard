@@ -1337,6 +1337,23 @@ bind attempt that also catches non-Docker occupants like
 `systemd-resolved`/`dnsmasq`), and that the FAQ case is now detected
 automatically rather than something the user has to go check by hand.
 
+**2026-08-18, later the same day:** renamed "Control Plane" to "Control
+Panel" everywhere it names the WebGUI Dashboard eyebrow and Stack page
+section (`Overview.tsx`, `Stack.tsx`'s history-row `scope`, the
+`stack.controlPlane*` i18n strings, and the matching public-site Dashboard
+mockup on `index.html`). Deliberately scoped to WebGUI-visible text only,
+confirmed with foxly-it first: `architecture.md`/`threat-model.md`/
+`README.md`/`ROADMAP.md`/`docs.html`'s quickstart and manual/`wiki.html`
+all keep "control plane" as the precise architectural term (the
+privileged Core/WebApp/Updater layer, contrasted with the data-plane DNS
+services) - renaming those would make that established distinction less
+accurate, not more. Also untouched: env var names
+(`ROOTGUARD_CONTROL_PLANE_UPDATER_*`), the `/api/control-plane-updates*`
+routes, and internal Go/TS identifiers (the `controlplane` package,
+`ControlPlaneUpdateStatus` type) - all outside the public UI surface and
+would otherwise break already-running installations without a migration
+path.
+
 ---
 
 0.2's conflict-detection checkbox
