@@ -98,7 +98,7 @@ export default function Overview() {
     <div className="overview-page">
       <section className={`overview-hero ${protectedState ? "healthy" : "attention"}`}>
         <div className="hero-copy">
-          <span className="overview-eyebrow">ROOTGUARD CONTROL PLANE</span>
+          <span className="overview-eyebrow">ROOTGUARD CONTROL PANEL</span>
           <h1>{headline}</h1>
           <p>
             {protectedState
