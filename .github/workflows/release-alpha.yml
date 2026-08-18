@@ -214,17 +214,34 @@ jobs:
             sed -i -E "s|^(# RootGuard )[0-9]+\.[0-9]+\.[0-9]+-[a-z]+\.[0-9]+|\1${VERSION}|" "$file"
           done
 
+      # site/*.html's version references went stale twice in the two days
+      # after v0.1.0-beta.2 and v0.1.0-beta.3 each shipped - nothing here
+      # ever touched them, only compose.alpha.yaml/.env.alpha.example.
+      # bump-site-versions.sh runs the exact same logic
+      # check-site-facts.sh checks for, so this and that check can never
+      # drift apart. Idempotent: a no-op when the site already matches.
+      - name: Refresh site/*.html version references
+        run: ./scripts/bump-site-versions.sh
+
+      # The pin commit below carries [skip ci] (a mechanical, low-risk
+      # pin-only commit shouldn't re-trigger the whole CI matrix), which
+      # means ci.yml's own check-site-facts.sh run would never see it -
+      # verify right here instead, so a gap in bump-site-versions.sh fails
+      # this workflow loudly instead of shipping an unverified site.
+      - name: Verify site facts are current
+        run: ./scripts/check-site-facts.sh
+
       - name: Commit updated pins
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- compose.alpha.yaml .env.alpha.example; then
-            echo "compose.alpha.yaml and .env.alpha.example already pin the published digests, nothing to commit"
+          if git diff --quiet -- compose.alpha.yaml .env.alpha.example site/; then
+            echo "compose.alpha.yaml, .env.alpha.example, and site/*.html already reflect the published release, nothing to commit"
             exit 0
           fi
-          git add compose.alpha.yaml .env.alpha.example
-          git commit -m "ci: pin compose.alpha.yaml and .env.alpha.example to ${{ needs.version.outputs.value }} image digests [skip ci]"
+          git add compose.alpha.yaml .env.alpha.example site/
+          git commit -m "ci: pin compose.alpha.yaml, .env.alpha.example, and site/*.html to ${{ needs.version.outputs.value }} [skip ci]"
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main

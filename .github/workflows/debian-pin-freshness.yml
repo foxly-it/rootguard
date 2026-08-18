@@ -1,0 +1,69 @@
+name: Debian pin freshness
+
+# Debian only ever serves the latest point release of a package - any
+# exact-pinned version in rootguard-unbound/Dockerfile WILL eventually go
+# stale the moment that package gets a routine security update, taking the
+# old pinned version down with it entirely. Confirmed live: a
+# libexpat1/libexpat1-dev security bump silently broke the scheduled
+# Unbound CI build with a bare apt error, easy to miss in a full 20-minute
+# build log until someone happened to notice. This runs the same check
+# scripts/check-debian-pins.sh does on demand, but proactively and daily,
+# well ahead of the next scheduled Unbound CI build, and opens a PR with
+# the fix already applied instead of leaving a cryptic failure for someone
+# to decode.
+
+on:
+  schedule:
+    - cron: "15 4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  check-and-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check pinned Debian packages
+        id: check
+        run: |
+          set +e
+          report="$(./scripts/check-debian-pins.sh 2>&1)"
+          exit_code=$?
+          set -e
+          echo "$report"
+          {
+            echo "report<<PINEOF"
+            echo "$report"
+            echo "PINEOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "drift=$exit_code" >> "$GITHUB_OUTPUT"
+
+      # Reuses one deterministic branch, force-pushed, rather than opening
+      # a new PR on every drifted run before a human gets to review the
+      # last one - the same convention dependabot itself uses.
+      - name: Apply the fix and open or update a PR
+        if: steps.check.outputs.drift != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DRIFT_REPORT: ${{ steps.check.outputs.report }}
+        run: |
+          set -euo pipefail
+          ./scripts/check-debian-pins.sh --fix
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          branch="chore/debian-pin-refresh"
+          git checkout -B "$branch"
+          git add rootguard-unbound/Dockerfile
+          git commit -m "chore(unbound): refresh drifted Debian package pins" -m "${DRIFT_REPORT}"
+          git push --force origin "$branch"
+          if gh pr view "$branch" --json state -q .state 2>/dev/null | grep -q OPEN; then
+            echo "PR already open for $branch, force-push updated it"
+          else
+            gh pr create --title "chore(unbound): refresh drifted Debian package pins" \
+              --body "Opened automatically by the Debian pin freshness workflow - one or more exact-pinned package versions in \`rootguard-unbound/Dockerfile\` are no longer available from the live Debian repository (Debian only serves the latest point release of each package). \`Unbound CI\` runs on this PR automatically; merge once it's green." \
+              --head "$branch" --base main
+          fi

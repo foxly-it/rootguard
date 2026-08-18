@@ -1300,9 +1300,32 @@ gone stale again the same way as before - the release pipeline updates
 the hardcoded site version strings, so cutting `v0.1.0-beta.3` without a
 manual site pass left it one release behind within two days. Updated the
 same three files (plus `roadmap.html`'s current-version badge) again.
-Worth a standing habit: re-run `scripts/check-site-facts.sh` immediately
-after any `release-version-bump.yml` run, not just when someone happens to
-notice.
+
+Both of that day's findings recur by nature (a live upstream repository
+drifting under a pin; a release shipping without a site pass), so instead
+of just fixing them again, built prevention for each:
+
+- `scripts/bump-site-versions.sh` mechanically applies exactly what
+  `scripts/check-site-facts.sh` checks for - verified idempotent (a no-op
+  against an already-current site) and, by reverting `site/*.html` to the
+  known-stale beta.2 state and rerunning it, byte-identical to the manual
+  beta.3 fix. Wired into `release-alpha.yml`'s `update-alpha-pins` job,
+  right after the digest-pin update and committed in the same commit; a
+  `check-site-facts.sh` run immediately after verifies it, since the pin
+  commit itself carries `[skip ci]` and would otherwise never be checked.
+- `scripts/check-debian-pins.sh` (with a `--fix` mode) extracts every
+  `package=version` pin from `rootguard-unbound/Dockerfile`, checks each
+  against the pinned base image's real `apt-cache policy` output, and
+  reports or rewrites whatever's drifted - verified against both states on
+  the `.7` host: reports nothing on the current (fixed) Dockerfile, and
+  against the known-drifted pre-fix one, detects and `--fix`es both
+  `libexpat1`/`libexpat1-dev` occurrences to the exact version the manual
+  fix used. New scheduled workflow
+  (`.github/workflows/debian-pin-freshness.yml`, daily) runs it and, on
+  drift, force-pushes a fix to one reused branch and opens or updates a PR
+  - `ci-unbound.yml`'s own `pull_request` path filter already covers
+  `rootguard-unbound/**`, so the real build tests the fix before anyone
+  merges it, same as any other PR.
 
 ---
 
