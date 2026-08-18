@@ -1327,6 +1327,16 @@ of just fixing them again, built prevention for each:
   `rootguard-unbound/**`, so the real build tests the fix before anyone
   merges it, same as any other PR.
 
+**2026-08-18, same day:** `site/docs.html`'s preflight step and "Port 53
+is already in use" FAQ entry only described the old `docker ps`-based
+port check, predating the two-stage real-bind-test `probeHostPortBusy`
+added for [rootguard#288](https://github.com/foxly-it/rootguard/issues/288) -
+reworded both to explain the actual current
+mechanism (published-Docker-ports check first, then a real host-level
+bind attempt that also catches non-Docker occupants like
+`systemd-resolved`/`dnsmasq`), and that the FAQ case is now detected
+automatically rather than something the user has to go check by hand.
+
 ---
 
 0.2's conflict-detection checkbox
