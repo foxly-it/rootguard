@@ -83,7 +83,7 @@ services:
   updater:
     build:
       context: ./rootguard-updater
-    image: rootguard-updater:dev
+    image: "${ROOTGUARD_UPDATER_IMAGE:-rootguard-updater:dev}"
     container_name: rootguard-updater
     restart: unless-stopped
     environment:
