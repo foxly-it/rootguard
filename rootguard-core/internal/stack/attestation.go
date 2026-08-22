@@ -62,8 +62,14 @@ var attestationCache = struct {
 
 type attestationRunner func(context.Context, string, ...string) ([]byte, error)
 
+// attestationRun is swapped out in tests so CheckStackAttestations's real
+// wiring (which services it actually checks, not just what
+// verifyReleaseAttestationWith itself can do in isolation) can be verified
+// end-to-end without invoking the real cosign binary.
+var attestationRun attestationRunner = runAttestationCommand
+
 func verifyReleaseAttestation(ctx context.Context, service, image string) (string, string) {
-	return verifyReleaseAttestationWith(ctx, service, image, runAttestationCommand, time.Now)
+	return verifyReleaseAttestationWith(ctx, service, image, attestationRun, time.Now)
 }
 
 func verifyReleaseAttestationWith(ctx context.Context, service, image string, run attestationRunner, now func() time.Time) (string, string) {

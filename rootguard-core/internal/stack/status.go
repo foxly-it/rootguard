@@ -35,7 +35,17 @@ func CheckStackAttestations(ctx context.Context, status *StackStatus) {
 		name string
 		info *ContainerInfo
 	}
-	targets := []target{{"core", &status.Core}, {"webapp", &status.WebApp}}
+	// AdGuard has no RootGuard signing policy (third-party image) and stays
+	// permanently not_applicable - core, webapp, updater, and unbound are
+	// all published by the same release-alpha.yml matrix build and do have
+	// real policies in attestationPolicies, so they must actually be
+	// checked rather than assumed not_applicable.
+	targets := []target{
+		{"core", &status.Core},
+		{"webapp", &status.WebApp},
+		{"updater", &status.Updater},
+		{"unbound", &status.Unbound},
+	}
 	var wait sync.WaitGroup
 	for _, item := range targets {
 		wait.Add(1)
@@ -45,9 +55,7 @@ func CheckStackAttestations(ctx context.Context, status *StackStatus) {
 		}(item)
 	}
 	wait.Wait()
-	status.Updater.Attestation = "not_applicable"
 	status.AdGuard.Attestation = "not_applicable"
-	status.Unbound.Attestation = "not_applicable"
 }
 
 type StackStatus struct {

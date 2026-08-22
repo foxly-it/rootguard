@@ -1,6 +1,48 @@
 package stack
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
+
+// TestCheckStackAttestationsCoversCoreWebappUpdaterUnbound guards against
+// the actual live-serving wiring drifting away from attestationPolicies
+// again: core/webapp/updater/unbound all have real signing policies and a
+// correctly signed image must verify for all four, not just core/webapp -
+// #230 extended the policy map to cover updater/unbound/blockpage but
+// CheckStackAttestations itself, which is what /api/services actually
+// calls, never started checking them and hardcoded not_applicable
+// instead. adguard has no RootGuard policy (third-party image) and must
+// stay not_applicable regardless.
+func TestCheckStackAttestationsCoversCoreWebappUpdaterUnbound(t *testing.T) {
+	resetAttestationCache()
+	original := attestationRun
+	defer func() { attestationRun = original }()
+	attestationRun = func(context.Context, string, ...string) ([]byte, error) {
+		return []byte(`{"verified":true}`), nil
+	}
+
+	status := &StackStatus{
+		Core:    ContainerInfo{Image: "ghcr.io/foxly-it/rootguard-core:v1@sha256:abc"},
+		WebApp:  ContainerInfo{Image: "ghcr.io/foxly-it/rootguard-webapp:v1@sha256:abc"},
+		Updater: ContainerInfo{Image: "ghcr.io/foxly-it/rootguard-updater:v1@sha256:abc"},
+		AdGuard: ContainerInfo{Image: "adguard/adguardhome:v0.107.79@sha256:abc"},
+		Unbound: ContainerInfo{Image: "ghcr.io/foxly-it/rootguard-unbound:v1@sha256:abc"},
+	}
+	CheckStackAttestations(context.Background(), status)
+
+	for name, info := range map[string]ContainerInfo{
+		"core": status.Core, "webapp": status.WebApp,
+		"updater": status.Updater, "unbound": status.Unbound,
+	} {
+		if info.Attestation != "verified" {
+			t.Fatalf("%s: expected verified, got %q", name, info.Attestation)
+		}
+	}
+	if status.AdGuard.Attestation != "not_applicable" {
+		t.Fatalf("adguard: expected not_applicable, got %q", status.AdGuard.Attestation)
+	}
+}
 
 func TestDecodeContainerInspectReturnsOperatorMetadata(t *testing.T) {
 	payload := []byte(`[{
