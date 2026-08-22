@@ -31,7 +31,7 @@ services:
       # self-refreshing tag is preferable to a snapshot that would need its
       # own release-pipeline pin-refresh step for a value that's never the
       # primary source of truth.
-      ROOTGUARD_UPDATER_UPDATE_IMAGE: "${ROOTGUARD_UPDATER_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-updater:0.1.0-beta.5@sha256:94d25d8074ae09ef986e413ec64ee89c1a7ff79c3f3435f33a3cb78764cba2c1"
+      ROOTGUARD_UPDATER_UPDATE_IMAGE: "${ROOTGUARD_UPDATER_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-updater:0.1.0-beta.5@sha256:94d25d8074ae09ef986e413ec64ee89c1a7ff79c3f3435f33a3cb78764cba2c1}"
       ROOTGUARD_SELF_UPDATE_DIR: /var/lib/rootguard/updater-self-update
       # Core replaces the updater's own container the same way it already
       # replaces AdGuard/Unbound - via `docker compose ... up -d --no-deps
@@ -48,6 +48,13 @@ services:
       # Same reason the updater service carries them.
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
       ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
+      # Propagates the real host checkout directory into `docker compose -f
+      # /opt/rootguard/compose.yaml ...` re-invocations (self-update and the
+      # control-plane update both do this from inside a container). Without
+      # this, `${PWD}` below re-resolves against the wrong process's cwd and
+      # silently mounts an empty directory instead of the real file - see the
+      # matching comment on the volumes line.
+      PWD: "${PWD}"
       UNBOUND_CONFIG_DIR: /var/lib/rootguard/unbound
       UNBOUND_CONTAINER_CONFIG_DIR: /etc/unbound/unbound.d
       UNBOUND_CONTAINER_NAME: rootguard-unbound
@@ -62,7 +69,10 @@ services:
       - rootguard-data:/var/lib/rootguard
       - unbound-config:/var/lib/rootguard/unbound
       - adguard-auth:/var/lib/rootguard/adguard-auth
-      - ./compose.release.yaml:/opt/rootguard/compose.yaml:ro
+      # ${PWD}, not a relative "./compose.release.yaml": see the matching
+      # PWD/${PWD} comments on this file's core service, above - the same
+      # self-referential-mount hazard applies here.
+      - ${PWD}/compose.release.yaml:/opt/rootguard/compose.yaml:ro
     networks:
       - control
     healthcheck:
@@ -114,11 +124,15 @@ services:
       ROOTGUARD_CORE_IMAGE: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-beta.5@sha256:abb43826dae39bdbe026dcb96eab3b73756399c925d6bd20b9f2ceb872ec6e23}"
       ROOTGUARD_WEBAPP_IMAGE: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-beta.5@sha256:f6e9783350c7d9f34503a0e8790d90a4b3def160423bef0f69a1f4712dc868d2}"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
+      # See the matching PWD/${PWD} comments on the core service above - the
+      # same self-referential-mount hazard applies here now that Core can
+      # recreate this very service (self-update).
+      PWD: "${PWD}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - rootguard-sessions:/var/lib/rootguard-sessions
-      - ./compose.release.yaml:/opt/rootguard/compose.release.yaml:ro
+      - ${PWD}/compose.release.yaml:/opt/rootguard/compose.release.yaml:ro
     networks:
       - control
     healthcheck:

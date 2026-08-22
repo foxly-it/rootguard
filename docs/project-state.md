@@ -903,6 +903,41 @@ Trustworthy Stack Center and production visibility:
   self-mount keeps its real name since it uses a literal full-path field
   instead of this fixed-filename join
   ([rootguard#321](https://github.com/foxly-it/rootguard/issues/321)).
+- Three more real bugs found live while actually exercising updater
+  self-update against published `v0.1.0-beta.5` images (the renamed-mount
+  fix above was necessary but not sufficient):
+  (1) Docker Compose resolves a *relative* bind-mount source against the
+  directory of whatever `-f` file is being parsed, not the file's own
+  location - so when Core (or the Updater) re-invokes `docker compose -f
+  /opt/rootguard/compose.yaml ...` from inside its own container to
+  recreate a sibling service, `core:`'s/`updater:`'s own `./compose.yaml`
+  self-mount re-resolved against `/opt/rootguard` (a container-internal
+  path, meaningless on the real host) and silently became an empty
+  directory - corrupting the mount for every future recreation of that
+  service, including a normal core/webapp control-plane update (#320),
+  not just self-update. Fixed by switching to `${PWD}/compose.yaml` (a
+  literal env-var substitution, immune to filesystem-relative
+  resolution) with an explicit `PWD: "${PWD}"` passthrough on both
+  services, in both `compose.yaml` and `compose.release.yaml`.
+  (2) Live-discovered update targets are bare `repo:tag` references by
+  design (#320); cosign attestation verification requires an explicit
+  `@sha256:...` reference and reports `not_applicable` without one - so a
+  self-updated (or live-discovery-updated) service only ever showed
+  "Verified" by coincidence, never because the live-discovery mechanism
+  itself produced a verifiable reference. Fixed with a `digestQualify`
+  helper (mirrored in both updater implementations) that resolves the
+  real digest via `docker image inspect` right after a successful pull
+  and upgrades the target to `repo@sha256:...` before it's used.
+  (3) The already-published `v0.1.0-beta.5` release-pin-refresh commit on
+  `main` contained genuinely broken YAML: `release-alpha.yml`'s
+  digest-pinning `sed` pattern didn't exclude `}` from its greedy match,
+  and every `*_UPDATE_IMAGE` line except the new
+  `ROOTGUARD_UPDATER_UPDATE_IMAGE` (intentionally unpinned to `:latest`,
+  so its default had no pre-existing `@sha256:...` to stop the match at)
+  happened to avoid the bug by luck. `docker compose -f
+  compose.release.yaml config` failed outright as a result - fixed the
+  regex and the already-broken committed line
+  ([rootguard#323](https://github.com/foxly-it/rootguard/issues/323)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

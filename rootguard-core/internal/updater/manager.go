@@ -264,6 +264,7 @@ func (m *Manager) check() {
 			})
 			continue
 		}
+		targetImage = digestQualify(ctx, m.run, targetImage)
 		candidateID, err := m.inspectImage(ctx, targetImage)
 		result := ServiceStatus{
 			CurrentImage: currentImage, CurrentID: currentID, TargetImage: targetImage, CandidateID: candidateID,
@@ -307,6 +308,7 @@ func (m *Manager) update(service string) {
 		m.fail(service, fmt.Errorf("pull target image: %w", err))
 		return
 	}
+	targetImage = digestQualify(ctx, m.run, targetImage)
 	candidateID, err := m.inspectImage(ctx, targetImage)
 	if err != nil {
 		m.fail(service, err)
