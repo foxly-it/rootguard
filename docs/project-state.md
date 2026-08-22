@@ -878,6 +878,31 @@ Trustworthy Stack Center and production visibility:
   component rather than blocking the check/update - those pins become
   unused, not obsolete
   ([rootguard#319](https://github.com/foxly-it/rootguard/issues/319)).
+- The RootGuard Updater can now update its own image, closing the one
+  remaining gap #319/#320 explicitly left open: a running process can't
+  gracefully replace its own container, so Core - which already holds the
+  Docker socket and, since #320, real outbound internet access - manages
+  this the same way it already manages AdGuard/Unbound, via a second
+  `*updater.Manager` instance scoped to the control-plane `compose.yaml`/
+  project `rootguard` (not Core's own generated data-plane compose file).
+  New Core routes (`/api/updater-updates`, mirroring the existing
+  `/api/updates` shape) are proxied by the WebApp backend the same way as
+  every other update surface; the Stack Center "Control Plane" panel's
+  updater row, previously a static "HELPER" label with no action, now
+  carries a real update button. A busy-guard refuses to start the swap
+  while the updater is itself mid a core/webapp check or update - not
+  required for correctness (an interrupted operation already recovers
+  cleanly on next start, the same recovery path proven for a real process
+  kill in #225) but avoids an easily-avoidable, confusing failure. Live
+  verification on the dev/test LXC surfaced a real filename mismatch that
+  unit tests couldn't: Core's generic update manager always looks for a
+  file literally named `compose.yaml` in whichever directory it's pointed
+  at, but the public release stack's file is `compose.release.yaml` -
+  fixed by mounting it at a renamed target path (`/opt/rootguard/
+  compose.yaml`) for Core specifically, while the updater's own
+  self-mount keeps its real name since it uses a literal full-path field
+  instead of this fixed-filename join
+  ([rootguard#321](https://github.com/foxly-it/rootguard/issues/321)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

@@ -17,18 +17,22 @@ import {
 import {
   checkControlPlaneUpdates,
   checkUpdates,
+  checkUpdaterSelfUpdate,
   fetchControlPlaneUpdateStatus,
   fetchCleanupPreview,
   fetchServices,
   fetchUpdateStatus,
+  fetchUpdaterSelfUpdateStatus,
   installServiceUpdate,
   installControlPlaneUpdates,
+  installUpdaterSelfUpdate,
   runManualCleanup,
   serviceAction,
   type ServiceInfo,
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
+  type UpdaterSelfUpdateStatus,
   type CleanupPreview,
   type UpdateHistoryEntry,
 } from "../api/client";
@@ -41,6 +45,7 @@ export default function Stack() {
   const { t, formatDate } = useI18n();
   const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [controlPlane, setControlPlane] = useState<ControlPlaneUpdateStatus | null>(null);
+  const [updaterUpdate, setUpdaterUpdate] = useState<UpdaterSelfUpdateStatus | null>(null);
   const [cleanup, setCleanup] = useState<CleanupPreview | null>(null);
   const [runningCleanup, setRunningCleanup] = useState(false);
   const [services, setServices] = useState<ServiceInfo[]>([]);
@@ -48,13 +53,15 @@ export default function Stack() {
 
   const load = useCallback(async () => {
     try {
-      const [nextUpdates, nextControlPlane, nextServices] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextServices] = await Promise.all([
         fetchUpdateStatus(),
         fetchControlPlaneUpdateStatus(),
+        fetchUpdaterSelfUpdateStatus(),
         fetchServices(),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
+      setUpdaterUpdate(nextUpdaterUpdate);
       setServices(nextServices);
       setError("");
     } catch (cause) {
@@ -68,7 +75,8 @@ export default function Stack() {
   }, [load]);
 
   const busy = updates?.state === "checking" || updates?.state === "updating"
-    || controlPlane?.state === "checking" || controlPlane?.state === "updating" || runningCleanup;
+    || controlPlane?.state === "checking" || controlPlane?.state === "updating"
+    || updaterUpdate?.state === "checking" || updaterUpdate?.state === "updating" || runningCleanup;
   useEffect(() => {
     const timer = window.setInterval(load, busy ? 1500 : 10_000);
     return () => window.clearInterval(timer);
@@ -76,27 +84,32 @@ export default function Stack() {
 
   const available = useMemo(
     () => (updates?.services.filter((service) => service.update_available).length ?? 0)
-      + (controlPlane?.services.filter((service) => service.update_available).length ?? 0),
-    [updates, controlPlane],
+      + (controlPlane?.services.filter((service) => service.update_available).length ?? 0)
+      + (updaterUpdate?.services.filter((service) => service.update_available).length ?? 0),
+    [updates, controlPlane, updaterUpdate],
   );
   const history = useMemo(
     () => [
       ...(updates?.history ?? []).map((entry) => ({ ...entry, scope: entry.service === "cleanup" ? "Docker" : entry.service || "DNS" })),
       ...(controlPlane?.history ?? []).map((entry) => ({ ...entry, scope: "Control Panel" })),
+      ...(updaterUpdate?.history ?? []).map((entry) => ({ ...entry, scope: "Updater" })),
     ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)).slice(0, 12),
-    [updates, controlPlane],
+    [updates, controlPlane, updaterUpdate],
   );
   const updaterRuntime = services.find((service) => service.name === "updater");
+  const updaterService = updaterUpdate?.services[0];
 
   async function startCheck() {
     setError("");
     try {
-      const [nextUpdates, nextControlPlane] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextUpdaterUpdate] = await Promise.all([
         checkUpdates(),
         checkControlPlaneUpdates(),
+        checkUpdaterSelfUpdate(),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
+      setUpdaterUpdate(nextUpdaterUpdate);
     } catch (cause) {
       setError(errorMessage(cause, t("stack.updateCheckError")));
     }
@@ -109,6 +122,16 @@ export default function Stack() {
       setControlPlane(await installControlPlaneUpdates());
     } catch (cause) {
       setError(errorMessage(cause, t("stack.controlPlaneStartError")));
+    }
+  }
+
+  async function startUpdaterSelfUpdate() {
+    if (!window.confirm(t("stack.updaterSelfUpdateConfirm"))) return;
+    setError("");
+    try {
+      setUpdaterUpdate(await installUpdaterSelfUpdate());
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.updaterSelfUpdateStartError")));
     }
   }
 
@@ -225,12 +248,16 @@ export default function Stack() {
                 t={t}
               />
             ))}
-            {updaterRuntime && (
+            {updaterRuntime && updaterService && (
               <ControlPlaneService
                 icon={<ServerCog />}
                 name={updaterRuntime.displayName}
-                updateLabel={t("stack.helper")}
+                updateLabel={updaterService.update_available ? t("stack.update") : updaterService.checked_at ? t("stack.current") : t("stack.unchecked")}
+                updateAvailable={updaterService.update_available}
                 runtime={updaterRuntime}
+                fallbackImage={updaterService.current_image}
+                onUpdate={startUpdaterSelfUpdate}
+                updating={updaterUpdate?.state === "updating"}
                 t={t}
               />
             )}
@@ -390,6 +417,8 @@ function ControlPlaneService({
   updateAvailable = false,
   runtime,
   fallbackImage,
+  onUpdate,
+  updating = false,
   t,
 }: {
   icon: React.ReactNode;
@@ -398,6 +427,8 @@ function ControlPlaneService({
   updateAvailable?: boolean;
   runtime?: ServiceInfo;
   fallbackImage?: string;
+  onUpdate?: () => void;
+  updating?: boolean;
   t: Translate;
 }) {
   return (
@@ -417,7 +448,19 @@ function ControlPlaneService({
           <AttestationBadge service={runtime} t={t} compact />
         </div>
       </div>
-      <em className={updateAvailable ? "available" : ""}>{updateLabel}</em>
+      {onUpdate ? (
+        <button
+          type="button"
+          className="rg-button rg-button-secondary stack-service-update-button"
+          disabled={!updateAvailable || updating}
+          onClick={onUpdate}
+        >
+          {updating ? <LoaderCircle className="spin" size={15} /> : <Download size={15} />}
+          {updateLabel}
+        </button>
+      ) : (
+        <em className={updateAvailable ? "available" : ""}>{updateLabel}</em>
+      )}
     </article>
   );
 }

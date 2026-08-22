@@ -224,6 +224,18 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleControlPlaneUpdateInstall(w, r, core)
 	}))
 
+	mux.HandleFunc("GET /api/updater-updates", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleUpdaterSelfUpdateStatus(w, r, core)
+	})
+
+	mux.HandleFunc("POST /api/updater-updates/check", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleUpdaterSelfUpdateCheck(w, r, core)
+	})
+
+	mux.HandleFunc("POST /api/updater-updates/install", dest(auditUpdaterSelfUpdateInstall, func(w http.ResponseWriter, r *http.Request) {
+		api.HandleUpdaterSelfUpdateInstall(w, r, core)
+	}))
+
 	putUnboundSettings := dest(auditUnboundSettingsApplied, func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePutUnboundSettings(w, r, core)
 	})

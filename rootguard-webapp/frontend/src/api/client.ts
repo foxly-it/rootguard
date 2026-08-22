@@ -791,3 +791,28 @@ export async function checkControlPlaneUpdates(): Promise<ControlPlaneUpdateStat
 export async function installControlPlaneUpdates(): Promise<ControlPlaneUpdateStatus> {
   return request<ControlPlaneUpdateStatus>("/api/control-plane-updates/install", { method: "POST" });
 }
+
+export interface UpdaterSelfUpdateServiceStatus extends Omit<UpdateServiceStatus, "name"> {
+  name: "updater";
+}
+
+export interface UpdaterSelfUpdateStatus {
+  state: "idle" | "checking" | "updating" | "failed";
+  active_service?: string;
+  message: string;
+  services: UpdaterSelfUpdateServiceStatus[];
+  history?: UpdateHistoryEntry[];
+  updated_at: string;
+}
+
+export async function fetchUpdaterSelfUpdateStatus(): Promise<UpdaterSelfUpdateStatus> {
+  return request<UpdaterSelfUpdateStatus>("/api/updater-updates");
+}
+
+export async function checkUpdaterSelfUpdate(): Promise<UpdaterSelfUpdateStatus> {
+  return request<UpdaterSelfUpdateStatus>("/api/updater-updates/check", { method: "POST" });
+}
+
+export async function installUpdaterSelfUpdate(): Promise<UpdaterSelfUpdateStatus> {
+  return request<UpdaterSelfUpdateStatus>("/api/updater-updates/install", { method: "POST" });
+}

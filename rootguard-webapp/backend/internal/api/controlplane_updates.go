@@ -17,3 +17,15 @@ func HandleControlPlaneUpdateCheck(w http.ResponseWriter, r *http.Request, core 
 func HandleControlPlaneUpdateInstall(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	proxyCore(w, r, http.StatusAccepted, core.InstallControlPlaneUpdates)
 }
+
+func HandleUpdaterSelfUpdateStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	proxyCore(w, r, http.StatusOK, core.UpdaterSelfUpdateStatus)
+}
+
+func HandleUpdaterSelfUpdateCheck(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	proxyCore(w, r, http.StatusAccepted, core.CheckUpdaterSelfUpdate)
+}
+
+func HandleUpdaterSelfUpdateInstall(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	proxyCore(w, r, http.StatusAccepted, core.InstallUpdaterSelfUpdate)
+}

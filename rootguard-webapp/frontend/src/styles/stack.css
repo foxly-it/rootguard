@@ -357,6 +357,16 @@
   background: var(--warning-soft);
 }
 
+.control-plane-services .stack-service-update-button {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 0.62rem;
+}
+
+.control-plane-services .stack-service-update-button svg {
+  width: 13px;
+}
+
 .control-plane-note {
   display: flex;
   align-items: flex-start;
