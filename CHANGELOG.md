@@ -3,6 +3,12 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.6] - 2026-08-22
+
+### Fixed
+
+- Updater self-update compose-mount resolution, digest-less attestation, and a broken beta.5 pin ([#324](https://github.com/foxly-it/rootguard/pull/324))
+
 ## [0.1.0-beta.5] - 2026-08-22
 
 ### Added
