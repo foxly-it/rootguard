@@ -16,7 +16,7 @@ repository_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repository_dir}"
 
 latest_tag="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' | head -1)"
+  | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' | head -1 || true)"
 if [[ -z "${latest_tag}" ]]; then
   echo "No v0.1.0-alpha.*/beta.* tag found - cannot determine the current version" >&2
   exit 1
