@@ -3,6 +3,30 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.4] - 2026-08-22
+
+### Added
+
+- Automate site-version refresh and Debian pin-drift detection ([#298](https://github.com/foxly-it/rootguard/pull/298))
+
+### Documentation
+
+- Explain the real host-level port-53 verification on the site ([#299](https://github.com/foxly-it/rootguard/pull/299))
+- Record the real 08-22 update-exercise result ([#310](https://github.com/foxly-it/rootguard/pull/310))
+
+### Fixed
+
+- Bump drifted libexpat pin; refresh site to beta.3 ([#297](https://github.com/foxly-it/rootguard/pull/297))
+- Retry post-restore DNS check in the soak backup-restore drill (#301) ([#302](https://github.com/foxly-it/rootguard/pull/302))
+- Parameterize updater image in compose.yaml, matching core/webapp (#303) ([#304](https://github.com/foxly-it/rootguard/pull/304))
+- Match the actual graphify-out/ directory name ([#305](https://github.com/foxly-it/rootguard/pull/305))
+- Bump stale AdGuard Home pin from v0.107.78 to v0.107.79 (#306) ([#307](https://github.com/foxly-it/rootguard/pull/307))
+
+### Other
+
+- "Control Plane" -> "Control Panel" in WebGUI-visible text ([#300](https://github.com/foxly-it/rootguard/pull/300))
+- Compose.alpha.yaml/.env.alpha.example -> compose.release.yaml/.env.release.example (#308) ([#309](https://github.com/foxly-it/rootguard/pull/309))
+
 ## [0.1.0-beta.3] - 2026-08-16
 
 ### Fixed
