@@ -172,3 +172,44 @@ func TestCheckFallsBackToStaticPinWhenResolveTargetFails(t *testing.T) {
 		t.Fatalf("expected the static pin to be reported, got %q", service.TargetImage)
 	}
 }
+
+// TestDigestQualifyAttachesTheRealDigest guards against live-discovered
+// bare-tag targets (e.g. "ghcr.io/foxly-it/rootguard-unbound:0.1.0-beta.5")
+// staying tag-only after a successful pull - cosign attestation requires
+// an explicit @sha256: reference and reports "not_applicable" without
+// one, exactly the gap found live: a real self-update left the running
+// container's image bare-tag-only even though the digest was available
+// locally right after the pull.
+func TestDigestQualifyAttachesTheRealDigest(t *testing.T) {
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		if arguments[0] != "image" || arguments[1] != "inspect" {
+			t.Fatalf("unexpected command: %v", arguments)
+		}
+		return []byte("ghcr.io/foxly-it/rootguard-unbound@sha256:deadbeef|"), nil
+	}
+	image := digestQualify(context.Background(), run, "ghcr.io/foxly-it/rootguard-unbound:0.1.0-beta.5")
+	if image != "ghcr.io/foxly-it/rootguard-unbound@sha256:deadbeef" {
+		t.Fatalf("expected the digest-qualified reference, got %q", image)
+	}
+}
+
+func TestDigestQualifyLeavesAlreadyQualifiedImagesUnchanged(t *testing.T) {
+	run := func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("should not inspect an already digest-qualified image")
+		return nil, nil
+	}
+	const image = "ghcr.io/foxly-it/rootguard-unbound:0.1.0-beta.5@sha256:cafe"
+	if got := digestQualify(context.Background(), run, image); got != image {
+		t.Fatalf("expected the image unchanged, got %q", got)
+	}
+}
+
+func TestDigestQualifyFallsBackToTheBareTagOnLookupFailure(t *testing.T) {
+	run := func(context.Context, ...string) ([]byte, error) {
+		return nil, errors.New("docker daemon unreachable")
+	}
+	const image = "ghcr.io/foxly-it/rootguard-unbound:0.1.0-beta.5"
+	if got := digestQualify(context.Background(), run, image); got != image {
+		t.Fatalf("expected the bare tag as a fallback, got %q", got)
+	}
+}

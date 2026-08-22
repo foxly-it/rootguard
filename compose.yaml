@@ -35,6 +35,13 @@ services:
       # for the webapp service. Same reason the updater service carries them.
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
       ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
+      # Propagates the real host checkout directory into `docker compose -f
+      # /opt/rootguard/compose.yaml ...` re-invocations (self-update and the
+      # control-plane update both do this from inside a container). Without
+      # this, `${PWD}` below re-resolves against the wrong process's cwd and
+      # silently mounts an empty directory instead of the real file - see the
+      # matching comment on the volumes line.
+      PWD: "${PWD}"
       UNBOUND_CONFIG_DIR: /var/lib/rootguard/unbound
       UNBOUND_CONTAINER_CONFIG_DIR: /etc/unbound/unbound.d
       UNBOUND_CONTAINER_NAME: rootguard-unbound
@@ -49,7 +56,20 @@ services:
       - rootguard-data:/var/lib/rootguard
       - unbound-config:/var/lib/rootguard/unbound
       - adguard-auth:/var/lib/rootguard/adguard-auth
-      - ./compose.yaml:/opt/rootguard/compose.yaml:ro
+      # ${PWD}, not a relative "./compose.yaml": docker compose resolves a
+      # relative bind source against the directory of whatever -f file is
+      # being read, not against this file's own location. That's fine for
+      # the top-level `docker compose up` (PWD = the real checkout dir), but
+      # breaks the moment Core or the Updater re-invoke `docker compose -f
+      # /opt/rootguard/compose.yaml ...` from inside their own container to
+      # recreate a sibling service: the relative path would then resolve
+      # against /opt/rootguard - a path that only exists inside containers,
+      # not on the real host - silently mounting an auto-vivified empty
+      # directory instead of the real file. ${PWD} sidesteps this since it's
+      # a literal environment-variable substitution, not filesystem-relative
+      # resolution; the PWD env var above keeps propagating the correct
+      # value through every such re-invocation.
+      - ${PWD}/compose.yaml:/opt/rootguard/compose.yaml:ro
     networks:
       - control
     healthcheck:
@@ -114,11 +134,15 @@ services:
       ROOTGUARD_CORE_IMAGE: "${ROOTGUARD_CORE_IMAGE:-rootguard-core:dev}"
       ROOTGUARD_WEBAPP_IMAGE: "${ROOTGUARD_WEBAPP_IMAGE:-rootguard-webapp:dev}"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
+      # See the matching PWD/${PWD} comments on the core service above - the
+      # same self-referential-mount hazard applies here now that Core can
+      # recreate this very service (self-update).
+      PWD: "${PWD}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - rootguard-sessions:/var/lib/rootguard-sessions
-      - ./compose.yaml:/opt/rootguard/compose.yaml:ro
+      - ${PWD}/compose.yaml:/opt/rootguard/compose.yaml:ro
     networks:
       - control
     healthcheck:

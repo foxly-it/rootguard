@@ -114,3 +114,32 @@ func TestControlPlaneCheckFallsBackToStaticPinWithoutOverride(t *testing.T) {
 		t.Fatalf("expected the static pin unaffected, got %q", result.Services[0].TargetImage)
 	}
 }
+
+// TestDigestQualifyAttachesTheRealDigest guards against a live-resolved
+// bare-tag override (from Core's GitHub Releases discovery) staying
+// tag-only in the reported/recorded image after a successful pull -
+// cosign attestation requires an explicit @sha256: reference and reports
+// "not_applicable" without one.
+func TestDigestQualifyAttachesTheRealDigest(t *testing.T) {
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		if arguments[0] != "image" || arguments[1] != "inspect" {
+			t.Fatalf("unexpected command: %v", arguments)
+		}
+		return []byte("ghcr.io/foxly-it/rootguard-core@sha256:deadbeef|"), nil
+	}
+	image := digestQualify(context.Background(), run, "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.5")
+	if image != "ghcr.io/foxly-it/rootguard-core@sha256:deadbeef" {
+		t.Fatalf("expected the digest-qualified reference, got %q", image)
+	}
+}
+
+func TestDigestQualifyLeavesAlreadyQualifiedImagesUnchanged(t *testing.T) {
+	run := func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("should not inspect an already digest-qualified image")
+		return nil, nil
+	}
+	const image = "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.5@sha256:cafe"
+	if got := digestQualify(context.Background(), run, image); got != image {
+		t.Fatalf("expected the image unchanged, got %q", got)
+	}
+}

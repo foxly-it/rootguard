@@ -77,6 +77,33 @@ func targetImageFor(spec serviceSpec, targetImages map[string]string) string {
 	return spec.TargetImage
 }
 
+// digestQualify turns a bare "repo:tag" override (as resolved by Core's
+// live release discovery) into an immutable "repo@sha256:..." one, using
+// the digest the image was just pulled at. Cosign attestation verification
+// requires an explicit @sha256: reference and reports "not_applicable"
+// without one; an already-qualified (static pin) target passes through
+// unchanged, and a lookup failure falls back to the original reference
+// rather than failing the check/update over a cosmetic gap.
+func digestQualify(ctx context.Context, run runner, image string) string {
+	if strings.Contains(image, "@sha256:") {
+		return image
+	}
+	repo, _, ok := strings.Cut(image, ":")
+	if !ok {
+		return image
+	}
+	output, err := run(ctx, "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}|{{end}}", image)
+	if err != nil {
+		return image
+	}
+	for _, digestRef := range strings.Split(strings.TrimSpace(string(output)), "|") {
+		if strings.HasPrefix(digestRef, repo+"@") {
+			return digestRef
+		}
+	}
+	return image
+}
+
 // decodeTargetOverrides reads an optional {"target_images": {...}} JSON
 // body; a missing/empty body is not an error and yields no overrides.
 func decodeTargetOverrides(body io.Reader) (map[string]string, error) {
@@ -266,12 +293,16 @@ func (m *manager) check(targetImages map[string]string) {
 	for _, spec := range m.specs {
 		m.progress("Prüfe " + spec.DisplayName + ".")
 		targetImage := targetImageFor(spec, targetImages)
-		result := serviceStatus{Name: spec.Name, DisplayName: spec.DisplayName, TargetImage: targetImage, CheckedAt: time.Now().UTC()}
 		currentImage, currentID, err := m.inspectContainer(ctx, spec.Container)
-		result.CurrentImage, result.CurrentID = currentImage, currentID
 		if err == nil && !m.skipPull {
-			_, err = m.run(ctx, "pull", targetImage)
+			if _, pullErr := m.run(ctx, "pull", targetImage); pullErr != nil {
+				err = pullErr
+			} else {
+				targetImage = digestQualify(ctx, m.run, targetImage)
+			}
 		}
+		result := serviceStatus{Name: spec.Name, DisplayName: spec.DisplayName, TargetImage: targetImage, CheckedAt: time.Now().UTC()}
+		result.CurrentImage, result.CurrentID = currentImage, currentID
 		if err == nil {
 			result.CandidateID, err = m.inspectImage(ctx, targetImage)
 		}
@@ -312,6 +343,7 @@ func (m *manager) update(targetImages map[string]string) {
 				m.fail(err)
 				return
 			}
+			targetImage = digestQualify(ctx, m.run, targetImage)
 		}
 		candidateID, err := m.inspectImage(ctx, targetImage)
 		if err != nil {

@@ -74,3 +74,31 @@ func resolveTargetImage(ctx context.Context, spec ServiceSpec) string {
 	}
 	return spec.TargetImage
 }
+
+// digestQualify turns a bare "repo:tag" reference - what live release
+// discovery produces - into an immutable "repo@sha256:..." one, using the
+// digest the image was just pulled at. Cosign attestation verification
+// requires an explicit @sha256: reference and reports "not_applicable"
+// without one, same as it already does for any other mutable-tag image;
+// an already-qualified (static pin) target passes through unchanged, and a
+// lookup failure falls back to the original reference rather than failing
+// the check/update over a cosmetic gap.
+func digestQualify(ctx context.Context, run CommandRunner, image string) string {
+	if strings.Contains(image, "@sha256:") {
+		return image
+	}
+	repo, _, ok := strings.Cut(image, ":")
+	if !ok {
+		return image
+	}
+	output, err := run(ctx, "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}|{{end}}", image)
+	if err != nil {
+		return image
+	}
+	for _, digestRef := range strings.Split(strings.TrimSpace(string(output)), "|") {
+		if strings.HasPrefix(digestRef, repo+"@") {
+			return digestRef
+		}
+	}
+	return image
+}

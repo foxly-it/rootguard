@@ -205,7 +205,16 @@ jobs:
             for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound; do
               digest="$(cat "/tmp/digests/${image}.digest")"
               test -n "$digest"
-              sed -i -E "s#(ghcr\.io/${OWNER}/${image}:)[^@\"]+(@sha256:[0-9a-f]+)?#\1${VERSION}@${digest}#g" "$file"
+              # [^@\"}] - not just [^@\"] - because ROOTGUARD_UPDATER_UPDATE_IMAGE
+              # is the one *_UPDATE_IMAGE line whose default fallback has no
+              # pre-existing @sha256: digest (it's an intentionally unpinned
+              # :latest, see compose.release.yaml's own comment on that line).
+              # Without excluding "}" too, the greedy match swallowed the
+              # closing brace of the surrounding ${VAR:-default}" wrapper on
+              # v0.1.0-beta.5's cut, breaking the file's YAML syntax outright
+              # (caught live, not by CI - docker compose config never ran
+              # against this exact committed pin-refresh commit).
+              sed -i -E "s#(ghcr\.io/${OWNER}/${image}:)[^@\"}]+(@sha256:[0-9a-f]+)?#\1${VERSION}@${digest}#g" "$file"
             done
             # Keep the descriptive header comment's version number in sync too -
             # left stale after alpha.7 since only the image pins were automated.
