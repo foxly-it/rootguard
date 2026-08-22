@@ -37,7 +37,7 @@ func TestControlPlaneCheckComparesBothAllowlistedServices(t *testing.T) {
 		}
 	}
 	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", testSpecs(), run)
-	if _, err := manager.StartCheck(); err != nil {
+	if _, err := manager.StartCheck(nil); err != nil {
 		t.Fatal(err)
 	}
 	result := waitForState(t, manager, stateIdle)
@@ -88,7 +88,7 @@ func TestControlPlaneUpdateRollsBackBothImagesWhenHealthFails(t *testing.T) {
 		return &http.Response{StatusCode: code, Status: http.StatusText(code), Body: io.NopCloser(strings.NewReader(""))}, nil
 	})}
 
-	if _, err := manager.StartUpdate(); err != nil {
+	if _, err := manager.StartUpdate(nil); err != nil {
 		t.Fatal(err)
 	}
 	result := waitForState(t, manager, stateFailed)

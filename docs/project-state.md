@@ -836,6 +836,48 @@ Trustworthy Stack Center and production visibility:
   self-correct once the next release ships
   ([rootguard#308](https://github.com/foxly-it/rootguard/issues/308),
   [rootguard#309](https://github.com/foxly-it/rootguard/pull/309)).
+- Stack Center's per-component attestation check now actually runs for the
+  RootGuard Updater and Unbound, not just Core/WebApp: `attestationPolicies`
+  has held real signing policies for all five components since #230, but
+  `CheckStackAttestations` - the function `/api/services` actually calls -
+  only ever invoked the check for `core`/`webapp`, hardcoding
+  `updater`/`adguard`/`unbound` to `not_applicable` unconditionally.
+  `adguard` correctly stays hardcoded (third-party image, no RootGuard
+  policy); `updater`/`unbound` now go through the same live `cosign`
+  verification as `core`/`webapp`. A new regression test confirmed to fail
+  against the pre-fix code and pass against the fix
+  ([rootguard#317](https://github.com/foxly-it/rootguard/issues/317),
+  [rootguard#318](https://github.com/foxly-it/rootguard/pull/318)).
+- "Auf Updates prüfen" now discovers real new RootGuard releases live
+  instead of requiring an administrator to hand-pin the next image in
+  `.env` first. Core (which has real outbound internet access) queries the
+  public GitHub Releases API for `foxly-it/rootguard` (the full,
+  newest-first `/releases` list, since every release here is created with
+  `--prerelease` and is therefore invisible to `/releases/latest`), picks
+  the newest tag matching RootGuard's own `v0.1.0-(alpha|beta).N`
+  convention, and resolves it to
+  `ghcr.io/foxly-it/rootguard-<component>:<version>` for Core, WebApp, and
+  Unbound. Unbound's own updater (inside Core) resolves this directly;
+  Core/WebApp's updater is the separate, network-isolated
+  `rootguard-updater` component (`control` network, `internal: true` - no
+  outbound internet by design), so Core resolves those two itself and
+  passes the result through as a per-request `target_images` override on
+  the existing check/update call - live verification on the dev/test LXC
+  is what surfaced this network boundary, since the first implementation
+  attempt had `rootguard-updater` try to query GitHub directly and failed
+  with a DNS lookup error. The explicit "Control Plane
+  aktualisieren"/per-service update button click remains the real
+  authorization gate - only how the target image string is determined
+  changed, from a static pin to live discovery; the existing pull +
+  inspect + cosign-attestation-checked install/rollback machinery is
+  unchanged. AdGuard (third-party, channel-based) and the RootGuard
+  Updater's own image (self-update is a separate, harder problem - a
+  process can't gracefully replace its own running container) stay on the
+  static-pin path. A failed GitHub Releases lookup degrades silently to
+  the existing static `ROOTGUARD_*_UPDATE_IMAGE` `.env` pin for that
+  component rather than blocking the check/update - those pins become
+  unused, not obsolete
+  ([rootguard#319](https://github.com/foxly-it/rootguard/issues/319)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes

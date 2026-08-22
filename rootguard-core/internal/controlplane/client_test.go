@@ -1,7 +1,10 @@
 package controlplane
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -60,5 +63,71 @@ func TestStatusPreservesHistory(t *testing.T) {
 	}
 	if len(roundTrip.History) != 1 {
 		t.Fatalf("round-tripped History = %v, want 1 entry", roundTrip.History)
+	}
+}
+
+// TestCheckSendsResolvedTargetImages guards against Check() silently
+// ignoring registered resolvers: the updater's own control-plane network
+// is deliberately internet-isolated, so Core must resolve live release
+// images itself and forward them in the request body, not leave the
+// updater to fall back to its static pins every time.
+func TestCheckSendsResolvedTargetImages(t *testing.T) {
+	var receivedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"checking","message":"","services":[],"updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token")
+	client.WithTargetResolver("core", func(context.Context) (string, error) {
+		return "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.5", nil
+	})
+	client.WithTargetResolver("webapp", func(context.Context) (string, error) {
+		return "", errors.New("github unavailable")
+	})
+
+	if _, err := client.Check(t.Context()); err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	var payload struct {
+		TargetImages map[string]string `json:"target_images"`
+	}
+	if err := json.Unmarshal(receivedBody, &payload); err != nil {
+		t.Fatalf("decode request body: %v (body: %s)", err, receivedBody)
+	}
+	if payload.TargetImages["core"] != "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.5" {
+		t.Fatalf("expected the resolved core image in the request, got %#v", payload.TargetImages)
+	}
+	if _, ok := payload.TargetImages["webapp"]; ok {
+		t.Fatalf("expected the failed webapp resolution to be omitted, got %#v", payload.TargetImages)
+	}
+}
+
+// TestCheckOmitsBodyWithoutResolvers guards against always sending a
+// (possibly empty) JSON body: with no resolvers registered, Check()'s
+// request must look exactly like it did before this feature existed.
+func TestCheckOmitsBodyWithoutResolvers(t *testing.T) {
+	var receivedLength int64 = -1
+	var receivedContentType string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedLength = r.ContentLength
+		receivedContentType = r.Header.Get("Content-Type")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"checking","message":"","services":[],"updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token")
+	if _, err := client.Check(t.Context()); err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+	if receivedLength > 0 {
+		t.Fatalf("expected no request body without resolvers, got Content-Length %d", receivedLength)
+	}
+	if receivedContentType != "" {
+		t.Fatalf("expected no Content-Type header without a body, got %q", receivedContentType)
 	}
 }
