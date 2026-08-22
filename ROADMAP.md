@@ -1078,10 +1078,14 @@ Goal: freeze features and prove reliability.
       the 8 misses were all transient DNSSEC-reject timeouts correlated
       with elevated resolve latency (~12s vs. the usual ~3s), each
       self-recovered by the next 10-minute probe - looks like real
-      upstream/root-server jitter, not a RootGuard defect. 4 clean
-      update-exercise cycles, all `no_change` since the host's
-      `*_UPDATE_IMAGE` pins were never bumped past the beta.1 they were
-      deployed with - no real version upgrade has been exercised yet.
+      upstream/root-server jitter, not a RootGuard defect. 4 no-op
+      update-exercise cycles (the host's `*_UPDATE_IMAGE` pins were never
+      bumped past the beta.1 it was deployed with, so these only proved
+      the check/poll/history path stayed healthy, not a real upgrade),
+      then one real one after repinning to beta.3 and re-running on
+      2026-08-22: `outcome: "success"`, Core and WebApp both verified
+      swapped from their beta.1 to beta.3 image digests, DNS/DNSSEC/
+      filtering/WebGUI probe clean immediately after.
       2 backup/restore drills: the first (08-14) fully clean; the second
       (08-21) had `restore_ok=true` but its single-shot post-restore DNS
       check lost a narrow timing race right after container recreation
