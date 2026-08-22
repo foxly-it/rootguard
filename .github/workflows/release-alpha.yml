@@ -183,6 +183,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@v7
         with:
@@ -272,6 +273,19 @@ jobs:
           fi
           git tag -f -a "${tag}" -m "${{ needs.version.outputs.value }}" "${target}"
           git push --force origin "refs/tags/${tag}"
+
+      # GitHub never auto-triggers another workflow's "on: push" from a
+      # push made with the built-in GITHUB_TOKEN (the same anti-recursion
+      # rule release-version-bump.yml already works around for tag
+      # pushes) - so the "Commit updated pins" push above, even though it
+      # touches site/**, never starts pages.yml on its own. Dispatch it
+      # explicitly so the live site actually reflects this release
+      # instead of silently waiting for the next 6-hourly cron run.
+      # Idempotent: redeploying already-current content is harmless.
+      - name: Deploy the refreshed site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "${{ github.repository }}" --ref main
 
   smoke-test:
     needs: [version, publish]
