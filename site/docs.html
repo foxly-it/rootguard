@@ -112,15 +112,15 @@
             <h2 data-de="Control Plane starten" data-en="Start the control plane">Control Plane starten</h2>
             <div class="code-block"><div>shell</div><pre><code>mkdir rootguard &amp;&amp; cd rootguard
 
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.4/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.4/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.4/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.4/.env.release.example
 
 # Zwei unabhängige Sicherheitsschlüssel erzeugen
 openssl rand -hex 32
 openssl rand -hex 32
 
 # .env ausfüllen, dann RootGuard starten
-docker compose -f compose.alpha.yaml up -d</code></pre></div>
+docker compose -f compose.release.yaml up -d</code></pre></div>
             <p data-de="Trage zwei getrennt erzeugte Zufallswerte als ROOTGUARD_API_TOKEN und ROOTGUARD_RECOVERY_TOKEN sowie ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Die Beta lädt versionierte amd64-/arm64-Images aus GHCR; ein Checkout oder lokaler Build der Komponenten ist nicht erforderlich. Die Control Plane startet zuerst, die DNS-Dienste werden anschließend im Setup erzeugt." data-en="Store two independently generated random values as ROOTGUARD_API_TOKEN and ROOTGUARD_RECOVERY_TOKEN, and set your own strong ROOTGUARD_ADMIN_PASSWORD in .env. The beta pulls versioned amd64/arm64 images from GHCR; no component checkout or local build is required. The control plane starts first and Setup then creates the DNS services.">Trage zwei getrennt erzeugte Zufallswerte als ROOTGUARD_API_TOKEN und ROOTGUARD_RECOVERY_TOKEN sowie ein eigenes starkes ROOTGUARD_ADMIN_PASSWORD in .env ein. Die Beta lädt versionierte amd64-/arm64-Images aus GHCR; ein Checkout oder lokaler Build der Komponenten ist nicht erforderlich. Die Control Plane startet zuerst, die DNS-Dienste werden anschließend im Setup erzeugt.</p>
             <div class="code-block"><div>browser</div><pre><code>http://localhost:8080/login</code></pre></div>
           </section>
@@ -227,16 +227,16 @@ ROOTGUARD_WEBAPP_UPDATE_IMAGE=ghcr.io/foxly-it/rootguard-webapp:0.1.0-beta.4@sha
             <p class="eyebrow" data-de="11 · Betrieb" data-en="11 · Operations">11 · Betrieb</p>
             <h2 data-de="Nützliche Befehle" data-en="Useful commands">Nützliche Befehle</h2>
             <div class="code-block"><div>shell</div><pre><code># Status der Control Plane
-docker compose -f compose.alpha.yaml ps
+docker compose -f compose.release.yaml ps
 
 # Logs
-docker compose -f compose.alpha.yaml logs --tail=200 core webapp updater
+docker compose -f compose.release.yaml logs --tail=200 core webapp updater
 
 # Control Plane neu starten
-docker compose -f compose.alpha.yaml restart core webapp updater
+docker compose -f compose.release.yaml restart core webapp updater
 
 # Gestoppten Stack wieder starten
-docker compose -f compose.alpha.yaml start
+docker compose -f compose.release.yaml start
 
 # DNS testen
 dig @192.168.178.10 example.com A  # durch die eigene Host-IP ersetzen</code></pre></div>
