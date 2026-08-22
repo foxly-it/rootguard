@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -117,6 +118,29 @@ func main() {
 	controlPlaneClient.WithTargetResolver("webapp", func(ctx context.Context) (string, error) {
 		return updater.ResolveLatestReleaseImage(ctx, githubClient, "webapp")
 	})
+	// The RootGuard Updater can't safely replace its own running container
+	// (it would kill itself mid-operation), so Core manages that update
+	// instead - the same way it already manages AdGuard/Unbound, just
+	// against the separate control-plane compose.yaml/project rather than
+	// Core's own generated data-plane one.
+	controlPlaneComposeFile := envOrDefault("ROOTGUARD_COMPOSE_FILE", "/opt/rootguard/compose.yaml")
+	updaterSelfUpdateManager := updater.NewManager(updater.Options{
+		DataDir:        envOrDefault("ROOTGUARD_SELF_UPDATE_DIR", "/var/lib/rootguard/updater-self-update"),
+		ComposeDir:     filepath.Dir(controlPlaneComposeFile),
+		ComposeProject: envOrDefault("ROOTGUARD_COMPOSE_PROJECT", "rootguard"),
+		Services: []updater.ServiceSpec{{
+			Name: "updater", DisplayName: "RootGuard Updater",
+			Container:   "rootguard-updater",
+			TargetImage: envOrDefault("ROOTGUARD_UPDATER_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-updater:latest"),
+			ResolveTarget: func(ctx context.Context) (string, error) {
+				return updater.ResolveLatestReleaseImage(ctx, githubClient, "updater")
+			},
+		}},
+		Verify: func(ctx context.Context, _ string) error {
+			_, err := controlPlaneClient.Status(ctx)
+			return err
+		},
+	})
 	backupExporter := backupexport.New(backupexport.Options{
 		DataDir: envOrDefault("ROOTGUARD_EXPORT_DIR", "/var/lib/rootguard/exports"),
 		LocalSources: []backupexport.Source{
@@ -151,6 +175,7 @@ func main() {
 		Installer:         installationManager,
 		Updater:           updateManager,
 		ControlPlane:      controlPlaneClient,
+		UpdaterSelfUpdate: updaterSelfUpdateManager,
 		AdGuardDNSAddress: envOrDefault("ADGUARD_DNS_ADDRESS", "rootguard-adguard:53"),
 		BackupExporter:    backupExporter,
 		BackupRestorer:    backupRestorer,

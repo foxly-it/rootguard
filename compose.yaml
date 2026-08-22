@@ -24,6 +24,17 @@ services:
       ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      ROOTGUARD_UPDATER_UPDATE_IMAGE: "${ROOTGUARD_UPDATER_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-updater:latest}"
+      ROOTGUARD_SELF_UPDATE_DIR: /var/lib/rootguard/updater-self-update
+      ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.yaml
+      ROOTGUARD_COMPOSE_PROJECT: rootguard
+      # Core never reads these two - they exist only so `docker compose -f
+      # compose.yaml ... up -d --no-deps updater` (used to replace the
+      # updater's own container, see ROOTGUARD_SELF_UPDATE_DIR above) can
+      # interpolate the whole compose.yaml file, which also references them
+      # for the webapp service. Same reason the updater service carries them.
+      ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
+      ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
       UNBOUND_CONFIG_DIR: /var/lib/rootguard/unbound
       UNBOUND_CONTAINER_CONFIG_DIR: /etc/unbound/unbound.d
       UNBOUND_CONTAINER_NAME: rootguard-unbound
@@ -38,6 +49,7 @@ services:
       - rootguard-data:/var/lib/rootguard
       - unbound-config:/var/lib/rootguard/unbound
       - adguard-auth:/var/lib/rootguard/adguard-auth
+      - ./compose.yaml:/opt/rootguard/compose.yaml:ro
     networks:
       - control
     healthcheck:

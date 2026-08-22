@@ -30,6 +30,7 @@ type Dependencies struct {
 	Installer         *installer.Manager
 	Updater           *updater.Manager
 	ControlPlane      *controlplane.Client
+	UpdaterSelfUpdate *updater.Manager
 	AdGuardDNSAddress string
 	BackupExporter    *backupexport.Exporter
 	BackupRestorer    *backuprestore.Manager
@@ -60,6 +61,9 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/control-plane-updates", controlPlaneStatusHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/check", controlPlaneCheckHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane))
+	apiMux.HandleFunc("GET /api/updater-updates", updateStatusHandler(deps.UpdaterSelfUpdate))
+	apiMux.HandleFunc("POST /api/updater-updates/check", updateCheckHandler(deps.UpdaterSelfUpdate))
+	apiMux.HandleFunc("POST /api/updater-updates/install", updaterSelfUpdateInstallHandler(deps.UpdaterSelfUpdate, deps.ControlPlane))
 	apiMux.HandleFunc("GET /api/unbound/settings", getUnboundSettingsHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/config", getUnboundConfigurationHandler(deps.Unbound))
 	apiMux.HandleFunc("PUT /api/unbound/settings", putUnboundSettingsHandler(deps.Unbound))
@@ -135,6 +139,36 @@ func controlPlaneUpdateHandler(client *controlplane.Client) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusAccepted, result)
+	}
+}
+
+// updaterSelfUpdateInstallHandler triggers the RootGuard Updater's own
+// image update. Unlike updateServiceHandler, it first refuses if the
+// control-plane updater it's about to replace is itself mid core/webapp
+// check or update - the container swap would otherwise abort that
+// operation. This is a UX guard, not a correctness requirement: an
+// interrupted core/webapp update already recovers cleanly on the
+// updater's own next start (the same path already exercised by a real
+// process kill).
+func updaterSelfUpdateInstallHandler(manager *updater.Manager, controlPlane *controlplane.Client) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if status, err := controlPlane.Status(r.Context()); err == nil && (status.State == "checking" || status.State == "updating") {
+			writeError(w, http.StatusConflict, fmt.Errorf("control-plane updater is busy with a core/webapp operation, try again once it finishes"))
+			return
+		}
+		status, err := manager.StartUpdate("updater")
+		if err != nil {
+			switch {
+			case errors.Is(err, updater.ErrBusy):
+				writeError(w, http.StatusConflict, err)
+			case errors.Is(err, updater.ErrUnknownService):
+				writeError(w, http.StatusBadRequest, err)
+			default:
+				writeError(w, http.StatusInternalServerError, err)
+			}
+			return
+		}
+		writeJSON(w, http.StatusAccepted, status)
 	}
 }
 
