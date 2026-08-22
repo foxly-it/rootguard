@@ -163,7 +163,7 @@ jobs:
           mkdir -p /tmp/digests
           printf '%s' "$digest" > "/tmp/digests/${{ matrix.image }}.digest"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.component != 'blockpage'
         with:
           name: digest-${{ matrix.component }}
@@ -188,7 +188,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: digest-*
           path: /tmp/digests
