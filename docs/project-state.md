@@ -1448,9 +1448,37 @@ on the untracked guided access-rules surface).
 
 ## Release status
 
-`v0.1.0-beta.3` is the current public release, published with digest-pinned
+`v0.1.0-beta.4` is the current public release, published with digest-pinned
 `amd64`/`arm64` images for all five RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; the remaining gates before 1.0 are 0.9 (release
 candidate) and the 1.0.0 stable-appliance checklist itself (see
 `ROADMAP.md`).
+
+Cutting beta.4 (2026-08-22) surfaced three real release-pipeline bugs, none
+caught before because this was the first release since #298 added the
+site-refresh/pin-consistency automation and since the alpha->beta series
+transition: `update-alpha-pins`'s checkout lacked tag history (`fetch-depth`
+default of 1), so `bump-site-versions.sh` died silently under
+`set -e`+`pipefail` before its own error message could print
+([rootguard#311](https://github.com/foxly-it/rootguard/issues/311));
+`upgrade-test`'s "previous release" detection only ever listed
+`v0.1.0-alpha.*` tags, silently testing an upgrade from `alpha.16` instead of
+the real N-1 release for every beta release so far, until the
+`compose.alpha.yaml`->`compose.release.yaml` rename turned the
+already-wrong-scope lookup into a hard crash (same issue, fixed by re-deriving
+via `git for-each-ref --sort=-creatordate` across both series); and a push
+made with the workflow's own `GITHUB_TOKEN` never auto-triggers `pages.yml`
+(the same GitHub anti-recursion rule `release-version-bump.yml` already
+works around for tag pushes), so the pin-refresh commit's site changes
+never deployed on their own
+([rootguard#314](https://github.com/foxly-it/rootguard/issues/314)) - now an
+explicit `gh workflow run pages.yml` dispatch, mirroring that same existing
+pattern. A fourth, narrower bug: the rename intentionally left the public
+quick start's `curl` commands pointing at the old filename under the
+still-current `v0.1.0-beta.3` tag so they wouldn't 404 immediately, but
+`bump-site-versions.sh` only ever substitutes the version-number substring,
+not filenames - so the very next release advanced the version in that same
+text without the filename, producing "new version, old filename," a
+combination that never existed and did 404 live on the public site for a
+few minutes before being caught and fixed.
