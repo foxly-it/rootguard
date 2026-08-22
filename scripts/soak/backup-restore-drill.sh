@@ -93,7 +93,23 @@ if [ "$restore_ok" != true ]; then
   fresh_install || true
 fi
 
-if soak_resolve_ok >/dev/null && soak_dnssec_reject_ok; then
+wait_dns_ok() {
+  local budget="$1"
+  for _ in $(seq 1 "$budget"); do
+    soak_resolve_ok >/dev/null && soak_dnssec_reject_ok && return 0
+    sleep 2
+  done
+  return 1
+}
+
+# Core only reaches state=installed after its own waitForUnbound+bootstrap
+# already confirmed the DNS chain internally, but the host's published port
+# 53 can lag a few seconds behind container recreation - a single dig
+# attempt right after wait_installed can lose that narrow race and log a
+# false failure even though the restore itself is fine (seen live on the
+# soak host 2026-08-21: restore_ok=true, DNS healthy again within the next
+# probe interval). Give it a short bounded retry instead of one shot.
+if wait_dns_ok 30; then
   post_restore_dns_ok=true
 fi
 
