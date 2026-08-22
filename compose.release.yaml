@@ -2,7 +2,7 @@ name: rootguard
 
 # RootGuard 0.1.0-beta.3 public evaluation stack.
 # Every release image is pinned to its verified multi-architecture manifest.
-# Copy .env.alpha.example to .env and replace all placeholder secrets.
+# Copy .env.release.example to .env and replace all placeholder secrets.
 
 services:
   core:
@@ -77,7 +77,7 @@ services:
     environment:
       ROOTGUARD_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
-      ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.alpha.yaml
+      ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.release.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard
       ROOTGUARD_CORE_UPDATE_IMAGE: "${ROOTGUARD_CORE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-core:0.1.0-beta.3@sha256:eeea97722d8c050bfcdffd38fc3099735021a4dfacff1afa1d8489a53a53736f}"
       ROOTGUARD_WEBAPP_UPDATE_IMAGE: "${ROOTGUARD_WEBAPP_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:0.1.0-beta.3@sha256:21dfb6a7aff8785f552ae5743e77193442ed6b28b89685eab6387bbf3d2a9f8d}"
@@ -94,7 +94,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - rootguard-sessions:/var/lib/rootguard-sessions
-      - ./compose.alpha.yaml:/opt/rootguard/compose.alpha.yaml:ro
+      - ./compose.release.yaml:/opt/rootguard/compose.release.yaml:ro
     networks:
       - control
     healthcheck:

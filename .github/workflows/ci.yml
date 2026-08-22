@@ -30,8 +30,8 @@ jobs:
 
       - name: Validate public release Compose model
         run: |
-          docker compose -f compose.alpha.yaml config --quiet
-          model="$(docker compose -f compose.alpha.yaml config --format json)"
+          docker compose -f compose.release.yaml config --quiet
+          model="$(docker compose -f compose.release.yaml config --format json)"
           test "$(jq -r 'any(.services[]; has("build"))' <<<"$model")" = false
           test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
           test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false

@@ -3,7 +3,7 @@
 # release tag - the exact thing scripts/check-site-facts.sh checks for,
 # and the thing that went stale unnoticed for two days after both
 # v0.1.0-beta.2 and v0.1.0-beta.3 shipped, because the release pipeline
-# updates compose.alpha.yaml/.env.alpha.example automatically but never
+# updates compose.release.yaml/.env.release.example automatically but never
 # touched the site. Meant to run as an automated step right after a
 # release tag is cut (see release-alpha.yml's update-alpha-pins job),
 # committed alongside the compose/.env pin update.
@@ -58,7 +58,7 @@ done
 docs_file="site/docs.html"
 if [[ -f "${docs_file}" ]]; then
   for var in ROOTGUARD_CORE_UPDATE_IMAGE ROOTGUARD_WEBAPP_UPDATE_IMAGE; do
-    real_line="$(grep "^${var}=" .env.alpha.example || true)"
+    real_line="$(grep "^${var}=" .env.release.example || true)"
     [[ -z "${real_line}" ]] && continue
     if ! grep -qF "${real_line}" "${docs_file}"; then
       awk -v var="${var}=" -v replacement="${real_line}" '
@@ -66,7 +66,7 @@ if [[ -f "${docs_file}" ]]; then
         { print }
       ' "${docs_file}" > "${docs_file}.tmp"
       mv "${docs_file}.tmp" "${docs_file}"
-      echo "Bumped ${docs_file}: ${var} -> matches .env.alpha.example"
+      echo "Bumped ${docs_file}: ${var} -> matches .env.release.example"
       changed_files+=("${docs_file}")
     fi
   done

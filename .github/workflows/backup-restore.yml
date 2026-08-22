@@ -3,8 +3,8 @@ name: Backup and restore
 on:
   pull_request:
     paths:
-      - "compose.alpha.yaml"
-      - ".env.alpha.example"
+      - "compose.release.yaml"
+      - ".env.release.example"
       - "scripts/verify-backup-restore.sh"
       - "scripts/verification-common.sh"
       - ".github/workflows/backup-restore.yml"
@@ -13,8 +13,8 @@ on:
   push:
     branches: [main]
     paths:
-      - "compose.alpha.yaml"
-      - ".env.alpha.example"
+      - "compose.release.yaml"
+      - ".env.release.example"
       - "scripts/verify-backup-restore.sh"
       - "scripts/verification-common.sh"
       - ".github/workflows/backup-restore.yml"

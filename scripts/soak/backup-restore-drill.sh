@@ -35,7 +35,7 @@ managed_networks=(rootguard-dns rootguard_control rootguard_edge)
 
 teardown_primary() {
   docker rm -f "${managed_containers[@]}" >/dev/null 2>&1 || true
-  docker compose -f "${ROOTGUARD_SOAK_DIR}/compose.alpha.yaml" down --volumes --remove-orphans >/dev/null 2>&1 || true
+  docker compose -f "${ROOTGUARD_SOAK_DIR}/compose.release.yaml" down --volumes --remove-orphans >/dev/null 2>&1 || true
   for n in "${managed_networks[@]}"; do docker network rm "$n" >/dev/null 2>&1 || true; done
   docker volume rm "${managed_volumes[@]}" >/dev/null 2>&1 || true
 }
@@ -54,7 +54,7 @@ wait_installed() {
 deploy_config='{"dns_bind_address":"0.0.0.0","dns_port":53}'
 
 fresh_install() {
-  docker compose -f "${ROOTGUARD_SOAK_DIR}/compose.alpha.yaml" up -d
+  docker compose -f "${ROOTGUARD_SOAK_DIR}/compose.release.yaml" up -d
   soak_login
   soak_call POST /api/installation/preflight "$deploy_config" >/dev/null
   soak_call POST /api/installation/deploy "$deploy_config" >/dev/null
@@ -73,7 +73,7 @@ fi
 
 if [ "$export_ok" = true ]; then
   teardown_primary
-  docker compose -f "${ROOTGUARD_SOAK_DIR}/compose.alpha.yaml" up -d
+  docker compose -f "${ROOTGUARD_SOAK_DIR}/compose.release.yaml" up -d
   if soak_login; then
     if curl --fail --silent \
         --cookie "$ROOTGUARD_SOAK_COOKIE_JAR" \

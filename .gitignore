@@ -1,6 +1,6 @@
 .DS_Store
 .env
-!.env.alpha.example
+!.env.release.example
 
 # AI assistant tooling (local workflow only, not part of the public repo)
 .claude/

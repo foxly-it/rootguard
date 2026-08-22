@@ -3,7 +3,7 @@
 Unattended scripts for `ROADMAP.md`'s 0.9 "Thirty-day continuous DNS test
 with update and restore exercises" item. Not part of CI - these run on a
 dedicated, long-lived host against a real `v0.1.0-*` release deployed from
-`compose.alpha.yaml`, driven by systemd timers, not by any CI workflow or
+`compose.release.yaml`, driven by systemd timers, not by any CI workflow or
 Claude session.
 
 - `common.sh` - shared login/call/log helpers, sourced by the others.
@@ -38,14 +38,14 @@ Claude session.
 ## Deploying to a soak host
 
 1. `mkdir -p /root/rootguard-soak && cd /root/rootguard-soak`
-2. `curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/<tag>/compose.alpha.yaml`
-   and `.env.alpha.example` -> `.env`, fill in real secrets (see the main
+2. `curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/<tag>/compose.release.yaml`
+   and `.env.release.example` -> `.env`, fill in real secrets (see the main
    README's Quick Start).
-3. `docker compose -f compose.alpha.yaml up -d`, then complete guided setup
+3. `docker compose -f compose.release.yaml up -d`, then complete guided setup
    once via `/api/auth/login` -> `/api/installation/preflight` ->
    `/api/installation/deploy` (see `scripts/verify-clean-install.sh` for the
    exact call shape).
-4. Copy this `scripts/soak/` directory next to `compose.alpha.yaml` on the
+4. Copy this `scripts/soak/` directory next to `compose.release.yaml` on the
    host (e.g. `/root/rootguard-soak/scripts/soak/`).
 5. Run each script manually once to confirm real output before arming any
    timer - a probe that can't fail loud is worse than no probe.
