@@ -1074,11 +1074,22 @@ Goal: freeze features and prove reliability.
 - [ ] Thirty-day continuous DNS test with update and restore exercises -
       **in progress**, started 2026-08-14 on a dedicated host
       (`scripts/soak/*.sh` + systemd timers, see that directory's README).
-      Live status as of 2026-08-15: 100% probe pass rate (DNS resolution,
-      DNSSEC rejection, AdGuard filtering, WebGUI liveness), one clean
-      update-exercise cycle, one clean backup/restore drill with no
-      fallback needed. Closes with the final `report.sh` rollup around
-      2026-09-13 ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
+      Live status as of 2026-08-22 (day 8): 952/960 probes passed (99%);
+      the 8 misses were all transient DNSSEC-reject timeouts correlated
+      with elevated resolve latency (~12s vs. the usual ~3s), each
+      self-recovered by the next 10-minute probe - looks like real
+      upstream/root-server jitter, not a RootGuard defect. 4 clean
+      update-exercise cycles, all `no_change` since the host's
+      `*_UPDATE_IMAGE` pins were never bumped past the beta.1 they were
+      deployed with - no real version upgrade has been exercised yet.
+      2 backup/restore drills: the first (08-14) fully clean; the second
+      (08-21) had `restore_ok=true` but its single-shot post-restore DNS
+      check lost a narrow timing race right after container recreation
+      and logged a false failure, fixed by giving that check a bounded
+      retry instead of one attempt
+      ([rootguard#301](https://github.com/foxly-it/rootguard/issues/301)).
+      Closes with the final `report.sh` rollup around 2026-09-13
+      ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
 - [x] Fresh install, upgrade, rollback, backup, and restore matrix is green -
       fresh install (`clean-install.yml`), upgrade
       (`release-alpha.yml`'s `upgrade-test`), and rollback
