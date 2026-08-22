@@ -148,7 +148,7 @@ jobs:
       # is only set when the build actually ran (see "Check for an immutable
       # existing release image" above), so a re-run against an already-published
       # version falls back to looking the digest up directly from the registry.
-      # compose.alpha.yaml's pins need a real digest either way.
+      # compose.release.yaml's pins need a real digest either way.
       - name: Record published digest
         id: digest
         if: matrix.component != 'blockpage'
@@ -169,12 +169,12 @@ jobs:
           name: digest-${{ matrix.component }}
           path: /tmp/digests/${{ matrix.image }}.digest
 
-  # compose.alpha.yaml and .env.alpha.example are the pinned, no-build public
+  # compose.release.yaml and .env.release.example are the pinned, no-build public
   # release model - their default/documented image references need to track
   # whatever publish just pushed, or every fresh clone silently keeps running
-  # the *previous* release's digests forever. .env.alpha.example is what the
+  # the *previous* release's digests forever. .env.release.example is what the
   # quick start actually tells users to download as their .env, and its
-  # values there take precedence over compose.alpha.yaml's own defaults - so
+  # values there take precedence over compose.release.yaml's own defaults - so
   # both files must be kept in lockstep, not just the compose file. blockpage
   # is excluded: it isn't referenced in either file at all (Core provisions
   # it dynamically), so there's nothing here to update for it.
@@ -198,7 +198,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          for file in compose.alpha.yaml .env.alpha.example; do
+          for file in compose.release.yaml .env.release.example; do
             for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound; do
               digest="$(cat "/tmp/digests/${image}.digest")"
               test -n "$digest"
@@ -216,7 +216,7 @@ jobs:
 
       # site/*.html's version references went stale twice in the two days
       # after v0.1.0-beta.2 and v0.1.0-beta.3 each shipped - nothing here
-      # ever touched them, only compose.alpha.yaml/.env.alpha.example.
+      # ever touched them, only compose.release.yaml/.env.release.example.
       # bump-site-versions.sh runs the exact same logic
       # check-site-facts.sh checks for, so this and that check can never
       # drift apart. Idempotent: a no-op when the site already matches.
@@ -236,12 +236,12 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- compose.alpha.yaml .env.alpha.example site/; then
-            echo "compose.alpha.yaml, .env.alpha.example, and site/*.html already reflect the published release, nothing to commit"
+          if git diff --quiet -- compose.release.yaml .env.release.example site/; then
+            echo "compose.release.yaml, .env.release.example, and site/*.html already reflect the published release, nothing to commit"
             exit 0
           fi
-          git add compose.alpha.yaml .env.alpha.example site/
-          git commit -m "ci: pin compose.alpha.yaml, .env.alpha.example, and site/*.html to ${{ needs.version.outputs.value }} [skip ci]"
+          git add compose.release.yaml .env.release.example site/
+          git commit -m "ci: pin compose.release.yaml, .env.release.example, and site/*.html to ${{ needs.version.outputs.value }} [skip ci]"
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
@@ -249,11 +249,11 @@ jobs:
       # The release tag is created before this job ever runs (by
       # release-version-bump.yml, or by hand for a workflow_dispatch run),
       # so without this step it permanently points at a commit whose
-      # compose.alpha.yaml still pins the *previous* release's images -
+      # compose.release.yaml still pins the *previous* release's images -
       # confirmed live: v0.1.0-alpha.7's and v0.1.0-alpha.8's own tags both
-      # resolve to a compose.alpha.yaml pinned one release behind their own
+      # resolve to a compose.release.yaml pinned one release behind their own
       # name. Anyone following the documented quick start
-      # ("curl .../v0.1.0-alpha.N/compose.alpha.yaml") got the wrong images.
+      # ("curl .../v0.1.0-alpha.N/compose.release.yaml") got the wrong images.
       # Moving the tag here, once, right after the pin commit that
       # completes *this* release, keeps it self-consistent going forward.
       # Idempotent: a no-op if the tag already points at the pinned commit.
@@ -296,7 +296,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Start published control plane
-        run: docker compose -f compose.alpha.yaml up -d
+        run: docker compose -f compose.release.yaml up -d
       - name: Install and verify the DNS stack
         run: |
           for attempt in {1..60}; do
@@ -332,10 +332,10 @@ jobs:
             's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
       - name: Show logs after failure
         if: failure()
-        run: docker compose -f compose.alpha.yaml logs --no-color
+        run: docker compose -f compose.release.yaml logs --no-color
       - name: Stop stack
         if: always()
-        run: docker compose -f compose.alpha.yaml down --volumes
+        run: docker compose -f compose.release.yaml down --volumes
 
   # Proves the actual upgrade path an operator running the previous release
   # would take, not just a fresh install of the new one: deploy the
@@ -369,11 +369,11 @@ jobs:
           # cut, before the pin-update commit that follows it - so, absent
           # this release's own "Point the release tag at the pin-update
           # commit" step (only self-healing for releases cut after that step
-          # existed), the tag's own compose.alpha.yaml can still be pinned to
+          # existed), the tag's own compose.release.yaml can still be pinned to
           # the release *before* it. Searching history for the actual pin
           # commit is correct regardless of whether the tag was ever moved.
-          pin_commit="$(git log --format='%H %s' -- compose.alpha.yaml \
-            | grep -F "pin compose.alpha.yaml to ${previous_version} image digests" \
+          pin_commit="$(git log --format='%H %s' -- compose.release.yaml \
+            | grep -F "pin compose.release.yaml to ${previous_version} image digests" \
             | head -1 | cut -d' ' -f1)"
           if [ -z "${pin_commit}" ]; then
             echo "No pin-update commit found for ${previous_version} - nothing to upgrade from"
@@ -385,7 +385,7 @@ jobs:
 
       - name: Extract the previous release's correctly pinned Compose model
         if: steps.previous.outputs.skip != 'true'
-        run: git show "${{ steps.previous.outputs.commit }}:compose.alpha.yaml" > compose.alpha.yaml
+        run: git show "${{ steps.previous.outputs.commit }}:compose.release.yaml" > compose.release.yaml
 
       - uses: docker/login-action@v4
         if: steps.previous.outputs.skip != 'true'
@@ -409,7 +409,7 @@ jobs:
           ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token
           ROOTGUARD_WEB_BIND: 127.0.0.1
           ROOTGUARD_WEB_PORT: "18082"
-        run: docker compose -f compose.alpha.yaml up -d
+        run: docker compose -f compose.release.yaml up -d
 
       - name: Install the previous release and verify DNS
         if: steps.previous.outputs.skip != 'true'
@@ -550,7 +550,7 @@ jobs:
           ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token
           ROOTGUARD_WEB_BIND: 127.0.0.1
           ROOTGUARD_WEB_PORT: "18082"
-        run: docker compose -f compose.alpha.yaml logs --no-color
+        run: docker compose -f compose.release.yaml logs --no-color
 
       - name: Stop stack
         if: always() && steps.previous.outputs.skip != 'true'
@@ -563,4 +563,4 @@ jobs:
           ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token
           ROOTGUARD_WEB_BIND: 127.0.0.1
           ROOTGUARD_WEB_PORT: "18082"
-        run: docker compose -f compose.alpha.yaml down --volumes
+        run: docker compose -f compose.release.yaml down --volumes

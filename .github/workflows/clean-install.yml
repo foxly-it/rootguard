@@ -3,15 +3,15 @@ name: Public clean install
 on:
   pull_request:
     paths:
-      - "compose.alpha.yaml"
-      - ".env.alpha.example"
+      - "compose.release.yaml"
+      - ".env.release.example"
       - "scripts/verify-clean-install.sh"
       - ".github/workflows/clean-install.yml"
   push:
     branches: [main]
     paths:
-      - "compose.alpha.yaml"
-      - ".env.alpha.example"
+      - "compose.release.yaml"
+      - ".env.release.example"
       - "scripts/verify-clean-install.sh"
       - ".github/workflows/clean-install.yml"
   workflow_dispatch:

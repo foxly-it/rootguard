@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Shared helpers for the 0.9 30-day endurance-test scripts in this directory.
 # Sourced, not executed directly. Assumes it runs on the dedicated soak host
-# next to a compose.alpha.yaml + .env deployment (see README.md in this dir).
+# next to a compose.release.yaml + .env deployment (see README.md in this dir).
 
 : "${ROOTGUARD_SOAK_DIR:=/root/rootguard-soak}"
 : "${ROOTGUARD_SOAK_ENV:=${ROOTGUARD_SOAK_DIR}/.env}"
@@ -38,7 +38,7 @@ soak_admin_password() {
   grep -E '^ROOTGUARD_ADMIN_PASSWORD=' "$ROOTGUARD_SOAK_ENV" | head -1 | cut -d= -f2-
 }
 
-# Defaults to "admin", matching compose.alpha.yaml's own
+# Defaults to "admin", matching compose.release.yaml's own
 # ${ROOTGUARD_ADMIN_USER:-admin} default when the .env doesn't set it.
 soak_admin_user() {
   local value

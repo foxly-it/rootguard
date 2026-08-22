@@ -11,7 +11,7 @@
 set -Eeuo pipefail
 
 repository_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-compose_file="${ROOTGUARD_TEST_COMPOSE_FILE:-${repository_dir}/compose.alpha.yaml}"
+compose_file="${ROOTGUARD_TEST_COMPOSE_FILE:-${repository_dir}/compose.release.yaml}"
 web_port="${ROOTGUARD_TEST_WEB_PORT:-18080}"
 dns_port="${ROOTGUARD_TEST_DNS_PORT:-1053}"
 expected_arch="${ROOTGUARD_TEST_ARCH:-}"

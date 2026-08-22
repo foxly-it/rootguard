@@ -105,12 +105,12 @@ were verified directly against GHCR and Docker Hub before being recorded.
 
 Development Compose files may continue to use local or mutable image references.
 They are not release artifacts and are deliberately kept separate from
-`compose.alpha.yaml`.
+`compose.release.yaml`.
 
 ## Preparing the next release
 
 Build and test all component images first. Resolve the published
-multi-architecture digest for each version tag, update `compose.alpha.yaml` and
-`.env.alpha.example` together, and run the clean installation smoke test. The
+multi-architecture digest for each version tag, update `compose.release.yaml` and
+`.env.release.example` together, and run the clean installation smoke test. The
 integration workflow rejects a release Compose model if a required image lacks
 an `@sha256:` digest or if a service image uses `latest`.
