@@ -1550,7 +1550,7 @@ on the untracked guided access-rules surface).
 
 ## Release status
 
-`v0.1.0-beta.4` is the current public release, published with digest-pinned
+`v0.1.0-beta.6` is the current public release, published with digest-pinned
 `amd64`/`arm64` images for all five RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; the remaining gates before 1.0 are 0.9 (release
@@ -1584,3 +1584,24 @@ not filenames - so the very next release advanced the version in that same
 text without the filename, producing "new version, old filename," a
 combination that never existed and did 404 live on the public site for a
 few minutes before being caught and fixed.
+
+`v0.1.0-beta.5` shipped the same day, adding live GitHub-Releases update
+discovery ([rootguard#320](https://github.com/foxly-it/rootguard/pull/320))
+and updater self-update
+([rootguard#322](https://github.com/foxly-it/rootguard/pull/322)). Live
+verification of the latter immediately surfaced three more real bugs -
+a self-referential compose-mount resolution failure, a digest-less
+attestation gap, and genuinely broken YAML in beta.5's own committed
+pin-refresh commit - all fixed same-day
+([rootguard#324](https://github.com/foxly-it/rootguard/pull/324)). That
+fix's own follow-up correction for the already-published beta.5 pin
+commit then hit two release-pipeline mechanics for the first time: a
+squash-merged two-commit historical correction collapses into a
+net-zero diff and silently undoes itself (fixed by re-merging with a
+real merge commit,
+[rootguard#326](https://github.com/foxly-it/rootguard/pull/326)), and a
+tag-triggered workflow run stays pinned to its original checkout even
+when rerun (worked around with a fresh `workflow_dispatch` against
+`main` for the same version). `v0.1.0-beta.6`, cut immediately after
+with all of the above already on `main`, passed its full pipeline
+including `upgrade-test` cleanly on the first real (non-rerun) attempt.
