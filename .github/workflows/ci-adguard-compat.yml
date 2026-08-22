@@ -31,7 +31,7 @@ jobs:
       matrix:
         include:
           - channel: stable
-            image: adguard/adguardhome:v0.107.78
+            image: adguard/adguardhome:v0.107.79
           - channel: beta
             image: adguard/adguardhome:beta
     runs-on: ubuntu-latest

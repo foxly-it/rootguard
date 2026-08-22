@@ -46,7 +46,7 @@ services:
       retries: 15
 
   adguard:
-    image: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.78}"
+    image: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.79}"
     container_name: rootguard-adguard
     restart: unless-stopped
     depends_on:
