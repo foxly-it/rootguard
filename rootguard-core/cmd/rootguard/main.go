@@ -59,6 +59,7 @@ func main() {
 			return nil
 		},
 	})
+	githubClient := &http.Client{Timeout: 8 * time.Second}
 	updateManager := updater.NewManager(updater.Options{
 		DataDir:    envOrDefault("ROOTGUARD_UPDATE_DIR", "/var/lib/rootguard/updates"),
 		ComposeDir: envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
@@ -73,6 +74,9 @@ func main() {
 				Name: "unbound", DisplayName: "Unbound",
 				Container:   "rootguard-unbound",
 				TargetImage: envOrDefault("ROOTGUARD_UNBOUND_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
+				ResolveTarget: func(ctx context.Context) (string, error) {
+					return updater.ResolveLatestReleaseImage(ctx, githubClient, "unbound")
+				},
 				BackupPaths: []string{"/etc/unbound/unbound.d", "/var/lib/unbound"},
 				OwnershipMigrations: []updater.VolumeOwnershipMigration{{
 					Volume: "rootguard-unbound-state",
@@ -107,6 +111,12 @@ func main() {
 		envOrDefault("ROOTGUARD_CONTROL_PLANE_UPDATER_URL", "http://rootguard-updater:8082"),
 		envOrDefault("ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN", token),
 	)
+	controlPlaneClient.WithTargetResolver("core", func(ctx context.Context) (string, error) {
+		return updater.ResolveLatestReleaseImage(ctx, githubClient, "core")
+	})
+	controlPlaneClient.WithTargetResolver("webapp", func(ctx context.Context) (string, error) {
+		return updater.ResolveLatestReleaseImage(ctx, githubClient, "webapp")
+	})
 	backupExporter := backupexport.New(backupexport.Options{
 		DataDir: envOrDefault("ROOTGUARD_EXPORT_DIR", "/var/lib/rootguard/exports"),
 		LocalSources: []backupexport.Source{

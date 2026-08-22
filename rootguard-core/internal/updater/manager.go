@@ -34,6 +34,7 @@ type ServiceSpec struct {
 	DisplayName         string
 	Container           string
 	TargetImage         string
+	ResolveTarget       func(ctx context.Context) (string, error)
 	BackupPaths         []string
 	OwnershipMigrations []VolumeOwnershipMigration
 }
@@ -251,20 +252,21 @@ func (m *Manager) check() {
 	for _, service := range m.serviceNames() {
 		spec := m.specs[service]
 		m.setProgress(service, "Prüfe "+spec.DisplayName+".")
+		targetImage := resolveTargetImage(ctx, spec)
 		currentImage, currentID, err := m.inspectContainer(ctx, spec)
 		if err != nil {
-			m.setServiceResult(service, ServiceStatus{Error: err.Error(), CheckedAt: time.Now().UTC()})
+			m.setServiceResult(service, ServiceStatus{TargetImage: targetImage, Error: err.Error(), CheckedAt: time.Now().UTC()})
 			continue
 		}
-		if _, err := m.run(ctx, "pull", spec.TargetImage); err != nil {
+		if _, err := m.run(ctx, "pull", targetImage); err != nil {
 			m.setServiceResult(service, ServiceStatus{
-				CurrentImage: currentImage, CurrentID: currentID, Error: err.Error(), CheckedAt: time.Now().UTC(),
+				CurrentImage: currentImage, CurrentID: currentID, TargetImage: targetImage, Error: err.Error(), CheckedAt: time.Now().UTC(),
 			})
 			continue
 		}
-		candidateID, err := m.inspectImage(ctx, spec.TargetImage)
+		candidateID, err := m.inspectImage(ctx, targetImage)
 		result := ServiceStatus{
-			CurrentImage: currentImage, CurrentID: currentID, CandidateID: candidateID,
+			CurrentImage: currentImage, CurrentID: currentID, TargetImage: targetImage, CandidateID: candidateID,
 			UpdateAvailable: err == nil && currentID != candidateID, CheckedAt: time.Now().UTC(),
 		}
 		if err != nil {
@@ -292,6 +294,7 @@ func (m *Manager) update(service string) {
 		m.fail(service, err)
 		return
 	}
+	targetImage := resolveTargetImage(ctx, spec)
 	m.setProgress(service, "Erstelle eine Sicherung der persistenten Dienstdaten.")
 	backupDir, err := m.backup(ctx, spec)
 	if err != nil {
@@ -300,11 +303,11 @@ func (m *Manager) update(service string) {
 	}
 	defer m.enforceBackupRetention()
 	m.setProgress(service, "Lade das freigegebene Ziel-Image.")
-	if _, err := m.run(ctx, "pull", spec.TargetImage); err != nil {
+	if _, err := m.run(ctx, "pull", targetImage); err != nil {
 		m.fail(service, fmt.Errorf("pull target image: %w", err))
 		return
 	}
-	candidateID, err := m.inspectImage(ctx, spec.TargetImage)
+	candidateID, err := m.inspectImage(ctx, targetImage)
 	if err != nil {
 		m.fail(service, err)
 		return
@@ -326,7 +329,7 @@ func (m *Manager) update(service string) {
 	}
 
 	m.setProgress(service, "Ersetze den Container kontrolliert.")
-	if err := m.selectImage(service, spec.TargetImage); err != nil {
+	if err := m.selectImage(service, targetImage); err != nil {
 		if restoreErr := m.restoreVolumeOwnership(ctx, previousOwnership, oldID); restoreErr != nil {
 			err = fmt.Errorf("%v; restore volume ownership: %w", err, restoreErr)
 		}
@@ -363,7 +366,7 @@ func (m *Manager) update(service string) {
 	m.recordHistory(entry)
 	cleanup := m.cleanupAfterSuccess(ctx, service)
 	m.attachCleanup(cleanup)
-	m.finish(service, spec.TargetImage, candidateID, candidateID, false, spec.DisplayName+" wurde aktualisiert und erfolgreich geprüft.")
+	m.finish(service, targetImage, candidateID, candidateID, false, spec.DisplayName+" wurde aktualisiert und erfolgreich geprüft.")
 }
 
 func (m *Manager) recordHistory(entry HistoryEntry) {
@@ -615,7 +618,9 @@ func (m *Manager) setServiceResult(service string, result ServiceStatus) {
 		}
 		result.Name = m.status.Services[index].Name
 		result.DisplayName = m.status.Services[index].DisplayName
-		result.TargetImage = m.status.Services[index].TargetImage
+		if result.TargetImage == "" {
+			result.TargetImage = m.status.Services[index].TargetImage
+		}
 		m.status.Services[index] = result
 		break
 	}

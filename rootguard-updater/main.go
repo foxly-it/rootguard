@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -67,6 +68,30 @@ type status struct {
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
+// targetImageFor returns targetImages[spec.Name] when set, falling back to
+// spec's own static TargetImage pin otherwise.
+func targetImageFor(spec serviceSpec, targetImages map[string]string) string {
+	if image, ok := targetImages[spec.Name]; ok && image != "" {
+		return image
+	}
+	return spec.TargetImage
+}
+
+// decodeTargetOverrides reads an optional {"target_images": {...}} JSON
+// body; a missing/empty body is not an error and yields no overrides.
+func decodeTargetOverrides(body io.Reader) (map[string]string, error) {
+	var payload struct {
+		TargetImages map[string]string `json:"target_images"`
+	}
+	if err := json.NewDecoder(body).Decode(&payload); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return payload.TargetImages, nil
+}
+
 type runner func(context.Context, ...string) ([]byte, error)
 
 type manager struct {
@@ -117,8 +142,13 @@ func main() {
 	mux.HandleFunc("GET /api/control-plane/status", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, manager.Status())
 	})
-	mux.HandleFunc("POST /api/control-plane/check", func(w http.ResponseWriter, _ *http.Request) {
-		next, err := manager.StartCheck()
+	mux.HandleFunc("POST /api/control-plane/check", func(w http.ResponseWriter, r *http.Request) {
+		overrides, err := decodeTargetOverrides(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		next, err := manager.StartCheck(overrides)
 		if errors.Is(err, errBusy) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
@@ -129,8 +159,13 @@ func main() {
 		}
 		writeJSON(w, http.StatusAccepted, next)
 	})
-	mux.HandleFunc("POST /api/control-plane/update", func(w http.ResponseWriter, _ *http.Request) {
-		next, err := manager.StartUpdate()
+	mux.HandleFunc("POST /api/control-plane/update", func(w http.ResponseWriter, r *http.Request) {
+		overrides, err := decodeTargetOverrides(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		next, err := manager.StartUpdate(overrides)
 		if errors.Is(err, errBusy) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 			return
@@ -197,12 +232,17 @@ func (m *manager) Status() status {
 	return cloneStatus(m.status)
 }
 
-func (m *manager) StartCheck() (status, error) {
-	return m.start(stateChecking, "Core- und WebApp-Images werden geprüft.", m.check)
+// StartCheck begins a check. targetImages optionally overrides a
+// service's static TargetImage pin for this run only (e.g. a live
+// release resolved by rootguard-core, which - unlike this network-
+// isolated control-plane updater - has outbound internet access); a
+// service with no entry keeps using its configured static pin.
+func (m *manager) StartCheck(targetImages map[string]string) (status, error) {
+	return m.start(stateChecking, "Core- und WebApp-Images werden geprüft.", func() { m.check(targetImages) })
 }
 
-func (m *manager) StartUpdate() (status, error) {
-	return m.start(stateUpdating, "Das atomare Control-Plane-Update wird vorbereitet.", m.update)
+func (m *manager) StartUpdate(targetImages map[string]string) (status, error) {
+	return m.start(stateUpdating, "Das atomare Control-Plane-Update wird vorbereitet.", func() { m.update(targetImages) })
 }
 
 func (m *manager) start(state, message string, fn func()) (status, error) {
@@ -219,20 +259,21 @@ func (m *manager) start(state, message string, fn func()) (status, error) {
 	return cloneStatus(m.status), nil
 }
 
-func (m *manager) check() {
+func (m *manager) check(targetImages map[string]string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 	results := make([]serviceStatus, 0, len(m.specs))
 	for _, spec := range m.specs {
 		m.progress("Prüfe " + spec.DisplayName + ".")
-		result := serviceStatus{Name: spec.Name, DisplayName: spec.DisplayName, TargetImage: spec.TargetImage, CheckedAt: time.Now().UTC()}
+		targetImage := targetImageFor(spec, targetImages)
+		result := serviceStatus{Name: spec.Name, DisplayName: spec.DisplayName, TargetImage: targetImage, CheckedAt: time.Now().UTC()}
 		currentImage, currentID, err := m.inspectContainer(ctx, spec.Container)
 		result.CurrentImage, result.CurrentID = currentImage, currentID
 		if err == nil && !m.skipPull {
-			_, err = m.run(ctx, "pull", spec.TargetImage)
+			_, err = m.run(ctx, "pull", targetImage)
 		}
 		if err == nil {
-			result.CandidateID, err = m.inspectImage(ctx, spec.TargetImage)
+			result.CandidateID, err = m.inspectImage(ctx, targetImage)
 		}
 		if err != nil {
 			result.Error = err.Error()
@@ -250,7 +291,7 @@ func (m *manager) check() {
 	m.mu.Unlock()
 }
 
-func (m *manager) update() {
+func (m *manager) update(targetImages map[string]string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 
@@ -264,19 +305,20 @@ func (m *manager) update() {
 			return
 		}
 		oldImages[spec.Name] = oldID
+		targetImage := targetImageFor(spec, targetImages)
 		m.progress("Lade " + spec.DisplayName + ".")
 		if !m.skipPull {
-			if _, err := m.run(ctx, "pull", spec.TargetImage); err != nil {
+			if _, err := m.run(ctx, "pull", targetImage); err != nil {
 				m.fail(err)
 				return
 			}
 		}
-		candidateID, err := m.inspectImage(ctx, spec.TargetImage)
+		candidateID, err := m.inspectImage(ctx, targetImage)
 		if err != nil {
 			m.fail(err)
 			return
 		}
-		candidateImages[spec.Name] = spec.TargetImage
+		candidateImages[spec.Name] = targetImage
 		candidateIDs[spec.Name] = candidateID
 	}
 
