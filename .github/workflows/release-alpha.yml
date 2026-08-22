@@ -185,6 +185,8 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -357,11 +359,19 @@ jobs:
         id: previous
         run: |
           set -euo pipefail
-          previous_version="$(git tag --list 'v0.1.0-alpha.*' \
+          # Sort by actual tag creation date across the whole v0.1.0-*
+          # series (alpha and beta both) rather than the previous
+          # alpha-only, trailing-number sort - that older approach always
+          # resolved to the highest alpha.N tag, even once the beta series
+          # existed, silently testing an upgrade from a much older release
+          # than the one directly before this one.
+          previous_version="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate \
+            --format='%(refname:short)' \
+            | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' \
             | grep -v "^v${{ needs.version.outputs.value }}\$" \
-            | sort -t. -k4 -n | tail -1 | sed 's/^v//')"
+            | head -1 | sed 's/^v//' || true)"
           if [ -z "${previous_version}" ]; then
-            echo "No previous alpha release exists yet - nothing to upgrade from"
+            echo "No previous release exists yet - nothing to upgrade from"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -372,20 +382,53 @@ jobs:
           # existed), the tag's own compose.release.yaml can still be pinned to
           # the release *before* it. Searching history for the actual pin
           # commit is correct regardless of whether the tag was ever moved.
-          pin_commit="$(git log --format='%H %s' -- compose.release.yaml \
-            | grep -F "pin compose.release.yaml to ${previous_version} image digests" \
-            | head -1 | cut -d' ' -f1)"
+          # --follow and the alpha/release alternation handle a previous
+          # release cut before the compose.alpha.yaml -> compose.release.yaml
+          # rename; the message pattern tolerates both the pre- and
+          # post-#298 commit wording ("pin X to V image digests" vs.
+          # "ci: pin X, Y, and Z to V") since only the "pin ... to V" core
+          # is common to both.
+          escaped_version="${previous_version//./\\.}"
+          pin_commit="$(git log --format='%H %s' --follow -- compose.release.yaml \
+            | grep -iE "pin compose\.(alpha|release)\.yaml.*to ${escaped_version}" \
+            | head -1 | cut -d' ' -f1 || true)"
           if [ -z "${pin_commit}" ]; then
             echo "No pin-update commit found for ${previous_version} - nothing to upgrade from"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # The historical compose filename may differ from today's
+          # convention if the previous release predates a rename - detect
+          # which one actually exists in that commit's tree instead of
+          # assuming the current name.
+          if git cat-file -e "${pin_commit}:compose.release.yaml" 2>/dev/null; then
+            pin_compose_path="compose.release.yaml"
+          elif git cat-file -e "${pin_commit}:compose.alpha.yaml" 2>/dev/null; then
+            pin_compose_path="compose.alpha.yaml"
+          else
+            echo "Neither compose.release.yaml nor compose.alpha.yaml exists at ${pin_commit} - nothing to upgrade from"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "commit=${pin_commit}" >> "$GITHUB_OUTPUT"
+          echo "compose_path=${pin_compose_path}" >> "$GITHUB_OUTPUT"
 
       - name: Extract the previous release's correctly pinned Compose model
         if: steps.previous.outputs.skip != 'true'
-        run: git show "${{ steps.previous.outputs.commit }}:compose.release.yaml" > compose.release.yaml
+        run: |
+          set -euo pipefail
+          git show "${{ steps.previous.outputs.commit }}:${{ steps.previous.outputs.compose_path }}" > compose.release.yaml
+          # A previous release predating the compose.alpha.yaml ->
+          # compose.release.yaml rename bind-mounts and self-references
+          # itself under its own historical name (the updater container's
+          # ROOTGUARD_COMPOSE_FILE and volume mount) - keep a copy under
+          # that name too so the extracted file's own internal references
+          # still resolve, even though every docker compose invocation
+          # below uses the canonical compose.release.yaml name.
+          if [ "${{ steps.previous.outputs.compose_path }}" != "compose.release.yaml" ]; then
+            cp compose.release.yaml "${{ steps.previous.outputs.compose_path }}"
+          fi
 
       - uses: docker/login-action@v4
         if: steps.previous.outputs.skip != 'true'
