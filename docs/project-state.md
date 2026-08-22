@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-13
+Last updated: 2026-08-22
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -807,6 +807,35 @@ Trustworthy Stack Center and production visibility:
   separate fallback path to maintain. `rootguard-webapp`'s manually-synced
   preview copy updated to match, including the mascot asset
   ([rootguard#125](https://github.com/foxly-it/rootguard/pull/125)).
+- Four small live-testing findings fixed in one session (2026-08-22):
+  the AdGuard Home update-check pin (`ROOTGUARD_ADGUARD_IMAGE`/
+  `ROOTGUARD_ADGUARD_UPDATE_IMAGE`) had been frozen at `v0.107.78` since
+  alpha.5 - unlike RootGuard's own four component images, nothing
+  refreshes this third-party pin automatically, so every install's
+  AdGuard "check for updates" silently stayed up to date regardless of
+  real upstream releases; bumped to the current stable `v0.107.79`
+  ([rootguard#306](https://github.com/foxly-it/rootguard/issues/306),
+  [rootguard#307](https://github.com/foxly-it/rootguard/pull/307)).
+  The local dev `compose.yaml`'s `updater` service hardcoded
+  `image: rootguard-updater:dev` with no env interpolation, unlike
+  `core`/`webapp`, so a real `ROOTGUARD_UPDATER_IMAGE` pin in `.env` had
+  no effect
+  ([rootguard#304](https://github.com/foxly-it/rootguard/pull/304)).
+  `.gitignore` had `.graphify-out/` (leading dot) instead of the tool's
+  actual `graphify-out/`, so it was never ignored
+  ([rootguard#305](https://github.com/foxly-it/rootguard/pull/305)).
+  `compose.alpha.yaml`/`.env.alpha.example` renamed to
+  `compose.release.yaml`/`.env.release.example` - phase-neutral, so it
+  won't need to change again at the next phase transition; the
+  updater container's own `ROOTGUARD_COMPOSE_FILE`/bind-mount
+  self-reference was updated too, since that one drives the real
+  control-plane update mechanism, not just docs. `README.md`/
+  `site/index.html`/`site/docs.html`'s quick-start commands are
+  deliberately left pinned to the old name under the already-published
+  `v0.1.0-beta.3` tag, which doesn't contain the new one - they
+  self-correct once the next release ships
+  ([rootguard#308](https://github.com/foxly-it/rootguard/issues/308),
+  [rootguard#309](https://github.com/foxly-it/rootguard/pull/309)).
 
 The storage safety slice persists successful image history before deleting
 anything. Cleanup retains the active and previous successful image and removes
