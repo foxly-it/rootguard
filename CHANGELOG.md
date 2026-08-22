@@ -3,6 +3,23 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.5] - 2026-08-22
+
+### Added
+
+- Discover new RootGuard releases live instead of a manual .env pin ([#320](https://github.com/foxly-it/rootguard/pull/320))
+- Let the RootGuard Updater update its own image ([#322](https://github.com/foxly-it/rootguard/pull/322))
+
+### Documentation
+
+- Record v0.1.0-beta.4 and the release-pipeline bugs it surfaced ([#316](https://github.com/foxly-it/rootguard/pull/316))
+
+### Fixed
+
+- Quick-start still referenced compose.alpha.yaml under v0.1.0-beta.4 ([#313](https://github.com/foxly-it/rootguard/pull/313))
+- Dispatch pages.yml explicitly after the release pin-refresh push (#314) ([#315](https://github.com/foxly-it/rootguard/pull/315))
+- Actually check updater/unbound attestation instead of hardcoding not_applicable (#317) ([#318](https://github.com/foxly-it/rootguard/pull/318))
+
 ## [0.1.0-beta.4] - 2026-08-22
 
 ### Added
