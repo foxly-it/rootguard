@@ -441,6 +441,8 @@ export const en: LocaleDefinition = {
     "overview.metricUnavailable": "Unavailable",
     "overview.chartMin": "Min {value}",
     "overview.chartMax": "Max {value}",
+    "overview.chartNow": "Now",
+    "overview.chartSecondsAgo": "{seconds}s ago",
     "overview.queries": "DNS queries",
     "overview.blocked": "Blocked",
     "overview.blockRate": "Filter rate",

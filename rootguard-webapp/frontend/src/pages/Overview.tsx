@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   Activity,
@@ -60,9 +60,11 @@ export default function Overview() {
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [busyService, setBusyService] = useState("");
   const [error, setError] = useState("");
+  const [cpuHistory, setCpuHistory] = useState<number[]>([]);
   const [memoryHistory, setMemoryHistory] = useState<number[]>([]);
   const [queriesHistory, setQueriesHistory] = useState<number[]>([]);
   const [blockedHistory, setBlockedHistory] = useState<number[]>([]);
+  const [blockRateHistory, setBlockRateHistory] = useState<number[]>([]);
 
   const loadDashboard = useCallback(async () => {
     try {
@@ -74,12 +76,14 @@ export default function Overview() {
       setDashboard(nextDashboard);
       setInstallation(nextInstallation);
       setServices(nextServices);
+      setCpuHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.cpu : null));
       setMemoryHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.memory : null));
 
       const nextAdGuard = nextInstallation.state === "installed" ? await fetchAdGuardStatus().catch(() => null) : null;
       setAdGuard(nextAdGuard);
       setQueriesHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.queries : null));
       setBlockedHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.blocked : null));
+      setBlockRateHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? blockRatePercent(nextAdGuard.blocked, nextAdGuard.queries) : null));
 
       setLastChecked(new Date());
       setError("");
@@ -170,6 +174,9 @@ export default function Overview() {
           percent={dashboard?.docker.metrics_available ? dashboard.docker.cpu : 0}
           detail={t("overview.cpuHelp")}
           available={dashboard?.docker.metrics_available === true}
+          history={cpuHistory}
+          formatValue={formatCPU}
+          t={t}
         />
         <SparkMetric
           icon={<MemoryStick />}
@@ -210,6 +217,9 @@ export default function Overview() {
           detail={t("overview.statisticsPeriod")}
           available={adGuard?.stats_available === true}
           tone="accent"
+          history={blockRateHistory}
+          formatValue={formatCPU}
+          t={t}
         />
       </section>
 
@@ -236,22 +246,20 @@ export default function Overview() {
           {services.map((service) => {
             const Icon = serviceIcons[service.name];
             return (
-              <article className={`service-row ${runtimeTone(service)}`} key={service.name}>
-                <span className="service-row-icon"><Icon size={16} /></span>
-                <div className="service-row-detail">
-                  <strong>{service.displayName}</strong>
-                  <span className="service-row-status">{healthLabel(service, t)}</span>
-                </div>
+              <article className={`service-card ${runtimeTone(service)}`} key={service.name}>
                 <button
-                  className="service-row-restart"
+                  className="service-card-restart"
                   type="button"
                   disabled={service.status !== "running" || busyService === service.name}
                   onClick={() => restart(service.name)}
                   aria-label={t("common.restart")}
                   title={t("common.restart")}
                 >
-                  <RefreshCw size={14} className={busyService === service.name ? "spinning" : ""} />
+                  <RefreshCw size={13} className={busyService === service.name ? "spinning" : ""} />
                 </button>
+                <span className="service-card-icon"><Icon size={19} /></span>
+                <strong>{service.displayName}</strong>
+                <span className="service-card-status">{healthLabel(service, t)}</span>
               </article>
             );
           })}
@@ -316,37 +324,80 @@ function RadialGauge({ percent, size = 38, strokeWidth = 5, tone = "info" }: {
 
 // Baseline sits at y=29 (not the viewBox edge) so the axis line itself
 // stays fully visible with a stroke instead of clipping against the SVG
-// bounds - this is the chart's x-axis; SparkMetric renders the
-// min/max as its y-axis reference underneath, since cramming that into
-// this tiny an SVG reads worse than plain text.
-function Sparkline({ values, tone = "info" }: { values: number[]; tone?: string }) {
+// bounds - this is the chart's x-axis; the Min/Max caption under it is the
+// y-axis reference, since cramming that into this tiny an SVG reads worse
+// than plain text. Hovering shows the exact value at the nearest sample
+// instead, following the cursor along the time axis (each sample is one
+// 10s poll tick, oldest to newest left-to-right).
+function Sparkline({ values, tone = "info", formatValue, t }: {
+  values: number[];
+  tone?: string;
+  formatValue: (value: number) => string;
+  t: (key: string, values?: Record<string, string | number>) => string;
+}) {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  function handleMove(event: React.MouseEvent<HTMLDivElement>) {
+    if (values.length < 2 || !wrapRef.current) return;
+    const rect = wrapRef.current.getBoundingClientRect();
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+    setHoverIndex(Math.round(ratio * (values.length - 1)));
+  }
+
   if (values.length < 2) {
     return (
-      <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" aria-hidden="true">
-        <line className="sparkline-axis" x1="0" y1="29" x2="100" y2="29" />
-      </svg>
+      <div className="sparkline-wrap">
+        <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" aria-hidden="true">
+          <line className="sparkline-axis" x1="0" y1="29" x2="100" y2="29" />
+        </svg>
+      </div>
     );
   }
+
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min || 1;
-  const points = values.map((value, index) => {
+  const pointAt = (index: number) => {
     const x = (index / (values.length - 1)) * 100;
-    const y = 27 - ((value - min) / range) * 23;
-    return `${x},${y}`;
-  });
-  const linePath = `M${points.join(" L")}`;
+    const y = 27 - ((values[index] - min) / range) * 23;
+    return { x, y };
+  };
+  const points = values.map((_, index) => pointAt(index));
+  const linePath = `M${points.map(({ x, y }) => `${x},${y}`).join(" L")}`;
   const areaPath = `${linePath} L100,29 L0,29 Z`;
+  const hovered = hoverIndex !== null ? pointAt(hoverIndex) : null;
+  const secondsAgo = hoverIndex !== null ? (values.length - 1 - hoverIndex) * 10 : 0;
+
   return (
-    <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
-      <path className="sparkline-area" d={areaPath} />
-      <line className="sparkline-axis" x1="0" y1="29" x2="100" y2="29" vectorEffect="non-scaling-stroke" />
-      <path className="sparkline-line" d={linePath} fill="none" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <div
+      className="sparkline-wrap"
+      ref={wrapRef}
+      onMouseMove={handleMove}
+      onMouseLeave={() => setHoverIndex(null)}
+    >
+      <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
+        <path className="sparkline-area" d={areaPath} />
+        <line className="sparkline-axis" x1="0" y1="29" x2="100" y2="29" vectorEffect="non-scaling-stroke" />
+        <path className="sparkline-line" d={linePath} fill="none" vectorEffect="non-scaling-stroke" />
+        {hovered && (
+          <>
+            <line className="sparkline-crosshair" x1={hovered.x} x2={hovered.x} y1="0" y2="29" vectorEffect="non-scaling-stroke" />
+            <circle className="sparkline-dot" cx={hovered.x} cy={hovered.y} r="2.4" vectorEffect="non-scaling-stroke" />
+          </>
+        )}
+      </svg>
+      {hovered && hoverIndex !== null && (
+        <div className="sparkline-tooltip" style={{ left: `${hovered.x}%` }}>
+          <strong>{formatValue(values[hoverIndex])}</strong>
+          <small>{secondsAgo === 0 ? t("overview.chartNow") : t("overview.chartSecondsAgo", { seconds: secondsAgo })}</small>
+        </div>
+      )}
+    </div>
   );
 }
 
-function GaugeMetric({ icon, label, display, percent, detail, available, tone = "info" }: {
+function GaugeMetric({ icon, label, display, percent, detail, available, tone = "info", history, formatValue, t }: {
   icon: React.ReactNode;
   label: string;
   display: string;
@@ -354,20 +405,31 @@ function GaugeMetric({ icon, label, display, percent, detail, available, tone = 
   detail: string;
   available: boolean;
   tone?: "info" | "accent" | "warning" | "danger";
+  history: number[];
+  formatValue: (value: number) => string;
+  t: (key: string, values?: Record<string, string | number>) => string;
 }) {
+  const hasRange = history.length >= 2;
   return (
     <article className={`metric-card ${available ? "available" : ""}`}>
-      <div className="metric-card-head">
+      <div className="metric-card-head" data-tooltip={detail}>
         <span className={`metric-icon ${tone}`}>{icon}</span>
         <div className="metric-card-labels"><small>{label}</small><strong>{display}</strong></div>
       </div>
-      <div className="metric-visual metric-visual-gauge" data-tooltip={detail}>
+      <div className="metric-visual metric-visual-gauge">
         <span className="gauge-wrap">
           <RadialGauge percent={available ? percent : 0} tone={tone} />
           <em>{available ? Math.round(percent) : "–"}{available && "%"}</em>
         </span>
       </div>
-      <div className="metric-chart-range" />
+      <div className="metric-chart-range">
+        {hasRange && (
+          <>
+            <span>{t("overview.chartMin", { value: formatValue(Math.min(...history)) })}</span>
+            <span>{t("overview.chartMax", { value: formatValue(Math.max(...history)) })}</span>
+          </>
+        )}
+      </div>
     </article>
   );
 }
@@ -386,12 +448,12 @@ function SparkMetric({ icon, label, display, history, detail, available, tone = 
   const hasRange = history.length >= 2;
   return (
     <article className={`metric-card ${available ? "available" : ""}`}>
-      <div className="metric-card-head">
+      <div className="metric-card-head" data-tooltip={detail}>
         <span className={`metric-icon ${tone}`}>{icon}</span>
         <div className="metric-card-labels"><small>{label}</small><strong>{display}</strong></div>
       </div>
-      <div className="metric-visual" data-tooltip={detail}>
-        <Sparkline values={history} tone={tone} />
+      <div className="metric-visual">
+        <Sparkline values={history} tone={tone} formatValue={formatValue} t={t} />
       </div>
       <div className="metric-chart-range">
         {hasRange && (

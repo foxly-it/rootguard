@@ -246,6 +246,7 @@
 }
 
 .metric-card-head {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -294,11 +295,13 @@
   white-space: nowrap;
 }
 
-/* A metric's chart area carries the hover tooltip (see [data-tooltip]
-   below) - the numeric value above stays permanently visible, the chart
-   plus its exact-value/period tooltip is the OPNsense/AdGuard-style
-   "hover for detail" affordance the always-on description text used to
-   provide, just less noisy at rest. */
+/* The card header (icon+label) carries the static [data-tooltip] - what
+   this metric measures/its period, e.g. "AdGuard-Statistikzeitraum". The
+   chart area below it is reserved for Sparkline's own interactive
+   value-at-cursor tooltip (.sparkline-tooltip) instead - both used to
+   compete for the same [data-tooltip] hover affordance on .metric-visual,
+   which only ever showed the static text and couldn't also track the
+   cursor along the time axis. */
 .metric-visual {
   position: relative;
   display: flex;
@@ -337,19 +340,10 @@
   pointer-events: none;
 }
 
-.metric-visual-gauge::after {
-  left: 28px;
-}
-
 [data-tooltip]:hover::after,
 [data-tooltip]:focus-visible::after {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
-}
-
-.metric-visual-gauge:hover::after,
-.metric-visual-gauge:focus-visible::after {
-  transform: translateX(0) translateY(0);
 }
 
 .gauge-wrap {
@@ -389,6 +383,13 @@
 .metric-card.available .radial-gauge.warning .gauge-value { stroke: var(--warning); }
 .metric-card.available .radial-gauge.danger .gauge-value { stroke: var(--danger); }
 
+.sparkline-wrap {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  cursor: crosshair;
+}
+
 .sparkline {
   width: 100%;
   height: 40px;
@@ -414,6 +415,54 @@
 .sparkline-axis {
   stroke: var(--border);
   stroke-width: 1;
+}
+
+.sparkline-crosshair {
+  stroke: var(--text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+  opacity: 0.7;
+}
+
+.sparkline-dot {
+  fill: var(--text-muted);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.metric-card.available .sparkline.info .sparkline-dot { fill: var(--info); }
+.metric-card.available .sparkline.danger .sparkline-dot { fill: var(--danger); }
+
+/* Follows the cursor along the chart (see Sparkline's onMouseMove) -
+   positioned via inline `left` in %, so only the centering/placement is
+   here. Same visual language as the static [data-tooltip]::after bubble
+   elsewhere on this page, just driven by React state instead of CSS
+   content/hover since it must change with cursor position. */
+.sparkline-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  display: grid;
+  gap: 1px;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgb(var(--shadow-ink) / calc(0.28 * var(--shadow-scale)));
+  transform: translateX(-50%);
+  white-space: nowrap;
+  text-align: center;
+  pointer-events: none;
+}
+
+.sparkline-tooltip strong {
+  font-size: 0.74rem;
+}
+
+.sparkline-tooltip small {
+  color: var(--text-muted);
+  font-size: 0.62rem;
 }
 
 .metric-chart-range {
@@ -581,19 +630,21 @@
 
 .dashboard-services {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   margin-top: 18px;
 }
 
-.service-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 12px;
+.service-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 10px 11px;
+  gap: 6px;
+  padding: 18px 10px 14px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
+  text-align: center;
   /* Unlike .metric-card above, this sits *inside* an already-var(--surface)
      panel, so it can't reuse that same token - needs a tint that reads
      against --surface specifically. Mixing in --text (light in dark mode,
@@ -603,83 +654,81 @@
   background: color-mix(in srgb, var(--text) 6%, var(--surface));
 }
 
-.service-row-icon {
+.service-card-icon {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 11px;
   color: var(--info);
   background: var(--info-soft);
 }
 
-.service-row.good .service-row-icon {
+.service-card.good .service-card-icon {
   color: var(--success);
   border-color: var(--success-soft);
   background: var(--success-soft);
 }
 
-.service-row.attention .service-row-icon {
+.service-card.attention .service-card-icon {
   color: var(--warning);
   border-color: var(--warning-soft);
   background: var(--warning-soft);
 }
 
-.service-row.danger .service-row-icon {
+.service-card.danger .service-card-icon {
   color: var(--danger);
   border-color: var(--danger-soft);
   background: var(--danger-soft);
 }
 
-.service-row-detail {
-  min-width: 0;
-  display: grid;
-  gap: 2px;
-}
-
-.service-row-detail strong {
+.service-card strong {
   overflow: hidden;
-  font-size: 0.83rem;
+  max-width: 100%;
+  font-size: 0.8rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.service-row-status {
+.service-card-status {
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
 }
 
-.service-row.good .service-row-status {
+.service-card.good .service-card-status {
   color: var(--success);
 }
 
-.service-row.attention .service-row-status {
+.service-card.attention .service-card-status {
   color: var(--warning);
 }
 
-.service-row.danger .service-row-status {
+.service-card.danger .service-card-status {
   color: var(--danger);
 }
 
-.service-row-restart {
+.service-card-restart {
+  position: absolute;
+  top: 8px;
+  right: 8px;
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 7px;
   color: var(--text-muted);
   background: var(--surface);
 }
 
-.service-row-restart:hover:not(:disabled) {
+.service-card-restart:hover:not(:disabled) {
   color: var(--text);
   border-color: var(--focus-ring);
 }
 
-.service-row-restart:disabled {
+.service-card-restart:disabled {
   cursor: not-allowed;
   opacity: 0.42;
 }
@@ -713,6 +762,10 @@
   .overview-resources {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .dashboard-services {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -735,7 +788,7 @@
   }
 
   .dashboard-services {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .dns-flow {
