@@ -10,8 +10,10 @@ import {
   Globe2,
   MemoryStick,
   Network,
+  PanelsTopLeft,
   RefreshCw,
   Server,
+  ServerCog,
   ShieldCheck,
 } from "lucide-react";
 import {
@@ -27,6 +29,15 @@ import {
 } from "../api/client";
 import "../styles/dashboard.css";
 import { useI18n } from "../i18n";
+import { healthLabel, runtimeTone } from "../utils/serviceHealth";
+
+const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
+  core: Cpu,
+  webapp: PanelsTopLeft,
+  updater: ServerCog,
+  adguard: Filter,
+  unbound: ShieldCheck,
+};
 
 export default function Overview() {
   const { locale, t } = useI18n();
@@ -193,24 +204,28 @@ export default function Overview() {
         <section className="overview-panel service-panel">
           <PanelHeading eyebrow={t("overview.runtime")} title={t("overview.dnsServices")} />
           <div className="dashboard-services">
-            {services.map((service) => (
-              <article key={service.name}>
-                <span className={`service-light ${service.status}`} />
-                <div>
-                  <strong>{service.displayName}</strong>
-                  <p>{service.description}</p>
-                </div>
-                <button
-                  className="rg-button rg-button-secondary"
-                  type="button"
-                  disabled={service.status !== "running" || busyService === service.name}
-                  onClick={() => restart(service.name)}
-                >
-                  <RefreshCw size={14} className={busyService === service.name ? "spinning" : ""} />
-                  {t("common.restart")}
-                </button>
-              </article>
-            ))}
+            {services.map((service) => {
+              const Icon = serviceIcons[service.name];
+              return (
+                <article className={`service-row ${runtimeTone(service)}`} key={service.name}>
+                  <span className="service-row-icon"><Icon size={16} /></span>
+                  <div className="service-row-detail">
+                    <strong>{service.displayName}</strong>
+                    <span className="service-row-status">{healthLabel(service, t)}</span>
+                  </div>
+                  <button
+                    className="service-row-restart"
+                    type="button"
+                    disabled={service.status !== "running" || busyService === service.name}
+                    onClick={() => restart(service.name)}
+                    aria-label={t("common.restart")}
+                    title={t("common.restart")}
+                  >
+                    <RefreshCw size={14} className={busyService === service.name ? "spinning" : ""} />
+                  </button>
+                </article>
+              );
+            })}
           </div>
           <div className="panel-footer">
             <span>{t("overview.lastChecked", { time: lastChecked ? lastChecked.toLocaleTimeString(locale) : "–" })}</span>

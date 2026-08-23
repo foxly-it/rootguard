@@ -419,55 +419,100 @@
 
 .dashboard-services {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   margin-top: 18px;
 }
 
-.dashboard-services article {
+.service-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 15px 0;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--surface-soft);
 }
 
-.service-light {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--text-muted);
+.service-row-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--info);
+  background: var(--info-soft);
 }
 
-.service-light.running {
-  background: var(--success);
-  box-shadow: 0 0 0 5px var(--success-soft);
+.service-row.good .service-row-icon {
+  color: var(--success);
+  border-color: var(--success-soft);
+  background: var(--success-soft);
 }
 
-.dashboard-services strong {
-  font-size: 0.83rem;
+.service-row.attention .service-row-icon {
+  color: var(--warning);
+  border-color: var(--warning-soft);
+  background: var(--warning-soft);
 }
 
-.dashboard-services p {
-  margin: 4px 0 0;
+.service-row.danger .service-row-icon {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
+}
+
+.service-row-detail {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.service-row-detail strong {
   overflow: hidden;
-  color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.83rem;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dashboard-services button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 9px;
+.service-row-status {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+.service-row.good .service-row-status {
+  color: var(--success);
+}
+
+.service-row.attention .service-row-status {
+  color: var(--warning);
+}
+
+.service-row.danger .service-row-status {
+  color: var(--danger);
+}
+
+.service-row-restart {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   color: var(--text-muted);
-  background: var(--surface-soft);
-  font: inherit;
-  font-size: 0.68rem;
+  background: var(--surface);
+}
+
+.service-row-restart:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--focus-ring);
+}
+
+.service-row-restart:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .panel-footer {
