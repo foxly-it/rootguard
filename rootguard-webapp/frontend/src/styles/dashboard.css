@@ -411,6 +411,20 @@
 .metric-card.available .sparkline.danger .sparkline-area { fill: var(--danger-soft); }
 .metric-card.available .sparkline.danger .sparkline-line { stroke: var(--danger); }
 
+.sparkline-axis {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.metric-chart-range {
+  display: flex;
+  justify-content: space-between;
+  min-height: 13px;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 650;
+}
+
 .overview-panel {
   padding: 27px;
   border: 1px solid var(--border-subtle);
@@ -500,15 +514,49 @@
 }
 
 .flow-arrow {
+  position: relative;
   display: flex;
   align-items: center;
   color: var(--text-muted);
 }
 
 .flow-arrow span {
+  position: relative;
   width: 16px;
   height: 1px;
-  background: var(--border);
+  background: var(--text-muted);
+  opacity: 0.4;
+  overflow: visible;
+}
+
+/* A small glowing dot travels along each connector to read as "data is
+   flowing through here", not just a static diagram - loops continuously;
+   prefers-reduced-motion (motion.css) collapses this like every other
+   animation on the page. */
+.flow-arrow span::after {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--focus-ring);
+  box-shadow: 0 0 6px var(--focus-ring);
+  content: "";
+  transform: translate(-50%, -50%);
+  animation: rg-flow-travel 2.2s linear infinite;
+  /* Set per-instance from JSX (FlowArrow's index prop) so each of the
+     three connectors travels out of sync - nth-of-type can't target "the
+     Nth .flow-arrow" here since it alternates with .flow-node divs of the
+     same tag, which nth-of-type can't tell apart from class alone. */
+  animation-delay: var(--flow-delay, 0s);
+}
+
+@keyframes rg-flow-travel {
+  0% { left: 0%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
 }
 
 .flow-footnote {
@@ -533,7 +581,8 @@
 
 .dashboard-services {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
   margin-top: 18px;
 }
 
@@ -685,6 +734,9 @@
     grid-template-columns: 1fr;
   }
 
+  .dashboard-services {
+    grid-template-columns: 1fr;
+  }
 
   .dns-flow {
     grid-template-columns: 1fr;

@@ -178,6 +178,8 @@ export default function Overview() {
           history={memoryHistory}
           detail={t("overview.memoryHelp")}
           available={dashboard?.docker.metrics_available === true}
+          formatValue={formatBytes}
+          t={t}
         />
         <SparkMetric
           icon={<Activity />}
@@ -186,6 +188,8 @@ export default function Overview() {
           history={queriesHistory}
           detail={t("overview.statisticsPeriod")}
           available={adGuard?.stats_available === true}
+          formatValue={formatInteger}
+          t={t}
         />
         <SparkMetric
           icon={<Ban />}
@@ -195,6 +199,8 @@ export default function Overview() {
           detail={t("overview.statisticsPeriod")}
           available={adGuard?.stats_available === true}
           tone="danger"
+          formatValue={formatInteger}
+          t={t}
         />
         <GaugeMetric
           icon={<Filter />}
@@ -211,11 +217,11 @@ export default function Overview() {
         <PanelHeading eyebrow={t("overview.dataFlow")} title={t("overview.flowTitle")} link="/adguard" linkLabel={t("overview.details")} />
         <div className="dns-flow">
           <FlowNode icon={<Globe2 />} title={t("overview.clients")} detail={bindAddress} state="neutral" />
-          <FlowArrow />
+          <FlowArrow index={0} />
           <FlowNode icon={<Filter />} title="AdGuard Home" detail={t("overview.filters")} state={serviceState(services, "adguard")} />
-          <FlowArrow />
+          <FlowArrow index={1} />
           <FlowNode icon={<ShieldCheck />} title="Unbound" detail={t("overview.recursive")} state={serviceState(services, "unbound")} />
-          <FlowArrow />
+          <FlowArrow index={2} />
           <FlowNode icon={<Network />} title={t("overview.hierarchy")} detail={t("overview.noExternal")} state={protectedState ? "running" : "neutral"} />
         </div>
         <div className="flow-footnote">
@@ -308,22 +314,34 @@ function RadialGauge({ percent, size = 38, strokeWidth = 5, tone = "info" }: {
   );
 }
 
+// Baseline sits at y=29 (not the viewBox edge) so the axis line itself
+// stays fully visible with a stroke instead of clipping against the SVG
+// bounds - this is the chart's x-axis; SparkMetric renders the
+// min/max as its y-axis reference underneath, since cramming that into
+// this tiny an SVG reads worse than plain text.
 function Sparkline({ values, tone = "info" }: { values: number[]; tone?: string }) {
-  if (values.length < 2) return <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" aria-hidden="true" />;
+  if (values.length < 2) {
+    return (
+      <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" aria-hidden="true">
+        <line className="sparkline-axis" x1="0" y1="29" x2="100" y2="29" />
+      </svg>
+    );
+  }
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min || 1;
   const points = values.map((value, index) => {
     const x = (index / (values.length - 1)) * 100;
-    const y = 30 - ((value - min) / range) * 26;
+    const y = 27 - ((value - min) / range) * 23;
     return `${x},${y}`;
   });
   const linePath = `M${points.join(" L")}`;
-  const areaPath = `${linePath} L100,32 L0,32 Z`;
+  const areaPath = `${linePath} L100,29 L0,29 Z`;
   return (
     <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
       <path className="sparkline-area" d={areaPath} />
-      <path className="sparkline-line" d={linePath} fill="none" />
+      <line className="sparkline-axis" x1="0" y1="29" x2="100" y2="29" vectorEffect="non-scaling-stroke" />
+      <path className="sparkline-line" d={linePath} fill="none" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -349,11 +367,12 @@ function GaugeMetric({ icon, label, display, percent, detail, available, tone = 
           <em>{available ? Math.round(percent) : "–"}{available && "%"}</em>
         </span>
       </div>
+      <div className="metric-chart-range" />
     </article>
   );
 }
 
-function SparkMetric({ icon, label, display, history, detail, available, tone = "info" }: {
+function SparkMetric({ icon, label, display, history, detail, available, tone = "info", formatValue, t }: {
   icon: React.ReactNode;
   label: string;
   display: string;
@@ -361,7 +380,10 @@ function SparkMetric({ icon, label, display, history, detail, available, tone = 
   detail: string;
   available: boolean;
   tone?: string;
+  formatValue: (value: number) => string;
+  t: (key: string, values?: Record<string, string | number>) => string;
 }) {
+  const hasRange = history.length >= 2;
   return (
     <article className={`metric-card ${available ? "available" : ""}`}>
       <div className="metric-card-head">
@@ -370,6 +392,14 @@ function SparkMetric({ icon, label, display, history, detail, available, tone = 
       </div>
       <div className="metric-visual" data-tooltip={detail}>
         <Sparkline values={history} tone={tone} />
+      </div>
+      <div className="metric-chart-range">
+        {hasRange && (
+          <>
+            <span>{t("overview.chartMin", { value: formatValue(Math.min(...history)) })}</span>
+            <span>{t("overview.chartMax", { value: formatValue(Math.max(...history)) })}</span>
+          </>
+        )}
       </div>
     </article>
   );
@@ -393,8 +423,13 @@ function FlowNode({ icon, title, detail, state }: {
   return <div className={`flow-node ${state}`}><span>{icon}</span><strong>{title}</strong><small>{detail}</small></div>;
 }
 
-function FlowArrow() {
-  return <div className="flow-arrow"><span /><ArrowRight size={15} /></div>;
+function FlowArrow({ index }: { index: number }) {
+  return (
+    <div className="flow-arrow">
+      <span style={{ "--flow-delay": `${index * 0.5}s` } as React.CSSProperties} />
+      <ArrowRight size={15} />
+    </div>
+  );
 }
 
 function serviceState(services: ServiceInfo[], name: ServiceInfo["name"]) {

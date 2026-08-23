@@ -439,6 +439,8 @@ export const en: LocaleDefinition = {
     "overview.cpuHelp": "Current combined usage",
     "overview.memoryHelp": "Memory currently in use",
     "overview.metricUnavailable": "Unavailable",
+    "overview.chartMin": "Min {value}",
+    "overview.chartMax": "Max {value}",
     "overview.queries": "DNS queries",
     "overview.blocked": "Blocked",
     "overview.blockRate": "Filter rate",

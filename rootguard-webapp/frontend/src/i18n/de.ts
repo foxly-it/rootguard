@@ -439,6 +439,8 @@ export const de: LocaleDefinition = {
     "overview.cpuHelp": "Aktuelle Gesamtauslastung",
     "overview.memoryHelp": "Aktuell belegter Speicher",
     "overview.metricUnavailable": "Nicht verfügbar",
+    "overview.chartMin": "Min {value}",
+    "overview.chartMax": "Max {value}",
     "overview.queries": "DNS-Anfragen",
     "overview.blocked": "Blockiert",
     "overview.blockRate": "Filterquote",
