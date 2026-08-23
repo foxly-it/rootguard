@@ -236,7 +236,13 @@
   padding: 16px 18px;
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
-  background: var(--surface-soft);
+  /* Sits directly on the page background (like .card/.stack-service-card
+     elsewhere) - --surface-soft is a flat 3% white tint meant for a subtle
+     highlight *within* an already-lighter --surface card, and reads as
+     almost no card at all against the much darker page background in dark
+     mode (confirmed on a live dark-mode screenshot: the whole metrics row
+     nearly disappeared into the page). */
+  background: var(--surface);
 }
 
 .metric-card-head {
@@ -365,7 +371,12 @@
 }
 
 .radial-gauge .gauge-track {
-  stroke: var(--border-subtle);
+  /* --border-subtle was nearly invisible in dark mode (0.05 alpha white),
+     making the ring's "empty" portion disappear entirely - only the tiny
+     colored value arc showed. --border (0.08/0.1 alpha) is what every
+     other card boundary on this page already uses; same fix as
+     .metric-card/.service-row above. */
+  stroke: var(--border);
 }
 
 .radial-gauge .gauge-value {
@@ -532,9 +543,15 @@
   gap: 12px;
   align-items: center;
   padding: 10px 11px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--surface-soft);
+  /* Unlike .metric-card above, this sits *inside* an already-var(--surface)
+     panel, so it can't reuse that same token - needs a tint that reads
+     against --surface specifically. Mixing in --text (light in dark mode,
+     dark in light mode) instead of a fixed white/black overlay keeps
+     contrast consistent across both themes, unlike the flat 3% white
+     --surface-soft this replaced. */
+  background: color-mix(in srgb, var(--text) 6%, var(--surface));
 }
 
 .service-row-icon {
