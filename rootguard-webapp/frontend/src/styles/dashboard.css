@@ -7,11 +7,10 @@
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(270px, 0.7fr);
-  gap: 50px;
+  gap: 20px 50px;
   align-items: center;
-  min-height: 340px;
   overflow: hidden;
-  padding: 54px 60px;
+  padding: 54px 60px 40px;
   border: 1px solid var(--border);
   border-radius: 28px;
   background:
@@ -157,54 +156,69 @@
   background: var(--danger-soft);
 }
 
-.overview-kpis {
+.hero-stats {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 18px;
+  grid-column: 1 / -1;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 26px;
+  border-top: 1px solid var(--border-subtle);
 }
 
-.overview-kpi {
+.hero-stat {
   display: flex;
-  gap: 14px;
+  align-items: center;
+  gap: 12px;
   min-width: 0;
-  padding: 19px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 16px;
-  background: var(--surface);
 }
 
-.kpi-icon {
+.hero-stat-icon {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
   border-radius: 11px;
   color: var(--info);
   background: var(--info-soft);
 }
 
-.kpi-icon svg {
-  width: 18px;
-  height: 18px;
+.hero-stat-icon svg {
+  width: 17px;
+  height: 17px;
 }
 
-.kpi-icon.good {
+.hero-stat-icon.good {
   color: var(--success);
   background: var(--success-soft);
 }
 
-.overview-kpi div {
+.hero-stat div {
   min-width: 0;
 }
 
-.overview-kpi small,
-.overview-kpi strong,
-.overview-kpi p {
+.hero-stat small {
   display: block;
   overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-stat strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 3px;
+  font-size: 0.87rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .overview-resources {
@@ -212,95 +226,160 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
   align-items: stretch;
-  margin-top: 12px;
+  margin-top: 18px;
 }
 
-.overview-resource {
+.metric-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.metric-card-head {
   display: flex;
   align-items: center;
-  gap: 13px;
+  gap: 12px;
   min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  background: var(--surface-soft);
 }
 
-.overview-resource > span {
+.metric-icon {
   display: grid;
   place-items: center;
-  width: 35px;
-  height: 35px;
-  flex: 0 0 35px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
   border-radius: 10px;
   color: var(--text-muted);
-  background: var(--surface-soft);
+  background: var(--surface);
 }
 
-.overview-resource.available > span {
-  color: var(--focus-ring);
-  background: var(--accent-soft);
-}
+.metric-card.available .metric-icon.info { color: var(--info); background: var(--info-soft); }
+.metric-card.available .metric-icon.accent { color: var(--focus-ring); background: var(--accent-soft); }
+.metric-card.available .metric-icon.warning { color: var(--warning); background: var(--warning-soft); }
+.metric-card.available .metric-icon.danger { color: var(--danger); background: var(--danger-soft); }
 
-.overview-resource div {
-  display: grid;
+.metric-card-labels {
   min-width: 0;
 }
 
-.overview-resource small {
+.metric-card-labels small {
+  display: block;
+  overflow: hidden;
   color: var(--text-muted);
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.overview-resource strong {
+.metric-card-labels strong {
+  display: block;
+  overflow: hidden;
   margin-top: 2px;
   color: var(--text);
   font-size: 1.05rem;
-}
-
-.overview-resource p {
-  margin: 2px 0 0;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  line-height: 1.45;
-}
-
-
-.overview-kpi small {
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.overview-kpi strong {
-  margin-top: 5px;
+  text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.93rem;
 }
 
-.overview-kpi p {
-  margin: 4px 0 0;
-  color: var(--text-muted);
+/* A metric's chart area carries the hover tooltip (see [data-tooltip]
+   below) - the numeric value above stays permanently visible, the chart
+   plus its exact-value/period tooltip is the OPNsense/AdGuard-style
+   "hover for detail" affordance the always-on description text used to
+   provide, just less noisy at rest. */
+.metric-visual {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 40px;
+}
+
+.metric-visual-gauge {
+  justify-content: flex-start;
+}
+
+[data-tooltip] {
+  cursor: default;
+}
+
+[data-tooltip]::after {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  z-index: 5;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgb(var(--shadow-ink) / calc(0.28 * var(--shadow-scale)));
+  content: attr(data-tooltip);
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
   white-space: nowrap;
   font-size: 0.72rem;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.overview-content-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.75fr);
-  /* Without this, grid's default stretch forces the shorter flow-diagram
-     card to match the taller five-service list card's height, leaving a
-     visible empty band inside its own border at the bottom - fit-content
-     the row instead so each card sizes to what it actually contains. */
-  align-items: start;
-  gap: 18px;
-  margin-top: 18px;
+.metric-visual-gauge::after {
+  left: 28px;
 }
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+
+.metric-visual-gauge:hover::after,
+.metric-visual-gauge:focus-visible::after {
+  transform: translateX(0) translateY(0);
+}
+
+.radial-gauge .gauge-track {
+  stroke: var(--border-subtle);
+}
+
+.radial-gauge .gauge-value {
+  stroke: var(--text-muted);
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.metric-card.available .radial-gauge.info .gauge-value { stroke: var(--info); }
+.metric-card.available .radial-gauge.accent .gauge-value { stroke: var(--focus-ring); }
+.metric-card.available .radial-gauge.warning .gauge-value { stroke: var(--warning); }
+.metric-card.available .radial-gauge.danger .gauge-value { stroke: var(--danger); }
+
+.sparkline {
+  width: 100%;
+  height: 40px;
+}
+
+.sparkline-area {
+  fill: var(--info-soft);
+  stroke: none;
+}
+
+.sparkline-line {
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.metric-card.available .sparkline.info .sparkline-area { fill: var(--info-soft); }
+.metric-card.available .sparkline.info .sparkline-line { stroke: var(--info); }
+.metric-card.available .sparkline.danger .sparkline-area { fill: var(--danger-soft); }
+.metric-card.available .sparkline.danger .sparkline-line { stroke: var(--danger); }
 
 .overview-panel {
   padding: 27px;
@@ -415,6 +494,11 @@
 
 .flow-footnote svg {
   color: var(--success);
+}
+
+.system-panel-divider {
+  margin: 30px 0 26px;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .dashboard-services {
@@ -537,12 +621,8 @@
 }
 
 @media (max-width: 1080px) {
-  .overview-kpis {
+  .hero-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .overview-content-grid {
-    grid-template-columns: 1fr;
   }
 
   .overview-resources {
@@ -561,7 +641,7 @@
     height: 190px;
   }
 
-  .overview-kpis {
+  .hero-stats {
     grid-template-columns: 1fr;
   }
 
