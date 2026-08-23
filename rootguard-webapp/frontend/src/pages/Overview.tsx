@@ -278,7 +278,7 @@ function HeroStat({ icon, label, value, good }: {
 // rolling count respectively - the same visual split OPNsense/Proxmox use
 // (a ring for "how full is this out of 100") vs. what AdGuard Home's own
 // dashboard uses (a trend line for "how many, over time").
-function RadialGauge({ percent, size = 56, strokeWidth = 6, tone = "info" }: {
+function RadialGauge({ percent, size = 38, strokeWidth = 5, tone = "info" }: {
   percent: number;
   size?: number;
   strokeWidth?: number;
@@ -344,7 +344,10 @@ function GaugeMetric({ icon, label, display, percent, detail, available, tone = 
         <div className="metric-card-labels"><small>{label}</small><strong>{display}</strong></div>
       </div>
       <div className="metric-visual metric-visual-gauge" data-tooltip={detail}>
-        <RadialGauge percent={available ? percent : 0} tone={tone} />
+        <span className="gauge-wrap">
+          <RadialGauge percent={available ? percent : 0} tone={tone} />
+          <em>{available ? Math.round(percent) : "–"}{available && "%"}</em>
+        </span>
       </div>
     </article>
   );

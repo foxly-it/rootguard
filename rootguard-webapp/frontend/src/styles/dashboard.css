@@ -302,6 +302,7 @@
 }
 
 .metric-visual-gauge {
+  align-items: center;
   justify-content: flex-start;
 }
 
@@ -343,6 +344,24 @@
 .metric-visual-gauge:hover::after,
 .metric-visual-gauge:focus-visible::after {
   transform: translateX(0) translateY(0);
+}
+
+.gauge-wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.gauge-wrap em {
+  position: absolute;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.metric-card.available .gauge-wrap em {
+  color: var(--text);
 }
 
 .radial-gauge .gauge-track {
