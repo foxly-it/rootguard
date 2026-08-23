@@ -534,7 +534,7 @@ func TestAccountUpdateRejectsWrongCurrentPasswordAndInvalidInput(t *testing.T) {
 		body       string
 		wantStatus int
 	}{
-		"wrong current password": {`{"current_password":"wrong","new_username":"root"}`, http.StatusUnauthorized},
+		"wrong current password": {`{"current_password":"wrong","new_username":"root"}`, http.StatusForbidden},
 		"weak new password":      {`{"current_password":"secret","new_password":"short"}`, http.StatusBadRequest},
 		"nothing to update":      {`{"current_password":"secret"}`, http.StatusBadRequest},
 	} {
@@ -624,6 +624,96 @@ func TestAccountUpdateRollsBackOnCredentialPersistFailure(t *testing.T) {
 	handler.ServeHTTP(oldLoginResponse, oldLoginRequest)
 	if oldLoginResponse.Code != http.StatusOK {
 		t.Fatalf("expected the original username/password to still work after a rolled-back rename, got %d", oldLoginResponse.Code)
+	}
+}
+
+// TestAccountUpdateRollsBackCredentialsOnSessionPersistFailure covers the
+// other write ordering: the credential write succeeds first (durably), then
+// the session write fails. The handler must undo the already-committed
+// credential change rather than leaving the account renamed/repassworded
+// while responding with a plain failure - and must genuinely invalidate
+// nothing, not just the calling session, since sessions.json was never
+// actually overwritten by the failed persist.
+func TestAccountUpdateRollsBackCredentialsOnSessionPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	sessionFile := filepath.Join(dir, "sessions.json")
+
+	auth := NewSessionAuth("admin", "old-password", "", time.Hour, sessionFile)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "old-password"})
+
+	login := func() *http.Cookie {
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("expected login 200, got %d", response.Code)
+		}
+		return response.Result().Cookies()[0]
+	}
+	currentCookie := login()
+	otherCookie := login()
+
+	// Sessions.json itself becomes a directory only *after* both logins
+	// above have already persisted it as a normal file - so the credential
+	// write inside the account update below still succeeds first, and only
+	// the subsequent session write fails.
+	if err := os.Remove(sessionFile); err != nil {
+		t.Fatalf("failed to remove the seeded sessions.json: %v", err)
+	}
+	if err := os.MkdirAll(sessionFile, 0700); err != nil {
+		t.Fatalf("failed to set up sessions.json as a directory: %v", err)
+	}
+
+	updateBody, _ := json.Marshal(accountUpdate{CurrentPassword: "old-password", NewUsername: "root", NewPassword: "new-password-123"})
+	updateRequest := httptest.NewRequest(http.MethodPost, "/api/auth/account", bytes.NewReader(updateBody))
+	updateRequest.Header.Set("Origin", "http://example.com")
+	updateRequest.Host = "example.com"
+	updateRequest.AddCookie(currentCookie)
+	update := httptest.NewRecorder()
+	handler.ServeHTTP(update, updateRequest)
+	if update.Code != http.StatusInternalServerError {
+		t.Fatalf("expected the update to fail when sessions can't persist, got %d: %s", update.Code, update.Body.String())
+	}
+	var errorBody map[string]string
+	if err := json.Unmarshal(update.Body.Bytes(), &errorBody); err == nil && errorBody["error"] == "partial_update" {
+		t.Fatalf("expected a clean rollback (credentials.json was never broken), not a partial_update response: %s", update.Body.String())
+	}
+
+	// The rolled-back credentials must mean the *new* password does not
+	// work at all. (A fresh login attempt with the still-valid *old*
+	// credentials isn't checked the same way here: sessions.json is a
+	// directory for the rest of this test, so even a correctly-validated
+	// login would itself fail to persist its new session - that would test
+	// the broken test fixture, not the rollback. The existing sessions'
+	// still-valid state below is the real proof the rollback worked.)
+	newLoginBody, _ := json.Marshal(credentials{Username: "root", Password: "new-password-123"})
+	newLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(newLoginBody))
+	newLoginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(newLoginResponse, newLoginRequest)
+	if newLoginResponse.Code == http.StatusOK {
+		t.Fatalf("expected the new (rolled-back) credentials to not work, got %d", newLoginResponse.Code)
+	}
+
+	// Neither pre-existing session was actually invalidated, since the
+	// failed persist never overwrote the real sessions.json on disk - and
+	// both still report the original username, proving the credential
+	// rollback (not just the session-map rollback) took effect.
+	for name, sessionCookie := range map[string]*http.Cookie{"current": currentCookie, "other": otherCookie} {
+		sessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+		sessionRequest.AddCookie(sessionCookie)
+		sessionResponse := httptest.NewRecorder()
+		handler.ServeHTTP(sessionResponse, sessionRequest)
+		if sessionResponse.Code != http.StatusOK {
+			t.Fatalf("%s session: expected it to remain valid after a fully rolled-back update, got %d", name, sessionResponse.Code)
+		}
+		var sessionResult map[string]any
+		if err := json.Unmarshal(sessionResponse.Body.Bytes(), &sessionResult); err != nil {
+			t.Fatalf("%s session: failed to decode response: %v", name, err)
+		}
+		if sessionResult["username"] != "admin" {
+			t.Fatalf("%s session: expected the original username %q after a rolled-back update, got %v", name, "admin", sessionResult["username"])
+		}
 	}
 }
 

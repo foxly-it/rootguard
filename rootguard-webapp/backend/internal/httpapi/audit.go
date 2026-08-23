@@ -29,6 +29,12 @@ const (
 	auditSessionRevoked   = "session_revoked"
 	auditAccountUpdated   = "account_updated"
 	auditAccountFailure   = "account_update_failure"
+	// auditAccountPartial marks the rare double-failure case where the
+	// credential write succeeded but the session-invalidation write (and
+	// the attempt to roll the credential write back) both failed - a
+	// genuinely inconsistent state worth distinguishing from a clean
+	// account_update_failure in the audit log.
+	auditAccountPartial = "account_update_partial"
 )
 
 // Destructive-action base event names. guardDestructive appends "_success",

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import ContentModal from "./ContentModal";
 import { updateAccount } from "../api/client";
@@ -18,15 +18,26 @@ export default function AccountModal({ open, onClose, returnFocusTo }: { open: b
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  // Only reset the form when the modal actually opens, not on every
+  // `username` change - a successful rename calls updateUsername() right
+  // before setting the success message below, and that context update
+  // would otherwise re-run this effect and immediately clear it again. The
+  // ref keeps the latest username available without making the effect
+  // depend on (and re-run for) it.
+  const latestUsername = useRef(username);
+  useEffect(() => {
+    latestUsername.current = username;
+  }, [username]);
+
   useEffect(() => {
     if (!open) return;
-    setNewUsername(username);
+    setNewUsername(latestUsername.current);
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
     setError("");
     setMessage("");
-  }, [open, username]);
+  }, [open]);
 
   const trimmedUsername = newUsername.trim();
   const usernameChanged = trimmedUsername !== "" && trimmedUsername !== username;
@@ -68,6 +79,13 @@ export default function AccountModal({ open, onClose, returnFocusTo }: { open: b
       else if (code === "username_too_long") setError(t("account.usernameTooLong"));
       else if (code === "nothing_to_update") setError(t("account.nothingToUpdate"));
       else if (code === "rate_limited") setError(t("account.rateLimited"));
+      // Rare: the credential change itself was durably saved, but the
+      // server then failed to invalidate other sessions (and failed to
+      // roll the credential change back too) - the account was genuinely
+      // changed despite the error, so this needs its own message rather
+      // than the generic "could not update" one, which would wrongly
+      // imply nothing happened.
+      else if (code === "partial_update") setError(t("account.partialUpdate"));
       else setError(t("account.updateError"));
     } finally {
       setBusy(false);

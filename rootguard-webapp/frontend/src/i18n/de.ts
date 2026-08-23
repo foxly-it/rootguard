@@ -129,6 +129,7 @@ export const de: LocaleDefinition = {
     "sessions.activity.session_revoked": "Sitzung beendet",
     "sessions.activity.account_updated": "Konto aktualisiert",
     "sessions.activity.account_update_failure": "Fehlgeschlagener Versuch, das Konto zu ändern",
+    "sessions.activity.account_update_partial": "Konto-Änderung teilweise fehlgeschlagen",
 
     "account.manage": "Kontoeinstellungen",
     "account.title": "Kontoeinstellungen",
@@ -150,6 +151,7 @@ export const de: LocaleDefinition = {
     "account.usernameTooLong": "Der Benutzername ist zu lang.",
     "account.nothingToUpdate": "Gib einen neuen Benutzernamen oder ein neues Passwort ein, um zu speichern.",
     "account.rateLimited": "Zu viele Versuche - bitte kurz warten und erneut versuchen.",
+    "account.partialUpdate": "Deine Zugangsdaten wurden geändert, aber andere angemeldete Geräte konnten nicht abgemeldet werden. Bitte melde dich mit den neuen Zugangsdaten erneut an und prüfe die aktiven Sitzungen.",
 
     "setup.title": "DNS-Stack einrichten",
     "setup.intro": "Wähle die vorhandene Host-Adresse aus, über die DNS bereitgestellt werden soll. RootGuard erstellt und schützt Unbound und AdGuard Home.",

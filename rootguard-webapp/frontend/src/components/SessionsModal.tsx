@@ -5,7 +5,7 @@ import { fetchAuditLog, fetchSessions, revokeSession, type AuditEvent, type Sess
 import { useI18n } from "../i18n";
 import "../styles/sessions.css";
 
-const WARNING_AUDIT_EVENTS = new Set<AuditEvent["event"]>(["login_failure", "login_rate_limited", "recovery_failure"]);
+const WARNING_AUDIT_EVENTS = new Set<AuditEvent["event"]>(["login_failure", "login_rate_limited", "recovery_failure", "account_update_failure", "account_update_partial"]);
 
 export default function SessionsModal({ open, onClose, returnFocusTo }: { open: boolean; onClose: () => void; returnFocusTo?: RefObject<Element | null> }) {
   const { t, locale } = useI18n();

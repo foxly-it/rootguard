@@ -129,6 +129,7 @@ export const en: LocaleDefinition = {
     "sessions.activity.session_revoked": "Session signed out",
     "sessions.activity.account_updated": "Account updated",
     "sessions.activity.account_update_failure": "Failed account update attempt",
+    "sessions.activity.account_update_partial": "Account update partially failed",
 
     "account.manage": "Account settings",
     "account.title": "Account settings",
@@ -150,6 +151,7 @@ export const en: LocaleDefinition = {
     "account.usernameTooLong": "The username is too long.",
     "account.nothingToUpdate": "Enter a new username or a new password to update.",
     "account.rateLimited": "Too many attempts - please wait a moment and try again.",
+    "account.partialUpdate": "Your credentials were changed, but other signed-in devices could not be signed out. Please sign in again with your new credentials and check Active sessions.",
 
     "setup.title": "Set up DNS stack",
     "setup.intro": "Choose the existing host address that should serve DNS. RootGuard will create and secure Unbound and AdGuard Home for you.",

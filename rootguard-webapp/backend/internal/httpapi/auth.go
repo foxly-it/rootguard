@@ -349,7 +349,13 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 		a.loginLimiter.recordFailure(limiterKey)
 		a.recordAudit(auditAccountFailure, "", remoteIP)
 		time.Sleep(250 * time.Millisecond)
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_current_password"})
+		// 403, not 401: the caller's session cookie is valid (already
+		// confirmed above) - only the submitted current-password field is
+		// wrong. The frontend's shared API client treats any 401 as "the
+		// session itself is invalid" and clears the local login state on
+		// it, so a 401 here would silently sign a correctly-logged-in
+		// operator out just for mistyping their current password.
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid_current_password"})
 		return
 	}
 	a.loginLimiter.reset(limiterKey)
@@ -408,6 +414,33 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := a.persistLocked(); err != nil {
 		a.sessions = oldSessions
+		// The credential write above already succeeded and is durably on
+		// disk - leaving it in place here would mean the response says
+		// "failed" while the account was actually renamed/repassworded.
+		// Try to undo it by persisting the old credentials back.
+		newUsernameApplied, newUserHashApplied := a.expectedUsername, a.expectedUserHash
+		newPasswordHashApplied, newPasswordSaltApplied := a.expectedPasswordHash, a.passwordSalt
+		a.expectedUsername, a.expectedUserHash = oldUsername, oldUserHash
+		a.expectedPasswordHash, a.passwordSalt = oldPasswordHash, oldPasswordSalt
+		if rollbackErr := a.persistCredentialsLocked(); rollbackErr != nil {
+			// Both writes failed: disk still holds the NEW credentials from
+			// the successful write above (the rollback attempt's own write
+			// failed to overwrite it), so keep memory matching disk instead
+			// of diverging from what's actually durable. This is a genuine
+			// partial state - say so explicitly rather than returning the
+			// same generic 500 as a clean rollback, so the operator knows
+			// to sign in with the *new* credentials and check other devices
+			// themselves rather than assuming nothing happened.
+			a.expectedUsername, a.expectedUserHash = newUsernameApplied, newUserHashApplied
+			a.expectedPasswordHash, a.passwordSalt = newPasswordHashApplied, newPasswordSaltApplied
+			a.mu.Unlock()
+			a.recordAuditDetail(auditAccountPartial, resultUsername, remoteIP, "credentials changed, session invalidation failed")
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error":    "partial_update",
+				"username": resultUsername,
+			})
+			return
+		}
 		a.mu.Unlock()
 		http.Error(w, "Unable to invalidate sessions", http.StatusInternalServerError)
 		return
