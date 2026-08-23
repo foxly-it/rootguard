@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   Activity,
@@ -30,6 +30,7 @@ import {
 import "../styles/dashboard.css";
 import { useI18n } from "../i18n";
 import { healthLabel, runtimeTone } from "../utils/serviceHealth";
+import { blockRatePercent, pushHistory, type HistoryPoint } from "../utils/metrics";
 
 const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
   core: Cpu,
@@ -39,17 +40,12 @@ const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
   unbound: ShieldCheck,
 };
 
-// How many samples the resource sparklines/gauges keep in memory - purely
+// How many samples the resource sparklines keep in memory - purely
 // client-side, resets on page load (RootGuard has no metrics time-series
 // store). At the 10s poll interval below, 24 samples covers 4 minutes,
 // enough to show a meaningful trend without the chart going stale-looking
 // on a rarely-refreshed tab.
 const HISTORY_LENGTH = 24;
-
-function pushHistory(previous: number[], value: number | null): number[] {
-  if (value === null) return previous;
-  return [...previous, value].slice(-HISTORY_LENGTH);
-}
 
 export default function Overview() {
   const { locale, t } = useI18n();
@@ -60,69 +56,120 @@ export default function Overview() {
   const [lastChecked, setLastChecked] = useState<Date | null>(null);
   const [busyService, setBusyService] = useState("");
   const [error, setError] = useState("");
-  const [cpuHistory, setCpuHistory] = useState<number[]>([]);
-  const [memoryHistory, setMemoryHistory] = useState<number[]>([]);
-  const [queriesHistory, setQueriesHistory] = useState<number[]>([]);
-  const [blockedHistory, setBlockedHistory] = useState<number[]>([]);
-  const [blockRateHistory, setBlockRateHistory] = useState<number[]>([]);
+  const [cpuHistory, setCpuHistory] = useState<HistoryPoint[]>([]);
+  const [memoryHistory, setMemoryHistory] = useState<HistoryPoint[]>([]);
+  const [queriesHistory, setQueriesHistory] = useState<HistoryPoint[]>([]);
+  const [blockedHistory, setBlockedHistory] = useState<HistoryPoint[]>([]);
+  const [blockRateHistory, setBlockRateHistory] = useState<HistoryPoint[]>([]);
 
-  const loadDashboard = useCallback(async () => {
+  // Tracks the latest known installation state outside React state so
+  // loadMetrics (see below) can decide whether to also fetch AdGuard stats
+  // without re-fetching installation status itself every time - that's
+  // loadStatus's job, on its own slower cadence.
+  const installationRef = useRef<InstallationStatus | null>(null);
+
+  // Every poll cycle can have several requests in flight at once (the
+  // startup burst, the steady interval, a manual refresh, a post-restart
+  // reload) with no guarantee they resolve in the order they were sent. A
+  // sequence counter per loader ensures only the most recently *started*
+  // request's response is ever applied - a slow, stale response finishing
+  // after a newer one can no longer clobber fresher data, reset
+  // lastChecked to the wrong time, or resurrect an error that already
+  // cleared.
+  const metricsSeq = useRef(0);
+  const statusSeq = useRef(0);
+
+  const loadMetrics = useCallback(async () => {
+    const seq = ++metricsSeq.current;
     try {
-      const [nextDashboard, nextInstallation, nextServices] = await Promise.all([
-        fetchDashboard(),
-        fetchInstallationStatus(),
-        fetchServices(),
-      ]);
+      const nextDashboard = await fetchDashboard();
+      const nextAdGuard = installationRef.current?.state === "installed"
+        ? await fetchAdGuardStatus().catch(() => null)
+        : null;
+      if (seq !== metricsSeq.current) return;
+
       setDashboard(nextDashboard);
-      setInstallation(nextInstallation);
-      setServices(nextServices);
-      setCpuHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.cpu : null));
-      setMemoryHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.memory : null));
-
-      const nextAdGuard = nextInstallation.state === "installed" ? await fetchAdGuardStatus().catch(() => null) : null;
+      setCpuHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.cpu : null, HISTORY_LENGTH));
+      setMemoryHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.memory : null, HISTORY_LENGTH));
       setAdGuard(nextAdGuard);
-      setQueriesHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.queries : null));
-      setBlockedHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.blocked : null));
-      setBlockRateHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? blockRatePercent(nextAdGuard.blocked, nextAdGuard.queries) : null));
-
+      setQueriesHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.queries : null, HISTORY_LENGTH));
+      setBlockedHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.blocked : null, HISTORY_LENGTH));
+      setBlockRateHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? blockRatePercent(nextAdGuard.blocked, nextAdGuard.queries) : null, HISTORY_LENGTH));
       setLastChecked(new Date());
       setError("");
     } catch (cause) {
+      if (seq !== metricsSeq.current) return;
       setError(cause instanceof Error ? cause.message : t("overview.loadError"));
     }
   }, [t]);
+
+  const loadStatus = useCallback(async () => {
+    const seq = ++statusSeq.current;
+    try {
+      const [nextInstallation, nextServices] = await Promise.all([
+        fetchInstallationStatus(),
+        fetchServices(),
+      ]);
+      if (seq !== statusSeq.current) return;
+      installationRef.current = nextInstallation;
+      setInstallation(nextInstallation);
+      setServices(nextServices);
+      setError("");
+    } catch (cause) {
+      if (seq !== statusSeq.current) return;
+      setError(cause instanceof Error ? cause.message : t("overview.loadError"));
+    }
+  }, [t]);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([loadStatus(), loadMetrics()]);
+  }, [loadStatus, loadMetrics]);
 
   useEffect(() => {
     // A single sample can't draw a chart at all, and a real trend only
     // starts looking like one after a handful of points - at a flat 10s
     // cadence that's a genuinely long, boring wait after opening the page.
-    // Front-load a quick burst of extra samples right after mount (and
-    // again whenever the tab becomes visible, see below) so the metric
-    // charts have a few real points within seconds instead of one; the
-    // steady-state poll cadence itself is unchanged.
+    // Front-load a quick burst of extra metric samples right after mount
+    // (and again whenever the tab becomes visible, see below) so the
+    // charts have a few real points within seconds instead of one. Only
+    // the cheap metrics fetch (dashboard + AdGuard stats) is bursted -
+    // installation/services rarely change on that timescale, so bursting
+    // loadStatus too would just be redundant load for no visible benefit
+    // (previously a single combined loader meant every burst tick re-fetched
+    // all four endpoints).
     const burstDelays = [2_000, 4_000, 7_000];
-    let timeouts: number[] = [];
-    let interval: number | null = null;
+    let metricsTimeouts: number[] = [];
+    let metricsInterval: number | null = null;
+    let statusInterval: number | null = null;
 
     function start() {
-      loadDashboard();
-      timeouts = burstDelays.map((delay) => window.setTimeout(loadDashboard, delay));
-      interval = window.setInterval(loadDashboard, 10_000);
+      loadStatus();
+      loadMetrics();
+      metricsTimeouts = burstDelays.map((delay) => window.setTimeout(loadMetrics, delay));
+      metricsInterval = window.setInterval(loadMetrics, 10_000);
+      // Service/installation status changes far less often than CPU/memory/
+      // query counts - a slower cadence is plenty fresh for it and roughly
+      // halves the steady-state request count.
+      statusInterval = window.setInterval(loadStatus, 20_000);
     }
 
     function stop() {
-      timeouts.forEach(window.clearTimeout);
-      timeouts = [];
-      if (interval !== null) {
-        window.clearInterval(interval);
-        interval = null;
+      metricsTimeouts.forEach(window.clearTimeout);
+      metricsTimeouts = [];
+      if (metricsInterval !== null) {
+        window.clearInterval(metricsInterval);
+        metricsInterval = null;
+      }
+      if (statusInterval !== null) {
+        window.clearInterval(statusInterval);
+        statusInterval = null;
       }
     }
 
     // Backgrounded/hidden tabs have no reason to keep polling Core, Docker,
-    // and AdGuard every 10s - nobody's watching the charts. Pausing there
-    // and catching back up with a fresh burst on return keeps the same
-    // "feels current" behavior without the wasted requests in between.
+    // and AdGuard - nobody's watching the charts. Pausing there and
+    // catching back up with a fresh burst on return keeps the same "feels
+    // current" behavior without the wasted requests in between.
     function handleVisibilityChange() {
       if (document.hidden) stop();
       else start();
@@ -134,13 +181,13 @@ export default function Overview() {
       stop();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadDashboard]);
+  }, [loadMetrics, loadStatus]);
 
   async function restart(service: ServiceInfo["name"]) {
     setBusyService(service);
     try {
       await serviceAction(service, "restart");
-      await loadDashboard();
+      await refreshAll();
     } finally {
       setBusyService("");
     }
@@ -177,7 +224,7 @@ export default function Overview() {
               {installation?.state === "installed" ? t("overview.configure") : t("overview.openSetup")}
               <ArrowRight size={16} />
             </Link>
-            <button className="rg-button rg-button-secondary overview-button ghost" type="button" onClick={loadDashboard}>
+            <button className="rg-button rg-button-secondary overview-button ghost" type="button" onClick={refreshAll}>
               <RefreshCw size={15} />
               {t("overview.refresh")}
             </button>
@@ -285,8 +332,8 @@ export default function Overview() {
                   type="button"
                   disabled={service.status !== "running" || busyService === service.name}
                   onClick={() => restart(service.name)}
-                  aria-label={t("common.restart")}
-                  title={t("common.restart")}
+                  aria-label={t("overview.restartService", { name: service.displayName })}
+                  title={t("overview.restartService", { name: service.displayName })}
                 >
                   <RefreshCw size={13} className={busyService === service.name ? "spinning" : ""} />
                 </button>
@@ -326,15 +373,22 @@ function HeroStat({ icon, label, value, good }: {
 // bounds - this is the chart's x-axis; the Min/Max caption under it is the
 // y-axis reference, since cramming that into this tiny an SVG reads worse
 // than plain text. Hovering shows the exact value at the nearest sample
-// instead, following the cursor along the time axis (each sample is one
-// 10s poll tick, oldest to newest left-to-right).
+// instead, following the cursor along the time axis. Each point carries its
+// own real sampledAt timestamp rather than an assumed uniform interval -
+// the startup burst, manual refreshes, and post-restart reloads all sample
+// at irregular gaps, which a fixed "N * 10s" calculation would render as a
+// confidently wrong age.
 function Sparkline({ values, tone = "info", formatValue, t }: {
-  values: number[];
+  values: HistoryPoint[];
   tone?: string;
   formatValue: (value: number) => string;
   t: (key: string, values?: Record<string, string | number>) => string;
 }) {
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  // `now` is captured alongside the index at the moment of the pointer
+  // event (not read via Date.now() during render, which the render-purity
+  // lint rule correctly rejects as producing a value that silently drifts
+  // between renders without any actual input changing).
+  const [hover, setHover] = useState<{ index: number; now: number } | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   // Coalesces rapid mousemove events (the browser can fire far more of
   // these per second than it ever repaints) down to at most one state
@@ -346,18 +400,19 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // Only depends on `values` (one new sample every ~10s), not on
-  // hoverIndex - previously this whole path/area computation re-ran on
+  // Only depends on `values` (one new sample every ~10s), not on hover
+  // state - previously this whole path/area computation re-ran on
   // every single hover-driven re-render even though only the crosshair
   // position actually needs to change while the mouse moves.
   const chart = useMemo(() => {
     if (values.length < 2) return null;
-    const max = Math.max(...values);
-    const min = Math.min(...values);
+    const raw = values.map((point) => point.value);
+    const max = Math.max(...raw);
+    const min = Math.min(...raw);
     const range = max - min || 1;
-    const points = values.map((value, index) => ({
+    const points = values.map((point, index) => ({
       x: (index / (values.length - 1)) * 100,
-      y: 27 - ((value - min) / range) * 23,
+      y: 27 - ((point.value - min) / range) * 23,
     }));
     const linePath = `M${points.map(({ x, y }) => `${x},${y}`).join(" L")}`;
     const areaPath = `${linePath} L100,29 L0,29 Z`;
@@ -371,7 +426,7 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
     rafRef.current = requestAnimationFrame(() => {
       rafRef.current = null;
       const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-      setHoverIndex(Math.round(ratio * (values.length - 1)));
+      setHover({ index: Math.round(ratio * (values.length - 1)), now: Date.now() });
     });
   }
 
@@ -380,7 +435,7 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    setHoverIndex(null);
+    setHover(null);
   }
 
   if (!chart) {
@@ -393,8 +448,9 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
     );
   }
 
-  const hovered = hoverIndex !== null ? chart.points[hoverIndex] : null;
-  const secondsAgo = hoverIndex !== null ? (values.length - 1 - hoverIndex) * 10 : 0;
+  const hoveredPoint = hover ? values[hover.index] : null;
+  const hovered = hover ? chart.points[hover.index] : null;
+  const secondsAgo = hover && hoveredPoint ? Math.max(0, Math.round((hover.now - hoveredPoint.sampledAt) / 1000)) : 0;
 
   return (
     <div
@@ -414,9 +470,9 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
           </>
         )}
       </svg>
-      {hovered && hoverIndex !== null && (
+      {hovered && hoveredPoint && (
         <div className="sparkline-tooltip" style={{ left: `${hovered.x}%` }}>
-          <strong>{formatValue(values[hoverIndex])}</strong>
+          <strong>{formatValue(hoveredPoint.value)}</strong>
           <small>{secondsAgo === 0 ? t("overview.chartNow") : t("overview.chartSecondsAgo", { seconds: secondsAgo })}</small>
         </div>
       )}
@@ -424,12 +480,11 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
   );
 }
 
-
 function SparkMetric({ icon, label, display, history, detail, available, tone = "info", formatValue, t }: {
   icon: React.ReactNode;
   label: string;
   display: string;
-  history: number[];
+  history: HistoryPoint[];
   detail: string;
   available: boolean;
   tone?: string;
@@ -437,11 +492,19 @@ function SparkMetric({ icon, label, display, history, detail, available, tone = 
   t: (key: string, values?: Record<string, string | number>) => string;
 }) {
   const hasRange = history.length >= 2;
+  const detailId = useId();
   return (
     <article className={`metric-card ${available ? "available" : ""}`}>
-      <div className="metric-card-head" data-tooltip={detail}>
+      {/* tabIndex makes this reachable/focusable for keyboard users (the
+          existing [data-tooltip]:focus-visible CSS rule could never fire on
+          a plain, non-interactive div); aria-describedby ties it to a
+          real (if visually hidden) text node instead of relying on
+          screen readers picking up CSS-generated ::after content from
+          data-tooltip, which they don't reliably do. */}
+      <div className="metric-card-head" data-tooltip={detail} tabIndex={0} aria-describedby={detailId}>
         <span className={`metric-icon ${tone}`}>{icon}</span>
         <div className="metric-card-labels"><small>{label}</small><strong>{display}</strong></div>
+        <span id={detailId} className="sr-only">{detail}</span>
       </div>
       <div className="metric-visual">
         <Sparkline values={history} tone={tone} formatValue={formatValue} t={t} />
@@ -449,8 +512,8 @@ function SparkMetric({ icon, label, display, history, detail, available, tone = 
       <div className="metric-chart-range">
         {hasRange && (
           <>
-            <span>{t("overview.chartMin", { value: formatValue(Math.min(...history)) })}</span>
-            <span>{t("overview.chartMax", { value: formatValue(Math.max(...history)) })}</span>
+            <span>{t("overview.chartMin", { value: formatValue(Math.min(...history.map((point) => point.value))) })}</span>
+            <span>{t("overview.chartMax", { value: formatValue(Math.max(...history.map((point) => point.value))) })}</span>
           </>
         )}
       </div>
@@ -510,8 +573,4 @@ function formatInteger(value: number) {
 
 function formatBlockRate(blocked: number, queries: number) {
   return `${blockRatePercent(blocked, queries).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
-}
-
-function blockRatePercent(blocked: number, queries: number) {
-  return queries === 0 ? 0 : (blocked / queries) * 100;
 }

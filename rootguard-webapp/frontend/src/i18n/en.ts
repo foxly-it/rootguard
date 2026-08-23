@@ -443,6 +443,7 @@ export const en: LocaleDefinition = {
     "overview.chartMax": "Max {value}",
     "overview.chartNow": "Now",
     "overview.chartSecondsAgo": "{seconds}s ago",
+    "overview.restartService": "Restart {name}",
     "overview.queries": "DNS queries",
     "overview.blocked": "Blocked",
     "overview.blockRate": "Filter rate",
