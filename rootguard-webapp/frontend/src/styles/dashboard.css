@@ -310,11 +310,6 @@
   height: 40px;
 }
 
-.metric-visual-gauge {
-  align-items: center;
-  justify-content: flex-start;
-}
-
 [data-tooltip] {
   cursor: default;
 }
@@ -346,43 +341,6 @@
   opacity: 1;
 }
 
-.gauge-wrap {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-
-.gauge-wrap em {
-  position: absolute;
-  color: var(--text-muted);
-  font-size: 0.6rem;
-  font-style: normal;
-  font-weight: 800;
-}
-
-.metric-card.available .gauge-wrap em {
-  color: var(--text);
-}
-
-.radial-gauge .gauge-track {
-  /* --border-subtle was nearly invisible in dark mode (0.05 alpha white),
-     making the ring's "empty" portion disappear entirely - only the tiny
-     colored value arc showed. --border (0.08/0.1 alpha) is what every
-     other card boundary on this page already uses; same fix as
-     .metric-card/.service-row above. */
-  stroke: var(--border);
-}
-
-.radial-gauge .gauge-value {
-  stroke: var(--text-muted);
-  transition: stroke-dashoffset 0.5s ease;
-}
-
-.metric-card.available .radial-gauge.info .gauge-value { stroke: var(--info); }
-.metric-card.available .radial-gauge.accent .gauge-value { stroke: var(--focus-ring); }
-.metric-card.available .radial-gauge.warning .gauge-value { stroke: var(--warning); }
-.metric-card.available .radial-gauge.danger .gauge-value { stroke: var(--danger); }
-
 .sparkline-wrap {
   position: relative;
   width: 100%;
@@ -409,6 +367,8 @@
 
 .metric-card.available .sparkline.info .sparkline-area { fill: var(--info-soft); }
 .metric-card.available .sparkline.info .sparkline-line { stroke: var(--info); }
+.metric-card.available .sparkline.accent .sparkline-area { fill: var(--accent-soft); }
+.metric-card.available .sparkline.accent .sparkline-line { stroke: var(--focus-ring); }
 .metric-card.available .sparkline.danger .sparkline-area { fill: var(--danger-soft); }
 .metric-card.available .sparkline.danger .sparkline-line { stroke: var(--danger); }
 
@@ -431,6 +391,7 @@
 }
 
 .metric-card.available .sparkline.info .sparkline-dot { fill: var(--info); }
+.metric-card.available .sparkline.accent .sparkline-dot { fill: var(--focus-ring); }
 .metric-card.available .sparkline.danger .sparkline-dot { fill: var(--danger); }
 
 /* Follows the cursor along the chart (see Sparkline's onMouseMove) -
@@ -475,6 +436,7 @@
 }
 
 .overview-panel {
+  margin-top: 18px;
   padding: 27px;
   border: 1px solid var(--border-subtle);
   border-radius: 19px;
@@ -606,6 +568,21 @@
   12% { opacity: 1; }
   88% { opacity: 1; }
   100% { left: 100%; opacity: 0; }
+}
+
+/* The arrowhead itself was static while the dot traveled past it - nudges
+   forward right as the dot arrives (matching rg-flow-travel's own timing,
+   same shared --flow-delay so both stay in sync per connector) instead of
+   just sitting there. */
+.flow-arrow svg {
+  animation: rg-arrow-nudge 2.2s ease-in-out infinite;
+  animation-delay: var(--flow-delay, 0s);
+}
+
+@keyframes rg-arrow-nudge {
+  0%, 78% { transform: translateX(0); opacity: 0.7; }
+  90% { transform: translateX(3px); opacity: 1; }
+  100% { transform: translateX(0); opacity: 0.7; }
 }
 
 .flow-footnote {

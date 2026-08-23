@@ -93,10 +93,17 @@ export default function Overview() {
   }, [t]);
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(loadDashboard, 0);
+    // A single sample can't draw a chart at all, and a real trend only
+    // starts looking like one after a handful of points - at a flat 10s
+    // cadence that's a genuinely long, boring wait after opening the page.
+    // Front-load a quick burst of extra samples right after mount so the
+    // metric charts have a few real points within seconds; the steady-state
+    // poll cadence below is unchanged.
+    const burstDelays = [0, 2_000, 4_000, 7_000];
+    const timeouts = burstDelays.map((delay) => window.setTimeout(loadDashboard, delay));
     const interval = window.setInterval(loadDashboard, 10_000);
     return () => {
-      window.clearTimeout(initialLoad);
+      timeouts.forEach(window.clearTimeout);
       window.clearInterval(interval);
     };
   }, [loadDashboard]);
@@ -167,14 +174,13 @@ export default function Overview() {
       {error && <div className="overview-error" role="alert">{error}</div>}
 
       <section className="overview-resources" aria-label={t("overview.resources")}>
-        <GaugeMetric
+        <SparkMetric
           icon={<Cpu />}
           label={t("overview.cpu")}
           display={dashboard?.docker.metrics_available ? formatCPU(dashboard.docker.cpu) : t("overview.metricUnavailable")}
-          percent={dashboard?.docker.metrics_available ? dashboard.docker.cpu : 0}
+          history={cpuHistory}
           detail={t("overview.cpuHelp")}
           available={dashboard?.docker.metrics_available === true}
-          history={cpuHistory}
           formatValue={formatCPU}
           t={t}
         />
@@ -209,15 +215,14 @@ export default function Overview() {
           formatValue={formatInteger}
           t={t}
         />
-        <GaugeMetric
+        <SparkMetric
           icon={<Filter />}
           label={t("overview.blockRate")}
           display={adGuard?.stats_available ? formatBlockRate(adGuard.blocked, adGuard.queries) : t("overview.metricUnavailable")}
-          percent={adGuard?.stats_available ? blockRatePercent(adGuard.blocked, adGuard.queries) : 0}
+          history={blockRateHistory}
           detail={t("overview.statisticsPeriod")}
           available={adGuard?.stats_available === true}
           tone="accent"
-          history={blockRateHistory}
           formatValue={formatCPU}
           t={t}
         />
@@ -285,40 +290,6 @@ function HeroStat({ icon, label, value, good }: {
       <span className={`hero-stat-icon ${good ? "good" : ""}`}>{icon}</span>
       <div><small>{label}</small><strong>{value}</strong></div>
     </article>
-  );
-}
-
-// RadialGauge/Sparkline render a bounded percentage and an unbounded
-// rolling count respectively - the same visual split OPNsense/Proxmox use
-// (a ring for "how full is this out of 100") vs. what AdGuard Home's own
-// dashboard uses (a trend line for "how many, over time").
-function RadialGauge({ percent, size = 38, strokeWidth = 5, tone = "info" }: {
-  percent: number;
-  size?: number;
-  strokeWidth?: number;
-  tone?: "info" | "accent" | "warning" | "danger";
-}) {
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(100, percent));
-  const offset = circumference * (1 - clamped / 100);
-  const center = size / 2;
-  return (
-    <svg className={`radial-gauge ${tone}`} width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true">
-      <circle className="gauge-track" cx={center} cy={center} r={radius} strokeWidth={strokeWidth} fill="none" />
-      <circle
-        className="gauge-value"
-        cx={center}
-        cy={center}
-        r={radius}
-        strokeWidth={strokeWidth}
-        fill="none"
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        transform={`rotate(-90 ${center} ${center})`}
-      />
-    </svg>
   );
 }
 
@@ -397,42 +368,6 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
   );
 }
 
-function GaugeMetric({ icon, label, display, percent, detail, available, tone = "info", history, formatValue, t }: {
-  icon: React.ReactNode;
-  label: string;
-  display: string;
-  percent: number;
-  detail: string;
-  available: boolean;
-  tone?: "info" | "accent" | "warning" | "danger";
-  history: number[];
-  formatValue: (value: number) => string;
-  t: (key: string, values?: Record<string, string | number>) => string;
-}) {
-  const hasRange = history.length >= 2;
-  return (
-    <article className={`metric-card ${available ? "available" : ""}`}>
-      <div className="metric-card-head" data-tooltip={detail}>
-        <span className={`metric-icon ${tone}`}>{icon}</span>
-        <div className="metric-card-labels"><small>{label}</small><strong>{display}</strong></div>
-      </div>
-      <div className="metric-visual metric-visual-gauge">
-        <span className="gauge-wrap">
-          <RadialGauge percent={available ? percent : 0} tone={tone} />
-          <em>{available ? Math.round(percent) : "–"}{available && "%"}</em>
-        </span>
-      </div>
-      <div className="metric-chart-range">
-        {hasRange && (
-          <>
-            <span>{t("overview.chartMin", { value: formatValue(Math.min(...history)) })}</span>
-            <span>{t("overview.chartMax", { value: formatValue(Math.max(...history)) })}</span>
-          </>
-        )}
-      </div>
-    </article>
-  );
-}
 
 function SparkMetric({ icon, label, display, history, detail, available, tone = "info", formatValue, t }: {
   icon: React.ReactNode;
@@ -487,8 +422,8 @@ function FlowNode({ icon, title, detail, state }: {
 
 function FlowArrow({ index }: { index: number }) {
   return (
-    <div className="flow-arrow">
-      <span style={{ "--flow-delay": `${index * 0.5}s` } as React.CSSProperties} />
+    <div className="flow-arrow" style={{ "--flow-delay": `${index * 0.5}s` } as React.CSSProperties}>
+      <span />
       <ArrowRight size={15} />
     </div>
   );
