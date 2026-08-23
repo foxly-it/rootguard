@@ -363,30 +363,21 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Same failure-safety ordering as handleRecovery: invalidate every other
-	// session and persist that first (a failed subsequent credential write
-	// then only ever costs needless re-logins elsewhere, never leaves a new
-	// password active in memory without it having reached disk). The current
-	// session's entry is kept, and its stored Username is updated in place
-	// so /api/auth/session immediately reflects a rename without requiring
-	// the caller to log back in.
+	// Unlike handleRecovery (a single resource - only ever the password),
+	// this handler mutates two persisted resources - credentials and
+	// sessions - and the credential write must go first specifically so a
+	// failure there needs no session rollback at all: nothing session-side
+	// has been touched yet, so it's a clean no-op failure. Doing it in the
+	// other order (as an earlier version of this code did) let a
+	// credential-persist failure roll back the in-memory username/password
+	// while the already-persisted session wipe stayed applied - leaving the
+	// calling session's stored Username renamed on disk even though the
+	// account's real username had reverted. Once the credential write does
+	// succeed, it's durably committed; a subsequent session-persist failure
+	// only rolls back the in-memory session map (matching sessions.json,
+	// which never got overwritten) and costs a needless "other devices stay
+	// logged in a bit longer," never a credential inconsistency.
 	a.mu.Lock()
-	oldSessions := a.sessions
-	currentSession, hasCurrent := oldSessions[currentToken]
-	a.sessions = map[string]session{}
-	if hasCurrent {
-		if newUsername != "" {
-			currentSession.Username = newUsername
-		}
-		a.sessions[currentToken] = currentSession
-	}
-	if err := a.persistLocked(); err != nil {
-		a.sessions = oldSessions
-		a.mu.Unlock()
-		http.Error(w, "Unable to invalidate sessions", http.StatusInternalServerError)
-		return
-	}
-
 	oldUsername, oldUserHash := a.expectedUsername, a.expectedUserHash
 	oldPasswordHash, oldPasswordSalt := a.expectedPasswordHash, a.passwordSalt
 	if newUsername != "" {
@@ -403,6 +394,24 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resultUsername := a.expectedUsername
+
+	// The current session's entry is kept (and its stored Username updated
+	// in place, since the rename above just durably committed) so
+	// /api/auth/session immediately reflects it without requiring the
+	// caller to log back in; every other session is invalidated.
+	oldSessions := a.sessions
+	currentSession, hasCurrent := oldSessions[currentToken]
+	a.sessions = map[string]session{}
+	if hasCurrent {
+		currentSession.Username = resultUsername
+		a.sessions[currentToken] = currentSession
+	}
+	if err := a.persistLocked(); err != nil {
+		a.sessions = oldSessions
+		a.mu.Unlock()
+		http.Error(w, "Unable to invalidate sessions", http.StatusInternalServerError)
+		return
+	}
 	a.mu.Unlock()
 
 	var detail string

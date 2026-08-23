@@ -597,13 +597,33 @@ func TestAccountUpdateRollsBackOnCredentialPersistFailure(t *testing.T) {
 	}
 
 	// The original username/password must still work, and the caller's own
-	// session must not have been invalidated by the failed attempt either.
+	// session must not have been invalidated by the failed attempt either -
+	// and must still report the *original* username, not "root". An earlier
+	// version of this handler renamed and persisted the session first, then
+	// rolled back only the in-memory credential fields on this exact
+	// failure - leaving a session that claimed "root" while the real
+	// account (and every future login) stayed "admin".
 	sessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
 	sessionRequest.AddCookie(cookie)
 	sessionResponse := httptest.NewRecorder()
 	handler.ServeHTTP(sessionResponse, sessionRequest)
 	if sessionResponse.Code != http.StatusOK {
 		t.Fatalf("expected the session to remain valid after a failed update, got %d", sessionResponse.Code)
+	}
+	var sessionResult map[string]any
+	if err := json.Unmarshal(sessionResponse.Body.Bytes(), &sessionResult); err != nil {
+		t.Fatalf("failed to decode session response: %v", err)
+	}
+	if sessionResult["username"] != "admin" {
+		t.Fatalf("expected the session to still report the original username %q after a rolled-back rename, got %v", "admin", sessionResult["username"])
+	}
+
+	oldLoginBody, _ := json.Marshal(credentials{Username: "admin", Password: "old-password"})
+	oldLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(oldLoginBody))
+	oldLoginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(oldLoginResponse, oldLoginRequest)
+	if oldLoginResponse.Code != http.StatusOK {
+		t.Fatalf("expected the original username/password to still work after a rolled-back rename, got %d", oldLoginResponse.Code)
 	}
 }
 
