@@ -573,8 +573,13 @@
 /* The arrowhead itself was static while the dot traveled past it - nudges
    forward right as the dot arrives (matching rg-flow-travel's own timing,
    same shared --flow-delay so both stay in sync per connector) instead of
-   just sitting there. */
+   just sitting there. margin-left pulls it in against the line: ArrowRight's
+   glyph sits inset from its own 24x24 viewBox (empty space before the
+   tail-line starts), so butting the icon directly against the line span
+   still left a visible gap between "line" and "arrowhead" that read as two
+   separate elements instead of one continuous arrow. */
 .flow-arrow svg {
+  margin-left: -4px;
   animation: rg-arrow-nudge 2.2s ease-in-out infinite;
   animation-delay: var(--flow-delay, 0s);
 }
