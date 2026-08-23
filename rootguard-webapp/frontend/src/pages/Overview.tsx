@@ -96,15 +96,43 @@ export default function Overview() {
     // A single sample can't draw a chart at all, and a real trend only
     // starts looking like one after a handful of points - at a flat 10s
     // cadence that's a genuinely long, boring wait after opening the page.
-    // Front-load a quick burst of extra samples right after mount so the
-    // metric charts have a few real points within seconds; the steady-state
-    // poll cadence below is unchanged.
-    const burstDelays = [0, 2_000, 4_000, 7_000];
-    const timeouts = burstDelays.map((delay) => window.setTimeout(loadDashboard, delay));
-    const interval = window.setInterval(loadDashboard, 10_000);
-    return () => {
+    // Front-load a quick burst of extra samples right after mount (and
+    // again whenever the tab becomes visible, see below) so the metric
+    // charts have a few real points within seconds instead of one; the
+    // steady-state poll cadence itself is unchanged.
+    const burstDelays = [2_000, 4_000, 7_000];
+    let timeouts: number[] = [];
+    let interval: number | null = null;
+
+    function start() {
+      loadDashboard();
+      timeouts = burstDelays.map((delay) => window.setTimeout(loadDashboard, delay));
+      interval = window.setInterval(loadDashboard, 10_000);
+    }
+
+    function stop() {
       timeouts.forEach(window.clearTimeout);
-      window.clearInterval(interval);
+      timeouts = [];
+      if (interval !== null) {
+        window.clearInterval(interval);
+        interval = null;
+      }
+    }
+
+    // Backgrounded/hidden tabs have no reason to keep polling Core, Docker,
+    // and AdGuard every 10s - nobody's watching the charts. Pausing there
+    // and catching back up with a fresh burst on return keeps the same
+    // "feels current" behavior without the wasted requests in between.
+    function handleVisibilityChange() {
+      if (document.hidden) stop();
+      else start();
+    }
+
+    if (!document.hidden) start();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [loadDashboard]);
 
@@ -308,15 +336,54 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
 }) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  // Coalesces rapid mousemove events (the browser can fire far more of
+  // these per second than it ever repaints) down to at most one state
+  // update per animation frame, instead of one React re-render per raw
+  // event.
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+  }, []);
+
+  // Only depends on `values` (one new sample every ~10s), not on
+  // hoverIndex - previously this whole path/area computation re-ran on
+  // every single hover-driven re-render even though only the crosshair
+  // position actually needs to change while the mouse moves.
+  const chart = useMemo(() => {
+    if (values.length < 2) return null;
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const range = max - min || 1;
+    const points = values.map((value, index) => ({
+      x: (index / (values.length - 1)) * 100,
+      y: 27 - ((value - min) / range) * 23,
+    }));
+    const linePath = `M${points.map(({ x, y }) => `${x},${y}`).join(" L")}`;
+    const areaPath = `${linePath} L100,29 L0,29 Z`;
+    return { points, linePath, areaPath };
+  }, [values]);
 
   function handleMove(event: React.MouseEvent<HTMLDivElement>) {
-    if (values.length < 2 || !wrapRef.current) return;
+    if (!chart || !wrapRef.current || rafRef.current !== null) return;
     const rect = wrapRef.current.getBoundingClientRect();
-    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-    setHoverIndex(Math.round(ratio * (values.length - 1)));
+    const clientX = event.clientX;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const ratio = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+      setHoverIndex(Math.round(ratio * (values.length - 1)));
+    });
   }
 
-  if (values.length < 2) {
+  function handleLeave() {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    setHoverIndex(null);
+  }
+
+  if (!chart) {
     return (
       <div className="sparkline-wrap">
         <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" aria-hidden="true">
@@ -326,18 +393,7 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
     );
   }
 
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const range = max - min || 1;
-  const pointAt = (index: number) => {
-    const x = (index / (values.length - 1)) * 100;
-    const y = 27 - ((values[index] - min) / range) * 23;
-    return { x, y };
-  };
-  const points = values.map((_, index) => pointAt(index));
-  const linePath = `M${points.map(({ x, y }) => `${x},${y}`).join(" L")}`;
-  const areaPath = `${linePath} L100,29 L0,29 Z`;
-  const hovered = hoverIndex !== null ? pointAt(hoverIndex) : null;
+  const hovered = hoverIndex !== null ? chart.points[hoverIndex] : null;
   const secondsAgo = hoverIndex !== null ? (values.length - 1 - hoverIndex) * 10 : 0;
 
   return (
@@ -345,12 +401,12 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
       className="sparkline-wrap"
       ref={wrapRef}
       onMouseMove={handleMove}
-      onMouseLeave={() => setHoverIndex(null)}
+      onMouseLeave={handleLeave}
     >
       <svg className={`sparkline ${tone}`} viewBox="0 0 100 32" preserveAspectRatio="none" aria-hidden="true">
-        <path className="sparkline-area" d={areaPath} />
+        <path className="sparkline-area" d={chart.areaPath} />
         <line className="sparkline-axis" x1="0" y1="29" x2="100" y2="29" vectorEffect="non-scaling-stroke" />
-        <path className="sparkline-line" d={linePath} fill="none" vectorEffect="non-scaling-stroke" />
+        <path className="sparkline-line" d={chart.linePath} fill="none" vectorEffect="non-scaling-stroke" />
         {hovered && (
           <>
             <line className="sparkline-crosshair" x1={hovered.x} x2={hovered.x} y1="0" y2="29" vectorEffect="non-scaling-stroke" />
