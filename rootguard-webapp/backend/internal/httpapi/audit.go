@@ -27,6 +27,8 @@ const (
 	auditRecoverySuccess  = "recovery_success"
 	auditRecoveryFailure  = "recovery_failure"
 	auditSessionRevoked   = "session_revoked"
+	auditAccountUpdated   = "account_updated"
+	auditAccountFailure   = "account_update_failure"
 )
 
 // Destructive-action base event names. guardDestructive appends "_success",

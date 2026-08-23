@@ -1,0 +1,79 @@
+.account-form {
+  display: grid;
+  gap: 14px;
+}
+
+.account-form label {
+  display: grid;
+  gap: 6px;
+}
+
+.account-form label > span {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.account-form input {
+  width: 100%;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  color: var(--text);
+  background: var(--field-bg);
+  font: inherit;
+  font-size: 0.88rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.account-form input:focus {
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.account-form small {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.account-field-warning {
+  color: var(--danger);
+}
+
+.account-password-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-password-field input {
+  flex: 1 1 auto;
+}
+
+.account-password-field button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+.account-password-field button:hover {
+  color: var(--text);
+}
+
+.account-form-divider {
+  border-top: 1px solid var(--border);
+}
+
+.account-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
