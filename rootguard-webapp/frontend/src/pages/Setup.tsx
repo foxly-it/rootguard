@@ -12,7 +12,15 @@ import "../styles/setup.css";
 import { useI18n } from "../i18n";
 import { errorMessage as messageFrom } from "../utils/errors";
 import { detectDefaultBindAddress } from "../utils/network";
-import { AlertTriangle, ArrowRight, Check, ExternalLink, Filter, Network, RotateCcw, ServerCog, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowRight, Check, Download, ExternalLink, Filter, Layers, Link2, Network, Play, RotateCcw, ServerCog, ShieldCheck, X } from "lucide-react";
+
+const deployStepIcons: Record<string, typeof Layers> = {
+  prepare: Layers,
+  pull: Download,
+  start: Play,
+  connect: Link2,
+  bootstrap: ShieldCheck,
+};
 
 const defaultConfig: InstallationConfig = {
   dns_bind_address: "0.0.0.0",
@@ -84,6 +92,9 @@ export default function Setup() {
   }
 
   const deploying = status?.state === "deploying";
+  const deployStepCount = status?.steps.length ?? 0;
+  const deployDoneCount = status?.steps.filter((step) => step.status === "done").length ?? 0;
+  const deployPercent = deployStepCount > 0 ? Math.round((deployDoneCount / deployStepCount) * 100) : 0;
   const progressStep = status?.state === "installed" || status?.state === "deploying" || status?.state === "failed"
     ? 3
     : preflight
@@ -284,18 +295,34 @@ export default function Setup() {
               <p>{t("setup.deploymentHelp")}</p>
             </div>
           </div>
-          <div className="step-list">
-            {status.steps.map((step) => (
-              <div className={`step-row ${step.status}`} key={step.id}>
-                <span className="step-dot" aria-hidden="true" />
-                <div>
-                  <strong>{t(`setup.step.${step.id}`)}</strong>
-                  <p>{t(`setup.step.${step.id}`)}</p>
-                </div>
-                <span className="step-status">{t(`setup.step.${step.status}`)}</span>
-              </div>
-            ))}
+          <div
+            className="deploy-progress-track"
+            role="progressbar"
+            aria-valuenow={deployPercent}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={t("setup.deployment")}
+          >
+            <div className="deploy-progress-fill" style={{ width: `${deployPercent}%` }} />
           </div>
+
+          <ol className="deploy-steps">
+            {status.steps.map((step) => {
+              const Icon = deployStepIcons[step.id] ?? Layers;
+              let statusIcon = <Icon size={14} />;
+              if (step.status === "done") statusIcon = <Check size={15} />;
+              else if (step.status === "failed") statusIcon = <X size={15} />;
+              return (
+                <li className={`deploy-step ${step.status}`} key={step.id}>
+                  <span className="deploy-step-icon" aria-hidden="true">{statusIcon}</span>
+                  <div className="deploy-step-label">
+                    <strong>{t(`setup.step.${step.id}`)}</strong>
+                    <span className="deploy-step-status">{t(`setup.step.${step.status}`)}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
           {status.state === "installed" && status.config && (
             <div className="setup-success">
               {t("setup.ready", { address: status.config.dns_bind_address })}
