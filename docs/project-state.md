@@ -1677,3 +1677,33 @@ recreated with the same tag. Also re-verified the protection-pause
 round trip against the real published beta.7 build (not just the local
 `:dev` build used during development): paused for 600s, confirmed
 `protection_disabled_duration_ms` counting down live, then restored.
+
+**2026-08-24, same day:** added a one-command installer,
+`install.sh` at the repo root, for non-technical ("DAU") users - user ask
+was a one-liner alternative to the manual quick start that detects/
+installs Docker, downloads the release, generates the secret tokens, and
+only asks for a WebGUI username/password, without taking anything away
+from the existing manual path for people who want to see every step.
+Detects Docker and, if missing, installs it via the separate
+[foxly-it/dockerinstall](https://github.com/foxly-it/dockerinstall)
+project (Debian/Ubuntu; that script already rejects unsupported OSes
+with a clear message on its own, so `install.sh` doesn't duplicate that
+logic). Resolves the current release the same way `rootguard-core`'s own
+updater does - GitHub Releases API, newest tag matching the release
+pattern, since `/releases/latest` excludes prereleases and every
+RootGuard release is one - so this script carries no version string of
+its own to remember to bump at release time, unlike `site/*.html`.
+Generates `ROOTGUARD_API_TOKEN`/`ROOTGUARD_RECOVERY_TOKEN`, prompts for a
+username/password (or auto-generates and prints one for
+`--non-interactive` use) explicitly via `/dev/tty` - a plain `read` in a
+`curl | bash` script reads from the download pipe instead of the
+terminal - and substitutes secrets into `.env` through `awk`+`ENVIRON`
+rather than sed/awk program text, so a password containing `&`, `#`, or
+`\` can't corrupt the substitution (verified live with exactly such a
+password). `site/index.html`'s quick start now leads with the one-liner;
+`site/docs.html`'s full manual walkthrough is untouched, with a callout
+linking to the new fast path instead. Verified live end-to-end twice, not
+just via shellcheck: once with a typed password, once via
+`--non-interactive`, both pulling the real published beta.7 images via
+the real GitHub API and ending in a successful login with the credentials
+the script set.
