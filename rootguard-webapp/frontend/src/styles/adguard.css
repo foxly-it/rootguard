@@ -287,13 +287,19 @@
   font-weight: 600;
 }
 
+/* Matches the app's other themed <select>s (e.g. .resource-profile-field
+   select in unbound-polish.css) - field-bg/border/radius/padding token
+   values, not the ad-hoc surface/8px this started out with. */
 .adguard-protection-control select {
   flex: 0 0 auto;
-  padding: 7px 10px;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 0 34px 0 11px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 7px;
+  background: var(--field-bg);
   color: var(--text);
-  background: var(--surface);
+  font: inherit;
   font-size: 0.78rem;
 }
 
