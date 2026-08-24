@@ -7,36 +7,95 @@ import (
 	"time"
 )
 
-func TestCollectMetricsReadsTheBackgroundCollectorCacheWithoutInvokingDocker(t *testing.T) {
-	// CollectMetrics itself must never shell out - it only reads whatever
-	// StartMetricsCollector's background loop last stored, which is the
-	// whole point of decoupling the HTTP response from `docker stats`'s
-	// ~1-2s inherent latency. Manipulating metricsCache directly (instead
-	// of calling StartMetricsCollector) keeps this test independent of a
-	// real docker binary being available.
+func resetMetricsCacheForTest(t *testing.T) {
+	t.Helper()
+	original := collectMetricsNowFunc
 	t.Cleanup(func() {
+		collectMetricsNowFunc = original
 		metricsCache.Lock()
 		metricsCache.value = Metrics{}
+		metricsCache.updatedAt = time.Time{}
 		metricsCache.Unlock()
 	})
+}
 
-	metricsCache.Lock()
-	metricsCache.value = Metrics{}
-	metricsCache.Unlock()
-	if got := CollectMetrics(context.Background()); got.Available {
-		t.Fatalf("expected unavailable metrics before any collection, got %#v", got)
+func TestCollectMetricsReadsAFreshCacheWithoutInvokingDocker(t *testing.T) {
+	// CollectMetrics must not shell out when the cache is fresh - it just
+	// reads whatever StartMetricsCollector's background loop last stored,
+	// which is the whole point of decoupling the HTTP response from
+	// `docker stats`'s ~1-2s inherent latency. Swapping collectMetricsNowFunc
+	// to fail the test if it's ever called (instead of just leaving the real
+	// one in place) keeps this test's guarantee explicit rather than
+	// incidental.
+	resetMetricsCacheForTest(t)
+	collectMetricsNowFunc = func(context.Context) Metrics {
+		t.Fatal("collectMetricsNowFunc must not be called for a fresh cache")
+		return Metrics{}
 	}
 
 	want := Metrics{Available: true, CPUPercent: 4.5, MemoryBytes: 1024}
 	metricsCache.Lock()
 	metricsCache.value = want
+	metricsCache.updatedAt = time.Now()
 	metricsCache.Unlock()
+
 	if got := CollectMetrics(context.Background()); got != want {
 		t.Fatalf("expected %#v, got %#v", want, got)
 	}
 }
 
+func TestCollectMetricsRefreshesSynchronouslyWhenCacheIsStale(t *testing.T) {
+	// The idle-skip in StartMetricsCollector (metricsIdleTimeout) is exactly
+	// what lets the cache go stale in the first place: once nothing has
+	// asked for a while, the background loop stops touching it entirely.
+	// Confirmed live: reopening the dashboard after it sat idle showed a
+	// CPU% far higher than the LXC's actual current load, because it was
+	// serving whatever was cached from before going idle. CollectMetrics
+	// must catch up itself when that's happened, rather than handing back
+	// an arbitrarily old number forever.
+	resetMetricsCacheForTest(t)
+	calls := 0
+	collectMetricsNowFunc = func(context.Context) Metrics {
+		calls++
+		return Metrics{Available: true, CPUPercent: 7, MemoryBytes: 99}
+	}
+
+	metricsCache.Lock()
+	metricsCache.value = Metrics{Available: true, CPUPercent: 999}
+	metricsCache.updatedAt = time.Now().Add(-metricsStaleThreshold - time.Second)
+	metricsCache.Unlock()
+
+	got := CollectMetrics(context.Background())
+	if calls != 1 {
+		t.Fatalf("expected exactly one synchronous refresh for a stale cache, got %d calls", calls)
+	}
+	want := Metrics{Available: true, CPUPercent: 7, MemoryBytes: 99}
+	if got != want {
+		t.Fatalf("expected the freshly collected value %#v, got %#v", want, got)
+	}
+}
+
+func TestCollectMetricsTreatsAnUntouchedCacheAsStale(t *testing.T) {
+	// The zero value of updatedAt (StartMetricsCollector never having run,
+	// e.g. in a test exercising dashboardHandler directly) must count as
+	// stale, not as "just refreshed a very very long time ago" - IsZero()
+	// is checked explicitly for this rather than relying on time.Since of
+	// the zero Time producing a suitably large duration by coincidence.
+	resetMetricsCacheForTest(t)
+	calls := 0
+	collectMetricsNowFunc = func(context.Context) Metrics {
+		calls++
+		return Metrics{Available: true, CPUPercent: 1}
+	}
+
+	if got := CollectMetrics(context.Background()); calls != 1 || !got.Available {
+		t.Fatalf("expected an untouched cache to trigger exactly one refresh, got %d calls, result %#v", calls, got)
+	}
+}
+
 func TestCollectMetricsStampsLastRequestedForIdleDetection(t *testing.T) {
+	resetMetricsCacheForTest(t)
+	collectMetricsNowFunc = func(context.Context) Metrics { return Metrics{} }
 	t.Cleanup(func() {
 		metricsLastRequested.Lock()
 		metricsLastRequested.at = time.Time{}

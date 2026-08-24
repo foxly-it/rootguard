@@ -35,9 +35,16 @@ const metricsRefreshInterval = 1 * time.Second
 // invoking docker stats once nothing has asked for a while.
 const metricsIdleTimeout = 5 * time.Second
 
+// metricsStaleThreshold bounds how old a cached value CollectMetrics is
+// allowed to hand back without first trying to refresh it - see
+// CollectMetrics for why this exists (the idle-skip above means the cache
+// can otherwise sit untouched for as long as the dashboard was closed).
+const metricsStaleThreshold = 2 * metricsRefreshInterval
+
 var metricsCache = struct {
 	sync.RWMutex
-	value Metrics
+	value     Metrics
+	updatedAt time.Time
 }{}
 
 var metricsLastRequested = struct {
@@ -76,10 +83,17 @@ func metricsRecentlyRequested() bool {
 	return time.Since(metricsLastRequested.at) < metricsIdleTimeout
 }
 
+// collectMetricsNowFunc is swapped out in tests so CollectMetrics's
+// staleness logic (does it correctly trigger a synchronous refresh when the
+// cache is old, and skip one when it isn't) can be verified without a real
+// docker binary - mirrors the attestationRun seam in attestation.go.
+var collectMetricsNowFunc = collectMetricsNow
+
 func refreshMetricsCache(ctx context.Context) {
-	metrics := collectMetricsNow(ctx)
+	metrics := collectMetricsNowFunc(ctx)
 	metricsCache.Lock()
 	metricsCache.value = metrics
+	metricsCache.updatedAt = time.Now()
 	metricsCache.Unlock()
 }
 
@@ -102,21 +116,40 @@ type dockerStatsLine struct {
 	Memory     string `json:"MemUsage"`
 }
 
-// CollectMetrics returns whatever the background collector (see
-// StartMetricsCollector) most recently gathered - it never itself invokes
-// `docker stats`, so it never blocks a caller (dashboardHandler) on that
+// CollectMetrics normally returns whatever the background collector (see
+// StartMetricsCollector) most recently gathered, without itself invoking
+// `docker stats` - so it doesn't block a caller (dashboardHandler) on that
 // command's ~1-2s inherent latency. If StartMetricsCollector was never
 // called (e.g. in a test that exercises dashboardHandler directly), this
 // returns the zero Metrics{} (Available: false), the same graceful
 // "unavailable" state a real collection failure already produces.
 //
 // Also stamps metricsLastRequested so the background collector knows
-// someone is actually asking - see metricsIdleTimeout.
-func CollectMetrics(_ context.Context) Metrics {
+// someone is actually asking - see metricsIdleTimeout. That idle-skip is
+// exactly what makes the cache capable of going stale in the first place:
+// once nothing has asked for metricsIdleTimeout, the background loop stops
+// refreshing entirely, so whatever was cached before going idle just sits
+// there - confirmed live, a dashboard reopened after sitting idle showed a
+// CPU% far higher than the LXC's actual current load per Proxmox, because
+// it was serving a reading from whenever the cache was last touched, not
+// from now. If the cache is older than metricsStaleThreshold, this pays the
+// real collection cost once, synchronously, before answering - the same
+// latency every request used to pay before caching existed, just now
+// limited to this one "waking back up" case instead of every single call.
+func CollectMetrics(ctx context.Context) Metrics {
 	metricsLastRequested.Lock()
 	metricsLastRequested.at = time.Now()
 	metricsLastRequested.Unlock()
 
+	metricsCache.RLock()
+	stale := metricsCache.updatedAt.IsZero() || time.Since(metricsCache.updatedAt) > metricsStaleThreshold
+	cached := metricsCache.value
+	metricsCache.RUnlock()
+	if !stale {
+		return cached
+	}
+
+	refreshMetricsCache(ctx)
 	metricsCache.RLock()
 	defer metricsCache.RUnlock()
 	return metricsCache.value
