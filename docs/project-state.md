@@ -1717,3 +1717,58 @@ just via shellcheck: once with a typed password, once via
 `--non-interactive`, both pulling the real published beta.7 images via
 the real GitHub API and ending in a successful login with the credentials
 the script set.
+
+**2026-08-24, later the same day:** four follow-ups found by the user
+actually using the shipped beta.7.
+
+- **Authenticated account settings had never been merged.** User: "Und in
+  Beta 7 hast du anscheinend die Benutzerverwaltung gelöscht" - it hadn't
+  been deleted, PR #330 (`feat/account-settings`, the change username/
+  password work from the prior session) had simply sat open, unmerged,
+  the whole time beta.7 was cut and this session's other work landed.
+  Rebased it onto current main (clean merge, no conflicts across 30+
+  commits of divergence), re-verified the full test/build/lint suite,
+  and merged it. Live-verified the actual endpoint on `.7` afterward
+  (not just CI): renamed the logged-in session's own username twice in a
+  row (round-trip back to the original) with the session staying alive
+  throughout, exactly as designed. Prompted by this, swept every other
+  branch in the repo for the same "PR open but never merged" gap
+  (checked all ~40 branches sitting ahead of `main` against the GitHub
+  API's own merge state, not just git ancestry, since a squash-merged
+  PR's source branch is *expected* to look "ahead" by one commit)  -
+  `feat/account-settings` was the only real gap found.
+- **The new AdGuard protection select didn't match the app's other
+  dropdowns.** Was using ad-hoc padding/radius/background instead of the
+  `--field-bg`/7px-radius/34px-padding tokens every other themed
+  `<select>` in the app already uses (`.resource-profile-field` in
+  unbound-polish.css, `.logs-toolbar select`). Fixed to match.
+- **The marketing site's hero mockup didn't structurally match the real
+  dashboard.** User: fake metrics are fine, but it should be 1:1. The
+  mockup's 5 metric cards were missing the sparkline chart + Min/Max
+  caption every real `SparkMetric` card has had since the metrics-history
+  work, and the runtime list was a plain bullet list instead of the real
+  `.service-card` treatment (icon box, restart-button corner, status
+  text). Rebuilt both to match, live-verified via headless Chromium.
+- **`install.sh` now checks for busy ports before installing** (user
+  ask, tying back to Setup's own existing two-stage port-53 preflight
+  described in docs.html). Port 8080 - what the script's own `docker
+  compose up` actually binds - is a hard check with an interactive
+  alternate-port prompt; 53/80 are informational only, since install.sh
+  doesn't bind those itself (Core creates the DNS/blockpage containers
+  later, during guided Setup). **Real incident while testing this
+  live on `.7`**: `compose.release.yaml`'s containers use fixed
+  `container_name` values, so running the script's actual `docker
+  compose up` step against `.7` recreated the *real* deployment's
+  containers regardless of `--dir` (isolating the download directory
+  does not isolate the Docker container namespace on the same host) -
+  and a `ROOTGUARD_WEB_PORT` override exported for that test leaked into
+  the recreated real webapp's own port binding via environment
+  inheritance, moving it off 8080. Both caught and fixed within the same
+  session (recreated from the real `/root/rootguard-test` checkout with
+  its correct `.env`, confirmed login and `collected_at` afterward) -
+  no data loss (named volumes are independent of container identity),
+  but a concrete reminder that `.7`/`.61` are shared persistent
+  environments, not disposable ones: any `install.sh`-style test that
+  actually runs `docker compose up` needs an isolated host (verified the
+  rest of this feature locally on macOS Docker Desktop instead, once
+  this was understood).
