@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"testing"
+	"time"
 )
 
 func TestCollectMetricsReadsTheBackgroundCollectorCacheWithoutInvokingDocker(t *testing.T) {
@@ -32,6 +33,41 @@ func TestCollectMetricsReadsTheBackgroundCollectorCacheWithoutInvokingDocker(t *
 	metricsCache.Unlock()
 	if got := CollectMetrics(context.Background()); got != want {
 		t.Fatalf("expected %#v, got %#v", want, got)
+	}
+}
+
+func TestCollectMetricsStampsLastRequestedForIdleDetection(t *testing.T) {
+	t.Cleanup(func() {
+		metricsLastRequested.Lock()
+		metricsLastRequested.at = time.Time{}
+		metricsLastRequested.Unlock()
+	})
+
+	metricsLastRequested.Lock()
+	metricsLastRequested.at = time.Time{}
+	metricsLastRequested.Unlock()
+	if metricsRecentlyRequested() {
+		t.Fatal("expected not recently requested before any CollectMetrics call")
+	}
+
+	CollectMetrics(context.Background())
+	if !metricsRecentlyRequested() {
+		t.Fatal("expected CollectMetrics to mark itself as a recent request")
+	}
+}
+
+func TestMetricsRecentlyRequestedExpiresAfterIdleTimeout(t *testing.T) {
+	t.Cleanup(func() {
+		metricsLastRequested.Lock()
+		metricsLastRequested.at = time.Time{}
+		metricsLastRequested.Unlock()
+	})
+
+	metricsLastRequested.Lock()
+	metricsLastRequested.at = time.Now().Add(-metricsIdleTimeout - time.Second)
+	metricsLastRequested.Unlock()
+	if metricsRecentlyRequested() {
+		t.Fatal("expected a request older than metricsIdleTimeout to count as idle")
 	}
 }
 

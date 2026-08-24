@@ -23,16 +23,34 @@ import (
 // was most recently collected.
 const metricsRefreshInterval = 1 * time.Second
 
+// metricsIdleTimeout gates the collector on actual demand: without this, a
+// 1s ticker whose own collection takes ~1-2s runs back-to-back forever with
+// no idle gap - confirmed live (`docker stats` measured directly against
+// the daemon, bypassing this code entirely) as a real, sustained ~14% CPU
+// cost on rootguard-core itself, running whether or not anyone had the
+// dashboard open. The dashboard's own frontend already pauses polling once
+// its tab is hidden or closed (Overview.tsx's visibilitychange handler); this
+// mirrors that same idea on the Core side - CollectMetrics stamps
+// metricsLastRequested on every call, and the background loop skips actually
+// invoking docker stats once nothing has asked for a while.
+const metricsIdleTimeout = 5 * time.Second
+
 var metricsCache = struct {
 	sync.RWMutex
 	value Metrics
+}{}
+
+var metricsLastRequested = struct {
+	sync.Mutex
+	at time.Time
 }{}
 
 // StartMetricsCollector runs the first collection synchronously (so a
 // request arriving immediately after startup still gets real data almost
 // as soon as it's available, rather than "not available" until the first
 // tick) and then keeps collecting on metricsRefreshInterval for as long as
-// ctx stays alive. Call once, near process startup.
+// ctx stays alive, but only while CollectMetrics has actually been called
+// recently. Call once, near process startup.
 func StartMetricsCollector(ctx context.Context) {
 	refreshMetricsCache(ctx)
 	go func() {
@@ -43,10 +61,19 @@ func StartMetricsCollector(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				if !metricsRecentlyRequested() {
+					continue
+				}
 				refreshMetricsCache(ctx)
 			}
 		}
 	}()
+}
+
+func metricsRecentlyRequested() bool {
+	metricsLastRequested.Lock()
+	defer metricsLastRequested.Unlock()
+	return time.Since(metricsLastRequested.at) < metricsIdleTimeout
 }
 
 func refreshMetricsCache(ctx context.Context) {
@@ -82,7 +109,14 @@ type dockerStatsLine struct {
 // called (e.g. in a test that exercises dashboardHandler directly), this
 // returns the zero Metrics{} (Available: false), the same graceful
 // "unavailable" state a real collection failure already produces.
+//
+// Also stamps metricsLastRequested so the background collector knows
+// someone is actually asking - see metricsIdleTimeout.
 func CollectMetrics(_ context.Context) Metrics {
+	metricsLastRequested.Lock()
+	metricsLastRequested.at = time.Now()
+	metricsLastRequested.Unlock()
+
 	metricsCache.RLock()
 	defer metricsCache.RUnlock()
 	return metricsCache.value
