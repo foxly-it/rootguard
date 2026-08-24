@@ -8,7 +8,80 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
+
+var statusCache = struct {
+	sync.RWMutex
+	value     StackStatus
+	updatedAt time.Time
+}{}
+
+var statusRefreshGroup refreshGroup
+
+// collectStackStatusFunc is swapped out in tests, mirroring
+// collectMetricsNowFunc in metrics.go - lets CollectStatus's staleness logic
+// be verified without a real docker binary.
+var collectStackStatusFunc = CheckStackStatus
+
+// StartStatusCollector mirrors StartMetricsCollector (see metrics.go for the
+// full rationale): dashboardHandler previously called CheckStackStatus()
+// directly on every request, which shelled out to `docker inspect` five
+// times per poll - at the frontend's 500ms interval that's ten `docker
+// inspect` processes per second per open dashboard. Collecting on a
+// background cadence instead means CollectStatus just hands back whatever
+// was most recently gathered. Call once, near process startup.
+func StartStatusCollector(ctx context.Context) {
+	statusRefreshGroup.do(refreshStatusCache)
+	go func() {
+		ticker := time.NewTicker(dashboardRefreshInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if !dashboardRecentlyRequested() {
+					continue
+				}
+				statusRefreshGroup.do(refreshStatusCache)
+			}
+		}
+	}()
+}
+
+func refreshStatusCache() {
+	status := collectStackStatusFunc()
+	statusCache.Lock()
+	statusCache.value = status
+	statusCache.updatedAt = time.Now()
+	statusCache.Unlock()
+}
+
+func isStatusCacheStale() bool {
+	statusCache.RLock()
+	defer statusCache.RUnlock()
+	return statusCache.updatedAt.IsZero() || time.Since(statusCache.updatedAt) > dashboardStaleThreshold
+}
+
+// CollectStatus is the cached counterpart to CheckStackStatus, used by
+// dashboardHandler - see CollectMetrics in metrics.go for the full caching
+// rationale (idle-skip, stale-triggers-synchronous-refresh, concurrent
+// stale callers sharing one real refresh via statusRefreshGroup). Handlers
+// that need attestation-checked, always-fresh data (stackStatusHandler,
+// servicesHandler) still call CheckStackStatus directly - they're only
+// polled every 20s from the frontend, not every 500ms.
+func CollectStatus() StackStatus {
+	markDashboardRequested()
+
+	if isStatusCacheStale() {
+		statusRefreshGroup.do(refreshStatusCache)
+	}
+
+	statusCache.RLock()
+	defer statusCache.RUnlock()
+	return statusCache.value
+}
 
 type ContainerInfo struct {
 	Exists       bool     `json:"exists"`

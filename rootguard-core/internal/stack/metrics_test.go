@@ -33,21 +33,24 @@ func TestCollectMetricsReadsAFreshCacheWithoutInvokingDocker(t *testing.T) {
 		return Metrics{}
 	}
 
-	want := Metrics{Available: true, CPUPercent: 4.5, MemoryBytes: 1024}
+	stored := Metrics{Available: true, CPUPercent: 4.5, MemoryBytes: 1024}
+	updatedAt := time.Now()
 	metricsCache.Lock()
-	metricsCache.value = want
-	metricsCache.updatedAt = time.Now()
+	metricsCache.value = stored
+	metricsCache.updatedAt = updatedAt
 	metricsCache.Unlock()
 
+	want := stored
+	want.CollectedAt = updatedAt.UnixMilli()
 	if got := CollectMetrics(context.Background()); got != want {
 		t.Fatalf("expected %#v, got %#v", want, got)
 	}
 }
 
 func TestCollectMetricsRefreshesSynchronouslyWhenCacheIsStale(t *testing.T) {
-	// The idle-skip in StartMetricsCollector (metricsIdleTimeout) is exactly
-	// what lets the cache go stale in the first place: once nothing has
-	// asked for a while, the background loop stops touching it entirely.
+	// The idle-skip in StartMetricsCollector (dashboardIdleTimeout) is
+	// exactly what lets the cache go stale in the first place: once nothing
+	// has asked for a while, the background loop stops touching it entirely.
 	// Confirmed live: reopening the dashboard after it sat idle showed a
 	// CPU% far higher than the LXC's actual current load, because it was
 	// serving whatever was cached from before going idle. CollectMetrics
@@ -62,16 +65,18 @@ func TestCollectMetricsRefreshesSynchronouslyWhenCacheIsStale(t *testing.T) {
 
 	metricsCache.Lock()
 	metricsCache.value = Metrics{Available: true, CPUPercent: 999}
-	metricsCache.updatedAt = time.Now().Add(-metricsStaleThreshold - time.Second)
+	metricsCache.updatedAt = time.Now().Add(-dashboardStaleThreshold - time.Second)
 	metricsCache.Unlock()
 
 	got := CollectMetrics(context.Background())
 	if calls != 1 {
 		t.Fatalf("expected exactly one synchronous refresh for a stale cache, got %d calls", calls)
 	}
-	want := Metrics{Available: true, CPUPercent: 7, MemoryBytes: 99}
-	if got != want {
-		t.Fatalf("expected the freshly collected value %#v, got %#v", want, got)
+	if got.Available != true || got.CPUPercent != 7 || got.MemoryBytes != 99 {
+		t.Fatalf("expected the freshly collected value, got %#v", got)
+	}
+	if got.CollectedAt == 0 {
+		t.Fatal("expected CollectedAt to be stamped after a refresh")
 	}
 }
 
@@ -97,36 +102,36 @@ func TestCollectMetricsStampsLastRequestedForIdleDetection(t *testing.T) {
 	resetMetricsCacheForTest(t)
 	collectMetricsNowFunc = func(context.Context) Metrics { return Metrics{} }
 	t.Cleanup(func() {
-		metricsLastRequested.Lock()
-		metricsLastRequested.at = time.Time{}
-		metricsLastRequested.Unlock()
+		dashboardLastRequested.Lock()
+		dashboardLastRequested.at = time.Time{}
+		dashboardLastRequested.Unlock()
 	})
 
-	metricsLastRequested.Lock()
-	metricsLastRequested.at = time.Time{}
-	metricsLastRequested.Unlock()
-	if metricsRecentlyRequested() {
+	dashboardLastRequested.Lock()
+	dashboardLastRequested.at = time.Time{}
+	dashboardLastRequested.Unlock()
+	if dashboardRecentlyRequested() {
 		t.Fatal("expected not recently requested before any CollectMetrics call")
 	}
 
 	CollectMetrics(context.Background())
-	if !metricsRecentlyRequested() {
+	if !dashboardRecentlyRequested() {
 		t.Fatal("expected CollectMetrics to mark itself as a recent request")
 	}
 }
 
-func TestMetricsRecentlyRequestedExpiresAfterIdleTimeout(t *testing.T) {
+func TestDashboardRecentlyRequestedExpiresAfterIdleTimeout(t *testing.T) {
 	t.Cleanup(func() {
-		metricsLastRequested.Lock()
-		metricsLastRequested.at = time.Time{}
-		metricsLastRequested.Unlock()
+		dashboardLastRequested.Lock()
+		dashboardLastRequested.at = time.Time{}
+		dashboardLastRequested.Unlock()
 	})
 
-	metricsLastRequested.Lock()
-	metricsLastRequested.at = time.Now().Add(-metricsIdleTimeout - time.Second)
-	metricsLastRequested.Unlock()
-	if metricsRecentlyRequested() {
-		t.Fatal("expected a request older than metricsIdleTimeout to count as idle")
+	dashboardLastRequested.Lock()
+	dashboardLastRequested.at = time.Now().Add(-dashboardIdleTimeout - time.Second)
+	dashboardLastRequested.Unlock()
+	if dashboardRecentlyRequested() {
+		t.Fatal("expected a request older than dashboardIdleTimeout to count as idle")
 	}
 }
 

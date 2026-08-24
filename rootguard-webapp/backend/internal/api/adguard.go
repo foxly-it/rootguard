@@ -36,3 +36,22 @@ func HandleSetAdGuardFiltering(w http.ResponseWriter, r *http.Request, core *cor
 	}
 	writeJSON(w, http.StatusOK, status)
 }
+
+func HandleSetAdGuardProtection(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
+	var input struct {
+		Enabled         bool  `json:"enabled"`
+		DurationSeconds int64 `json:"duration_seconds"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+	status, err := core.SetAdGuardProtection(r.Context(), input.Enabled, input.DurationSeconds)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}

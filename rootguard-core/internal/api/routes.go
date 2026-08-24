@@ -92,6 +92,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/adguard/status", getAdGuardStatusHandler(deps.AdGuard))
 	apiMux.HandleFunc("GET /api/adguard/filter-report", getAdGuardFilterReportHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/filtering", setAdGuardFilteringHandler(deps.AdGuard))
+	apiMux.HandleFunc("POST /api/adguard/protection", setAdGuardProtectionHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/bootstrap", bootstrapAdGuardHandler(deps.AdGuard, deps.Installer))
 	apiMux.Handle("/api/adguard/ui/", deps.AdGuard.UIHandler())
 
@@ -427,6 +428,31 @@ func setAdGuardFilteringHandler(manager *adguard.Manager) http.HandlerFunc {
 	}
 }
 
+func setAdGuardProtectionHandler(manager *adguard.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input struct {
+			Enabled         bool  `json:"enabled"`
+			DurationSeconds int64 `json:"duration_seconds"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if input.DurationSeconds < 0 || input.DurationSeconds > 24*60*60 {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("duration_seconds must be between 0 and 86400"))
+			return
+		}
+		status, err := manager.SetProtection(r.Context(), input.Enabled, time.Duration(input.DurationSeconds)*time.Second)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	}
+}
+
 func bootstrapAdGuardHandler(manager *adguard.Manager, installer *installer.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var blockPageIP string
@@ -469,6 +495,7 @@ type dashboardDocker struct {
 	MetricsAvailable bool    `json:"metrics_available"`
 	Containers       int     `json:"containers"`
 	Status           string  `json:"status"`
+	CollectedAt      int64   `json:"collected_at"`
 }
 
 type dashboardDNS struct {
@@ -478,7 +505,7 @@ type dashboardDNS struct {
 }
 
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
-	status := stack.CheckStackStatus()
+	status := stack.CollectStatus()
 	metrics := stack.CollectMetrics(r.Context())
 	running := 0
 	if status.AdGuard.Running {
@@ -506,6 +533,7 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 		Docker: dashboardDocker{
 			CPU: metrics.CPUPercent, Memory: metrics.MemoryBytes,
 			MetricsAvailable: metrics.Available, Containers: running, Status: dockerHealth,
+			CollectedAt: metrics.CollectedAt,
 		},
 		DNS: dashboardDNS{Status: dnsHealth, Resolver: "Unbound", DNSSEC: status.Unbound.Running},
 	})

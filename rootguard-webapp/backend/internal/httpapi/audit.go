@@ -50,6 +50,7 @@ const (
 	auditInstallationDeploy              = "installation_deploy"
 	auditAdGuardBootstrap                = "adguard_bootstrap"
 	auditAdGuardFilteringToggled         = "adguard_filtering_toggled"
+	auditAdGuardProtectionToggled        = "adguard_protection_toggled"
 )
 
 func (a *SessionAuth) recordAudit(event, username, remoteIP string) {

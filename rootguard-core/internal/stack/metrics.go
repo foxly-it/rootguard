@@ -13,33 +13,55 @@ import (
 	"time"
 )
 
-// metricsRefreshInterval paces the background collector, not individual
-// HTTP requests - `docker stats --no-stream` needs the Docker daemon to
-// take two internal CPU-accounting samples before it can answer at all,
-// which measured live costs ~1-2s per invocation regardless of who's
-// asking or how often. Collecting on a fixed background cadence instead of
-// per-request means CollectMetrics (called from dashboardHandler) never
-// blocks an HTTP response on that latency - it just hands back whatever
-// was most recently collected.
-const metricsRefreshInterval = 1 * time.Second
+// dashboardRefreshInterval paces the background collectors for both metrics
+// (this file) and container status (status.go), not individual HTTP
+// requests - `docker stats --no-stream` needs the Docker daemon to take two
+// internal CPU-accounting samples before it can answer at all, which
+// measured live costs ~1-2s per invocation regardless of who's asking or
+// how often. Collecting on a fixed background cadence instead of per-request
+// means CollectMetrics/CollectStatus (both called from dashboardHandler on
+// every poll) never block an HTTP response on that latency - they just hand
+// back whatever was most recently collected.
+const dashboardRefreshInterval = 1 * time.Second
 
-// metricsIdleTimeout gates the collector on actual demand: without this, a
+// dashboardIdleTimeout gates the collectors on actual demand: without this, a
 // 1s ticker whose own collection takes ~1-2s runs back-to-back forever with
 // no idle gap - confirmed live (`docker stats` measured directly against
 // the daemon, bypassing this code entirely) as a real, sustained ~14% CPU
 // cost on rootguard-core itself, running whether or not anyone had the
 // dashboard open. The dashboard's own frontend already pauses polling once
 // its tab is hidden or closed (Overview.tsx's visibilitychange handler); this
-// mirrors that same idea on the Core side - CollectMetrics stamps
-// metricsLastRequested on every call, and the background loop skips actually
-// invoking docker stats once nothing has asked for a while.
-const metricsIdleTimeout = 5 * time.Second
+// mirrors that same idea on the Core side - CollectMetrics/CollectStatus
+// stamp dashboardLastRequested on every call, and the background loops skip
+// actually refreshing once nothing has asked for a while.
+const dashboardIdleTimeout = 5 * time.Second
 
-// metricsStaleThreshold bounds how old a cached value CollectMetrics is
-// allowed to hand back without first trying to refresh it - see
-// CollectMetrics for why this exists (the idle-skip above means the cache
+// dashboardStaleThreshold bounds how old a cached value CollectMetrics or
+// CollectStatus is allowed to hand back without first trying to refresh it -
+// see CollectMetrics for why this exists (the idle-skip above means a cache
 // can otherwise sit untouched for as long as the dashboard was closed).
-const metricsStaleThreshold = 2 * metricsRefreshInterval
+const dashboardStaleThreshold = 2 * dashboardRefreshInterval
+
+var dashboardLastRequested = struct {
+	sync.Mutex
+	at time.Time
+}{}
+
+// markDashboardRequested is called by both CollectMetrics and CollectStatus
+// on every invocation (harmless if stamped twice per dashboardHandler call)
+// so a single idle timer covers both background collectors - they're always
+// polled together in practice, so there's no reason to track two.
+func markDashboardRequested() {
+	dashboardLastRequested.Lock()
+	dashboardLastRequested.at = time.Now()
+	dashboardLastRequested.Unlock()
+}
+
+func dashboardRecentlyRequested() bool {
+	dashboardLastRequested.Lock()
+	defer dashboardLastRequested.Unlock()
+	return time.Since(dashboardLastRequested.at) < dashboardIdleTimeout
+}
 
 var metricsCache = struct {
 	sync.RWMutex
@@ -47,40 +69,31 @@ var metricsCache = struct {
 	updatedAt time.Time
 }{}
 
-var metricsLastRequested = struct {
-	sync.Mutex
-	at time.Time
-}{}
+var metricsRefreshGroup refreshGroup
 
 // StartMetricsCollector runs the first collection synchronously (so a
 // request arriving immediately after startup still gets real data almost
 // as soon as it's available, rather than "not available" until the first
-// tick) and then keeps collecting on metricsRefreshInterval for as long as
+// tick) and then keeps collecting on dashboardRefreshInterval for as long as
 // ctx stays alive, but only while CollectMetrics has actually been called
 // recently. Call once, near process startup.
 func StartMetricsCollector(ctx context.Context) {
-	refreshMetricsCache(ctx)
+	metricsRefreshGroup.do(func() { refreshMetricsCache(ctx) })
 	go func() {
-		ticker := time.NewTicker(metricsRefreshInterval)
+		ticker := time.NewTicker(dashboardRefreshInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if !metricsRecentlyRequested() {
+				if !dashboardRecentlyRequested() {
 					continue
 				}
-				refreshMetricsCache(ctx)
+				metricsRefreshGroup.do(func() { refreshMetricsCache(ctx) })
 			}
 		}
 	}()
-}
-
-func metricsRecentlyRequested() bool {
-	metricsLastRequested.Lock()
-	defer metricsLastRequested.Unlock()
-	return time.Since(metricsLastRequested.at) < metricsIdleTimeout
 }
 
 // collectMetricsNowFunc is swapped out in tests so CollectMetrics's
@@ -97,6 +110,12 @@ func refreshMetricsCache(ctx context.Context) {
 	metricsCache.Unlock()
 }
 
+func isMetricsCacheStale() bool {
+	metricsCache.RLock()
+	defer metricsCache.RUnlock()
+	return metricsCache.updatedAt.IsZero() || time.Since(metricsCache.updatedAt) > dashboardStaleThreshold
+}
+
 var metricContainers = []string{
 	"rootguard-core",
 	"rootguard-webapp",
@@ -109,6 +128,12 @@ type Metrics struct {
 	Available   bool    `json:"available"`
 	CPUPercent  float64 `json:"cpu_percent"`
 	MemoryBytes uint64  `json:"memory_bytes"`
+	// CollectedAt is when the underlying `docker stats` sample was actually
+	// taken (unix ms), not when this particular caller happened to read the
+	// cache - see the frontend's pushHistory, which uses this to avoid
+	// recording the same cached sample twice under two different ages just
+	// because it polled faster than the cache refreshes.
+	CollectedAt int64 `json:"collected_at"`
 }
 
 type dockerStatsLine struct {
@@ -124,35 +149,35 @@ type dockerStatsLine struct {
 // returns the zero Metrics{} (Available: false), the same graceful
 // "unavailable" state a real collection failure already produces.
 //
-// Also stamps metricsLastRequested so the background collector knows
-// someone is actually asking - see metricsIdleTimeout. That idle-skip is
+// Also stamps dashboardLastRequested so the background collector knows
+// someone is actually asking - see dashboardIdleTimeout. That idle-skip is
 // exactly what makes the cache capable of going stale in the first place:
-// once nothing has asked for metricsIdleTimeout, the background loop stops
+// once nothing has asked for dashboardIdleTimeout, the background loop stops
 // refreshing entirely, so whatever was cached before going idle just sits
 // there - confirmed live, a dashboard reopened after sitting idle showed a
 // CPU% far higher than the LXC's actual current load per Proxmox, because
 // it was serving a reading from whenever the cache was last touched, not
-// from now. If the cache is older than metricsStaleThreshold, this pays the
+// from now. If the cache is older than dashboardStaleThreshold, this pays the
 // real collection cost once, synchronously, before answering - the same
 // latency every request used to pay before caching existed, just now
 // limited to this one "waking back up" case instead of every single call.
+//
+// Concurrent callers that all see a stale cache at once (several browser
+// tabs reopening together, or a request racing the background ticker) share
+// a single real refresh via metricsRefreshGroup instead of each starting
+// their own `docker stats` process - see refresh.go.
 func CollectMetrics(ctx context.Context) Metrics {
-	metricsLastRequested.Lock()
-	metricsLastRequested.at = time.Now()
-	metricsLastRequested.Unlock()
+	markDashboardRequested()
 
-	metricsCache.RLock()
-	stale := metricsCache.updatedAt.IsZero() || time.Since(metricsCache.updatedAt) > metricsStaleThreshold
-	cached := metricsCache.value
-	metricsCache.RUnlock()
-	if !stale {
-		return cached
+	if isMetricsCacheStale() {
+		metricsRefreshGroup.do(func() { refreshMetricsCache(ctx) })
 	}
 
-	refreshMetricsCache(ctx)
 	metricsCache.RLock()
 	defer metricsCache.RUnlock()
-	return metricsCache.value
+	result := metricsCache.value
+	result.CollectedAt = metricsCache.updatedAt.UnixMilli()
+	return result
 }
 
 func collectMetricsNow(ctx context.Context) Metrics {

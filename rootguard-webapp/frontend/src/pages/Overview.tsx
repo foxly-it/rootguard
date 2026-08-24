@@ -4,10 +4,8 @@ import {
   Activity,
   ArrowRight,
   Ban,
-  Check,
   Cpu,
   Filter,
-  Globe2,
   MemoryStick,
   Network,
   PanelsTopLeft,
@@ -42,15 +40,15 @@ const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
 
 // How many samples the resource sparklines keep in memory - purely
 // client-side, resets on page load (RootGuard has no metrics time-series
-// store). At the 500ms poll interval below, 120 samples covers a full
-// minute of live history - short enough to stay dense/readable at this
-// refresh rate instead of flattening into a long, mostly-empty-looking
-// line. Note this is faster than Core's own background collector
-// (metricsRefreshInterval in rootguard-core/internal/stack/metrics.go,
-// currently 1s - itself already about as fast as `docker stats` allows)
-// actually produces new numbers, so consecutive samples will often repeat
-// the same value; polling faster than that still shortens how long it
-// takes to *notice* a real change once Core's cache does update.
+// store). CPU/RAM poll every 500ms (see loadCoreMetrics) but only actually
+// change once Core's own background collector refreshes its cache, roughly
+// once a second (dashboardRefreshInterval in
+// rootguard-core/internal/stack/metrics.go) - and pushHistory skips
+// re-recording a sample whose collected_at hasn't moved, so 120 samples
+// there covers a couple of minutes of real history, not literally 60s of
+// polling. AdGuard-derived series (queries/blocked/filter rate) poll much
+// slower, every 5s (see loadAdGuardMetrics), so the same length covers
+// around 10 minutes for those.
 const HISTORY_LENGTH = 120;
 
 export default function Overview() {
@@ -83,6 +81,7 @@ export default function Overview() {
   // lastChecked to the wrong time, or resurrect an error that already
   // cleared.
   const metricsSeq = useRef(0);
+  const adGuardSeq = useRef(0);
   const statusSeq = useRef(0);
   // Core's /api/dashboard now serves from a background-refreshed cache
   // (see rootguard-core/internal/stack/metrics.go) instead of shelling out
@@ -96,31 +95,28 @@ export default function Overview() {
   // load, or the brief window before its first background collection
   // completes) at this now much faster 500ms cadence.
   const metricsInFlight = useRef(false);
+  const adGuardInFlight = useRef(false);
 
-  const loadMetrics = useCallback(async () => {
+  const loadCoreMetrics = useCallback(async () => {
     if (metricsInFlight.current) return;
     metricsInFlight.current = true;
     const seq = ++metricsSeq.current;
     try {
-      // These two were previously sequential (dashboard, then AdGuard) for
-      // no real reason - they don't depend on each other, so awaiting them
-      // one after another just adds their latencies together instead of
-      // taking the slower of the two. Running them in parallel roughly
-      // halves how long every single poll tick takes to land.
-      const wantsAdGuard = installationRef.current?.state === "installed";
-      const [nextDashboard, nextAdGuard] = await Promise.all([
-        fetchDashboard(),
-        wantsAdGuard ? fetchAdGuardStatus().catch(() => null) : Promise.resolve<AdGuardStatus | null>(null),
-      ]);
+      const nextDashboard = await fetchDashboard();
       if (seq !== metricsSeq.current) return;
 
       setDashboard(nextDashboard);
-      setCpuHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.cpu : null, HISTORY_LENGTH));
-      setMemoryHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.memory : null, HISTORY_LENGTH));
-      setAdGuard(nextAdGuard);
-      setQueriesHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.queries : null, HISTORY_LENGTH));
-      setBlockedHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.blocked : null, HISTORY_LENGTH));
-      setBlockRateHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? blockRatePercent(nextAdGuard.blocked, nextAdGuard.queries) : null, HISTORY_LENGTH));
+      // Pass the cache's own collected_at instead of the receipt time: Core
+      // only refreshes this roughly once a second (dashboardRefreshInterval
+      // in rootguard-core/internal/stack/metrics.go) while this poll runs
+      // twice that fast, so most polls just re-read the same cached sample.
+      // pushHistory skips re-appending when the timestamp is unchanged -
+      // without collected_at here, every poll would look like a distinct,
+      // freshly-sampled point even when nothing new was actually measured,
+      // which the sparkline tooltip's "N seconds ago" would then understate.
+      const collectedAt = nextDashboard.docker.collected_at;
+      setCpuHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.cpu : null, HISTORY_LENGTH, collectedAt));
+      setMemoryHistory((prev) => pushHistory(prev, nextDashboard.docker.metrics_available ? nextDashboard.docker.memory : null, HISTORY_LENGTH, collectedAt));
       setLastChecked(new Date());
       setError("");
     } catch (cause) {
@@ -130,6 +126,36 @@ export default function Overview() {
       metricsInFlight.current = false;
     }
   }, [t]);
+
+  // AdGuard's own status endpoint makes up to four real requests to
+  // AdGuard's API per call (see rootguard-core/internal/adguard/manager.go),
+  // unlike the dashboard endpoint above which now reads from a cache. Found
+  // via code review: polling it at the same 500ms cadence as CPU/RAM meant
+  // up to eight AdGuard API calls per second per open dashboard, multiplied
+  // by however many tabs/users had one open. Query/block counts also don't
+  // change fast enough to need sub-second freshness, so this runs on its
+  // own, much slower interval instead.
+  const loadAdGuardMetrics = useCallback(async () => {
+    if (installationRef.current?.state !== "installed") return;
+    if (adGuardInFlight.current) return;
+    adGuardInFlight.current = true;
+    const seq = ++adGuardSeq.current;
+    try {
+      const nextAdGuard = await fetchAdGuardStatus().catch(() => null);
+      if (seq !== adGuardSeq.current) return;
+
+      setAdGuard(nextAdGuard);
+      setQueriesHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.queries : null, HISTORY_LENGTH));
+      setBlockedHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? nextAdGuard.blocked : null, HISTORY_LENGTH));
+      setBlockRateHistory((prev) => pushHistory(prev, nextAdGuard?.stats_available ? blockRatePercent(nextAdGuard.blocked, nextAdGuard.queries) : null, HISTORY_LENGTH));
+    } finally {
+      adGuardInFlight.current = false;
+    }
+  }, []);
+
+  const loadMetrics = useCallback(async () => {
+    await Promise.all([loadCoreMetrics(), loadAdGuardMetrics()]);
+  }, [loadCoreMetrics, loadAdGuardMetrics]);
 
   const loadStatus = useCallback(async () => {
     const seq = ++statusSeq.current;
@@ -161,12 +187,19 @@ export default function Overview() {
     // redundant now and was removed - one immediate call plus the
     // interval is already fast.
     let metricsInterval: number | null = null;
+    let adGuardInterval: number | null = null;
     let statusInterval: number | null = null;
 
     function start() {
       loadStatus();
-      loadMetrics();
-      metricsInterval = window.setInterval(loadMetrics, 500);
+      loadCoreMetrics();
+      loadAdGuardMetrics();
+      metricsInterval = window.setInterval(loadCoreMetrics, 500);
+      // AdGuard's status endpoint makes several real upstream requests per
+      // call (see loadAdGuardMetrics) - a much slower cadence than CPU/RAM
+      // keeps that load reasonable without the query/block counts feeling
+      // stale, since they don't change on a sub-second timescale anyway.
+      adGuardInterval = window.setInterval(loadAdGuardMetrics, 5_000);
       // Service/installation status changes far less often than CPU/memory/
       // query counts - a slower cadence is plenty fresh for it and avoids
       // hitting Core for a full service/Docker inspect every single second.
@@ -177,6 +210,10 @@ export default function Overview() {
       if (metricsInterval !== null) {
         window.clearInterval(metricsInterval);
         metricsInterval = null;
+      }
+      if (adGuardInterval !== null) {
+        window.clearInterval(adGuardInterval);
+        adGuardInterval = null;
       }
       if (statusInterval !== null) {
         window.clearInterval(statusInterval);
@@ -199,7 +236,7 @@ export default function Overview() {
       stop();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadMetrics, loadStatus]);
+  }, [loadCoreMetrics, loadAdGuardMetrics, loadStatus]);
 
   async function restart(service: ServiceInfo["name"]) {
     setBusyService(service);
@@ -322,23 +359,6 @@ export default function Overview() {
       </section>
 
       <section className="overview-panel system-panel">
-        <PanelHeading eyebrow={t("overview.dataFlow")} title={t("overview.flowTitle")} link="/adguard" linkLabel={t("overview.details")} />
-        <div className="dns-flow">
-          <FlowNode icon={<Globe2 />} title={t("overview.clients")} detail={bindAddress} state="neutral" />
-          <FlowArrow index={0} />
-          <FlowNode icon={<Filter />} title="AdGuard Home" detail={t("overview.filters")} state={serviceState(services, "adguard")} />
-          <FlowArrow index={1} />
-          <FlowNode icon={<ShieldCheck />} title="Unbound" detail={t("overview.recursive")} state={serviceState(services, "unbound")} />
-          <FlowArrow index={2} />
-          <FlowNode icon={<Network />} title={t("overview.hierarchy")} detail={t("overview.noExternal")} state={protectedState ? "running" : "neutral"} />
-        </div>
-        <div className="flow-footnote">
-          <Check size={15} />
-          {t("overview.privateAdmin")}
-        </div>
-
-        <div className="system-panel-divider" />
-
         <PanelHeading eyebrow={t("overview.runtime")} title={t("overview.dnsServices")} />
         <div className="dashboard-services">
           {services.map((service) => {
@@ -539,35 +559,12 @@ function SparkMetric({ icon, label, display, history, detail, available, tone = 
   );
 }
 
-function PanelHeading({ eyebrow, title, link, linkLabel }: { eyebrow: string; title: string; link?: string; linkLabel?: string }) {
+function PanelHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
     <div className="overview-panel-heading">
       <div><span>{eyebrow}</span><h2>{title}</h2></div>
-      {link && <Link to={link}>{linkLabel} <ArrowRight size={14} /></Link>}
     </div>
   );
-}
-
-function FlowNode({ icon, title, detail, state }: {
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
-  state: "running" | "stopped" | "neutral";
-}) {
-  return <div className={`flow-node ${state}`}><span>{icon}</span><strong>{title}</strong><small>{detail}</small></div>;
-}
-
-function FlowArrow({ index }: { index: number }) {
-  return (
-    <div className="flow-arrow" style={{ "--flow-delay": `${index * 0.5}s` } as React.CSSProperties}>
-      <span />
-      <ArrowRight size={15} />
-    </div>
-  );
-}
-
-function serviceState(services: ServiceInfo[], name: ServiceInfo["name"]) {
-  return services.find((service) => service.name === name)?.status ?? "stopped";
 }
 
 function formatCPU(value: number) {

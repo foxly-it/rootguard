@@ -169,13 +169,14 @@ func main() {
 	}
 	reconcileCancel()
 
-	// Runs docker stats in the background on its own cadence instead of
-	// per HTTP request - see the metricsRefreshInterval comment in
-	// internal/stack/metrics.go for why. context.Background() is
-	// deliberate: this loop is meant to run for the whole process
-	// lifetime, same as the HTTP server itself, and needs no explicit
+	// Run docker stats/inspect in the background on their own cadence
+	// instead of per HTTP request - see the dashboardRefreshInterval
+	// comment in internal/stack/metrics.go for why. context.Background() is
+	// deliberate: these loops are meant to run for the whole process
+	// lifetime, same as the HTTP server itself, and need no explicit
 	// teardown beyond process exit.
 	stack.StartMetricsCollector(context.Background())
+	stack.StartStatusCollector(context.Background())
 
 	handler := api.RegisterRoutes(api.Dependencies{
 		Token:             token,

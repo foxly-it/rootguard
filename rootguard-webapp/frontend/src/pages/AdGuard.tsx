@@ -7,6 +7,7 @@ import {
   fetchAdGuardStatus,
   fetchInstallationStatus,
   setAdGuardFiltering,
+  setAdGuardProtection,
   type AdGuardFilterCheck,
   type AdGuardFilterReport,
   type AdGuardStatus,
@@ -30,6 +31,7 @@ export default function AdGuard() {
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [filterError, setFilterError] = useState("");
   const [filteringBusy, setFilteringBusy] = useState(false);
+  const [protectionBusy, setProtectionBusy] = useState(false);
 
   const load = useCallback(async () => {
     setError("");
@@ -97,6 +99,23 @@ export default function AdGuard() {
       setError(errorMessage(cause, t("adguard.filteringToggleError")));
     } finally {
       setFilteringBusy(false);
+    }
+  }
+
+  // Mirrors AdGuard Home's own "Protection" dropdown (Off/10 minutes/1
+  // hour) - unlike filtering above, AdGuard itself re-enables protection
+  // after the chosen duration, no RootGuard-side scheduling needed.
+  async function changeProtection(choice: "on" | "off" | "10m" | "1h") {
+    if (protectionBusy || !status) return;
+    setProtectionBusy(true);
+    setError("");
+    try {
+      const durations: Record<typeof choice, number> = { on: 0, off: 0, "10m": 600, "1h": 3600 };
+      setStatus(await setAdGuardProtection(choice === "on", durations[choice]));
+    } catch (cause) {
+      setError(errorMessage(cause, t("adguard.protectionToggleError")));
+    } finally {
+      setProtectionBusy(false);
     }
   }
 
@@ -182,13 +201,32 @@ export default function AdGuard() {
               <RefreshCw size={16} /> {t("adguard.filterTestRun")}
             </button>
             {status && (
-              <label className="adguard-filtering-toggle">
-                <div>
-                  <strong>{t("adguard.filteringToggleLabel")}</strong>
-                  <small>{t("adguard.filteringToggleHelp")}</small>
+              <>
+                <label className="adguard-filtering-toggle">
+                  <div>
+                    <strong>{t("adguard.filteringToggleLabel")}</strong>
+                    <small>{t("adguard.filteringToggleHelp")}</small>
+                  </div>
+                  <input type="checkbox" checked={status.filtering_enabled} disabled={filteringBusy} onChange={() => void toggleFiltering()} aria-label={t("adguard.filteringToggleLabel")} />
+                </label>
+                <div className="adguard-protection-control">
+                  <div>
+                    <strong>{t("adguard.protectionLabel")}</strong>
+                    <small>{status.protection_enabled ? t("adguard.protectionActiveHelp") : t("adguard.protectionPausedHelp")}</small>
+                  </div>
+                  <select
+                    value={status.protection_enabled ? "on" : "off"}
+                    disabled={protectionBusy}
+                    onChange={(event) => void changeProtection(event.target.value as "on" | "off" | "10m" | "1h")}
+                    aria-label={t("adguard.protectionLabel")}
+                  >
+                    <option value="on">{t("adguard.protectionOn")}</option>
+                    <option value="off">{t("adguard.protectionOffIndefinite")}</option>
+                    <option value="10m">{t("adguard.protectionOff10m")}</option>
+                    <option value="1h">{t("adguard.protectionOff1h")}</option>
+                  </select>
                 </div>
-                <input type="checkbox" checked={status.filtering_enabled} disabled={filteringBusy} onChange={() => void toggleFiltering()} aria-label={t("adguard.filteringToggleLabel")} />
-              </label>
+              </>
             )}
           </section>
         ) : (

@@ -288,6 +288,7 @@ type AdGuardStatus struct {
 	FilteringEnabled   bool    `json:"filtering_enabled"`
 	ActiveFilterLists  int     `json:"active_filter_lists"`
 	TotalFilterLists   int     `json:"total_filter_lists"`
+	ProtectionEnabled  bool    `json:"protection_enabled"`
 }
 
 type AdGuardFilterCheck struct {
@@ -596,6 +597,14 @@ func (c *Client) SetAdGuardFiltering(ctx context.Context, enabled bool) (AdGuard
 
 func (c *Client) BootstrapAdGuard(ctx context.Context) (AdGuardStatus, error) {
 	return doJSON[AdGuardStatus](ctx, c, http.MethodPost, "/api/adguard/bootstrap", nil)
+}
+
+func (c *Client) SetAdGuardProtection(ctx context.Context, enabled bool, durationSeconds int64) (AdGuardStatus, error) {
+	body := struct {
+		Enabled         bool  `json:"enabled"`
+		DurationSeconds int64 `json:"duration_seconds"`
+	}{Enabled: enabled, DurationSeconds: durationSeconds}
+	return doJSON[AdGuardStatus](ctx, c, http.MethodPost, "/api/adguard/protection", body)
 }
 
 func (c *Client) AdGuardFilterReport(ctx context.Context) (AdGuardFilterReport, error) {

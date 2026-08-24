@@ -25,6 +25,13 @@ describe("pushHistory", () => {
     for (let i = 0; i < 5; i++) history = pushHistory(history, i, 3, i);
     expect(history.map((point) => point.value)).toEqual([2, 3, 4]);
   });
+
+  it("skips re-appending a sample whose timestamp matches the last recorded one", () => {
+    let history = pushHistory([], 1, 24, 5_000);
+    history = pushHistory(history, 1, 24, 5_000);
+    history = pushHistory(history, 1, 24, 5_000);
+    expect(history).toEqual([{ value: 1, sampledAt: 5_000 }]);
+  });
 });
 
 describe("blockRatePercent", () => {
