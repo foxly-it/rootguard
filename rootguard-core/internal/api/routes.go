@@ -428,10 +428,30 @@ func setAdGuardFilteringHandler(manager *adguard.Manager) http.HandlerFunc {
 	}
 }
 
+// adGuardProtectionDurations are the only durations the UI actually offers
+// (Off/10 minutes/1 hour) - found via code review: without this allowlist,
+// a request with enabled=true and a positive duration_seconds wasn't
+// rejected here at all, AdGuard just returned an error for it that surfaced
+// as a confusing 502 for what was really a bad client request.
+var adGuardProtectionDurations = map[int64]bool{0: true, 600: true, 3600: true}
+
+func validateAdGuardProtectionRequest(enabled *bool, durationSeconds int64) error {
+	if enabled == nil {
+		return fmt.Errorf("enabled is required")
+	}
+	if !adGuardProtectionDurations[durationSeconds] {
+		return fmt.Errorf("duration_seconds must be one of 0, 600, 3600")
+	}
+	if *enabled && durationSeconds != 0 {
+		return fmt.Errorf("duration_seconds must be 0 when enabling protection")
+	}
+	return nil
+}
+
 func setAdGuardProtectionHandler(manager *adguard.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input struct {
-			Enabled         bool  `json:"enabled"`
+			Enabled         *bool `json:"enabled"`
 			DurationSeconds int64 `json:"duration_seconds"`
 		}
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
@@ -440,11 +460,11 @@ func setAdGuardProtectionHandler(manager *adguard.Manager) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		if input.DurationSeconds < 0 || input.DurationSeconds > 24*60*60 {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("duration_seconds must be between 0 and 86400"))
+		if err := validateAdGuardProtectionRequest(input.Enabled, input.DurationSeconds); err != nil {
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		status, err := manager.SetProtection(r.Context(), input.Enabled, time.Duration(input.DurationSeconds)*time.Second)
+		status, err := manager.SetProtection(r.Context(), *input.Enabled, time.Duration(input.DurationSeconds)*time.Second)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err)
 			return

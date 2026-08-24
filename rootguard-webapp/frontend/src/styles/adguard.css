@@ -282,6 +282,11 @@
   line-height: 1.45;
 }
 
+.adguard-protection-control small.paused {
+  color: var(--warning);
+  font-weight: 600;
+}
+
 .adguard-protection-control select {
   flex: 0 0 auto;
   padding: 7px 10px;

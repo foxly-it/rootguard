@@ -515,6 +515,7 @@ export interface AdGuardStatus {
   active_filter_lists: number;
   total_filter_lists: number;
   protection_enabled: boolean;
+  protection_disabled_duration_ms: number;
 }
 
 export async function fetchAdGuardStatus(): Promise<AdGuardStatus> {

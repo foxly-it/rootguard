@@ -41,6 +41,12 @@ type Status struct {
 	// FilteringEnabled above, which only controls whether the blocklists are
 	// applied. See SetProtection.
 	ProtectionEnabled bool `json:"protection_enabled"`
+	// ProtectionDisabledDurationMs is AdGuard's own remaining-pause figure
+	// (milliseconds) from /control/status - only meaningful while
+	// ProtectionEnabled is false and a timed pause (not an indefinite one)
+	// is in effect. Lets the frontend show a real countdown instead of just
+	// "paused".
+	ProtectionDisabledDurationMs int64 `json:"protection_disabled_duration_ms"`
 }
 
 type FilterCheck struct {
@@ -115,7 +121,8 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 	}
 
 	var controlStatus struct {
-		Version string `json:"version"`
+		Version                    string `json:"version"`
+		ProtectionDisabledDuration int64  `json:"protection_disabled_duration"`
 	}
 	if err := m.request(ctx, http.MethodGet, m.apiURL+"/control/status", nil, &controlStatus, &credentials); err != nil {
 		return Status{}, fmt.Errorf("adguard status: %w", err)
@@ -145,7 +152,8 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		Upstream:   m.upstream,
 		UpstreamReady: len(dnsInfo.UpstreamDNS) == 1 &&
 			dnsInfo.UpstreamDNS[0] == m.upstream && len(dnsInfo.FallbackDNS) == 0,
-		ProtectionEnabled: dnsInfo.ProtectionEnabled,
+		ProtectionEnabled:            dnsInfo.ProtectionEnabled,
+		ProtectionDisabledDurationMs: controlStatus.ProtectionDisabledDuration,
 		BestPracticesReady: dnsInfo.ProtectionEnabled &&
 			dnsInfo.RateLimit == 20 &&
 			dnsInfo.DNSSECEnabled &&

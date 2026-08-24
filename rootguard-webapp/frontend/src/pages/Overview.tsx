@@ -249,9 +249,16 @@ export default function Overview() {
   }
 
   const runningServices = services.filter((service) => service.status === "running").length;
+  // Found via code review: protection_enabled/filtering_enabled were loaded
+  // but never actually factored in here, so pausing AdGuard's protection
+  // (the new toggle on the AdGuard page) still showed "PROTECTED" - the
+  // dashboard's whole point is to reflect whether traffic is actually being
+  // filtered right now, not just whether the stack is reachable.
   const protectedState = installation?.state === "installed"
     && dashboard?.dns.status === "healthy"
-    && adGuard?.upstream_ready === true;
+    && adGuard?.upstream_ready === true
+    && adGuard?.protection_enabled === true
+    && adGuard?.filtering_enabled === true;
   const bindAddress = installation?.config
     ? `${installation.config.dns_bind_address}:${installation.config.dns_port}`
     : t("overview.notConfigured");

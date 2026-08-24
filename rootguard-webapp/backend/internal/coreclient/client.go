@@ -276,20 +276,21 @@ type UnboundDirectiveReference struct {
 }
 
 type AdGuardStatus struct {
-	Configured         bool    `json:"configured"`
-	Healthy            bool    `json:"healthy"`
-	Version            string  `json:"version,omitempty"`
-	Upstream           string  `json:"upstream"`
-	UpstreamReady      bool    `json:"upstream_ready"`
-	StatsAvailable     bool    `json:"stats_available"`
-	Queries            uint64  `json:"queries"`
-	Blocked            uint64  `json:"blocked"`
-	AverageResponse    float64 `json:"average_response_seconds"`
-	BestPracticesReady bool    `json:"best_practices_ready"`
-	FilteringEnabled   bool    `json:"filtering_enabled"`
-	ActiveFilterLists  int     `json:"active_filter_lists"`
-	TotalFilterLists   int     `json:"total_filter_lists"`
-	ProtectionEnabled  bool    `json:"protection_enabled"`
+	Configured                   bool    `json:"configured"`
+	Healthy                      bool    `json:"healthy"`
+	Version                      string  `json:"version,omitempty"`
+	Upstream                     string  `json:"upstream"`
+	UpstreamReady                bool    `json:"upstream_ready"`
+	StatsAvailable               bool    `json:"stats_available"`
+	Queries                      uint64  `json:"queries"`
+	Blocked                      uint64  `json:"blocked"`
+	AverageResponse              float64 `json:"average_response_seconds"`
+	BestPracticesReady           bool    `json:"best_practices_ready"`
+	FilteringEnabled             bool    `json:"filtering_enabled"`
+	ActiveFilterLists            int     `json:"active_filter_lists"`
+	TotalFilterLists             int     `json:"total_filter_lists"`
+	ProtectionEnabled            bool    `json:"protection_enabled"`
+	ProtectionDisabledDurationMs int64   `json:"protection_disabled_duration_ms"`
 }
 
 type AdGuardFilterCheck struct {
