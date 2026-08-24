@@ -92,6 +92,52 @@ resolve_latest_tag() {
     | head -1
 }
 
+# Best-effort: only checks what ss/netstat can currently see (a container
+# that starts publishing a port a moment later still slips through - the
+# same limitation the real preflight check in Setup itself accepts, see
+# docs.html's "zweistufig erkannt" note). Returns 1 (not listening) rather
+# than failing outright when neither tool is available, since a missing
+# tool isn't evidence either way.
+port_listening() {
+  local family="$1" port="$2"
+  if command -v ss >/dev/null 2>&1; then
+    ss -Hln "$family" 2>/dev/null | awk -v p=":${port}\$" '$4 ~ p { found=1 } END { exit !found }'
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ln 2>/dev/null | awk -v p=":${port}\$" '$4 ~ p { found=1 } END { exit !found }'
+  else
+    return 1
+  fi
+}
+
+# Checks the port this script's own `docker compose up` binds (WebGUI) plus
+# the two RootGuard eventually needs once guided Setup creates the DNS
+# containers (53 for DNS itself, 80 for the optional blockpage) - not
+# because install.sh binds those two itself, but so a conflict surfaces now
+# instead of confusing someone mid-wizard. Setup's own preflight (see
+# docs.html) re-checks port 53 properly (published Docker ports plus a real
+# bind attempt, catching non-Docker processes like systemd-resolved) - this
+# is just an early heads-up, not a replacement for that.
+check_ports() {
+  WEB_PORT="${ROOTGUARD_WEB_PORT:-8080}"
+
+  if port_listening -t "$WEB_PORT"; then
+    log "Port ${WEB_PORT} ist bereits belegt."
+    if [ "$NON_INTERACTIVE" = "1" ]; then
+      die "Setze ROOTGUARD_WEB_PORT auf einen freien Port und starte install.sh erneut."
+    fi
+    prompt WEB_PORT "Alternativen Port für die WebGUI verwenden [8081]: " "8081"
+    port_listening -t "$WEB_PORT" \
+      && die "Port ${WEB_PORT} ist ebenfalls belegt. Bitte manuell einen freien Port wählen und erneut starten."
+  fi
+
+  if port_listening -t 53 || port_listening -u 53; then
+    log "Hinweis: Port 53 scheint bereits belegt zu sein (häufig systemd-resolved oder dnsmasq). Wird erst später für die DNS-Dienste gebraucht - der geführte Setup-Assistent in der WebGUI prüft das erneut und erklärt, wie man ihn freigibt."
+  fi
+  if port_listening -t 80; then
+    log "Hinweis: Port 80 scheint bereits belegt zu sein. Wird nur für die optionale Blockseite verwendet - im geführten Setup lässt sie sich bei Bedarf auch deaktivieren."
+  fi
+}
+
 docker_present() {
   command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
 }
@@ -124,6 +170,8 @@ install_docker() {
 }
 
 main() {
+  check_ports
+
   if docker_present; then
     log "Docker ist bereits vorhanden."
   else
@@ -174,11 +222,13 @@ main() {
   ROOTGUARD_RECOVERY_TOKEN="$recovery_token" \
   ROOTGUARD_ADMIN_USER="$admin_user" \
   ROOTGUARD_ADMIN_PASSWORD="$admin_password" \
+  ROOTGUARD_WEB_PORT="$WEB_PORT" \
   awk '
     /^ROOTGUARD_API_TOKEN=/      { print "ROOTGUARD_API_TOKEN=" ENVIRON["ROOTGUARD_API_TOKEN"]; next }
     /^ROOTGUARD_RECOVERY_TOKEN=/ { print "ROOTGUARD_RECOVERY_TOKEN=" ENVIRON["ROOTGUARD_RECOVERY_TOKEN"]; next }
     /^ROOTGUARD_ADMIN_USER=/     { print "ROOTGUARD_ADMIN_USER=" ENVIRON["ROOTGUARD_ADMIN_USER"]; next }
     /^ROOTGUARD_ADMIN_PASSWORD=/ { print "ROOTGUARD_ADMIN_PASSWORD=" ENVIRON["ROOTGUARD_ADMIN_PASSWORD"]; next }
+    /^ROOTGUARD_WEB_PORT=/       { print "ROOTGUARD_WEB_PORT=" ENVIRON["ROOTGUARD_WEB_PORT"]; next }
     { print }
   ' .env > .env.tmp
   mv .env.tmp .env
@@ -189,7 +239,7 @@ main() {
     || die "RootGuard konnte nicht gestartet werden - läuft der Docker-Dienst? ('systemctl status docker' prüfen)."
 
   echo
-  log "Fertig! Öffne http://localhost:8080/login"
+  log "Fertig! Öffne http://localhost:${WEB_PORT}/login"
   log "Benutzername: ${admin_user}"
   if [ "$generated_password" = "1" ]; then
     log "Generiertes Passwort (jetzt notieren, wird nicht erneut angezeigt): ${admin_password}"
