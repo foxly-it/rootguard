@@ -42,10 +42,10 @@ const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
 
 // How many samples the resource sparklines keep in memory - purely
 // client-side, resets on page load (RootGuard has no metrics time-series
-// store). At the 10s poll interval below, 24 samples covers 4 minutes,
-// enough to show a meaningful trend without the chart going stale-looking
-// on a rarely-refreshed tab.
-const HISTORY_LENGTH = 24;
+// store). At the 1s poll interval below, 60 samples covers a full minute
+// of live history - short enough to stay dense/readable at this refresh
+// rate instead of flattening into a long, mostly-empty-looking line.
+const HISTORY_LENGTH = 60;
 
 export default function Overview() {
   const { locale, t } = useI18n();
@@ -82,10 +82,16 @@ export default function Overview() {
   const loadMetrics = useCallback(async () => {
     const seq = ++metricsSeq.current;
     try {
-      const nextDashboard = await fetchDashboard();
-      const nextAdGuard = installationRef.current?.state === "installed"
-        ? await fetchAdGuardStatus().catch(() => null)
-        : null;
+      // These two were previously sequential (dashboard, then AdGuard) for
+      // no real reason - they don't depend on each other, so awaiting them
+      // one after another just adds their latencies together instead of
+      // taking the slower of the two. Running them in parallel roughly
+      // halves how long every single poll tick takes to land.
+      const wantsAdGuard = installationRef.current?.state === "installed";
+      const [nextDashboard, nextAdGuard] = await Promise.all([
+        fetchDashboard(),
+        wantsAdGuard ? fetchAdGuardStatus().catch(() => null) : Promise.resolve<AdGuardStatus | null>(null),
+      ]);
       if (seq !== metricsSeq.current) return;
 
       setDashboard(nextDashboard);
@@ -126,36 +132,25 @@ export default function Overview() {
   }, [loadStatus, loadMetrics]);
 
   useEffect(() => {
-    // A single sample can't draw a chart at all, and a real trend only
-    // starts looking like one after a handful of points - at a flat 10s
-    // cadence that's a genuinely long, boring wait after opening the page.
-    // Front-load a quick burst of extra metric samples right after mount
-    // (and again whenever the tab becomes visible, see below) so the
-    // charts have a few real points within seconds instead of one. Only
-    // the cheap metrics fetch (dashboard + AdGuard stats) is bursted -
-    // installation/services rarely change on that timescale, so bursting
-    // loadStatus too would just be redundant load for no visible benefit
-    // (previously a single combined loader meant every burst tick re-fetched
-    // all four endpoints).
-    const burstDelays = [2_000, 4_000, 7_000];
-    let metricsTimeouts: number[] = [];
+    // At a 1s cadence the interval itself already delivers a fresh sample
+    // about as fast as a burst ever could, so the earlier startup-burst
+    // scheme (extra timeouts at 2/4/7s to front-load a few samples before
+    // the old, much slower 10s interval caught up) is redundant now and
+    // was removed - one immediate call plus the interval is already fast.
     let metricsInterval: number | null = null;
     let statusInterval: number | null = null;
 
     function start() {
       loadStatus();
       loadMetrics();
-      metricsTimeouts = burstDelays.map((delay) => window.setTimeout(loadMetrics, delay));
-      metricsInterval = window.setInterval(loadMetrics, 10_000);
+      metricsInterval = window.setInterval(loadMetrics, 1_000);
       // Service/installation status changes far less often than CPU/memory/
-      // query counts - a slower cadence is plenty fresh for it and roughly
-      // halves the steady-state request count.
+      // query counts - a slower cadence is plenty fresh for it and avoids
+      // hitting Core for a full service/Docker inspect every single second.
       statusInterval = window.setInterval(loadStatus, 20_000);
     }
 
     function stop() {
-      metricsTimeouts.forEach(window.clearTimeout);
-      metricsTimeouts = [];
       if (metricsInterval !== null) {
         window.clearInterval(metricsInterval);
         metricsInterval = null;
@@ -167,8 +162,8 @@ export default function Overview() {
     }
 
     // Backgrounded/hidden tabs have no reason to keep polling Core, Docker,
-    // and AdGuard - nobody's watching the charts. Pausing there and
-    // catching back up with a fresh burst on return keeps the same "feels
+    // and AdGuard every second - nobody's watching the charts. Pausing
+    // there and firing an immediate load on return keeps the same "feels
     // current" behavior without the wasted requests in between.
     function handleVisibilityChange() {
       if (document.hidden) stop();
@@ -400,7 +395,7 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // Only depends on `values` (one new sample every ~10s), not on hover
+  // Only depends on `values` (one new sample every ~1s), not on hover
   // state - previously this whole path/area computation re-ran on
   // every single hover-driven re-render even though only the crosshair
   // position actually needs to change while the mouse moves.
