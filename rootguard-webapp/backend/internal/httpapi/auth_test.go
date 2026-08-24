@@ -447,6 +447,276 @@ func TestAuditLogRecordsLoginLogoutAndRateLimitEvents(t *testing.T) {
 	}
 }
 
+func TestAccountUpdateChangesUsernameAndPasswordKeepsCurrentSessionInvalidatesOthers(t *testing.T) {
+	sessionFile := filepath.Join(t.TempDir(), "sessions.json")
+	auth := NewSessionAuth("admin", "old-password", "", time.Hour, sessionFile)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	login := func(username, password string) *http.Cookie {
+		body, _ := json.Marshal(credentials{Username: username, Password: password})
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(body))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("expected login 200, got %d: %s", response.Code, response.Body.String())
+		}
+		return response.Result().Cookies()[0]
+	}
+
+	currentCookie := login("admin", "old-password")
+	otherCookie := login("admin", "old-password")
+
+	updateBody, _ := json.Marshal(accountUpdate{CurrentPassword: "old-password", NewUsername: "root", NewPassword: "new-password-123"})
+	updateRequest := httptest.NewRequest(http.MethodPost, "/api/auth/account", bytes.NewReader(updateBody))
+	updateRequest.Header.Set("Origin", "http://example.com")
+	updateRequest.Host = "example.com"
+	updateRequest.AddCookie(currentCookie)
+	update := httptest.NewRecorder()
+	handler.ServeHTTP(update, updateRequest)
+	if update.Code != http.StatusOK {
+		t.Fatalf("expected account update 200, got %d: %s", update.Code, update.Body.String())
+	}
+	var updateResult map[string]any
+	if err := json.Unmarshal(update.Body.Bytes(), &updateResult); err != nil {
+		t.Fatalf("failed to decode update response: %v", err)
+	}
+	if updateResult["username"] != "root" {
+		t.Fatalf("expected response username %q, got %v", "root", updateResult["username"])
+	}
+
+	// The session used to make the change must stay valid and reflect the
+	// new username immediately, without a fresh login.
+	currentSessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	currentSessionRequest.AddCookie(currentCookie)
+	currentSessionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(currentSessionResponse, currentSessionRequest)
+	if currentSessionResponse.Code != http.StatusOK {
+		t.Fatalf("expected the session that made the change to remain valid, got %d", currentSessionResponse.Code)
+	}
+	var sessionResult map[string]any
+	if err := json.Unmarshal(currentSessionResponse.Body.Bytes(), &sessionResult); err != nil {
+		t.Fatalf("failed to decode session response: %v", err)
+	}
+	if sessionResult["username"] != "root" {
+		t.Fatalf("expected current session username to update to %q, got %v", "root", sessionResult["username"])
+	}
+
+	// Every other session must be invalidated.
+	otherSessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	otherSessionRequest.AddCookie(otherCookie)
+	otherSessionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(otherSessionResponse, otherSessionRequest)
+	if otherSessionResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("expected the other session to be invalidated, got %d", otherSessionResponse.Code)
+	}
+
+	// The new credentials must survive a restart (persisted, not just in memory).
+	restarted := NewSessionAuth("admin", "old-password", "", time.Hour, sessionFile)
+	newLoginBody, _ := json.Marshal(credentials{Username: "root", Password: "new-password-123"})
+	newLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(newLoginBody))
+	newLogin := httptest.NewRecorder()
+	restarted.Handler(http.NotFoundHandler()).ServeHTTP(newLogin, newLoginRequest)
+	if newLogin.Code != http.StatusOK {
+		t.Fatalf("expected the persisted new username/password to work after restart, got %d", newLogin.Code)
+	}
+}
+
+func TestAccountUpdateRejectsWrongCurrentPasswordAndInvalidInput(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, filepath.Join(t.TempDir(), "sessions.json"))
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "secret"})
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+	login := httptest.NewRecorder()
+	handler.ServeHTTP(login, loginRequest)
+	cookie := login.Result().Cookies()[0]
+
+	for name, testCase := range map[string]struct {
+		body       string
+		wantStatus int
+	}{
+		"wrong current password": {`{"current_password":"wrong","new_username":"root"}`, http.StatusForbidden},
+		"weak new password":      {`{"current_password":"secret","new_password":"short"}`, http.StatusBadRequest},
+		"nothing to update":      {`{"current_password":"secret"}`, http.StatusBadRequest},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/account", bytes.NewBufferString(testCase.body))
+			request.Header.Set("Origin", "http://example.com")
+			request.Host = "example.com"
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != testCase.wantStatus {
+				t.Fatalf("expected %d, got %d: %s", testCase.wantStatus, response.Code, response.Body.String())
+			}
+		})
+	}
+
+	// The original password must still work - none of the rejected attempts
+	// above may have mutated anything.
+	stillWorksRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+	stillWorksResponse := httptest.NewRecorder()
+	handler.ServeHTTP(stillWorksResponse, stillWorksRequest)
+	if stillWorksResponse.Code != http.StatusOK {
+		t.Fatalf("expected the original password to still work, got %d", stillWorksResponse.Code)
+	}
+
+	unauthenticatedRequest := httptest.NewRequest(http.MethodPost, "/api/auth/account", bytes.NewBufferString(`{"current_password":"secret","new_username":"root"}`))
+	unauthenticatedRequest.Header.Set("Origin", "http://example.com")
+	unauthenticatedRequest.Host = "example.com"
+	unauthenticatedResponse := httptest.NewRecorder()
+	handler.ServeHTTP(unauthenticatedResponse, unauthenticatedRequest)
+	if unauthenticatedResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("expected an unauthenticated account update to return 401, got %d", unauthenticatedResponse.Code)
+	}
+}
+
+func TestAccountUpdateRollsBackOnCredentialPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	sessionFile := filepath.Join(dir, "sessions.json")
+	if err := os.MkdirAll(filepath.Join(dir, "credentials.json"), 0700); err != nil {
+		t.Fatalf("failed to set up credentials.json as a directory: %v", err)
+	}
+
+	auth := NewSessionAuth("admin", "old-password", "", time.Hour, sessionFile)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "old-password"})
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+	login := httptest.NewRecorder()
+	handler.ServeHTTP(login, loginRequest)
+	cookie := login.Result().Cookies()[0]
+
+	updateBody, _ := json.Marshal(accountUpdate{CurrentPassword: "old-password", NewUsername: "root"})
+	updateRequest := httptest.NewRequest(http.MethodPost, "/api/auth/account", bytes.NewReader(updateBody))
+	updateRequest.Header.Set("Origin", "http://example.com")
+	updateRequest.Host = "example.com"
+	updateRequest.AddCookie(cookie)
+	update := httptest.NewRecorder()
+	handler.ServeHTTP(update, updateRequest)
+	if update.Code != http.StatusInternalServerError {
+		t.Fatalf("expected the update to fail when credentials can't persist, got %d: %s", update.Code, update.Body.String())
+	}
+
+	// The original username/password must still work, and the caller's own
+	// session must not have been invalidated by the failed attempt either -
+	// and must still report the *original* username, not "root". An earlier
+	// version of this handler renamed and persisted the session first, then
+	// rolled back only the in-memory credential fields on this exact
+	// failure - leaving a session that claimed "root" while the real
+	// account (and every future login) stayed "admin".
+	sessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	sessionRequest.AddCookie(cookie)
+	sessionResponse := httptest.NewRecorder()
+	handler.ServeHTTP(sessionResponse, sessionRequest)
+	if sessionResponse.Code != http.StatusOK {
+		t.Fatalf("expected the session to remain valid after a failed update, got %d", sessionResponse.Code)
+	}
+	var sessionResult map[string]any
+	if err := json.Unmarshal(sessionResponse.Body.Bytes(), &sessionResult); err != nil {
+		t.Fatalf("failed to decode session response: %v", err)
+	}
+	if sessionResult["username"] != "admin" {
+		t.Fatalf("expected the session to still report the original username %q after a rolled-back rename, got %v", "admin", sessionResult["username"])
+	}
+
+	oldLoginBody, _ := json.Marshal(credentials{Username: "admin", Password: "old-password"})
+	oldLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(oldLoginBody))
+	oldLoginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(oldLoginResponse, oldLoginRequest)
+	if oldLoginResponse.Code != http.StatusOK {
+		t.Fatalf("expected the original username/password to still work after a rolled-back rename, got %d", oldLoginResponse.Code)
+	}
+}
+
+// TestAccountUpdateRollsBackCredentialsOnSessionPersistFailure covers the
+// other write ordering: the credential write succeeds first (durably), then
+// the session write fails. The handler must undo the already-committed
+// credential change rather than leaving the account renamed/repassworded
+// while responding with a plain failure - and must genuinely invalidate
+// nothing, not just the calling session, since sessions.json was never
+// actually overwritten by the failed persist.
+func TestAccountUpdateRollsBackCredentialsOnSessionPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	sessionFile := filepath.Join(dir, "sessions.json")
+
+	auth := NewSessionAuth("admin", "old-password", "", time.Hour, sessionFile)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "old-password"})
+
+	login := func() *http.Cookie {
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("expected login 200, got %d", response.Code)
+		}
+		return response.Result().Cookies()[0]
+	}
+	currentCookie := login()
+	otherCookie := login()
+
+	// Sessions.json itself becomes a directory only *after* both logins
+	// above have already persisted it as a normal file - so the credential
+	// write inside the account update below still succeeds first, and only
+	// the subsequent session write fails.
+	if err := os.Remove(sessionFile); err != nil {
+		t.Fatalf("failed to remove the seeded sessions.json: %v", err)
+	}
+	if err := os.MkdirAll(sessionFile, 0700); err != nil {
+		t.Fatalf("failed to set up sessions.json as a directory: %v", err)
+	}
+
+	updateBody, _ := json.Marshal(accountUpdate{CurrentPassword: "old-password", NewUsername: "root", NewPassword: "new-password-123"})
+	updateRequest := httptest.NewRequest(http.MethodPost, "/api/auth/account", bytes.NewReader(updateBody))
+	updateRequest.Header.Set("Origin", "http://example.com")
+	updateRequest.Host = "example.com"
+	updateRequest.AddCookie(currentCookie)
+	update := httptest.NewRecorder()
+	handler.ServeHTTP(update, updateRequest)
+	if update.Code != http.StatusInternalServerError {
+		t.Fatalf("expected the update to fail when sessions can't persist, got %d: %s", update.Code, update.Body.String())
+	}
+	var errorBody map[string]string
+	if err := json.Unmarshal(update.Body.Bytes(), &errorBody); err == nil && errorBody["error"] == "partial_update" {
+		t.Fatalf("expected a clean rollback (credentials.json was never broken), not a partial_update response: %s", update.Body.String())
+	}
+
+	// The rolled-back credentials must mean the *new* password does not
+	// work at all. (A fresh login attempt with the still-valid *old*
+	// credentials isn't checked the same way here: sessions.json is a
+	// directory for the rest of this test, so even a correctly-validated
+	// login would itself fail to persist its new session - that would test
+	// the broken test fixture, not the rollback. The existing sessions'
+	// still-valid state below is the real proof the rollback worked.)
+	newLoginBody, _ := json.Marshal(credentials{Username: "root", Password: "new-password-123"})
+	newLoginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(newLoginBody))
+	newLoginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(newLoginResponse, newLoginRequest)
+	if newLoginResponse.Code == http.StatusOK {
+		t.Fatalf("expected the new (rolled-back) credentials to not work, got %d", newLoginResponse.Code)
+	}
+
+	// Neither pre-existing session was actually invalidated, since the
+	// failed persist never overwrote the real sessions.json on disk - and
+	// both still report the original username, proving the credential
+	// rollback (not just the session-map rollback) took effect.
+	for name, sessionCookie := range map[string]*http.Cookie{"current": currentCookie, "other": otherCookie} {
+		sessionRequest := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+		sessionRequest.AddCookie(sessionCookie)
+		sessionResponse := httptest.NewRecorder()
+		handler.ServeHTTP(sessionResponse, sessionRequest)
+		if sessionResponse.Code != http.StatusOK {
+			t.Fatalf("%s session: expected it to remain valid after a fully rolled-back update, got %d", name, sessionResponse.Code)
+		}
+		var sessionResult map[string]any
+		if err := json.Unmarshal(sessionResponse.Body.Bytes(), &sessionResult); err != nil {
+			t.Fatalf("%s session: failed to decode response: %v", name, err)
+		}
+		if sessionResult["username"] != "admin" {
+			t.Fatalf("%s session: expected the original username %q after a rolled-back update, got %v", name, "admin", sessionResult["username"])
+		}
+	}
+}
+
 func TestPasswordRecoveryRejectsInvalidTokenAndWeakPassword(t *testing.T) {
 	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, filepath.Join(t.TempDir(), "sessions.json"))
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))

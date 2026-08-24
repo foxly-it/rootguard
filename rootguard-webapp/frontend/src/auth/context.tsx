@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearSession]);
 
   const value = useMemo(
-    () => ({ loading, authenticated, username, login, logout }),
+    () => ({ loading, authenticated, username, login, logout, updateUsername: setUsername }),
     [loading, authenticated, username, login, logout],
   );
 

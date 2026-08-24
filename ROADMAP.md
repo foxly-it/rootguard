@@ -828,6 +828,14 @@ a trusted network.
       persisted before this feature (no id/created-at) are backfilled on
       the next load instead of staying permanently unrevocable
 - [x] Recovery path for lost administrator credentials
+- [x] Authenticated account settings: `POST /api/auth/account` lets the
+      logged-in operator rename their account and/or set a new password
+      by confirming the current one, reusing the same PBKDF2/
+      `credentials.json` persistence the recovery flow already had (now
+      extended to also cover the username). Unlike recovery, the calling
+      session stays alive and only every *other* session is invalidated.
+      Reachable from the user menu ("Account settings")
+      ([rootguard#329](https://github.com/foxly-it/rootguard/issues/329))
 - [x] Rate limits and audit events for authentication: login and password
       recovery both lock out after 5 failures in a 5-minute window (an
       already-issued lockout blocks even a subsequently correct password,

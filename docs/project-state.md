@@ -282,6 +282,16 @@ Network clients --TCP/UDP 53--> AdGuard Home --> Unbound --> DNS hierarchy
   active session. The recovery key neither creates a session nor crosses the
   WebApp/Core trust boundary; installations without one receive the explicit
   local `.env` recovery procedure instead of a misleading email flow.
+- The logged-in operator can rename their account and/or set a new password
+  from the WebGUI itself (`POST /api/auth/account`, user menu → "Account
+  settings"), confirming with the current password rather than the recovery
+  key. This reuses the recovery flow's existing PBKDF2/`credentials.json`
+  persistence (previously only ever written by password recovery), now
+  extended with a `Username` field so a rename also survives a restart.
+  Unlike recovery - a locked-out escape hatch that always wipes every
+  session - this keeps the calling session alive (its stored username
+  updated in place) and only invalidates every *other* session
+  ([rootguard#329](https://github.com/foxly-it/rootguard/issues/329)).
 - Lightweight vector RootGuard shield replaces the former embedded bitmap
   asset. The global header now identifies the current page next to the brand;
   the application shell adds a keyboard skip link, labelled main navigation,

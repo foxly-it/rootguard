@@ -22,6 +22,11 @@ const sessionCookieName = "rootguard_session"
 const passwordIterations = 600_000
 
 type SessionAuth struct {
+	// expectedUsername is kept alongside expectedUserHash (rather than just
+	// the hash) so a change-account request can return/persist the current
+	// value and so a no-op rename ("change password only") doesn't require
+	// the caller to already know it.
+	expectedUsername     string
 	expectedUserHash     [32]byte
 	expectedPasswordHash []byte
 	passwordSalt         []byte
@@ -74,7 +79,19 @@ type passwordReset struct {
 	NewPassword   string `json:"new_password"`
 }
 
+type accountUpdate struct {
+	CurrentPassword string `json:"current_password"`
+	NewUsername     string `json:"new_username"`
+	NewPassword     string `json:"new_password"`
+}
+
 type persistedCredentials struct {
+	// Username is omitted (empty) on credentials.json files written before
+	// this field existed, or ones that only ever went through the recovery
+	// flow (which never touches it) - loadCredentials treats an empty value
+	// as "keep the env-var-configured username" rather than as an actual
+	// stored empty username.
+	Username     string `json:"username,omitempty"`
 	Algorithm    string `json:"algorithm"`
 	Iterations   int    `json:"iterations"`
 	Salt         string `json:"salt"`
@@ -90,6 +107,7 @@ func NewSessionAuth(expectedUser, expectedPassword, recoveryToken string, ttl ti
 		panic("unable to initialize password hash: " + err.Error())
 	}
 	auth := &SessionAuth{
+		expectedUsername:     expectedUser,
 		expectedUserHash:     sha256.Sum256([]byte(expectedUser)),
 		expectedPasswordHash: passwordHash,
 		passwordSalt:         passwordSalt,
@@ -154,6 +172,9 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 			return
 		case "/api/auth/recovery":
 			a.handleRecovery(w, r)
+			return
+		case "/api/auth/account":
+			a.handleAccount(w, r)
 			return
 		case "/api/auth/sessions":
 			a.handleSessions(w, r)
@@ -265,6 +286,180 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]bool{"reset": true})
 }
 
+// handleAccount lets the currently logged-in operator change their own
+// username and/or password, re-authenticating with the current password
+// rather than the recovery token (unlike handleRecovery, which is a
+// locked-out escape hatch and always wipes every session). Unlike recovery,
+// this keeps the calling session alive and only invalidates every *other*
+// session, so a credential change on one device doesn't also log the
+// operator out of the browser tab they just used to make it.
+func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		return
+	}
+	if _, ok := a.authenticatedUser(r); !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		return
+	}
+	currentToken := cookie.Value
+	remoteIP := clientAddress(r)
+
+	limiterKey := rateLimitKey(r)
+	if a.loginLimiter.blocked(limiterKey) {
+		a.recordAudit(auditLoginRateLimited, "", remoteIP)
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+		return
+	}
+
+	var input accountUpdate
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		return
+	}
+	newUsername := strings.TrimSpace(input.NewUsername)
+	if newUsername == "" && input.NewPassword == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "nothing_to_update"})
+		return
+	}
+	if len(newUsername) > 128 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username_too_long"})
+		return
+	}
+	if input.NewPassword != "" && len(input.NewPassword) < 12 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "weak_password"})
+		return
+	}
+
+	a.mu.Lock()
+	passwordSalt := append([]byte(nil), a.passwordSalt...)
+	expectedPasswordHash := append([]byte(nil), a.expectedPasswordHash...)
+	a.mu.Unlock()
+	currentPasswordHash, err := pbkdf2.Key(sha256.New, input.CurrentPassword, passwordSalt, passwordIterations, sha256.Size)
+	if err != nil || subtle.ConstantTimeCompare(currentPasswordHash, expectedPasswordHash) != 1 {
+		a.loginLimiter.recordFailure(limiterKey)
+		a.recordAudit(auditAccountFailure, "", remoteIP)
+		time.Sleep(250 * time.Millisecond)
+		// 403, not 401: the caller's session cookie is valid (already
+		// confirmed above) - only the submitted current-password field is
+		// wrong. The frontend's shared API client treats any 401 as "the
+		// session itself is invalid" and clears the local login state on
+		// it, so a 401 here would silently sign a correctly-logged-in
+		// operator out just for mistyping their current password.
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid_current_password"})
+		return
+	}
+	a.loginLimiter.reset(limiterKey)
+
+	newPasswordSalt, newPasswordHash := passwordSalt, expectedPasswordHash
+	if input.NewPassword != "" {
+		newPasswordSalt, newPasswordHash, err = securePassword(input.NewPassword)
+		if err != nil {
+			http.Error(w, "Unable to secure credentials", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// Unlike handleRecovery (a single resource - only ever the password),
+	// this handler mutates two persisted resources - credentials and
+	// sessions - and the credential write must go first specifically so a
+	// failure there needs no session rollback at all: nothing session-side
+	// has been touched yet, so it's a clean no-op failure. Doing it in the
+	// other order (as an earlier version of this code did) let a
+	// credential-persist failure roll back the in-memory username/password
+	// while the already-persisted session wipe stayed applied - leaving the
+	// calling session's stored Username renamed on disk even though the
+	// account's real username had reverted. Once the credential write does
+	// succeed, it's durably committed; a subsequent session-persist failure
+	// only rolls back the in-memory session map (matching sessions.json,
+	// which never got overwritten) and costs a needless "other devices stay
+	// logged in a bit longer," never a credential inconsistency.
+	a.mu.Lock()
+	oldUsername, oldUserHash := a.expectedUsername, a.expectedUserHash
+	oldPasswordHash, oldPasswordSalt := a.expectedPasswordHash, a.passwordSalt
+	if newUsername != "" {
+		a.expectedUsername = newUsername
+		a.expectedUserHash = sha256.Sum256([]byte(newUsername))
+	}
+	a.expectedPasswordHash = newPasswordHash
+	a.passwordSalt = newPasswordSalt
+	if err := a.persistCredentialsLocked(); err != nil {
+		a.expectedUsername, a.expectedUserHash = oldUsername, oldUserHash
+		a.expectedPasswordHash, a.passwordSalt = oldPasswordHash, oldPasswordSalt
+		a.mu.Unlock()
+		http.Error(w, "Unable to persist credentials", http.StatusInternalServerError)
+		return
+	}
+	resultUsername := a.expectedUsername
+
+	// The current session's entry is kept (and its stored Username updated
+	// in place, since the rename above just durably committed) so
+	// /api/auth/session immediately reflects it without requiring the
+	// caller to log back in; every other session is invalidated.
+	oldSessions := a.sessions
+	currentSession, hasCurrent := oldSessions[currentToken]
+	a.sessions = map[string]session{}
+	if hasCurrent {
+		currentSession.Username = resultUsername
+		a.sessions[currentToken] = currentSession
+	}
+	if err := a.persistLocked(); err != nil {
+		a.sessions = oldSessions
+		// The credential write above already succeeded and is durably on
+		// disk - leaving it in place here would mean the response says
+		// "failed" while the account was actually renamed/repassworded.
+		// Try to undo it by persisting the old credentials back.
+		newUsernameApplied, newUserHashApplied := a.expectedUsername, a.expectedUserHash
+		newPasswordHashApplied, newPasswordSaltApplied := a.expectedPasswordHash, a.passwordSalt
+		a.expectedUsername, a.expectedUserHash = oldUsername, oldUserHash
+		a.expectedPasswordHash, a.passwordSalt = oldPasswordHash, oldPasswordSalt
+		if rollbackErr := a.persistCredentialsLocked(); rollbackErr != nil {
+			// Both writes failed: disk still holds the NEW credentials from
+			// the successful write above (the rollback attempt's own write
+			// failed to overwrite it), so keep memory matching disk instead
+			// of diverging from what's actually durable. This is a genuine
+			// partial state - say so explicitly rather than returning the
+			// same generic 500 as a clean rollback, so the operator knows
+			// to sign in with the *new* credentials and check other devices
+			// themselves rather than assuming nothing happened.
+			a.expectedUsername, a.expectedUserHash = newUsernameApplied, newUserHashApplied
+			a.expectedPasswordHash, a.passwordSalt = newPasswordHashApplied, newPasswordSaltApplied
+			a.mu.Unlock()
+			a.recordAuditDetail(auditAccountPartial, resultUsername, remoteIP, "credentials changed, session invalidation failed")
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error":    "partial_update",
+				"username": resultUsername,
+			})
+			return
+		}
+		a.mu.Unlock()
+		http.Error(w, "Unable to invalidate sessions", http.StatusInternalServerError)
+		return
+	}
+	a.mu.Unlock()
+
+	var detail string
+	switch {
+	case newUsername != "" && input.NewPassword != "":
+		detail = "username,password"
+	case newUsername != "":
+		detail = "username"
+	default:
+		detail = "password"
+	}
+	a.recordAuditDetail(auditAccountUpdated, resultUsername, remoteIP, detail)
+	writeJSON(w, http.StatusOK, map[string]any{"updated": true, "username": resultUsername})
+}
+
 // setSessionCookie writes the session cookie shared shape used both to set
 // a fresh session (handleLogin) and to clear one (handleLogout, value=""
 // and an already-expired Expires/MaxAge=-1).
@@ -305,11 +500,12 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	userHash := sha256.Sum256([]byte(input.Username))
 	a.mu.Lock()
+	expectedUserHash := a.expectedUserHash
 	passwordSalt := append([]byte(nil), a.passwordSalt...)
 	expectedPasswordHash := append([]byte(nil), a.expectedPasswordHash...)
 	a.mu.Unlock()
 	passwordHash, err := pbkdf2.Key(sha256.New, input.Password, passwordSalt, passwordIterations, sha256.Size)
-	valid := subtle.ConstantTimeCompare(userHash[:], a.expectedUserHash[:]) == 1 &&
+	valid := subtle.ConstantTimeCompare(userHash[:], expectedUserHash[:]) == 1 &&
 		err == nil &&
 		subtle.ConstantTimeCompare(passwordHash, expectedPasswordHash) == 1
 	if !valid {
@@ -585,6 +781,10 @@ func (a *SessionAuth) loadCredentials() {
 	}
 	a.passwordSalt = salt
 	a.expectedPasswordHash = passwordHash
+	if stored.Username != "" {
+		a.expectedUsername = stored.Username
+		a.expectedUserHash = sha256.Sum256([]byte(stored.Username))
+	}
 }
 
 func (a *SessionAuth) persistCredentialsLocked() error {
@@ -595,6 +795,7 @@ func (a *SessionAuth) persistCredentialsLocked() error {
 		return err
 	}
 	data, err := json.Marshal(persistedCredentials{
+		Username:     a.expectedUsername,
 		Algorithm:    "pbkdf2-sha256",
 		Iterations:   passwordIterations,
 		Salt:         base64.RawStdEncoding.EncodeToString(a.passwordSalt),
