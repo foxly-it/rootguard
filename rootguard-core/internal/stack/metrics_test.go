@@ -1,9 +1,39 @@
 package stack
 
 import (
+	"context"
 	"math"
 	"testing"
 )
+
+func TestCollectMetricsReadsTheBackgroundCollectorCacheWithoutInvokingDocker(t *testing.T) {
+	// CollectMetrics itself must never shell out - it only reads whatever
+	// StartMetricsCollector's background loop last stored, which is the
+	// whole point of decoupling the HTTP response from `docker stats`'s
+	// ~1-2s inherent latency. Manipulating metricsCache directly (instead
+	// of calling StartMetricsCollector) keeps this test independent of a
+	// real docker binary being available.
+	t.Cleanup(func() {
+		metricsCache.Lock()
+		metricsCache.value = Metrics{}
+		metricsCache.Unlock()
+	})
+
+	metricsCache.Lock()
+	metricsCache.value = Metrics{}
+	metricsCache.Unlock()
+	if got := CollectMetrics(context.Background()); got.Available {
+		t.Fatalf("expected unavailable metrics before any collection, got %#v", got)
+	}
+
+	want := Metrics{Available: true, CPUPercent: 4.5, MemoryBytes: 1024}
+	metricsCache.Lock()
+	metricsCache.value = want
+	metricsCache.Unlock()
+	if got := CollectMetrics(context.Background()); got != want {
+		t.Fatalf("expected %#v, got %#v", want, got)
+	}
+}
 
 func TestDecodeMetricsAggregatesAllowlistedContainerStats(t *testing.T) {
 	payload := []byte(

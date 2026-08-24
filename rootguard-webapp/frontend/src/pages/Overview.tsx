@@ -42,10 +42,16 @@ const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
 
 // How many samples the resource sparklines keep in memory - purely
 // client-side, resets on page load (RootGuard has no metrics time-series
-// store). At the 1s poll interval below, 60 samples covers a full minute
-// of live history - short enough to stay dense/readable at this refresh
-// rate instead of flattening into a long, mostly-empty-looking line.
-const HISTORY_LENGTH = 60;
+// store). At the 500ms poll interval below, 120 samples covers a full
+// minute of live history - short enough to stay dense/readable at this
+// refresh rate instead of flattening into a long, mostly-empty-looking
+// line. Note this is faster than Core's own background collector
+// (metricsRefreshInterval in rootguard-core/internal/stack/metrics.go,
+// currently 1s - itself already about as fast as `docker stats` allows)
+// actually produces new numbers, so consecutive samples will often repeat
+// the same value; polling faster than that still shortens how long it
+// takes to *notice* a real change once Core's cache does update.
+const HISTORY_LENGTH = 120;
 
 export default function Overview() {
   const { locale, t } = useI18n();
@@ -78,17 +84,17 @@ export default function Overview() {
   // cleared.
   const metricsSeq = useRef(0);
   const statusSeq = useRef(0);
-  // Core's own /api/dashboard handler shells out to `docker stats
-  // --no-stream` on every call, which the Docker daemon itself takes
-  // ~1-2s to answer (it needs two internal CPU-accounting samples to
-  // compute a delta) - measured live, consistently ~2s. At a 1s poll
-  // interval that means a request is essentially always still in flight
-  // when the next tick fires. The sequence guard above only decides which
-  // *result* wins; without this separate in-flight check, every tick's
-  // request gets superseded by the next one before it can ever complete,
-  // and the metrics never populate at all (reproduced live: "Nicht
-  // verfügbar" indefinitely). Skipping a tick while the previous request
-  // is still outstanding lets it actually finish instead.
+  // Core's /api/dashboard now serves from a background-refreshed cache
+  // (see rootguard-core/internal/stack/metrics.go) instead of shelling out
+  // to `docker stats` per request, so it's normally fast. This guard is
+  // kept anyway as cheap insurance: it's exactly what would have prevented
+  // the metrics never populating at all when that wasn't true yet
+  // (reproduced live at a 1s interval, before the Core fix: every tick's
+  // request got superseded by the next one - the sequence guard above only
+  // decides which *result* wins, it doesn't stop requests piling up) - and
+  // it still protects against any transient slow response (e.g. Core under
+  // load, or the brief window before its first background collection
+  // completes) at this now much faster 500ms cadence.
   const metricsInFlight = useRef(false);
 
   const loadMetrics = useCallback(async () => {
@@ -148,18 +154,19 @@ export default function Overview() {
   }, [loadStatus, loadMetrics]);
 
   useEffect(() => {
-    // At a 1s cadence the interval itself already delivers a fresh sample
-    // about as fast as a burst ever could, so the earlier startup-burst
-    // scheme (extra timeouts at 2/4/7s to front-load a few samples before
-    // the old, much slower 10s interval caught up) is redundant now and
-    // was removed - one immediate call plus the interval is already fast.
+    // At a 500ms cadence the interval itself already delivers a fresh
+    // sample about as fast as a burst ever could, so the earlier
+    // startup-burst scheme (extra timeouts at 2/4/7s to front-load a few
+    // samples before the old, much slower 10s interval caught up) is
+    // redundant now and was removed - one immediate call plus the
+    // interval is already fast.
     let metricsInterval: number | null = null;
     let statusInterval: number | null = null;
 
     function start() {
       loadStatus();
       loadMetrics();
-      metricsInterval = window.setInterval(loadMetrics, 1_000);
+      metricsInterval = window.setInterval(loadMetrics, 500);
       // Service/installation status changes far less often than CPU/memory/
       // query counts - a slower cadence is plenty fresh for it and avoids
       // hitting Core for a full service/Docker inspect every single second.
@@ -411,7 +418,7 @@ function Sparkline({ values, tone = "info", formatValue, t }: {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
   }, []);
 
-  // Only depends on `values` (one new sample every ~1s), not on hover
+  // Only depends on `values` (one new sample every ~500ms), not on hover
   // state - previously this whole path/area computation re-ran on
   // every single hover-driven re-render even though only the crosshair
   // position actually needs to change while the mouse moves.

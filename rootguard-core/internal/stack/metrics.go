@@ -9,8 +9,52 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// metricsRefreshInterval paces the background collector, not individual
+// HTTP requests - `docker stats --no-stream` needs the Docker daemon to
+// take two internal CPU-accounting samples before it can answer at all,
+// which measured live costs ~1-2s per invocation regardless of who's
+// asking or how often. Collecting on a fixed background cadence instead of
+// per-request means CollectMetrics (called from dashboardHandler) never
+// blocks an HTTP response on that latency - it just hands back whatever
+// was most recently collected.
+const metricsRefreshInterval = 1 * time.Second
+
+var metricsCache = struct {
+	sync.RWMutex
+	value Metrics
+}{}
+
+// StartMetricsCollector runs the first collection synchronously (so a
+// request arriving immediately after startup still gets real data almost
+// as soon as it's available, rather than "not available" until the first
+// tick) and then keeps collecting on metricsRefreshInterval for as long as
+// ctx stays alive. Call once, near process startup.
+func StartMetricsCollector(ctx context.Context) {
+	refreshMetricsCache(ctx)
+	go func() {
+		ticker := time.NewTicker(metricsRefreshInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				refreshMetricsCache(ctx)
+			}
+		}
+	}()
+}
+
+func refreshMetricsCache(ctx context.Context) {
+	metrics := collectMetricsNow(ctx)
+	metricsCache.Lock()
+	metricsCache.value = metrics
+	metricsCache.Unlock()
+}
 
 var metricContainers = []string{
 	"rootguard-core",
@@ -31,7 +75,20 @@ type dockerStatsLine struct {
 	Memory     string `json:"MemUsage"`
 }
 
-func CollectMetrics(ctx context.Context) Metrics {
+// CollectMetrics returns whatever the background collector (see
+// StartMetricsCollector) most recently gathered - it never itself invokes
+// `docker stats`, so it never blocks a caller (dashboardHandler) on that
+// command's ~1-2s inherent latency. If StartMetricsCollector was never
+// called (e.g. in a test that exercises dashboardHandler directly), this
+// returns the zero Metrics{} (Available: false), the same graceful
+// "unavailable" state a real collection failure already produces.
+func CollectMetrics(_ context.Context) Metrics {
+	metricsCache.RLock()
+	defer metricsCache.RUnlock()
+	return metricsCache.value
+}
+
+func collectMetricsNow(ctx context.Context) Metrics {
 	statsContext, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	arguments := append([]string{"stats", "--no-stream", "--format", "{{json .}}"}, metricContainers...)
