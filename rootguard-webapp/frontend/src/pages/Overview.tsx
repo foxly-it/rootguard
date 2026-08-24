@@ -78,8 +78,22 @@ export default function Overview() {
   // cleared.
   const metricsSeq = useRef(0);
   const statusSeq = useRef(0);
+  // Core's own /api/dashboard handler shells out to `docker stats
+  // --no-stream` on every call, which the Docker daemon itself takes
+  // ~1-2s to answer (it needs two internal CPU-accounting samples to
+  // compute a delta) - measured live, consistently ~2s. At a 1s poll
+  // interval that means a request is essentially always still in flight
+  // when the next tick fires. The sequence guard above only decides which
+  // *result* wins; without this separate in-flight check, every tick's
+  // request gets superseded by the next one before it can ever complete,
+  // and the metrics never populate at all (reproduced live: "Nicht
+  // verfügbar" indefinitely). Skipping a tick while the previous request
+  // is still outstanding lets it actually finish instead.
+  const metricsInFlight = useRef(false);
 
   const loadMetrics = useCallback(async () => {
+    if (metricsInFlight.current) return;
+    metricsInFlight.current = true;
     const seq = ++metricsSeq.current;
     try {
       // These two were previously sequential (dashboard, then AdGuard) for
@@ -106,6 +120,8 @@ export default function Overview() {
     } catch (cause) {
       if (seq !== metricsSeq.current) return;
       setError(cause instanceof Error ? cause.message : t("overview.loadError"));
+    } finally {
+      metricsInFlight.current = false;
     }
   }, [t]);
 
