@@ -43,6 +43,7 @@ type Dashboard struct {
 		MetricsAvailable bool    `json:"metrics_available"`
 		Containers       int     `json:"containers"`
 		Status           string  `json:"status"`
+		CollectedAt      int64   `json:"collected_at"`
 	} `json:"docker"`
 	DNS struct {
 		Status   string `json:"status"`
