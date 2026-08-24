@@ -48,6 +48,7 @@ export interface DashboardResponse {
     metrics_available: boolean;
     containers: number;
     status: "healthy" | "degraded" | "down";
+    collected_at: number;
   };
   dns: {
     status: "healthy" | "degraded" | "down";
@@ -513,6 +514,8 @@ export interface AdGuardStatus {
   filtering_enabled: boolean;
   active_filter_lists: number;
   total_filter_lists: number;
+  protection_enabled: boolean;
+  protection_disabled_duration_ms: number;
 }
 
 export async function fetchAdGuardStatus(): Promise<AdGuardStatus> {
@@ -527,6 +530,17 @@ export async function setAdGuardFiltering(enabled: boolean): Promise<AdGuardStat
   return request<AdGuardStatus>("/api/adguard/filtering", {
     method: "POST",
     body: JSON.stringify({ enabled }),
+  });
+}
+
+// Mirrors AdGuard Home's own "Protection" dropdown (Off/10 minutes/1 hour) -
+// distinct from setAdGuardFiltering above, which only toggles the
+// blocklists. durationSeconds > 0 has AdGuard itself re-enable protection
+// after that many seconds; 0 disables (or enables) with no timer.
+export async function setAdGuardProtection(enabled: boolean, durationSeconds = 0): Promise<AdGuardStatus> {
+  return request<AdGuardStatus>("/api/adguard/protection", {
+    method: "POST",
+    body: JSON.stringify({ enabled, duration_seconds: durationSeconds }),
   });
 }
 

@@ -43,6 +43,7 @@ type Dashboard struct {
 		MetricsAvailable bool    `json:"metrics_available"`
 		Containers       int     `json:"containers"`
 		Status           string  `json:"status"`
+		CollectedAt      int64   `json:"collected_at"`
 	} `json:"docker"`
 	DNS struct {
 		Status   string `json:"status"`
@@ -275,19 +276,21 @@ type UnboundDirectiveReference struct {
 }
 
 type AdGuardStatus struct {
-	Configured         bool    `json:"configured"`
-	Healthy            bool    `json:"healthy"`
-	Version            string  `json:"version,omitempty"`
-	Upstream           string  `json:"upstream"`
-	UpstreamReady      bool    `json:"upstream_ready"`
-	StatsAvailable     bool    `json:"stats_available"`
-	Queries            uint64  `json:"queries"`
-	Blocked            uint64  `json:"blocked"`
-	AverageResponse    float64 `json:"average_response_seconds"`
-	BestPracticesReady bool    `json:"best_practices_ready"`
-	FilteringEnabled   bool    `json:"filtering_enabled"`
-	ActiveFilterLists  int     `json:"active_filter_lists"`
-	TotalFilterLists   int     `json:"total_filter_lists"`
+	Configured                   bool    `json:"configured"`
+	Healthy                      bool    `json:"healthy"`
+	Version                      string  `json:"version,omitempty"`
+	Upstream                     string  `json:"upstream"`
+	UpstreamReady                bool    `json:"upstream_ready"`
+	StatsAvailable               bool    `json:"stats_available"`
+	Queries                      uint64  `json:"queries"`
+	Blocked                      uint64  `json:"blocked"`
+	AverageResponse              float64 `json:"average_response_seconds"`
+	BestPracticesReady           bool    `json:"best_practices_ready"`
+	FilteringEnabled             bool    `json:"filtering_enabled"`
+	ActiveFilterLists            int     `json:"active_filter_lists"`
+	TotalFilterLists             int     `json:"total_filter_lists"`
+	ProtectionEnabled            bool    `json:"protection_enabled"`
+	ProtectionDisabledDurationMs int64   `json:"protection_disabled_duration_ms"`
 }
 
 type AdGuardFilterCheck struct {
@@ -596,6 +599,14 @@ func (c *Client) SetAdGuardFiltering(ctx context.Context, enabled bool) (AdGuard
 
 func (c *Client) BootstrapAdGuard(ctx context.Context) (AdGuardStatus, error) {
 	return doJSON[AdGuardStatus](ctx, c, http.MethodPost, "/api/adguard/bootstrap", nil)
+}
+
+func (c *Client) SetAdGuardProtection(ctx context.Context, enabled bool, durationSeconds int64) (AdGuardStatus, error) {
+	body := struct {
+		Enabled         bool  `json:"enabled"`
+		DurationSeconds int64 `json:"duration_seconds"`
+	}{Enabled: enabled, DurationSeconds: durationSeconds}
+	return doJSON[AdGuardStatus](ctx, c, http.MethodPost, "/api/adguard/protection", body)
 }
 
 func (c *Client) AdGuardFilterReport(ctx context.Context) (AdGuardFilterReport, error) {

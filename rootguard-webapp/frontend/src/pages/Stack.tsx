@@ -40,6 +40,7 @@ import "../styles/stack.css";
 import { useI18n } from "../i18n";
 import { errorMessage } from "../utils/errors";
 import { formatBytes } from "../utils/format";
+import { healthLabel, runtimeTone, type Translate } from "../utils/serviceHealth";
 
 export default function Stack() {
   const { t, formatDate } = useI18n();
@@ -480,13 +481,6 @@ function shortID(value?: string) {
   return value.replace("sha256:", "").slice(0, 12);
 }
 
-type Translate = (key: string, values?: Record<string, string | number>) => string;
-
-function runtimeTone(service?: ServiceInfo) {
-  if (!service || service.status !== "running" || service.health === "unhealthy") return "danger";
-  if (service.health === "starting" || service.health === "unknown") return "attention";
-  return "good";
-}
 
 function runtimeHeadline(service: ServiceInfo | undefined, t: Translate) {
   if (!service || service.status !== "running") return t("stack.runtimeStoppedTitle");
@@ -504,11 +498,6 @@ function runtimeGuidance(service: ServiceInfo | undefined, t: Translate) {
   if (service.health === "not_configured") return t("stack.runtimeNoHealthcheckText");
   if (service.health === "unknown") return t("stack.runtimeUnknownText");
   return t("stack.runtimeHealthyText");
-}
-
-function healthLabel(service: ServiceInfo | undefined, t: Translate) {
-  if (!service || service.status !== "running") return t("stack.stopped");
-  return t(`stack.health.${service.health}`);
 }
 
 function imageVersion(image?: string) {

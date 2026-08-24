@@ -92,6 +92,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("GET /api/adguard/status", getAdGuardStatusHandler(deps.AdGuard))
 	apiMux.HandleFunc("GET /api/adguard/filter-report", getAdGuardFilterReportHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/filtering", setAdGuardFilteringHandler(deps.AdGuard))
+	apiMux.HandleFunc("POST /api/adguard/protection", setAdGuardProtectionHandler(deps.AdGuard))
 	apiMux.HandleFunc("POST /api/adguard/bootstrap", bootstrapAdGuardHandler(deps.AdGuard, deps.Installer))
 	apiMux.Handle("/api/adguard/ui/", deps.AdGuard.UIHandler())
 
@@ -427,6 +428,51 @@ func setAdGuardFilteringHandler(manager *adguard.Manager) http.HandlerFunc {
 	}
 }
 
+// adGuardProtectionDurations are the only durations the UI actually offers
+// (Off/10 minutes/1 hour) - found via code review: without this allowlist,
+// a request with enabled=true and a positive duration_seconds wasn't
+// rejected here at all, AdGuard just returned an error for it that surfaced
+// as a confusing 502 for what was really a bad client request.
+var adGuardProtectionDurations = map[int64]bool{0: true, 600: true, 3600: true}
+
+func validateAdGuardProtectionRequest(enabled *bool, durationSeconds int64) error {
+	if enabled == nil {
+		return fmt.Errorf("enabled is required")
+	}
+	if !adGuardProtectionDurations[durationSeconds] {
+		return fmt.Errorf("duration_seconds must be one of 0, 600, 3600")
+	}
+	if *enabled && durationSeconds != 0 {
+		return fmt.Errorf("duration_seconds must be 0 when enabling protection")
+	}
+	return nil
+}
+
+func setAdGuardProtectionHandler(manager *adguard.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var input struct {
+			Enabled         *bool `json:"enabled"`
+			DurationSeconds int64 `json:"duration_seconds"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if err := validateAdGuardProtectionRequest(input.Enabled, input.DurationSeconds); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		status, err := manager.SetProtection(r.Context(), *input.Enabled, time.Duration(input.DurationSeconds)*time.Second)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, status)
+	}
+}
+
 func bootstrapAdGuardHandler(manager *adguard.Manager, installer *installer.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var blockPageIP string
@@ -469,6 +515,7 @@ type dashboardDocker struct {
 	MetricsAvailable bool    `json:"metrics_available"`
 	Containers       int     `json:"containers"`
 	Status           string  `json:"status"`
+	CollectedAt      int64   `json:"collected_at"`
 }
 
 type dashboardDNS struct {
@@ -478,7 +525,7 @@ type dashboardDNS struct {
 }
 
 func dashboardHandler(w http.ResponseWriter, r *http.Request) {
-	status := stack.CheckStackStatus()
+	status := stack.CollectStatus()
 	metrics := stack.CollectMetrics(r.Context())
 	running := 0
 	if status.AdGuard.Running {
@@ -506,6 +553,7 @@ func dashboardHandler(w http.ResponseWriter, r *http.Request) {
 		Docker: dashboardDocker{
 			CPU: metrics.CPUPercent, Memory: metrics.MemoryBytes,
 			MetricsAvailable: metrics.Available, Containers: running, Status: dockerHealth,
+			CollectedAt: metrics.CollectedAt,
 		},
 		DNS: dashboardDNS{Status: dnsHealth, Resolver: "Unbound", DNSSEC: status.Unbound.Running},
 	})
