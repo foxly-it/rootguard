@@ -411,7 +411,7 @@ export const en: LocaleDefinition = {
     "stack.health.healthy": "Healthy",
     "stack.health.unhealthy": "Unhealthy",
     "stack.health.starting": "Starting",
-    "stack.health.not_configured": "Not configured",
+    "stack.health.not_configured": "Running",
     "stack.health.unknown": "Not reported",
     "stack.runtimeHealthyTitle": "Service is working as expected",
     "stack.runtimeHealthyText": "The container and its internal health check are active. Both DNS services must be healthy for the complete DNS chain.",
