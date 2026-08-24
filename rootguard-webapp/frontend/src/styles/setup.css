@@ -571,14 +571,12 @@
   opacity: 0.42;
 }
 
-.check-list,
-.step-list {
+.check-list {
   display: grid;
   gap: 8px;
 }
 
-.check-row,
-.step-row {
+.check-row {
   display: flex;
   align-items: center;
   gap: 13px;
@@ -589,13 +587,9 @@
   animation: rg-row-enter 0.35s ease both;
 }
 
-.check-row:nth-child(2),
-.step-row:nth-child(2) { animation-delay: 0.05s; }
-.check-row:nth-child(3),
-.step-row:nth-child(3) { animation-delay: 0.1s; }
-.check-row:nth-child(4),
-.step-row:nth-child(4) { animation-delay: 0.15s; }
-.step-row:nth-child(5) { animation-delay: 0.2s; }
+.check-row:nth-child(2) { animation-delay: 0.05s; }
+.check-row:nth-child(3) { animation-delay: 0.1s; }
+.check-row:nth-child(4) { animation-delay: 0.15s; }
 
 .check-row > span {
   display: grid;
@@ -616,8 +610,7 @@
   background: var(--danger-soft);
 }
 
-.check-row p,
-.step-row p {
+.check-row p {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.76rem;
@@ -636,41 +629,119 @@
   line-height: 1.45;
 }
 
-.step-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+.deploy-progress-track {
+  height: 6px;
+  margin: 4px 0 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  overflow: hidden;
 }
 
-.step-row strong {
-  display: block;
-  margin-bottom: 3px;
+.deploy-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--focus-ring), var(--success));
+  transition: width 0.4s ease;
 }
 
-.step-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--text-muted);
+.deploy-steps {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.step-row.running .step-dot {
-  background: var(--primary-fill);
-  animation: rg-status-pulse 1.3s ease-in-out infinite;
+.deploy-step {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  text-align: center;
+  animation: rg-row-enter 0.35s ease both;
 }
 
-.step-row.done .step-dot {
+.deploy-step:nth-child(2) { animation-delay: 0.05s; }
+.deploy-step:nth-child(3) { animation-delay: 0.1s; }
+.deploy-step:nth-child(4) { animation-delay: 0.15s; }
+.deploy-step:nth-child(5) { animation-delay: 0.2s; }
+
+.deploy-step:not(:last-child)::after {
+  position: absolute;
+  top: 17px;
+  right: calc(-50% + 20px);
+  left: calc(50% + 20px);
+  height: 2px;
+  background: var(--border);
+  content: "";
+}
+
+.deploy-step.done:not(:last-child)::after {
   background: var(--success);
 }
 
-.step-row.failed .step-dot {
+.deploy-step-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-muted);
+  background: var(--surface);
+}
+
+.deploy-step.running .deploy-step-icon {
+  color: var(--primary-fill-text);
+  border-color: var(--focus-ring);
+  background: var(--primary-fill);
+  box-shadow: 0 0 16px var(--accent-soft);
+  animation: rg-status-pulse 1.3s ease-in-out infinite;
+}
+
+.deploy-step.done .deploy-step-icon {
+  color: var(--primary-fill-text);
+  border-color: var(--success);
+  background: var(--success);
+}
+
+.deploy-step.failed .deploy-step-icon {
+  color: var(--primary-fill-text);
+  border-color: var(--danger);
   background: var(--danger);
 }
 
-.step-status {
+.deploy-step-label {
+  display: grid;
+  gap: 2px;
+}
+
+.deploy-step-label strong {
+  font-size: 0.8rem;
+}
+
+.deploy-step-status {
   color: var(--text-muted);
-  font-size: 0.65rem;
-  letter-spacing: 0.08em;
+  font-size: 0.64rem;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
+}
+
+.deploy-step.done .deploy-step-status {
+  color: var(--success);
+}
+
+.deploy-step.failed .deploy-step-status {
+  color: var(--danger);
+}
+
+.deploy-step.running .deploy-step-status {
+  color: var(--info);
 }
 
 .setup-success,
@@ -831,11 +902,21 @@
   .setup-card {
     padding: 22px;
   }
-  .step-row {
-    grid-template-columns: auto 1fr;
+  .deploy-steps {
+    flex-direction: column;
+    gap: 16px;
   }
-  .step-status {
-    grid-column: 2;
+  .deploy-step {
+    flex-direction: row;
+    text-align: left;
+  }
+  .deploy-step:not(:last-child)::after {
+    top: 34px;
+    right: auto;
+    bottom: -16px;
+    left: 16px;
+    width: 2px;
+    height: auto;
   }
   .diagnostic-heading {
     grid-template-columns: auto 1fr;

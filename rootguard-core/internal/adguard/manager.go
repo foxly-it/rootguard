@@ -36,6 +36,17 @@ type Status struct {
 	FilteringEnabled   bool    `json:"filtering_enabled"`
 	ActiveFilterLists  int     `json:"active_filter_lists"`
 	TotalFilterLists   int     `json:"total_filter_lists"`
+	// ProtectionEnabled mirrors AdGuard Home's own "Protection" switch (the
+	// dashboard dropdown offering Off/10 minutes/1 hour) - distinct from
+	// FilteringEnabled above, which only controls whether the blocklists are
+	// applied. See SetProtection.
+	ProtectionEnabled bool `json:"protection_enabled"`
+	// ProtectionDisabledDurationMs is AdGuard's own remaining-pause figure
+	// (milliseconds) from /control/status - only meaningful while
+	// ProtectionEnabled is false and a timed pause (not an indefinite one)
+	// is in effect. Lets the frontend show a real countdown instead of just
+	// "paused".
+	ProtectionDisabledDurationMs int64 `json:"protection_disabled_duration_ms"`
 }
 
 type FilterCheck struct {
@@ -110,7 +121,8 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 	}
 
 	var controlStatus struct {
-		Version string `json:"version"`
+		Version                    string `json:"version"`
+		ProtectionDisabledDuration int64  `json:"protection_disabled_duration"`
 	}
 	if err := m.request(ctx, http.MethodGet, m.apiURL+"/control/status", nil, &controlStatus, &credentials); err != nil {
 		return Status{}, fmt.Errorf("adguard status: %w", err)
@@ -140,6 +152,8 @@ func (m *Manager) Status(ctx context.Context) (Status, error) {
 		Upstream:   m.upstream,
 		UpstreamReady: len(dnsInfo.UpstreamDNS) == 1 &&
 			dnsInfo.UpstreamDNS[0] == m.upstream && len(dnsInfo.FallbackDNS) == 0,
+		ProtectionEnabled:            dnsInfo.ProtectionEnabled,
+		ProtectionDisabledDurationMs: controlStatus.ProtectionDisabledDuration,
 		BestPracticesReady: dnsInfo.ProtectionEnabled &&
 			dnsInfo.RateLimit == 20 &&
 			dnsInfo.DNSSECEnabled &&
@@ -208,6 +222,30 @@ func (m *Manager) SetFiltering(ctx context.Context, enabled bool) (Status, error
 	}{Enabled: enabled, Interval: current.Interval}
 	if err := m.request(ctx, http.MethodPost, m.apiURL+"/control/filtering/config", body, nil, &credentials); err != nil {
 		return Status{}, fmt.Errorf("adguard set filtering: %w", err)
+	}
+	return m.Status(ctx)
+}
+
+// SetProtection mirrors AdGuard Home's own "Protection" dropdown (Off/10
+// minutes/1 hour, shown at the top of its native dashboard) - unlike
+// FilteringEnabled/SetFiltering, AdGuard has a real, server-side timer for
+// this: passing a positive duration disables protection and has AdGuard
+// itself re-enable it once that duration elapses, with no RootGuard-side
+// scheduling required. duration <= 0 disables (or enables) with no timer.
+func (m *Manager) SetProtection(ctx context.Context, enabled bool, duration time.Duration) (Status, error) {
+	credentials, err := m.loadCredentials()
+	if err != nil {
+		return Status{}, err
+	}
+	body := struct {
+		Enabled  bool  `json:"enabled"`
+		Duration int64 `json:"duration"`
+	}{Enabled: enabled}
+	if duration > 0 {
+		body.Duration = duration.Milliseconds()
+	}
+	if err := m.request(ctx, http.MethodPost, m.apiURL+"/control/protection", body, nil, &credentials); err != nil {
+		return Status{}, fmt.Errorf("adguard set protection: %w", err)
 	}
 	return m.Status(ctx)
 }

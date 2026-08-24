@@ -18,6 +18,7 @@ import (
 	"github.com/foxly-it/rootguard-core/internal/backuprestore"
 	"github.com/foxly-it/rootguard-core/internal/controlplane"
 	"github.com/foxly-it/rootguard-core/internal/installer"
+	"github.com/foxly-it/rootguard-core/internal/stack"
 	"github.com/foxly-it/rootguard-core/internal/unbound"
 	"github.com/foxly-it/rootguard-core/internal/updater"
 )
@@ -167,6 +168,15 @@ func main() {
 		log.Printf("RootGuard installation reconciliation warning: %v", err)
 	}
 	reconcileCancel()
+
+	// Run docker stats/inspect in the background on their own cadence
+	// instead of per HTTP request - see the dashboardRefreshInterval
+	// comment in internal/stack/metrics.go for why. context.Background() is
+	// deliberate: these loops are meant to run for the whole process
+	// lifetime, same as the HTTP server itself, and need no explicit
+	// teardown beyond process exit.
+	stack.StartMetricsCollector(context.Background())
+	stack.StartStatusCollector(context.Background())
 
 	handler := api.RegisterRoutes(api.Dependencies{
 		Token:             token,

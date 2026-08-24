@@ -373,6 +373,17 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		setAdGuardFiltering(w, r)
 	})
 
+	setAdGuardProtection := dest(auditAdGuardProtectionToggled, func(w http.ResponseWriter, r *http.Request) {
+		api.HandleSetAdGuardProtection(w, r, core)
+	})
+	mux.HandleFunc("/api/adguard/protection", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		setAdGuardProtection(w, r)
+	})
+
 	mux.Handle("/adguard-ui/", core.AdGuardUIHandler())
 
 	// ==================================================

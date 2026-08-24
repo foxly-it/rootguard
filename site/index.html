@@ -25,7 +25,7 @@
     <main id="content">
       <section class="hero" id="top">
         <div class="hero-copy">
-          <div class="status"><span class="status-dot" aria-hidden="true"></span><span data-de="0.1.0-beta.6 · Öffentlich verfügbar" data-en="0.1.0-beta.6 · Publicly available">0.1.0-beta.6 · Öffentlich verfügbar</span></div>
+          <div class="status"><span class="status-dot" aria-hidden="true"></span><span data-de="0.1.0-beta.7 · Öffentlich verfügbar" data-en="0.1.0-beta.7 · Publicly available">0.1.0-beta.7 · Öffentlich verfügbar</span></div>
           <p class="eyebrow" data-de="Ein DNS-Schutz für dein ganzes Zuhause" data-en="DNS protection for your entire home">Ein DNS-Schutz für dein ganzes Zuhause</p>
           <h1 data-de="Weniger Werbung.<br><em>Mehr Privatsphäre.</em>" data-en="Fewer ads.<br><em>More privacy.</em>">Weniger Werbung.<br><em>Mehr Privatsphäre.</em></h1>
           <p class="lead" data-de="RootGuard schützt alle Geräte in deinem Netzwerk zentral vor Werbung und bekannten Trackern. Eine übersichtliche Oberfläche verbindet dafür AdGuard Home und Unbound – ohne Erweiterung auf jedem Handy, Fernseher oder Computer." data-en="RootGuard centrally protects every device on your network from ads and known trackers. One clear interface brings AdGuard Home and Unbound together—without installing an extension on every phone, TV, or computer.">RootGuard schützt alle Geräte in deinem Netzwerk zentral vor Werbung und bekannten Trackern. Eine übersichtliche Oberfläche verbindet dafür AdGuard Home und Unbound – ohne Erweiterung auf jedem Handy, Fernseher oder Computer.</p>
@@ -79,17 +79,14 @@
                 <article><i><svg aria-hidden="true" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></i><span><small data-de="FILTERQUOTE" data-en="FILTER RATE">FILTERQUOTE</small><b>16,5 %</b></span></article>
               </div>
               <div class="preview-bottom">
-                <div class="preview-flow">
-                  <small data-de="DNS-DATENFLUSS" data-en="DNS DATA FLOW">DNS-DATENFLUSS</small>
-                  <div><span><b data-de="Clients" data-en="Clients">Clients</b></span><i>→</i><span><b>AdGuard Home</b></span><i>→</i><span><b>Unbound</b></span><i>→</i><span><b data-de="DNS-Hierarchie" data-en="DNS hierarchy">DNS-Hierarchie</b></span></div>
-                </div>
                 <div class="preview-runtime">
                   <small data-de="LAUFZEIT" data-en="RUNTIME">LAUFZEIT</small>
                   <div class="runtime-list">
                     <div><i></i><span>RootGuard Core</span></div>
                     <div><i></i><span>RootGuard WebApp</span></div>
-                    <div><i></i><span>Unbound</span></div>
+                    <div><i></i><span>RootGuard Updater</span></div>
                     <div><i></i><span>AdGuard Home</span></div>
+                    <div><i></i><span>Unbound</span></div>
                   </div>
                 </div>
               </div>
@@ -100,26 +97,19 @@
 
       <section id="quickstart" class="home-quickstart">
         <div class="quickstart-copy">
-          <p class="eyebrow">Quick Start · Docker Compose</p>
+          <p class="eyebrow">Quick Start · Ein Befehl</p>
           <h2 data-de="In wenigen Minuten startklar." data-en="Up and running in minutes.">In wenigen Minuten startklar.</h2>
-          <p class="section-lead" data-de="Du brauchst Docker Compose und einen Rechner im Heimnetz. Lade die fertige Beta, trage ein eigenes Passwort sowie zwei zufällige Sicherheitsschlüssel ein und starte den Stack." data-en="You need Docker Compose and a computer on your home network. Download the ready-made beta, set your own password plus two random security keys, and start the stack.">Du brauchst Docker Compose und einen Rechner im Heimnetz. Lade die fertige Beta, trage ein eigenes Passwort sowie zwei zufällige Sicherheitsschlüssel ein und starte den Stack.</p>
+          <p class="section-lead" data-de="Ein Rechner im Heimnetz genügt. Das Installationsskript prüft Docker und installiert es bei Bedarf (Debian/Ubuntu), lädt die fertige Beta, erzeugt die beiden Sicherheitsschlüssel automatisch und fragt nur nach Benutzername und Passwort für die WebGUI." data-en="One computer on your home network is enough. The install script checks for Docker and installs it if needed (Debian/Ubuntu), downloads the ready-made beta, generates both security keys automatically, and only asks for a WebGUI username and password.">Ein Rechner im Heimnetz genügt. Das Installationsskript prüft Docker und installiert es bei Bedarf (Debian/Ubuntu), lädt die fertige Beta, erzeugt die beiden Sicherheitsschlüssel automatisch und fragt nur nach Benutzername und Passwort für die WebGUI.</p>
           <ol class="quickstart-steps">
-            <li><span>01</span><div><b data-de="Dateien laden" data-en="Download files">Dateien laden</b><small data-de="Compose und Beispielkonfiguration herunterladen." data-en="Download Compose and the example configuration.">Compose und Beispielkonfiguration herunterladen.</small></div></li>
-            <li><span>02</span><div><b data-de="Zugang absichern" data-en="Secure access">Zugang absichern</b><small data-de="Passwort und getrennte API-/Recovery-Schlüssel in .env setzen." data-en="Set a password and separate API/recovery keys in .env.">Passwort und getrennte API-/Recovery-Schlüssel in .env setzen.</small></div></li>
-            <li><span>03</span><div><b data-de="Stack starten" data-en="Start the stack">Stack starten</b><small data-de="Weboberfläche öffnen und dem geführten Setup folgen." data-en="Open the web interface and follow guided setup.">Weboberfläche öffnen und dem geführten Setup folgen.</small></div></li>
+            <li><span>01</span><div><b data-de="Docker prüfen" data-en="Check Docker">Docker prüfen</b><small data-de="Wird bei Bedarf automatisch installiert." data-en="Installed automatically if missing.">Wird bei Bedarf automatisch installiert.</small></div></li>
+            <li><span>02</span><div><b data-de="Zugang festlegen" data-en="Set your login">Zugang festlegen</b><small data-de="Nur Benutzername und Passwort werden abgefragt." data-en="Only a username and password are asked for.">Nur Benutzername und Passwort werden abgefragt.</small></div></li>
+            <li><span>03</span><div><b data-de="Stack läuft" data-en="Stack is running">Stack läuft</b><small data-de="Weboberfläche öffnen und dem geführten Setup folgen." data-en="Open the web interface and follow guided setup.">Weboberfläche öffnen und dem geführten Setup folgen.</small></div></li>
           </ol>
-          <a class="text-link" href="docs.html#quickstart" data-de="Vollständige Anleitung und Voraussetzungen →" data-en="Full instructions and requirements →">Vollständige Anleitung und Voraussetzungen →</a>
+          <a class="text-link" href="docs.html#quickstart" data-de="Lieber Schritt für Schritt? Manuelle Installation →" data-en="Prefer step by step? Manual installation →">Lieber Schritt für Schritt? Manuelle Installation →</a>
         </div>
         <div class="quickstart-command">
           <div class="terminal-head"><span></span><span></span><span></span><b>rootguard</b></div>
-          <pre><code>mkdir rootguard &amp;&amp; cd rootguard
-
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.6/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.6/.env.release.example
-
-# .env sicher ausfüllen
-
-docker compose -f compose.release.yaml up -d</code></pre>
+          <pre><code>curl -fsSL https://raw.githubusercontent.com/foxly-it/rootguard/main/install.sh | bash</code></pre>
           <div class="quickstart-open"><span data-de="Danach öffnen" data-en="Then open">Danach öffnen</span><strong>http://localhost:8080/login</strong></div>
         </div>
       </section>
@@ -149,7 +139,7 @@ docker compose -f compose.release.yaml up -d</code></pre>
         </div>
 
         <div class="project-metrics" aria-label="GitHub project metrics">
-          <a class="project-metric" id="version-link" href="https://github.com/foxly-it/rootguard/releases" target="_blank" rel="noopener noreferrer"><span data-de="Aktuelle Version" data-en="Current version">Aktuelle Version</span><strong id="current-version">v0.1.0-beta.6</strong><small data-de="Release ansehen →" data-en="View release →">Release ansehen →</small></a>
+          <a class="project-metric" id="version-link" href="https://github.com/foxly-it/rootguard/releases" target="_blank" rel="noopener noreferrer"><span data-de="Aktuelle Version" data-en="Current version">Aktuelle Version</span><strong id="current-version">v0.1.0-beta.7</strong><small data-de="Release ansehen →" data-en="View release →">Release ansehen →</small></a>
           <a class="project-metric" href="https://github.com/foxly-it/rootguard/pulls" target="_blank" rel="noopener noreferrer"><span data-de="Offene PRs" data-en="Open PRs">Offene PRs</span><strong id="open-pr-count">0</strong><small data-de="Pull Requests ansehen →" data-en="View pull requests →">Pull Requests ansehen →</small></a>
           <a class="project-metric" id="commit-link" href="https://github.com/foxly-it/rootguard/commits/main" target="_blank" rel="noopener noreferrer"><span data-de="Letzter Commit" data-en="Latest commit">Letzter Commit</span><strong id="latest-commit">7954a97</strong><small id="latest-commit-date">26.07.2026</small></a>
           <a class="project-metric" href="https://github.com/foxly-it/rootguard/releases" target="_blank" rel="noopener noreferrer"><span data-de="Veröffentlichungen" data-en="Releases">Veröffentlichungen</span><strong id="release-count">2</strong><small data-de="Release-Verlauf →" data-en="Release history →">Release-Verlauf →</small></a>

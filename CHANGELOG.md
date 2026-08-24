@@ -3,6 +3,40 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.7] - 2026-08-24
+
+### Documentation
+
+- Record v0.1.0-beta.6 and the release-pipeline mechanics it surfaced ([#327](https://github.com/foxly-it/rootguard/pull/327))
+
+### Fixed
+
+- Radial gauge overflowed its 40px metric row and got clipped by the card edge
+- Dashboard cards/gauge track nearly invisible in dark mode
+- Three review findings on the dashboard metrics (stale-response race, wrong sparkline ages, keyboard/AT-inaccessible tooltip)
+- Metrics polling starved itself at 1s - never showing data at all
+- Metrics collector ran docker stats continuously even with nobody watching
+- Metrics cache could serve arbitrarily stale data after being idle
+- Webapp's dashboard proxy struct dropped collected_at
+- AdGuard protection-pause toggle had three real bugs
+
+### Other
+
+- Horizontal progress stepper for the Setup deployment steps
+- Dashboard service list - fix untranslated English text, modernize layout
+- Dashboard hero/metrics/system-panel redesign
+- Service grid, sparkline axis, flow-arrow animation and contrast
+- Gauge min/max parity, service cards, interactive chart tooltip
+- CPU/filter-rate as sparklines, fix panel gap, animate arrowhead, faster initial metrics
+- Pull the flow-arrow icon flush against its line
+
+### Performance
+
+- Avoid redundant chart recompute on hover, throttle pointer tracking, pause polling when tab hidden
+- Parallelize metric fetches, refresh metrics every 1s instead of 10s
+- Background-cache Core's docker stats collection, drop metrics refresh to 500ms
+- Cache container status server-side and singleflight refreshes; remove DATENFLUSS card; add AdGuard protection-pause toggle
+
 ## [0.1.0-beta.6] - 2026-08-22
 
 ### Fixed
