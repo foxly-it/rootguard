@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-08-22
+Last updated: 2026-08-24
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -1550,7 +1550,7 @@ on the untracked guided access-rules surface).
 
 ## Release status
 
-`v0.1.0-beta.6` is the current public release, published with digest-pinned
+`v0.1.0-beta.7` is the current public release, published with digest-pinned
 `amd64`/`arm64` images for all five RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; the remaining gates before 1.0 are 0.9 (release
@@ -1605,3 +1605,75 @@ when rerun (worked around with a fresh `workflow_dispatch` against
 `main` for the same version). `v0.1.0-beta.6`, cut immediately after
 with all of the above already on `main`, passed its full pipeline
 including `upgrade-test` cleanly on the first real (non-rerun) attempt.
+
+**2026-08-24:** dashboard/AdGuard polish and bugfix round, released as
+`v0.1.0-beta.7` ([rootguard#331](https://github.com/foxly-it/rootguard/pull/331)).
+Code review of the metrics-caching work from the previous session found
+two remaining perf/concurrency gaps: `dashboardHandler` still ran `docker
+inspect` five times per request (only `docker stats` had been cached),
+and concurrent stale-cache callers (the background ticker plus several
+requests/tabs at once) could each start their own redundant refresh.
+Fixed by mirroring the existing metrics cache for container status
+(`CollectStatus` in `stack/status.go`) and adding a small singleflight
+(`stack/refresh.go`) shared by both caches; `fetchAdGuardStatus()` (up to
+four real AdGuard API calls) also moved off the 500ms poll onto its own
+5s interval, since it was still hitting AdGuard directly on every tick.
+Metrics now carry their real `collected_at` so the frontend can skip
+re-recording an unchanged cached sample under a fresher-looking age. Live
+verification on `.7` caught a real bug in this batch before it shipped:
+the webapp backend round-trips Core's `/api/dashboard` response through
+its own mirrored Go struct rather than forwarding raw bytes, and that
+struct hadn't been given the new field - `collected_at` was silently
+dropped even though Core sent it, until a direct `curl` comparison
+surfaced the gap.
+
+Also this session: removed the dashboard's "DATENFLUSS" card (both the
+live app and the marketing site's hand-built mockup, which had gone
+stale the moment the real card was removed and was still showing a
+fourth-of-five runtime list to boot); and added an AdGuard
+protection-pause toggle (Off/10 minutes/1 hour) mirroring AdGuard Home's
+own native "disable protection" control via its real `/control/protection`
+endpoint - AdGuard's own server-side timer re-enables it, no RootGuard
+scheduling needed. A second code-review pass on that toggle found three
+more real bugs before it shipped: `protectedState` (and AdGuard.tsx's own
+`ready`) never actually factored in `protection_enabled`/`filtering_enabled`,
+so pausing protection still showed a green "PROTECTED" dashboard; the
+select derived its displayed value straight from `protection_enabled`, so
+a 10-minute pause displayed identically to "off indefinitely" the instant
+it was chosen, and the AdGuard page never polled again afterward, so it
+stayed on "paused" after AdGuard's own timer re-enabled protection until
+a manual reload; and the protection handler took a plain `bool` for
+`enabled`, so an empty `{}` request body silently decoded to
+`{"enabled":false,"duration_seconds":0}` and disabled protection
+indefinitely with no expressed intent. Fixed: `reachable` (configured/
+healthy/upstream-ready) now gates the pause control itself so pausing
+protection can never hide the control needed to un-pause it, while
+`ready`/`protectedState` additionally require protection and filtering
+both enabled; the select is now a pure action trigger with the real
+state plus a live countdown (sourced from AdGuard's own
+`protection_disabled_duration` via `/control/status`, previously only
+`version` was read from that response) rendered separately, and the page
+polls every 5s while paused; `enabled` is now `*bool` (a missing field is
+a 400, not a silent false), and `duration_seconds` is restricted to the
+three values the UI actually offers - enforced identically in Core and
+the webapp proxy.
+
+`v0.1.0-beta.7`'s full release-pipeline run (test/publish/pin-refresh/
+smoke-test/upgrade-test) passed cleanly on the first attempt. Used it to
+verify RootGuard's own update mechanism end-to-end rather than just
+trusting the pipeline: reset the `.7` test LXC to a genuine, freshly
+pulled `v0.1.0-beta.6` (core/webapp/updater) plus its existing
+`v0.1.0-beta.5` Unbound - i.e. what a real user still on the previous
+release actually has - then drove the real in-app flows to bring every
+component to beta.7: `/api/control-plane-updates/check` +
+`/install` for the atomic Core+WebApp update (WebApp restarting itself
+mid-update and reconnecting cleanly afterward), `/api/updates/check` +
+`/api/updates/unbound` for Unbound, and `/api/updater-updates/check` +
+`/install` for the Updater's own self-update. All four succeeded; the
+post-update dashboard's `collected_at` field (absent on the pre-update
+beta.6 response, since that fix hadn't shipped yet) confirmed the live
+containers were genuinely running the new code, not just freshly
+recreated with the same tag. Also re-verified the protection-pause
+round trip against the real published beta.7 build (not just the local
+`:dev` build used during development): paused for 600s, confirmed
+`protection_disabled_duration_ms` counting down live, then restored.
