@@ -251,11 +251,65 @@
   line-height: 1.45;
 }
 
-.adguard-filtering-toggle input {
+/* Track/thumb switch instead of a bare checkbox - green when filtering is
+   on, red when it's off, so the state reads at a glance instead of
+   requiring the small status text next to it to be parsed. The checkbox
+   itself is kept for click/keyboard/aria semantics, just visually hidden
+   underneath the track. */
+.adguard-switch {
+  position: relative;
+  display: inline-flex;
   flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  accent-color: var(--rg-accent);
+  width: 44px;
+  height: 24px;
+}
+
+.adguard-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.adguard-switch-track {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--danger);
+  transition: background 0.2s ease;
+}
+
+.adguard-switch.is-on .adguard-switch-track {
+  background: var(--success);
+}
+
+.adguard-switch-thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.adguard-switch.is-on .adguard-switch-thumb {
+  transform: translateX(20px);
+}
+
+.adguard-switch input:disabled ~ .adguard-switch-track {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.adguard-switch input:focus-visible ~ .adguard-switch-track {
+  outline: 2px solid var(--rg-accent);
+  outline-offset: 2px;
 }
 
 .adguard-protection-control {
@@ -287,20 +341,38 @@
   font-weight: 600;
 }
 
-/* Matches the app's other themed <select>s (e.g. .resource-profile-field
-   select in unbound-polish.css) - field-bg/border/radius/padding token
-   values, not the ad-hoc surface/8px this started out with. */
+/* --field-bg reads as a near-black recessed field on the lighter/soft
+   panel backgrounds it was designed for (.resource-profile-field's own
+   container, content-modal) - but this control sits directly on
+   .adguard-panel's solid var(--surface), where the same value looks like
+   a mismatched dark square instead of a themed field. --surface-soft +
+   a full-strength border reads as a control on this particular
+   background instead; 44px/10px radius also matches the app's other
+   primary-sized fields (.guided-record select) rather than the smaller
+   38px/7px secondary size, which read as too short next to the button
+   above it. */
 .adguard-protection-control select {
   flex: 0 0 auto;
-  min-height: 38px;
+  min-height: 44px;
   box-sizing: border-box;
-  padding: 0 34px 0 11px;
+  padding: 0 34px 0 14px;
   border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--field-bg);
+  border-radius: 10px;
+  background: var(--surface-soft);
   color: var(--text);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.adguard-protection-control select:hover:not(:disabled) {
+  border-color: var(--rg-accent);
+}
+
+.adguard-protection-control select:focus-visible {
+  outline: 2px solid var(--rg-accent);
+  outline-offset: 2px;
 }
 
 .adguard-filter-launcher {

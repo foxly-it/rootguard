@@ -273,7 +273,12 @@ export default function AdGuard() {
                     <strong>{t("adguard.filteringToggleLabel")}</strong>
                     <small>{t("adguard.filteringToggleHelp")}</small>
                   </div>
-                  <input type="checkbox" checked={status.filtering_enabled} disabled={filteringBusy} onChange={() => void toggleFiltering()} aria-label={t("adguard.filteringToggleLabel")} />
+                  <span className={`adguard-switch ${status.filtering_enabled ? "is-on" : "is-off"}`}>
+                    <input type="checkbox" checked={status.filtering_enabled} disabled={filteringBusy} onChange={() => void toggleFiltering()} aria-label={t("adguard.filteringToggleLabel")} />
+                    <span className="adguard-switch-track">
+                      <span className="adguard-switch-thumb" />
+                    </span>
+                  </span>
                 </label>
                 <div className="adguard-protection-control">
                   <div>
