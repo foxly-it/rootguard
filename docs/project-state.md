@@ -1847,3 +1847,62 @@ remaining low-priority items:
   only plain-function utility tests) and covered the new switch/select
   - click/keyboard toggling, busy/disabled state, `filtering_enabled`
   rendering, the select's reset-after-action behavior.
+
+A third, full-repository review pass (PR #347, #348, #349, #350) closed
+one more security-relevant finding, two low-priority bugs, unified strict
+JSON decoding across every remaining handler, and shipped one user-driven
+website feature:
+
+- **Weak startup secrets accepted** (medium priority, security). WebApp,
+  Core, and the Updater only checked that
+  `ROOTGUARD_API_TOKEN`/`ROOTGUARD_ADMIN_PASSWORD`/`ROOTGUARD_RECOVERY_TOKEN`/`ROOTGUARD_UPDATER_TOKEN`
+  were non-empty, accepting e.g. `ROOTGUARD_ADMIN_PASSWORD=a` -
+  inconsistent with the 12-character minimum a password *change* already
+  enforces. Added a `requireSecretStrength` check to each binary's
+  `main()` (12 chars for the admin password, 32 for tokens) that also
+  rejects an unedited `.env.release.example` placeholder outright, since
+  those placeholder strings happen to be long enough to pass a length
+  check alone. `install.sh`'s own manual/env-supplied password path got
+  the matching check, moved to before any directory/download side
+  effects. **Caught live**: the first CI run against this fix failed -
+  two `scripts/verify-*.sh` fixtures and one hardcoded literal in
+  `ci.yml`'s own recovery-flow test still used short placeholder tokens
+  that the grep sweep for the env var *name* had missed (they set the
+  var via `export VAR="literal"`, not a workflow `env:` block); fixed in
+  a follow-up commit once CI surfaced it.
+- **FritzBox IPv6 URLs malformed.** `FritzBoxClient` built its base URL
+  with a bare `Sprintf`, producing an invalid `http://fd00::1:49000` for
+  an IPv6 router address instead of `http://[fd00::1]:49000`. Switched to
+  `net.JoinHostPort`.
+- **Backup restore off-by-one.** The entry-count guard used
+  `count > MaxFiles` instead of `>=`, accepting exactly one more archive
+  entry than the documented limit.
+- **JSON decode unification finished**: PR #346 only covered
+  login/recovery/account in the WebApp's `httpapi` package. Core's
+  `routes.go` still had 13 near-identical decoder blocks (none with a
+  trailing-data check), and the WebApp's own proxy handler package had 12
+  more. Added one generic `decodeJSON[T any]` helper per module and
+  converted every call site - no behavior change for endpoints that
+  already worked, every endpoint that previously accepted trailing JSON
+  data now rejects it with 400.
+- **Duplicate frontend API client removed.** `services/api.ts` existed
+  solely for `GET /api/version`, with its own raw `fetch()` that never
+  checked for a 401 - unlike the central client's `request<T>` helper,
+  it never fired the `rootguard:unauthorized` event on an expired
+  session. Moved into `api/client.ts`, deleted the duplicate.
+- **Website: copy-to-clipboard button + animated install demo**
+  (user idea, refined in conversation). The quick-start command block
+  was missing a copy button entirely. Added one, plus a new "Live
+  preview" section showing a faithful example `install.sh` session
+  (real `log()`/`prompt()` message wording) with lines staggering into
+  view via `IntersectionObserver`, respecting `prefers-reduced-motion`.
+  The version line stays live via the existing `project-data.json`
+  fetch; its static fallback is kept in sync for free by the existing
+  `bump-site-versions.sh` release-pin step.
+
+Two remaining code-compression suggestions from the same review (splitting
+`routes.go`/`auth.go`/other large files by responsibility, and unifying
+each module's own temp-file-then-rename atomic-write pattern into a
+shared helper) were explicitly deferred - the user picked only the API-
+client removal above; the review found no bugs in either, just organizational
+improvement.
