@@ -3,6 +3,16 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.11] - 2026-08-25
+
+### Documentation
+
+- Record the real updater digest bug found while cutting beta.10
+
+### Fixed
+
+- Updater's digest lookup could return a stale, already-superseded digest
+
 ## [0.1.0-beta.10] - 2026-08-25
 
 ### Added
