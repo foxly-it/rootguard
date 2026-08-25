@@ -1813,3 +1813,37 @@ priority order.
   download**, which then tripped the "already exists" abort on retry.
   Downloads now land in a `mktemp -d` scratch directory first and are
   only moved into `$TARGET_DIR` once both succeed.
+
+Two follow-up review passes on this same work (PR #345, #346) closed the
+remaining low-priority items:
+
+- **AdGuard page polish** (screenshot feedback): the "DNS filtering"
+  checkbox is now a green/red on-off switch; the "AdGuard protection"
+  select was too short and its color (`--field-bg`, a near-black
+  recessed-field tone designed for softer backgrounds) looked mismatched
+  directly on `.adguard-panel`'s solid `--surface` - restyled to
+  `--surface-soft` + a full-strength border at the app's primary field
+  size. Live-verified in both themes on `.7` via Playwright screenshots,
+  including toggling filtering off/on to confirm the underlying request
+  still works.
+- **Shared `decodeStrictJSON` helper**: login/recovery/account in
+  `auth.go` each ran a bare `Decode()` with no trailing-data check,
+  unlike the already-fixed AdGuard handlers. Extracted one helper
+  (decode + `decoder.More()`) and switched all three over.
+- **Recovery rate-limit slot released too early**: `handleRecovery`
+  freed its limiter slot right after the token check, before the
+  expensive PBKDF2 derivation and session-wipe/credential persistence
+  that follow a valid token - anyone holding the (already
+  high-privilege) recovery token could fire unbounded concurrent resets.
+  Now holds the slot through the whole handler, mirroring
+  `handleAccount`'s existing pattern. Regression-tested the same way as
+  the earlier login race fix: reverted, confirmed the test fails (18
+  accepted instead of 5), restored.
+- **`install.sh`'s target-directory check ran too late** - after
+  `check_ports` and a potential real Docker install. Moved to the very
+  first thing `main()` does.
+- **First React component tests in this repo**: added
+  `@testing-library/react` + `jsdom` (this project had none before -
+  only plain-function utility tests) and covered the new switch/select
+  - click/keyboard toggling, busy/disabled state, `filtering_enabled`
+  rendering, the select's reset-after-action behavior.
