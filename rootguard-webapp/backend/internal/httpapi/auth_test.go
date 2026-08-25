@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 )
@@ -360,6 +361,59 @@ func TestLoginRateLimitBlocksRepeatedFailuresAndResetsOnSuccess(t *testing.T) {
 	handler.ServeHTTP(stillBlockedResponse, stillBlockedRequest)
 	if stillBlockedResponse.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected the correct password to still be blocked during an active lockout, got %d", stillBlockedResponse.Code)
+	}
+}
+
+// TestLoginRateLimitBoundsTrulyConcurrentAttempts is the regression test
+// for the race a code review found: blocked() and recordFailure() used to
+// be separate, non-atomic calls with the (for login, PBKDF2-based and
+// genuinely expensive) password verification in between - many requests
+// fired at once could all observe zero recorded failures, all start
+// verifying in parallel, and only get counted afterward once that work was
+// already done, so the limit bounded sequential attempts but not
+// concurrent ones. Fires far more requests at once than maxFailure allows
+// and asserts that only maxFailure of them ever actually got verified
+// (401); every other truly-concurrent request must be rejected outright
+// (429) without ever reaching the password check.
+func TestLoginRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
+
+	const concurrentRequests = 30
+	var start, done sync.WaitGroup
+	start.Add(1)
+	done.Add(concurrentRequests)
+	codes := make([]int, concurrentRequests)
+	for i := range concurrentRequests {
+		go func(i int) {
+			defer done.Done()
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(wrongBody))
+			response := httptest.NewRecorder()
+			start.Wait() // release every goroutine at once, not one by one
+			handler.ServeHTTP(response, request)
+			codes[i] = response.Code
+		}(i)
+	}
+	start.Done()
+	done.Wait()
+
+	var verified, rejected int
+	for _, code := range codes {
+		switch code {
+		case http.StatusUnauthorized:
+			verified++
+		case http.StatusTooManyRequests:
+			rejected++
+		default:
+			t.Fatalf("unexpected status code %d", code)
+		}
+	}
+	if verified != auth.loginLimiter.maxFailure {
+		t.Fatalf("expected exactly %d concurrent requests to actually reach password verification, got %d (rejected: %d)", auth.loginLimiter.maxFailure, verified, rejected)
+	}
+	if rejected != concurrentRequests-auth.loginLimiter.maxFailure {
+		t.Fatalf("expected the remaining %d requests to be rejected outright, got %d", concurrentRequests-auth.loginLimiter.maxFailure, rejected)
 	}
 }
 

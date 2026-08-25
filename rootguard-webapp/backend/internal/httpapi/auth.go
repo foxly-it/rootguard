@@ -220,7 +220,7 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 
 	remoteIP := clientAddress(r)
 	limiterKey := rateLimitKey(r)
-	if a.recoveryLimiter.blocked(limiterKey) {
+	if !a.recoveryLimiter.beginAttempt(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
@@ -230,12 +230,14 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
+		a.recoveryLimiter.endAttempt(limiterKey, false)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
 	tokenHash := sha256.Sum256([]byte(input.RecoveryToken))
-	if subtle.ConstantTimeCompare(tokenHash[:], a.recoveryTokenHash[:]) != 1 {
-		a.recoveryLimiter.recordFailure(limiterKey)
+	tokenValid := subtle.ConstantTimeCompare(tokenHash[:], a.recoveryTokenHash[:]) == 1
+	a.recoveryLimiter.endAttempt(limiterKey, !tokenValid)
+	if !tokenValid {
 		a.recordAudit(auditRecoveryFailure, "", remoteIP)
 		time.Sleep(250 * time.Millisecond)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_recovery_token"})
@@ -313,11 +315,18 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 	remoteIP := clientAddress(r)
 
 	limiterKey := rateLimitKey(r)
-	if a.loginLimiter.blocked(limiterKey) {
+	if !a.loginLimiter.beginAttempt(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
 	}
+	// Several validation checks below can return before the password is
+	// even looked at (decode error, nothing to update, etc.) - a deferred
+	// release is simpler and safer than an explicit endAttempt call at each
+	// of those return points, and correctly stays "not a failure" (false)
+	// unless the password check itself actually runs and fails.
+	failedAttempt := false
+	defer func() { a.loginLimiter.endAttempt(limiterKey, failedAttempt) }()
 
 	var input accountUpdate
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
@@ -346,7 +355,7 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 	currentPasswordHash, err := pbkdf2.Key(sha256.New, input.CurrentPassword, passwordSalt, passwordIterations, sha256.Size)
 	if err != nil || subtle.ConstantTimeCompare(currentPasswordHash, expectedPasswordHash) != 1 {
-		a.loginLimiter.recordFailure(limiterKey)
+		failedAttempt = true
 		a.recordAudit(auditAccountFailure, "", remoteIP)
 		time.Sleep(250 * time.Millisecond)
 		// 403, not 401: the caller's session cookie is valid (already
@@ -484,7 +493,10 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	remoteIP := clientAddress(r)
 	limiterKey := rateLimitKey(r)
-	if a.loginLimiter.blocked(limiterKey) {
+	// beginAttempt reserves the slot atomically with the check itself - see
+	// its doc comment. Every return path below that follows a successful
+	// beginAttempt must call endAttempt exactly once.
+	if !a.loginLimiter.beginAttempt(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
@@ -494,6 +506,7 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&input); err != nil {
+		a.loginLimiter.endAttempt(limiterKey, false)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
@@ -508,8 +521,8 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	valid := subtle.ConstantTimeCompare(userHash[:], expectedUserHash[:]) == 1 &&
 		err == nil &&
 		subtle.ConstantTimeCompare(passwordHash, expectedPasswordHash) == 1
+	a.loginLimiter.endAttempt(limiterKey, !valid)
 	if !valid {
-		a.loginLimiter.recordFailure(limiterKey)
 		a.recordAudit(auditLoginFailure, input.Username, remoteIP)
 		time.Sleep(250 * time.Millisecond)
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_credentials"})
