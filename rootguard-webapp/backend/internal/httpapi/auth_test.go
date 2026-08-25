@@ -771,6 +771,104 @@ func TestAccountUpdateRollsBackCredentialsOnSessionPersistFailure(t *testing.T) 
 	}
 }
 
+// TestAuthEndpointsRejectTrailingDataAfterJSONBody is the regression test
+// for the code-review finding that login/recovery/account still only ran a
+// single bare Decode() call, unlike the AdGuard handlers already fixed for
+// the same class of bug: a body with a second JSON value appended after the
+// first one decoded fine and just silently discarded the extra part instead
+// of being rejected. All three now go through decodeStrictJSON, which
+// checks decoder.More() after the first value.
+func TestAuthEndpointsRejectTrailingDataAfterJSONBody(t *testing.T) {
+	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, filepath.Join(t.TempDir(), "sessions.json"))
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "old-password"})
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+	loginRequest.Header.Set("Origin", "http://example.com")
+	loginRequest.Host = "example.com"
+	login := httptest.NewRecorder()
+	handler.ServeHTTP(login, loginRequest)
+	if login.Code != http.StatusOK {
+		t.Fatalf("expected setup login 200, got %d", login.Code)
+	}
+	cookie := login.Result().Cookies()[0]
+
+	for name, testCase := range map[string]struct {
+		path   string
+		body   string
+		cookie *http.Cookie
+	}{
+		"login":    {"/api/auth/login", `{"username":"admin","password":"old-password"}{"extra":true}`, nil},
+		"recovery": {"/api/auth/recovery", `{"recovery_token":"recovery-secret","new_password":"new-password-123"}{"extra":true}`, nil},
+		"account":  {"/api/auth/account", `{"current_password":"old-password","new_username":"root"}{"extra":true}`, cookie},
+	} {
+		t.Run(name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, testCase.path, bytes.NewBufferString(testCase.body))
+			request.Header.Set("Origin", "http://example.com")
+			request.Host = "example.com"
+			if testCase.cookie != nil {
+				request.AddCookie(testCase.cookie)
+			}
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != http.StatusBadRequest {
+				t.Fatalf("expected trailing JSON data to be rejected with 400, got %d: %s", response.Code, response.Body.String())
+			}
+		})
+	}
+}
+
+// TestRecoveryRateLimitBoundsTrulyConcurrentAttempts is the regression test
+// for the code-review finding that handleRecovery released its rate-limiter
+// slot as soon as the (cheap) token check passed, instead of holding it
+// through the expensive PBKDF2 derivation and session-wipe/credential
+// persistence that follow a valid token - letting anyone holding the
+// recovery token fire an unbounded number of concurrent resets. Every
+// request here presents the same valid token; if the slot were released
+// early, most or all 30 would get to do that expensive work at once instead
+// of recoveryLimiter.maxFailure of them at a time.
+func TestRecoveryRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
+	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, filepath.Join(t.TempDir(), "sessions.json"))
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	const concurrentRequests = 30
+	var start, done sync.WaitGroup
+	start.Add(1)
+	done.Add(concurrentRequests)
+	codes := make([]int, concurrentRequests)
+	for i := range concurrentRequests {
+		go func(i int) {
+			defer done.Done()
+			body := []byte(fmt.Sprintf(`{"recovery_token":"recovery-secret","new_password":"new-password-%d"}`, i))
+			request := httptest.NewRequest(http.MethodPost, "/api/auth/recovery", bytes.NewReader(body))
+			response := httptest.NewRecorder()
+			start.Wait() // release every goroutine at once, not one by one
+			handler.ServeHTTP(response, request)
+			codes[i] = response.Code
+		}(i)
+	}
+	start.Done()
+	done.Wait()
+
+	var accepted, rejected int
+	for _, code := range codes {
+		switch code {
+		case http.StatusOK:
+			accepted++
+		case http.StatusTooManyRequests:
+			rejected++
+		default:
+			t.Fatalf("unexpected status code %d", code)
+		}
+	}
+	if accepted != auth.recoveryLimiter.maxFailure {
+		t.Fatalf("expected exactly %d concurrent requests to actually complete the reset, got %d (rejected: %d)", auth.recoveryLimiter.maxFailure, accepted, rejected)
+	}
+	if rejected != concurrentRequests-auth.recoveryLimiter.maxFailure {
+		t.Fatalf("expected the remaining %d requests to be rejected outright, got %d", concurrentRequests-auth.recoveryLimiter.maxFailure, rejected)
+	}
+}
+
 func TestPasswordRecoveryRejectsInvalidTokenAndWeakPassword(t *testing.T) {
 	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, filepath.Join(t.TempDir(), "sessions.json"))
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))

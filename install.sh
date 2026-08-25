@@ -181,6 +181,14 @@ install_docker() {
 }
 
 main() {
+  # Checked first, before anything else runs - so a pre-existing target
+  # directory aborts immediately instead of after check_ports and a
+  # potentially real Docker installation, which would otherwise leave a
+  # system with Docker just installed for nothing on a retry.
+  if [ -e "$TARGET_DIR" ]; then
+    die "'$TARGET_DIR' existiert bereits - vermutlich läuft hier schon eine Installation. Abgebrochen, um nichts zu überschreiben."
+  fi
+
   check_ports
   echo
 
@@ -190,10 +198,6 @@ main() {
     install_docker
   fi
   echo
-
-  if [ -e "$TARGET_DIR" ]; then
-    die "'$TARGET_DIR' existiert bereits - vermutlich läuft hier schon eine Installation. Abgebrochen, um nichts zu überschreiben."
-  fi
 
   log "Ermittle die aktuelle RootGuard-Version…"
   local tag

@@ -226,17 +226,23 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Kept in flight (deferred release) through the entire handler, not just
+	// the token check below - the expensive PBKDF2 derivation and the
+	// session-wipe/credential persistence that follow a valid token are real
+	// work an attacker (or a buggy caller) could otherwise fire unboundedly
+	// in parallel by only ever holding the slot as long as the cheap check
+	// took. Mirrors handleAccount's identical deferred pattern below.
+	failedAttempt := false
+	defer func() { a.recoveryLimiter.endAttempt(limiterKey, failedAttempt) }()
+
 	var input passwordReset
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
-		a.recoveryLimiter.endAttempt(limiterKey, false)
+	if err := decodeStrictJSON(w, r, 8<<10, &input); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
 	tokenHash := sha256.Sum256([]byte(input.RecoveryToken))
 	tokenValid := subtle.ConstantTimeCompare(tokenHash[:], a.recoveryTokenHash[:]) == 1
-	a.recoveryLimiter.endAttempt(limiterKey, !tokenValid)
+	failedAttempt = !tokenValid
 	if !tokenValid {
 		a.recordAudit(auditRecoveryFailure, "", remoteIP)
 		time.Sleep(250 * time.Millisecond)
@@ -329,9 +335,7 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 	defer func() { a.loginLimiter.endAttempt(limiterKey, failedAttempt) }()
 
 	var input accountUpdate
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeStrictJSON(w, r, 8<<10, &input); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
@@ -503,9 +507,7 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input credentials
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	if err := decodeStrictJSON(w, r, 8<<10, &input); err != nil {
 		a.loginLimiter.endAttempt(limiterKey, false)
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
@@ -905,4 +907,23 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+// decodeStrictJSON decodes exactly one JSON value from r's body into v,
+// rejecting unknown fields and any trailing data after that value. A bare
+// Decode() call silently ignores everything past the first JSON value, so
+// a body like {"password":"x"}{"anything"} would otherwise decode
+// successfully with the second part just discarded - decoder.More()
+// catches that the same way a second Decode() call returning something
+// other than io.EOF would.
+func decodeStrictJSON(w http.ResponseWriter, r *http.Request, maxBytes int64, v any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(v); err != nil {
+		return err
+	}
+	if decoder.More() {
+		return errors.New("unexpected trailing data after JSON body")
+	}
+	return nil
 }
