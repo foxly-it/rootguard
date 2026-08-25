@@ -3,6 +3,24 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.9] - 2026-08-25
+
+### Documentation
+
+- Record the AdGuard polish and follow-up review round in project-state
+
+### Fixed
+
+- Login/recovery/account rate limits could be bypassed with concurrent requests
+- AdGuard filtering endpoint accepted {} as "disable filtering"
+- Install.sh respects ROOTGUARD_ADMIN_USER, validates web port
+- Strict JSON decode helper, recovery rate-limit race, install.sh dir check order
+
+### Other
+
+- Add breathing room between install.sh's output phases
+- AdGuard filtering toggle as switch, restyle protection select
+
 ## [0.1.0-beta.8] - 2026-08-25
 
 ### Added
