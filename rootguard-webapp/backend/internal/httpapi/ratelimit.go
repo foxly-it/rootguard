@@ -17,6 +17,7 @@ type rateLimiter struct {
 	window     time.Duration
 	maxFailure int
 	failures   map[string][]time.Time
+	inFlight   map[string]int
 }
 
 func newRateLimiter(window time.Duration, maxFailure int) *rateLimiter {
@@ -24,6 +25,7 @@ func newRateLimiter(window time.Duration, maxFailure int) *rateLimiter {
 		window:     window,
 		maxFailure: maxFailure,
 		failures:   make(map[string][]time.Time),
+		inFlight:   make(map[string]int),
 	}
 }
 
@@ -34,6 +36,54 @@ func (rl *rateLimiter) blocked(key string) bool {
 	defer rl.mu.Unlock()
 	rl.pruneLocked(key, time.Now())
 	return len(rl.failures[key]) >= rl.maxFailure
+}
+
+// beginAttempt atomically combines the blocked check with reserving a slot
+// for one verification attempt - closing a timing gap the plain
+// blocked()-then-recordFailure() pattern below has: many concurrent
+// requests could all observe zero recorded failures, all start their own
+// (for login/account, PBKDF2-based and genuinely expensive) verification in
+// parallel, and only get counted afterward once that work is already done,
+// so the limit never actually bounds concurrent attempts, only sequential
+// ones. Counting an in-flight attempt as if it already were a failure for
+// admission purposes (without permanently recording it as one) closes that
+// gap: a request arriving while others are still being verified sees them
+// too and is turned away before doing any expensive work itself.
+//
+// Returns false (and reserves nothing) once recorded failures plus
+// attempts already in flight reach the limit; the caller must not call
+// endAttempt in that case. On true, the caller must call endAttempt exactly
+// once, however the attempt turns out - a deferred call is the simplest way
+// to guarantee that across every return path.
+func (rl *rateLimiter) beginAttempt(key string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.pruneLocked(key, time.Now())
+	if len(rl.failures[key])+rl.inFlight[key] >= rl.maxFailure {
+		return false
+	}
+	rl.inFlight[key]++
+	return true
+}
+
+// endAttempt releases the slot a prior successful beginAttempt call
+// reserved. Pass failed=true to convert the reservation into a real,
+// window-tracked failure (the same effect recordFailure has); pass false to
+// simply release it without counting against the key.
+func (rl *rateLimiter) endAttempt(key string, failed bool) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	if rl.inFlight[key] > 0 {
+		rl.inFlight[key]--
+	}
+	if rl.inFlight[key] == 0 {
+		delete(rl.inFlight, key)
+	}
+	if failed {
+		now := time.Now()
+		rl.pruneLocked(key, now)
+		rl.failures[key] = append(rl.failures[key], now)
+	}
 }
 
 func (rl *rateLimiter) recordFailure(key string) {
