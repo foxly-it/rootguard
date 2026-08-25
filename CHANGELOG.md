@@ -3,6 +3,12 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.13] - 2026-08-25
+
+### Fixed
+
+- GitHub Releases API order isn't reliably newest-first; digestQualify bug in Core too
+
 ## [0.1.0-beta.12] - 2026-08-25
 
 ### Fixed
