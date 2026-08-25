@@ -90,6 +90,12 @@ body{overflow-x:hidden}
 .quickstart-command{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:#090e13;box-shadow:var(--shadow)}
 .quickstart-command pre{overflow:auto;margin:0;padding:24px;color:#d9e4ec;font:12px/1.75 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 .quickstart-open{display:flex;justify-content:space-between;gap:20px;border-top:1px solid var(--border);padding:13px 18px;background:#111820;font-size:.72rem}.quickstart-open span{color:var(--muted)}.quickstart-open strong{color:var(--green);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.copy-button{display:flex;align-items:center;gap:6px;margin-left:auto;border:1px solid var(--border);border-radius:7px;background:transparent;color:#8a97a5;padding:5px 9px;font:10px "SFMono-Regular",Consolas,monospace;cursor:pointer;transition:color .15s,border-color .15s}.copy-button svg{width:13px;height:13px;flex:none}.copy-button:hover,.copy-button:focus-visible{color:var(--text);border-color:var(--green)}.copy-button.copied{color:var(--green);border-color:rgba(114,196,131,.5)}
+.install-demo-section{border-top:1px solid var(--border)}
+.install-demo-terminal{min-width:0;overflow:hidden;border:1px solid var(--border);border-radius:16px;background:#090e13;box-shadow:var(--shadow)}
+.install-demo-lines{margin:0;padding:26px;overflow:auto;color:#d9e4ec;font:12px/1.9 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.install-demo-lines b{color:var(--green);font-weight:700}
+@media(prefers-reduced-motion:no-preference){.install-demo-lines .line{display:block;opacity:0;transform:translateY(5px);transition:opacity .4s ease,transform .4s ease}.install-demo-terminal.revealed .line{opacity:1;transform:none}}
 .feature-grid-simple{grid-template-columns:repeat(3,minmax(0,1fr))}.feature-grid-simple>*{min-width:0}.feature-grid-simple h3,.feature-grid-simple p,.feature-more{overflow-wrap:anywhere}.feature-more{margin:25px 0 0}
 .project-status{scroll-margin-top:30px}
 .project-updated{margin:14px 0 0;color:var(--muted);font-size:.78rem}
@@ -129,7 +135,7 @@ body{overflow-x:hidden}
 @media(max-width:1000px){.home-quickstart{grid-template-columns:1fr;gap:35px}.project-metrics{grid-template-columns:1fr 1fr}.home-final-cta{align-items:flex-start;flex-direction:column;gap:20px}.home-final-cta .actions{width:100%}}
 @media(max-width:760px){.project-activity-grid,.release-log-grid{grid-template-columns:1fr}.release-card+.release-card{border-top:1px solid var(--border);border-left:0}}
 @media(max-width:640px){.feature-grid-simple{grid-template-columns:minmax(0,1fr)}}
-@media(max-width:520px){.quickstart-command pre{font-size:10px}.quickstart-open{align-items:flex-start;flex-direction:column;gap:4px}.project-metrics{grid-template-columns:1fr}.project-list a{grid-template-columns:56px minmax(0,1fr)}.project-list small{grid-column:2}.project-feed-head,.release-log-head{align-items:flex-start;flex-direction:column}.project-feed-head a,.release-log-head a{white-space:normal}}
+@media(max-width:520px){.quickstart-command pre{font-size:10px}.quickstart-open{align-items:flex-start;flex-direction:column;gap:4px}.project-metrics{grid-template-columns:1fr}.project-list a{grid-template-columns:56px minmax(0,1fr)}.project-list small{grid-column:2}.project-feed-head,.release-log-head{align-items:flex-start;flex-direction:column}.project-feed-head a,.release-log-head a{white-space:normal}.copy-button span{display:none}.install-demo-lines{padding:16px;font-size:10.5px}}
 
 /* Wider project canvas and readable command blocks */
 .wrap{width:min(1320px,calc(100% - 48px))}
