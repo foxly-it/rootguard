@@ -1906,3 +1906,28 @@ each module's own temp-file-then-rename atomic-write pattern into a
 shared helper) were explicitly deferred - the user picked only the API-
 client removal above; the review found no bugs in either, just organizational
 improvement.
+
+**Real bug found while cutting the resulting beta (0.1.0-beta.10), not by
+review**: the release pipeline's `upgrade-test` job failed twice in a row -
+"Core und WebApp verwenden bereits die aktuellen Images", skipping the
+upgrade entirely, even though beta.10's images are genuinely different
+from beta.9's (independently verified against the registry). Root cause
+in `rootguard-updater`'s `digestQualify`: it resolved a freshly-pulled
+tag's digest via `docker image inspect --format {{.RepoDigests}}`,
+returning the *first* repo-prefixed match - `RepoDigests` belongs to the
+local image object as a whole and can list more than one digest for a
+repository whose tag recently moved between releases, so the loop had no
+way to distinguish "the digest just pulled" from "some older digest this
+local image happens to also carry," and reproducibly returned the stale
+one on the GitHub Actions runner's Docker setup (did not reproduce on a
+different host with a containerd-backed image store). **This is a real
+correctness bug in the live `/api/control-plane-updates/check` path**, not
+just a CI artifact - any real installation could plausibly hit the same
+false "already up to date" under the right local Docker state, on any
+release before this fix. Fixed by reading the digest `docker pull` itself
+reports in its own output instead of round-tripping through the ambiguous
+local `RepoDigests` lookup (kept as a fallback for an already-qualified
+static pin or unexpected output). `beta.10`'s images themselves are fine
+(fresh install verified via its own passing smoke-test) - only the
+*upgrade path* was affected; `beta.11` carries the fix and re-verifies the
+upgrade-test passes for real.
