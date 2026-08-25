@@ -50,6 +50,19 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // =====================================================
+// Version Endpoint
+// =====================================================
+
+export interface VersionResponse {
+  version: string;
+  commit: string;
+}
+
+export async function getVersion() {
+  return request<VersionResponse>("/api/version");
+}
+
+// =====================================================
 // Dashboard Endpoint
 // =====================================================
 

@@ -13,7 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
-import { getVersion } from "../services/api";
+import { getVersion, type VersionResponse } from "../api/client";
 
 // RootGuard shield icon (SVG, icon-only)
 import logo from "../assets/rootguard-icon.svg";
@@ -25,13 +25,8 @@ import { useI18n } from "../i18n";
 import UserMenu from "./UserMenu";
 import SearchModal from "../search/SearchModal";
 
-interface VersionData {
-  version: string;
-  commit: string;
-}
-
 export default function Header() {
-  const [version, setVersion] = useState<VersionData | null>(null);
+  const [version, setVersion] = useState<VersionResponse | null>(null);
   const { t } = useI18n();
   const location = useLocation();
   const pageName = pageTitle(location.pathname, t);
@@ -50,7 +45,7 @@ export default function Header() {
   // - Always show version
   // - Only append commit if it is valid
   // -----------------------------------------------------
-  function formatVersion(v: VersionData | null): string | null {
+  function formatVersion(v: VersionResponse | null): string | null {
     if (!v) return null;
 
     if (v.commit && v.commit !== "unknown") {
