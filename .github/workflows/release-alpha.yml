@@ -582,6 +582,7 @@ jobs:
             sleep 2
           done
           test "$state" = idle
+          echo "$status"
           echo "$status" | jq -r '.history[0].outcome' | grep -qx success || { echo "$status"; exit 1; }
 
       - name: Verify the running images match the newly published version
@@ -601,7 +602,12 @@ jobs:
             docker pull "$release_ref" >/dev/null
             expected="$(docker image inspect "$release_ref" --format '{{.Id}}')"
             actual="$(docker inspect "$container" --format '{{.Image}}')"
-            test "$actual" = "$expected"
+            if [ "$actual" != "$expected" ]; then
+              echo "::error::${container}: running image ${actual} does not match freshly-pulled ${release_ref} (${expected})"
+              docker inspect "$container" --format 'running RepoDigests: {{.Config.Image}}'
+              docker image inspect "$release_ref" --format 'release RepoDigests: {{range .RepoDigests}}{{.}} {{end}}'
+              exit 1
+            fi
           done
 
       - name: Verify DNS still works after the upgrade
