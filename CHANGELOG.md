@@ -3,6 +3,26 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.10] - 2026-08-25
+
+### Added
+
+- Copy-to-clipboard button and animated install demo on the website
+
+### Changed
+
+- Shared generic decodeJSON helper across Core and WebApp
+- Remove duplicate frontend API client, move getVersion into client.ts
+
+### Documentation
+
+- Record the third review round (PR #347-#350)
+
+### Fixed
+
+- Enforce startup secret strength, FritzBox IPv6 URLs, backup off-by-one
+- Two more CI fixtures still used a short ROOTGUARD_API_TOKEN
+
 ## [0.1.0-beta.9] - 2026-08-25
 
 ### Documentation
