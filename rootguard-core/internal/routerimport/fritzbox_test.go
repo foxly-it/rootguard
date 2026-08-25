@@ -171,6 +171,30 @@ func TestNewFritzBoxClientRejectsUnsafeAddresses(t *testing.T) {
 	}
 }
 
+// TestNewFritzBoxClientBracketsIPv6Addresses is the regression test for a
+// code-review finding: a bare Sprintf built "http://fd00::1:49000" for an
+// IPv6 host, which is invalid/ambiguous (a bracket-less IPv6 literal can't
+// be told apart from an appended port). Both a bare and an
+// already-bracketed IPv6 literal must end up correctly bracketed exactly
+// once; IPv4/hostname addresses must be unaffected.
+func TestNewFritzBoxClientBracketsIPv6Addresses(t *testing.T) {
+	tests := map[string]string{
+		"fd00::1":       "http://[fd00::1]:49000",
+		"[fd00::1]":     "http://[fd00::1]:49000",
+		"192.168.178.1": "http://192.168.178.1:49000",
+		"fritz.box":     "http://fritz.box:49000",
+	}
+	for address, want := range tests {
+		client, err := NewFritzBoxClient(address)
+		if err != nil {
+			t.Fatalf("address %q: unexpected error: %v", address, err)
+		}
+		if client.baseURL != want {
+			t.Errorf("address %q: baseURL = %q, want %q", address, client.baseURL, want)
+		}
+	}
+}
+
 func TestDigestChallengeAuthorizationHeaderIsWellFormed(t *testing.T) {
 	challenge, ok := parseDigestChallenge(`Digest realm="F!Box SL", nonce="abc123", qop="auth"`)
 	if !ok {

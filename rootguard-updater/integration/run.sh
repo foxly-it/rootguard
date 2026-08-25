@@ -34,7 +34,7 @@ wait_for_updater() {
 start_update() {
   curl --fail --silent \
     --request POST \
-    --header "Authorization: Bearer integration-token" \
+    --header "Authorization: Bearer integration-token-not-a-real-secret-32" \
     http://127.0.0.1:18082/api/control-plane/update >/dev/null
 }
 
@@ -42,7 +42,7 @@ wait_for_outcome() {
   local expected_state="$1"
   for _ in {1..90}; do
     status="$(curl --fail --silent \
-      --header "Authorization: Bearer integration-token" \
+      --header "Authorization: Bearer integration-token-not-a-real-secret-32" \
       http://127.0.0.1:18082/api/control-plane/status)"
     state="$(jq -r .state <<<"$status")"
     if [[ "$state" == "$expected_state" ]]; then
