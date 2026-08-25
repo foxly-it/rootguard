@@ -3,6 +3,13 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.12] - 2026-08-25
+
+### Fixed
+
+- Upgrade-test's final verification assumed a local tag already existed
+- Update() had its own separate, still-buggy digestQualify call
+
 ## [0.1.0-beta.11] - 2026-08-25
 
 ### Documentation
