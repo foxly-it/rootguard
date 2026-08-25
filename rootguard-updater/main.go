@@ -370,11 +370,16 @@ func (m *manager) update(targetImages map[string]string) {
 		targetImage := targetImageFor(spec, targetImages)
 		m.progress("Lade " + spec.DisplayName + ".")
 		if !m.skipPull {
-			if _, err := m.run(ctx, "pull", targetImage); err != nil {
+			pullOutput, err := m.run(ctx, "pull", targetImage)
+			if err != nil {
 				m.fail(err)
 				return
 			}
-			targetImage = digestQualify(ctx, m.run, targetImage)
+			if qualified, ok := digestFromPullOutput(targetImage, pullOutput); ok {
+				targetImage = qualified
+			} else {
+				targetImage = digestQualify(ctx, m.run, targetImage)
+			}
 		}
 		candidateID, err := m.inspectImage(ctx, targetImage)
 		if err != nil {
