@@ -591,7 +591,15 @@ jobs:
           for pair in "rootguard-core:core" "rootguard-webapp:webapp"; do
             container="${pair%%:*}"
             image="${pair##*:}"
-            expected="$(docker image inspect "ghcr.io/${{ github.repository_owner }}/rootguard-${image}:${{ needs.version.outputs.value }}" --format '{{.Id}}')"
+            release_ref="ghcr.io/${{ github.repository_owner }}/rootguard-${image}:${{ needs.version.outputs.value }}"
+            # The updater itself never relies on a local tag existing (see
+            # the digestFromPullOutput fix) - it works entirely off the
+            # digest docker pull reports. This check shouldn't assume one
+            # either: pull the release tag fresh right here, rather than
+            # trusting that some earlier step in this job happened to leave
+            # a matching local tag behind as a side effect.
+            docker pull "$release_ref" >/dev/null
+            expected="$(docker image inspect "$release_ref" --format '{{.Id}}')"
             actual="$(docker inspect "$container" --format '{{.Image}}')"
             test "$actual" = "$expected"
           done
