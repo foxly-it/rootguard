@@ -80,6 +80,8 @@ function renderProjectData() {
   const latestCommit = commits[0];
 
   document.getElementById("current-version").textContent = projectData.current_version || "–";
+  const demoVersion = document.getElementById("install-demo-version");
+  if (demoVersion && projectData.current_version) demoVersion.textContent = projectData.current_version;
   document.getElementById("open-pr-count").textContent = pulls.length;
   document.getElementById("release-count").textContent = releases.length;
   if (currentRelease) document.getElementById("version-link").href = currentRelease.html_url;
@@ -230,6 +232,53 @@ function initializeBackToTop() {
   return button;
 }
 
+function initializeInstallCopyButton() {
+  const button = document.getElementById("install-copy-button");
+  const source = document.getElementById("install-command-text");
+  if (!button || !source) return;
+  const label = button.querySelector("span");
+  const idle = { de: "Kopieren", en: "Copy" };
+  const done = { de: "Kopiert!", en: "Copied!" };
+  let resetTimer = null;
+  button.addEventListener("click", () => {
+    navigator.clipboard.writeText(source.textContent.trim()).then(() => {
+      button.classList.add("copied");
+      label.textContent = done[currentLanguage];
+      window.clearTimeout(resetTimer);
+      resetTimer = window.setTimeout(() => {
+        button.classList.remove("copied");
+        label.textContent = idle[currentLanguage];
+      }, 1800);
+    }).catch(() => {});
+  });
+}
+
+// Lines start visible-but-transparent (see the prefers-reduced-motion rule
+// in styles.css) and get a per-line transition-delay set here, then a
+// single .revealed class added once the terminal scrolls into view -
+// staggering via JS-computed delays rather than a fixed set of :nth-child
+// CSS rules keeps this working if a line gets added/removed later without
+// anyone remembering to update a matching CSS selector list. Skips the
+// stagger (and the observer entirely) under prefers-reduced-motion, where
+// the CSS never hides the lines in the first place - nothing to reveal.
+function initializeInstallDemoReveal() {
+  const terminal = document.getElementById("install-demo-terminal");
+  if (!terminal) return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const lines = terminal.querySelectorAll(".line");
+  lines.forEach((line, index) => {
+    line.style.transitionDelay = `${index * 70}ms`;
+  });
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      terminal.classList.add("revealed");
+      observer.disconnect();
+    });
+  }, { threshold: 0.3 });
+  observer.observe(terminal);
+}
+
 const backToTopButton = initializeBackToTop();
 
 function setLanguage(language, persist = true) {
@@ -260,6 +309,8 @@ const preferred = localStorage.getItem("rootguard-language") || (navigator.langu
 setLanguage(preferred, false);
 initializeHeaderNavigation();
 initializeManualNavigation();
+initializeInstallCopyButton();
+initializeInstallDemoReveal();
 
 fetch("project-data.json", { cache: "no-cache" })
   .then((response) => {
