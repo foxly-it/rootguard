@@ -3,6 +3,33 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.8] - 2026-08-25
+
+### Added
+
+- Authenticated account settings (change username/password from the WebGUI)
+- One-command installer for non-technical users
+- Install.sh checks for busy ports before installing
+
+### Documentation
+
+- Record authenticated account settings ([#329](https://github.com/foxly-it/rootguard/pull/329))
+- Remove stale DNS-flow block from the website's dashboard mockup
+- Record beta.7 dashboard/AdGuard polish round and the real update-process verification
+- Record the one-command installer addition
+- Record account-settings ship, select styling fix, mockup fidelity, and install.sh port preflight
+
+### Fixed
+
+- Account update could leave a renamed-but-uncommitted session on credential-persist failure
+- Three account-settings issues found in review (wrong-password logout, partial-failure state, unparsed error codes)
+- AdGuard protection select didn't match the app's other dropdowns
+- Misleading "Nicht konfiguriert" label for AdGuard's health badge
+
+### Other
+
+- Make the hero mockup structurally match the real dashboard
+
 ## [0.1.0-beta.7] - 2026-08-24
 
 ### Documentation
