@@ -24,6 +24,50 @@ func TestPickLatestReleaseImagePicksNewestMatchingTag(t *testing.T) {
 	}
 }
 
+// TestPickLatestReleaseImageIgnoresAPIResponseOrder is the regression test
+// for a real bug: this function used to trust the GitHub Releases API's
+// own list order as newest-first (its own doc comment promised it), but a
+// direct query against the live API - on a repository that had several
+// releases cut in quick succession - returned v0.1.0-beta.9 *ahead of*
+// v0.1.0-beta.12. That silently made every self-update resolve to a much
+// older release than the one actually just published. This body puts the
+// true newest release last, matching what was observed live.
+func TestPickLatestReleaseImageIgnoresAPIResponseOrder(t *testing.T) {
+	body := []byte(`[
+		{"tag_name":"v0.1.0-beta.9"},
+		{"tag_name":"v0.1.0-beta.8"},
+		{"tag_name":"v0.1.0-beta.12"},
+		{"tag_name":"v0.1.0-beta.11"},
+		{"tag_name":"v0.1.0-beta.10"}
+	]`)
+	image, err := pickLatestReleaseImage(body, "core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image != "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.12" {
+		t.Fatalf("unexpected image: %q", image)
+	}
+}
+
+// TestPickLatestReleaseImagePrefersBetaOverAlphaOnAHigherBuildNumber
+// guards the series ranking: a beta build must always outrank every alpha
+// build, even one with a numerically higher build number (the two series
+// count independently, so e.g. alpha.20 existing doesn't mean it's newer
+// than beta.1).
+func TestPickLatestReleaseImagePrefersBetaOverAlphaOnAHigherBuildNumber(t *testing.T) {
+	body := []byte(`[
+		{"tag_name":"v0.1.0-alpha.20"},
+		{"tag_name":"v0.1.0-beta.1"}
+	]`)
+	image, err := pickLatestReleaseImage(body, "core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image != "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.1" {
+		t.Fatalf("expected the beta release to win over a higher-numbered alpha, got %q", image)
+	}
+}
+
 func TestPickLatestReleaseImageRejectsUnmatchedList(t *testing.T) {
 	if _, err := pickLatestReleaseImage([]byte(`[{"tag_name":"v9.9.9"}]`), "unbound"); err == nil {
 		t.Fatal("expected an error for a release list with no matching RootGuard tag")
@@ -211,5 +255,31 @@ func TestDigestQualifyFallsBackToTheBareTagOnLookupFailure(t *testing.T) {
 	const image = "ghcr.io/foxly-it/rootguard-unbound:0.1.0-beta.5"
 	if got := digestQualify(context.Background(), run, image); got != image {
 		t.Fatalf("expected the bare tag as a fallback, got %q", got)
+	}
+}
+
+// TestDigestFromPullOutputParsesARealPullTranscript is the regression test
+// for a real bug caught live in CI: digestQualify's RepoDigests lookup
+// returned a *stale* digest (an older release's, not the one just pulled)
+// because RepoDigests belongs to the whole local image object, not to this
+// specific pull. digestFromPullOutput reads the digest docker pull's own
+// output reports instead, which can only ever be what was just pulled.
+func TestDigestFromPullOutputParsesARealPullTranscript(t *testing.T) {
+	output := []byte("0.1.0-beta.12: Pulling from foxly-it/rootguard-core\n" +
+		"Digest: sha256:8cf049d4dffc1b3d456da8e89f92f089d74d4c85ec5cf8675ae1a0c88720f216\n" +
+		"Status: Downloaded newer image for ghcr.io/foxly-it/rootguard-core:0.1.0-beta.12\n")
+	got, ok := digestFromPullOutput("ghcr.io/foxly-it/rootguard-core:0.1.0-beta.12", output)
+	if !ok {
+		t.Fatal("expected a digest to be found")
+	}
+	want := "ghcr.io/foxly-it/rootguard-core@sha256:8cf049d4dffc1b3d456da8e89f92f089d74d4c85ec5cf8675ae1a0c88720f216"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestDigestFromPullOutputReturnsFalseWithoutADigestLine(t *testing.T) {
+	if _, ok := digestFromPullOutput("repo:tag", []byte("some unexpected output\n")); ok {
+		t.Fatal("expected no digest to be found")
 	}
 }
