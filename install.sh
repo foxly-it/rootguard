@@ -117,8 +117,17 @@ port_listening() {
 # docs.html) re-checks port 53 properly (published Docker ports plus a real
 # bind attempt, catching non-Docker processes like systemd-resolved) - this
 # is just an early heads-up, not a replacement for that.
+valid_port() {
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+
 check_ports() {
   WEB_PORT="${ROOTGUARD_WEB_PORT:-8080}"
+  valid_port "$WEB_PORT" \
+    || die "ROOTGUARD_WEB_PORT muss eine Zahl zwischen 1 und 65535 sein (war: '${WEB_PORT}')."
 
   if port_listening -t "$WEB_PORT"; then
     log "Port ${WEB_PORT} ist bereits belegt."
@@ -126,6 +135,8 @@ check_ports() {
       die "Setze ROOTGUARD_WEB_PORT auf einen freien Port und starte install.sh erneut."
     fi
     prompt WEB_PORT "Alternativen Port für die WebGUI verwenden [8081]: " "8081"
+    valid_port "$WEB_PORT" \
+      || die "Ungültiger Port: '${WEB_PORT}'. Muss eine Zahl zwischen 1 und 65535 sein."
     port_listening -t "$WEB_PORT" \
       && die "Port ${WEB_PORT} ist ebenfalls belegt. Bitte manuell einen freien Port wählen und erneut starten."
   fi
@@ -190,20 +201,31 @@ main() {
   [ -n "$tag" ] || die "Keine RootGuard-Version über die GitHub-Releases-API gefunden."
   log "Aktuelle Version: $tag"
 
-  mkdir -p "$TARGET_DIR"
-  cd "$TARGET_DIR"
+  # Downloaded to a scratch dir first and only moved into place once both
+  # files are down - so a failed download never leaves an empty $TARGET_DIR
+  # behind that would make a retry hit the "existiert bereits" abort above.
+  local staging
+  staging="$(mktemp -d)"
+  trap 'rm -rf "$staging"' RETURN
 
   local raw_base="https://raw.githubusercontent.com/${RG_REPO}/${tag}"
-  curl -fsSL -o compose.release.yaml "${raw_base}/compose.release.yaml" \
+  curl -fsSL -o "$staging/compose.release.yaml" "${raw_base}/compose.release.yaml" \
     || die "compose.release.yaml konnte nicht heruntergeladen werden."
-  curl -fsSL -o .env "${raw_base}/.env.release.example" \
+  curl -fsSL -o "$staging/.env" "${raw_base}/.env.release.example" \
     || die "Beispielkonfiguration konnte nicht heruntergeladen werden."
+
+  mkdir -p "$TARGET_DIR"
+  mv "$staging/compose.release.yaml" "$staging/.env" "$TARGET_DIR/"
+  cd "$TARGET_DIR"
 
   local api_token recovery_token admin_user admin_password
   api_token="$(random_secret)"
   recovery_token="$(random_secret)"
 
-  prompt admin_user "Benutzername für die RootGuard-WebGUI [admin]: " "admin"
+  admin_user="${ROOTGUARD_ADMIN_USER:-}"
+  if [ -z "$admin_user" ]; then
+    prompt admin_user "Benutzername für die RootGuard-WebGUI [admin]: " "admin"
+  fi
 
   local generated_password=0
   admin_password="${ROOTGUARD_ADMIN_PASSWORD:-}"

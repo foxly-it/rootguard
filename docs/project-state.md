@@ -1772,3 +1772,44 @@ actually using the shipped beta.7.
   actually runs `docker compose up` needs an isolated host (verified the
   rest of this feature locally on macOS Docker Desktop instead, once
   this was understood).
+
+**2026-08-25:** a formal code-review pass on the accumulated work above
+found four concrete issues, one security-critical, worked through in
+priority order.
+
+- **Login/recovery/account rate limiting had a TOCTOU race** (PR #342).
+  `blocked()` (check) and `recordFailure()` (record) were two separate,
+  non-atomic operations around an expensive PBKDF2 verification -
+  concurrent requests could all pass the check before any of them got
+  counted, so the limiter only ever bounded *sequential* guessing, not
+  concurrent. Fixed with an atomic reservation pattern: `beginAttempt`
+  combines the check with reserving an in-flight slot (counted as if it
+  were already a failure for admission purposes, without permanently
+  recording it), `endAttempt` releases that slot and optionally converts
+  it into a real, window-tracked failure. Verified the fix is load-
+  bearing, not just plausible: added a test that fires 30 truly
+  simultaneous login attempts via a `sync.WaitGroup` release gate,
+  confirmed it fails against the pre-fix code (temporarily reverted via
+  `sed`, saw a 30/0 pass/block split instead of the correct 5/25) before
+  restoring the fix and re-verifying green.
+- **AdGuard filtering endpoint still had the `{}`-disables-filtering
+  bug** the protection endpoint was already fixed for earlier (PR #343).
+  Same root cause, same fix shape: `Enabled bool` → `*bool` with an
+  explicit nil check, plus a `decoder.More()` check on both the
+  filtering and protection handlers (Core and WebApp) to reject trailing
+  JSON after the first decoded value - a bare `Decode()` call silently
+  ignores anything after the first object. Live-verified on `.7`: both
+  `{}` and trailing-JSON bodies now return 400, a real on/off filtering
+  toggle still works.
+- **`install.sh` ignored `ROOTGUARD_ADMIN_USER`.** Unlike the password
+  handling, the username prompt was called unconditionally instead of
+  checking the environment variable first - fixed to match the password
+  pattern (check env, only prompt if empty).
+- **`install.sh` accepted any string as `ROOTGUARD_WEB_PORT`**, both the
+  env var and the interactive alternate-port prompt, only failing later
+  and less clearly inside Docker Compose. Added a `valid_port()` check
+  (numeric, 1-65535) at both points.
+- **`install.sh` left an empty target directory behind on a failed
+  download**, which then tripped the "already exists" abort on retry.
+  Downloads now land in a `mktemp -d` scratch directory first and are
+  only moved into `$TARGET_DIR` once both succeed.
