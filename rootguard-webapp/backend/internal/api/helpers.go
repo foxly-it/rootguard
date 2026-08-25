@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 )
 
@@ -35,4 +36,24 @@ func proxyFixed[T any](w http.ResponseWriter, r *http.Request, errStatus int, fn
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+// decodeJSON decodes exactly one JSON value of type T from r's body,
+// rejecting unknown fields and any trailing data after that value - a bare
+// Decode() call silently ignores everything past the first JSON value, so
+// a body like {"enabled":true}{"anything"} would otherwise decode
+// successfully with the second part just discarded. Replaces what used to
+// be an identical decoder/DisallowUnknownFields/Decode block repeated at
+// every handler in this package.
+func decodeJSON[T any](w http.ResponseWriter, r *http.Request, maxBytes int64) (T, error) {
+	var value T
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return value, err
+	}
+	if decoder.More() {
+		return value, errors.New("unexpected trailing data after JSON body")
+	}
+	return value, nil
 }

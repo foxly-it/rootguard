@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
@@ -20,26 +19,20 @@ func HandleGetAdGuardFilterReport(w http.ResponseWriter, r *http.Request, core *
 }
 
 func HandleSetAdGuardFiltering(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	var input struct {
+	type request struct {
 		Enabled *bool `json:"enabled"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	input, err := decodeJSON[request](w, r, 1<<10)
+	if err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 	// Found via code review: {} used to decode to Enabled=false with no way
 	// to tell it apart from an explicit {"enabled":false}, silently
 	// disabling filtering - same class of bug as the protection endpoint
-	// below. decoder.More() rejects a second JSON value appended after the
-	// first, which a bare Decode call would otherwise silently ignore.
+	// below.
 	if input.Enabled == nil {
 		http.Error(w, "enabled is required", http.StatusBadRequest)
-		return
-	}
-	if decoder.More() {
-		http.Error(w, "unexpected trailing data after the JSON body", http.StatusBadRequest)
 		return
 	}
 	status, err := core.SetAdGuardFiltering(r.Context(), *input.Enabled)
@@ -58,13 +51,12 @@ func HandleSetAdGuardFiltering(w http.ResponseWriter, r *http.Request, core *cor
 var adGuardProtectionDurations = map[int64]bool{0: true, 600: true, 3600: true}
 
 func HandleSetAdGuardProtection(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	var input struct {
+	type request struct {
 		Enabled         *bool `json:"enabled"`
 		DurationSeconds int64 `json:"duration_seconds"`
 	}
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil {
+	input, err := decodeJSON[request](w, r, 1<<10)
+	if err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
@@ -78,10 +70,6 @@ func HandleSetAdGuardProtection(w http.ResponseWriter, r *http.Request, core *co
 	}
 	if *input.Enabled && input.DurationSeconds != 0 {
 		http.Error(w, "duration_seconds must be 0 when enabling protection", http.StatusBadRequest)
-		return
-	}
-	if decoder.More() {
-		http.Error(w, "unexpected trailing data after the JSON body", http.StatusBadRequest)
 		return
 	}
 	status, err := core.SetAdGuardProtection(r.Context(), *input.Enabled, input.DurationSeconds)

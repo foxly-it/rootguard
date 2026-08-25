@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -17,15 +16,10 @@ func HandleGetUnboundConfiguration(w http.ResponseWriter, r *http.Request, core 
 }
 
 func HandlePutUnboundSettings(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	var settings coreclient.UnboundSettings
-	if err := decoder.Decode(&settings); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	settings, ok := decodeUnboundSettings(w, r)
+	if !ok {
 		return
 	}
-
 	updated, err := core.UpdateUnboundSettings(r.Context(), settings)
 	if err != nil {
 		writeCoreError(w, err)
@@ -103,10 +97,8 @@ type forwardCheckRequest struct {
 
 func HandleUnboundForwardCheck(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	var request forwardCheckRequest
-	if err := decoder.Decode(&request); err != nil {
+	request, err := decodeJSON[forwardCheckRequest](w, r, 64<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -188,10 +180,8 @@ func HandleApplyUnboundImport(w http.ResponseWriter, r *http.Request, core *core
 
 func decodeUnboundBundle(w http.ResponseWriter, r *http.Request) (coreclient.UnboundConfigBundle, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 130<<10))
-	decoder.DisallowUnknownFields()
-	var bundle coreclient.UnboundConfigBundle
-	if err := decoder.Decode(&bundle); err != nil {
+	bundle, err := decodeJSON[coreclient.UnboundConfigBundle](w, r, 130<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return coreclient.UnboundConfigBundle{}, false
 	}
@@ -217,10 +207,8 @@ func HandleUnboundDirectives(w http.ResponseWriter, r *http.Request, core *corec
 
 func decodeCustomConfig(w http.ResponseWriter, r *http.Request) (customConfigRequest, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 65<<10))
-	decoder.DisallowUnknownFields()
-	var request customConfigRequest
-	if err := decoder.Decode(&request); err != nil {
+	request, err := decodeJSON[customConfigRequest](w, r, 65<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return customConfigRequest{}, false
 	}
@@ -229,10 +217,8 @@ func decodeCustomConfig(w http.ResponseWriter, r *http.Request) (customConfigReq
 
 func decodeUnboundSettings(w http.ResponseWriter, r *http.Request) (coreclient.UnboundSettings, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	var settings coreclient.UnboundSettings
-	if err := decoder.Decode(&settings); err != nil {
+	settings, err := decodeJSON[coreclient.UnboundSettings](w, r, 64<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return coreclient.UnboundSettings{}, false
 	}

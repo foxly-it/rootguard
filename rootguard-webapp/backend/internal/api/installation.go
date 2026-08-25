@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
@@ -39,10 +38,8 @@ func HandleInstallationDeploy(w http.ResponseWriter, r *http.Request, core *core
 
 func decodeInstallationConfig(w http.ResponseWriter, r *http.Request) (coreclient.InstallationConfig, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	decoder.DisallowUnknownFields()
-	var config coreclient.InstallationConfig
-	if err := decoder.Decode(&config); err != nil {
+	config, err := decodeJSON[coreclient.InstallationConfig](w, r, 8<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return coreclient.InstallationConfig{}, false
 	}
