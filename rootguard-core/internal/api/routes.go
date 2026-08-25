@@ -225,10 +225,8 @@ func putBackupSettingsHandler(manager *updater.Manager) http.HandlerFunc {
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-		decoder.DisallowUnknownFields()
-		var body request
-		if err := decoder.Decode(&body); err != nil {
+		body, err := decodeJSON[request](w, r, 4<<10)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -284,10 +282,8 @@ func backupExportHandler(exporter *backupexport.Exporter, manager *updater.Manag
 	}
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-		decoder.DisallowUnknownFields()
-		var body request
-		if err := decoder.Decode(&body); err != nil {
+		body, err := decodeJSON[request](w, r, 4<<10)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -299,7 +295,7 @@ func backupExportHandler(exporter *backupexport.Exporter, manager *updater.Manag
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="rootguard-backup-%s.tar.gz.age"`, time.Now().UTC().Format("2006-01-02")))
 		w.Header().Set("Cache-Control", "no-store")
 		writer := &lazyResponseWriter{ResponseWriter: w}
-		err := manager.RunExclusive("Verschlüsseltes Vollbackup wird erstellt.", func() error {
+		err = manager.RunExclusive("Verschlüsseltes Vollbackup wird erstellt.", func() error {
 			return exporter.Export(r.Context(), body.Passphrase, writer)
 		})
 		if err != nil && !writer.wrote {
@@ -376,10 +372,8 @@ func installationDeployHandler(manager *installer.Manager) http.HandlerFunc {
 
 func decodeInstallationConfig(w http.ResponseWriter, r *http.Request) (installer.Config, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
-	decoder.DisallowUnknownFields()
-	var config installer.Config
-	if err := decoder.Decode(&config); err != nil {
+	config, err := decodeJSON[installer.Config](w, r, 8<<10)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return installer.Config{}, false
 	}
@@ -409,27 +403,21 @@ func getAdGuardFilterReportHandler(manager *adguard.Manager) http.HandlerFunc {
 }
 
 func setAdGuardFilteringHandler(manager *adguard.Manager) http.HandlerFunc {
+	type request struct {
+		Enabled *bool `json:"enabled"`
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			Enabled *bool `json:"enabled"`
-		}
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&input); err != nil {
+		input, err := decodeJSON[request](w, r, 1<<10)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		// Found via code review: {} used to decode to Enabled=false with no
 		// way to tell it apart from an explicit {"enabled":false}, silently
 		// disabling filtering. Same class of bug as the protection endpoint
-		// above. decoder.More() catches a second JSON value appended after
-		// the first (a bare Decode call silently ignores it otherwise).
+		// below.
 		if input.Enabled == nil {
 			writeError(w, http.StatusBadRequest, fmt.Errorf("enabled is required"))
-			return
-		}
-		if decoder.More() {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("unexpected trailing data after the JSON body"))
 			return
 		}
 		status, err := manager.SetFiltering(r.Context(), *input.Enabled)
@@ -462,23 +450,18 @@ func validateAdGuardProtectionRequest(enabled *bool, durationSeconds int64) erro
 }
 
 func setAdGuardProtectionHandler(manager *adguard.Manager) http.HandlerFunc {
+	type request struct {
+		Enabled         *bool `json:"enabled"`
+		DurationSeconds int64 `json:"duration_seconds"`
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		var input struct {
-			Enabled         *bool `json:"enabled"`
-			DurationSeconds int64 `json:"duration_seconds"`
-		}
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&input); err != nil {
+		input, err := decodeJSON[request](w, r, 1<<10)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		if err := validateAdGuardProtectionRequest(input.Enabled, input.DurationSeconds); err != nil {
 			writeError(w, http.StatusBadRequest, err)
-			return
-		}
-		if decoder.More() {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("unexpected trailing data after the JSON body"))
 			return
 		}
 		status, err := manager.SetProtection(r.Context(), *input.Enabled, time.Duration(input.DurationSeconds)*time.Second)
@@ -701,13 +684,8 @@ func getUnboundSettingsHandler(manager *unbound.Manager) http.HandlerFunc {
 
 func putUnboundSettingsHandler(manager *unbound.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-		decoder.DisallowUnknownFields()
-
-		var settings unbound.Settings
-		if err := decoder.Decode(&settings); err != nil {
-			writeError(w, http.StatusBadRequest, err)
+		settings, ok := decodeUnboundSettings(w, r)
+		if !ok {
 			return
 		}
 		if err := manager.Apply(r.Context(), settings); err != nil {
@@ -817,10 +795,8 @@ func applyUnboundImportHandler(manager *unbound.Manager) http.HandlerFunc {
 
 func decodeUnboundBundle(w http.ResponseWriter, r *http.Request) (unbound.ConfigBundle, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, int64(unbound.MaxCustomConfigBytes)+64<<10))
-	decoder.DisallowUnknownFields()
-	var bundle unbound.ConfigBundle
-	if err := decoder.Decode(&bundle); err != nil {
+	bundle, err := decodeJSON[unbound.ConfigBundle](w, r, int64(unbound.MaxCustomConfigBytes)+64<<10)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return unbound.ConfigBundle{}, false
 	}
@@ -839,10 +815,8 @@ type importConfRequest struct {
 func classifyUnboundImportConfHandler(manager *unbound.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, int64(unbound.MaxCustomConfigBytes)+1024))
-		decoder.DisallowUnknownFields()
-		var request importConfRequest
-		if err := decoder.Decode(&request); err != nil {
+		request, err := decodeJSON[importConfRequest](w, r, int64(unbound.MaxCustomConfigBytes)+1024)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -899,10 +873,8 @@ type forwardCheckRequest struct {
 func unboundForwardCheckHandler(manager *unbound.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-		decoder.DisallowUnknownFields()
-		var request forwardCheckRequest
-		if err := decoder.Decode(&request); err != nil {
+		request, err := decodeJSON[forwardCheckRequest](w, r, 64<<10)
+		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -927,10 +899,8 @@ type fritzBoxDiscoverRequest struct {
 
 func fritzBoxDiscoverHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-	decoder.DisallowUnknownFields()
-	var request fritzBoxDiscoverRequest
-	if err := decoder.Decode(&request); err != nil {
+	request, err := decodeJSON[fritzBoxDiscoverRequest](w, r, 4<<10)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -957,10 +927,8 @@ type reverseDNSDiscoverRequest struct {
 
 func reverseDNSDiscoverHandler(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-	decoder.DisallowUnknownFields()
-	var request reverseDNSDiscoverRequest
-	if err := decoder.Decode(&request); err != nil {
+	request, err := decodeJSON[reverseDNSDiscoverRequest](w, r, 4<<10)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -1035,10 +1003,8 @@ func unboundDirectivesHandler(w http.ResponseWriter, _ *http.Request) {
 
 func decodeCustomConfig(w http.ResponseWriter, r *http.Request) (customConfigRequest, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, unbound.MaxCustomConfigBytes+1024))
-	decoder.DisallowUnknownFields()
-	var request customConfigRequest
-	if err := decoder.Decode(&request); err != nil {
+	request, err := decodeJSON[customConfigRequest](w, r, unbound.MaxCustomConfigBytes+1024)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return customConfigRequest{}, false
 	}
@@ -1047,10 +1013,8 @@ func decodeCustomConfig(w http.ResponseWriter, r *http.Request) (customConfigReq
 
 func decodeUnboundSettings(w http.ResponseWriter, r *http.Request) (unbound.Settings, bool) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
-	decoder.DisallowUnknownFields()
-	var settings unbound.Settings
-	if err := decoder.Decode(&settings); err != nil {
+	settings, err := decodeJSON[unbound.Settings](w, r, 64<<10)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return unbound.Settings{}, false
 	}
@@ -1072,6 +1036,26 @@ func requireBearerToken(expected string, next http.Handler) http.Handler {
 
 func writeError(w http.ResponseWriter, status int, err error) {
 	writeJSON(w, status, map[string]string{"error": err.Error()})
+}
+
+// decodeJSON decodes exactly one JSON value of type T from r's body,
+// rejecting unknown fields and any trailing data after that value - a bare
+// Decode() call silently ignores everything past the first JSON value, so
+// a body like {"enabled":true}{"anything"} would otherwise decode
+// successfully with the second part just discarded. Replaces what used to
+// be an identical decoder/DisallowUnknownFields/Decode block repeated at
+// every handler in this file, none of which had the trailing-data check.
+func decodeJSON[T any](w http.ResponseWriter, r *http.Request, maxBytes int64) (T, error) {
+	var value T
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&value); err != nil {
+		return value, err
+	}
+	if decoder.More() {
+		return value, errors.New("unexpected trailing data after JSON body")
+	}
+	return value, nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

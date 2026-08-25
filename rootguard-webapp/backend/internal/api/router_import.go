@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
@@ -15,10 +14,8 @@ type fritzBoxDiscoverRequest struct {
 
 func HandleFritzBoxDiscover(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-	decoder.DisallowUnknownFields()
-	var request fritzBoxDiscoverRequest
-	if err := decoder.Decode(&request); err != nil {
+	request, err := decodeJSON[fritzBoxDiscoverRequest](w, r, 4<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -36,10 +33,8 @@ type reverseDNSDiscoverRequest struct {
 
 func HandleReverseDNSDiscover(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-	decoder.DisallowUnknownFields()
-	var request reverseDNSDiscoverRequest
-	if err := decoder.Decode(&request); err != nil {
+	request, err := decodeJSON[reverseDNSDiscoverRequest](w, r, 4<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

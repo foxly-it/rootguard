@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"time"
@@ -18,13 +17,12 @@ func HandleBackupStatus(w http.ResponseWriter, r *http.Request, core *coreclient
 }
 
 func HandlePutBackupSettings(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-	decoder.DisallowUnknownFields()
-	var request struct {
+	type putBackupSettingsRequest struct {
 		RetentionPerService int `json:"retention_per_service"`
 	}
-	if err := decoder.Decode(&request); err != nil {
+	defer r.Body.Close()
+	request, err := decodeJSON[putBackupSettingsRequest](w, r, 4<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -45,13 +43,12 @@ func HandleRunCleanup(w http.ResponseWriter, r *http.Request, core *coreclient.C
 }
 
 func HandleBackupExport(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	defer r.Body.Close()
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<10))
-	decoder.DisallowUnknownFields()
-	var request struct {
+	type backupExportRequest struct {
 		Passphrase string `json:"passphrase"`
 	}
-	if err := decoder.Decode(&request); err != nil {
+	defer r.Body.Close()
+	request, err := decodeJSON[backupExportRequest](w, r, 4<<10)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
