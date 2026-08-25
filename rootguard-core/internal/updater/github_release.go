@@ -7,39 +7,70 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 // releaseTagPattern matches RootGuard's own release-tag convention, the same
 // pattern release-alpha.yml's own "version" job validates new tags against.
-var releaseTagPattern = regexp.MustCompile(`^v0\.1\.0-(alpha|beta)\.[0-9]+$`)
+// The two numbered capture groups (series, build number) let
+// pickLatestReleaseImage below rank releases itself instead of trusting the
+// API's own ordering.
+var releaseTagPattern = regexp.MustCompile(`^v0\.1\.0-(alpha|beta)\.([0-9]+)$`)
 
 type githubRelease struct {
 	TagName string `json:"tag_name"`
 }
 
-// pickLatestReleaseImage scans a GitHub Releases API response body
-// (newest-first, GitHub's own list order) for the newest RootGuard release
-// tag and returns the matching ghcr.io image reference for component.
+// pickLatestReleaseImage scans a GitHub Releases API response body for the
+// newest RootGuard release tag and returns the matching ghcr.io image
+// reference for component. Ranks every matching release itself by
+// (series, build number) rather than trusting the API response's own
+// ordering - found via a real CI failure: querying the live API directly
+// showed v0.1.0-beta.9 listed *ahead of* v0.1.0-beta.12, on a repository
+// that had several releases cut in quick succession, so "the full,
+// newest-first list" this function's doc comment used to promise isn't
+// actually guaranteed. beta ranks above alpha on a tie (RootGuard's series
+// only ever moves alpha -> beta, never back).
 func pickLatestReleaseImage(body []byte, component string) (string, error) {
 	var releases []githubRelease
 	if err := json.Unmarshal(body, &releases); err != nil {
 		return "", fmt.Errorf("parse GitHub releases response: %w", err)
 	}
+	var bestVersion string
+	var bestSeriesRank, bestBuild int
+	found := false
 	for _, release := range releases {
-		if releaseTagPattern.MatchString(release.TagName) {
-			version := strings.TrimPrefix(release.TagName, "v")
-			return fmt.Sprintf("ghcr.io/foxly-it/rootguard-%s:%s", component, version), nil
+		match := releaseTagPattern.FindStringSubmatch(release.TagName)
+		if match == nil {
+			continue
 		}
+		seriesRank := 0
+		if match[1] == "beta" {
+			seriesRank = 1
+		}
+		build, err := strconv.Atoi(match[2])
+		if err != nil {
+			continue
+		}
+		if found && (seriesRank < bestSeriesRank || (seriesRank == bestSeriesRank && build <= bestBuild)) {
+			continue
+		}
+		bestSeriesRank, bestBuild, found = seriesRank, build, true
+		bestVersion = strings.TrimPrefix(release.TagName, "v")
 	}
-	return "", fmt.Errorf("no matching RootGuard release found")
+	if !found {
+		return "", fmt.Errorf("no matching RootGuard release found")
+	}
+	return fmt.Sprintf("ghcr.io/foxly-it/rootguard-%s:%s", component, bestVersion), nil
 }
 
 // ResolveLatestReleaseImage queries the public GitHub Releases API for
 // foxly-it/rootguard and resolves the newest published release to
 // component's image reference. Every release here is created with
 // --prerelease, so GitHub's /releases/latest (which excludes prereleases)
-// can't be used - the full, newest-first list is queried instead.
+// can't be used - the full list is queried instead and ranked locally (see
+// pickLatestReleaseImage).
 func ResolveLatestReleaseImage(ctx context.Context, client *http.Client, component string) (string, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/foxly-it/rootguard/releases", nil)
 	if err != nil {
@@ -101,4 +132,29 @@ func digestQualify(ctx context.Context, run CommandRunner, image string) string 
 		}
 	}
 	return image
+}
+
+// digestFromPullOutput extracts the digest `docker pull` itself reports for
+// the image it just pulled ("Digest: sha256:...", printed once pulling
+// finishes) - authoritative for "what was just pulled" in a way
+// digestQualify's RepoDigests lookup above isn't: RepoDigests belongs to
+// the local image object as a whole, so if a repository ever has more than
+// one digest recorded against a matching local image, the first-match loop
+// there can silently return a stale one instead of the one just pulled.
+// Found via a real CI failure in rootguard-updater's own copy of this exact
+// pattern; preferred here over digestQualify whenever it can parse pull's
+// own output, with digestQualify kept as the fallback for an
+// already-qualified static pin or an unexpected output format.
+func digestFromPullOutput(image string, output []byte) (string, bool) {
+	repo, _, ok := strings.Cut(image, ":")
+	if !ok {
+		return "", false
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		digest, ok := strings.CutPrefix(strings.TrimSpace(line), "Digest: ")
+		if ok && strings.HasPrefix(digest, "sha256:") {
+			return repo + "@" + digest, true
+		}
+	}
+	return "", false
 }

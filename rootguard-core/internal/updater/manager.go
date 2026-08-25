@@ -258,13 +258,18 @@ func (m *Manager) check() {
 			m.setServiceResult(service, ServiceStatus{TargetImage: targetImage, Error: err.Error(), CheckedAt: time.Now().UTC()})
 			continue
 		}
-		if _, err := m.run(ctx, "pull", targetImage); err != nil {
+		pullOutput, err := m.run(ctx, "pull", targetImage)
+		if err != nil {
 			m.setServiceResult(service, ServiceStatus{
 				CurrentImage: currentImage, CurrentID: currentID, TargetImage: targetImage, Error: err.Error(), CheckedAt: time.Now().UTC(),
 			})
 			continue
 		}
-		targetImage = digestQualify(ctx, m.run, targetImage)
+		if qualified, ok := digestFromPullOutput(targetImage, pullOutput); ok {
+			targetImage = qualified
+		} else {
+			targetImage = digestQualify(ctx, m.run, targetImage)
+		}
 		candidateID, err := m.inspectImage(ctx, targetImage)
 		result := ServiceStatus{
 			CurrentImage: currentImage, CurrentID: currentID, TargetImage: targetImage, CandidateID: candidateID,
@@ -304,11 +309,16 @@ func (m *Manager) update(service string) {
 	}
 	defer m.enforceBackupRetention()
 	m.setProgress(service, "Lade das freigegebene Ziel-Image.")
-	if _, err := m.run(ctx, "pull", targetImage); err != nil {
+	pullOutput, err := m.run(ctx, "pull", targetImage)
+	if err != nil {
 		m.fail(service, fmt.Errorf("pull target image: %w", err))
 		return
 	}
-	targetImage = digestQualify(ctx, m.run, targetImage)
+	if qualified, ok := digestFromPullOutput(targetImage, pullOutput); ok {
+		targetImage = qualified
+	} else {
+		targetImage = digestQualify(ctx, m.run, targetImage)
+	}
 	candidateID, err := m.inspectImage(ctx, targetImage)
 	if err != nil {
 		m.fail(service, err)
