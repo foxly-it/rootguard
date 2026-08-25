@@ -104,6 +104,33 @@ func digestQualify(ctx context.Context, run runner, image string) string {
 	return image
 }
 
+// digestFromPullOutput extracts the digest `docker pull` itself reports for
+// the image it just pulled ("Digest: sha256:...", printed once pulling
+// finishes) - authoritative for "what was just pulled" in a way
+// digestQualify's RepoDigests lookup above isn't: RepoDigests belongs to
+// the local image object as a whole, so if a repository ever has more than
+// one digest recorded against a matching local image (observed for real in
+// CI - a repository whose tag had recently moved to a new release still
+// carried the previous release's digest in its RepoDigests list), the
+// first-match loop there can silently return the *stale* one, making an
+// available update look like "already current." Preferred over
+// digestQualify when it can parse pull's own output; digestQualify stays
+// as the fallback for an already-qualified static pin (whose "pull" prints
+// the same digest back anyway) or an unexpected output format.
+func digestFromPullOutput(image string, output []byte) (string, bool) {
+	repo, _, ok := strings.Cut(image, ":")
+	if !ok {
+		return "", false
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		digest, ok := strings.CutPrefix(strings.TrimSpace(line), "Digest: ")
+		if ok && strings.HasPrefix(digest, "sha256:") {
+			return repo + "@" + digest, true
+		}
+	}
+	return "", false
+}
+
 // decodeTargetOverrides reads an optional {"target_images": {...}} JSON
 // body; a missing/empty body is not an error and yields no overrides.
 func decodeTargetOverrides(body io.Reader) (map[string]string, error) {
@@ -296,8 +323,11 @@ func (m *manager) check(targetImages map[string]string) {
 		targetImage := targetImageFor(spec, targetImages)
 		currentImage, currentID, err := m.inspectContainer(ctx, spec.Container)
 		if err == nil && !m.skipPull {
-			if _, pullErr := m.run(ctx, "pull", targetImage); pullErr != nil {
+			pullOutput, pullErr := m.run(ctx, "pull", targetImage)
+			if pullErr != nil {
 				err = pullErr
+			} else if qualified, ok := digestFromPullOutput(targetImage, pullOutput); ok {
+				targetImage = qualified
 			} else {
 				targetImage = digestQualify(ctx, m.run, targetImage)
 			}

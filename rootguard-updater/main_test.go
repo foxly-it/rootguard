@@ -18,6 +18,40 @@ func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, 
 	return function(request)
 }
 
+// TestDigestFromPullOutputParsesARealPullTranscript is the regression test
+// for a real bug caught live in CI: digestQualify's RepoDigests lookup
+// returned a *stale* digest (the previous release's, not the one just
+// pulled) because RepoDigests belongs to the whole local image object, not
+// to this specific pull. digestFromPullOutput reads the digest docker
+// pull's own output reports instead, which can only ever be what was just
+// pulled.
+func TestDigestFromPullOutputParsesARealPullTranscript(t *testing.T) {
+	output := []byte(`0.1.0-beta.10: Pulling from foxly-it/rootguard-core
+Digest: sha256:d41fcc37dcb1bc76bf8d177ad164a90ee8e2070d1efe5e48cf52fa781781c54d
+Status: Downloaded newer image for ghcr.io/foxly-it/rootguard-core:0.1.0-beta.10
+`)
+	got, ok := digestFromPullOutput("ghcr.io/foxly-it/rootguard-core:0.1.0-beta.10", output)
+	if !ok {
+		t.Fatal("expected a digest to be found")
+	}
+	want := "ghcr.io/foxly-it/rootguard-core@sha256:d41fcc37dcb1bc76bf8d177ad164a90ee8e2070d1efe5e48cf52fa781781c54d"
+	if got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestDigestFromPullOutputReturnsFalseWithoutADigestLine(t *testing.T) {
+	if _, ok := digestFromPullOutput("repo:tag", []byte("some unexpected output\n")); ok {
+		t.Fatal("expected no digest to be found")
+	}
+}
+
+func TestDigestFromPullOutputReturnsFalseForATaglessImage(t *testing.T) {
+	if _, ok := digestFromPullOutput("repo-with-no-colon", []byte("Digest: sha256:abc\n")); ok {
+		t.Fatal("expected no digest to be found for an image reference with no tag separator")
+	}
+}
+
 func TestControlPlaneCheckComparesBothAllowlistedServices(t *testing.T) {
 	current := map[string]string{"rootguard-core": "sha256:core-old", "rootguard-webapp": "sha256:web-old"}
 	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
