@@ -139,6 +139,7 @@ func main() {
 	if token == "" {
 		log.Fatal("ROOTGUARD_UPDATER_TOKEN must be set")
 	}
+	requireSecretStrength("ROOTGUARD_UPDATER_TOKEN", token, minTokenLength)
 	if err := prepareSessionVolume(envOrDefault("ROOTGUARD_SESSION_DIR", "/var/lib/rootguard-sessions")); err != nil {
 		log.Fatalf("prepare WebApp session volume: %v", err)
 	}
@@ -712,4 +713,24 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+const (
+	minTokenLength = 32
+	// placeholderPrefix matches every secret value in .env.release.example
+	// ("replace-with-a-long-random-token", ...) - compose.release.yaml
+	// derives ROOTGUARD_UPDATER_TOKEN from that same ROOTGUARD_API_TOKEN
+	// value, so an unedited placeholder ends up here too.
+	placeholderPrefix = "replace-with-"
+)
+
+// requireSecretStrength exits the process if value is too short or is
+// still an unedited .env.release.example placeholder.
+func requireSecretStrength(name, value string, minLength int) {
+	if strings.HasPrefix(strings.ToLower(value), placeholderPrefix) {
+		log.Fatalf("%s is still set to its .env.release.example placeholder value - set a real secret", name)
+	}
+	if len(value) < minLength {
+		log.Fatalf("%s must be at least %d characters", name, minLength)
+	}
 }

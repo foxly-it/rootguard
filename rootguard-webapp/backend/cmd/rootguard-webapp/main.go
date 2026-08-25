@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -42,6 +43,14 @@ func main() {
 	if adminPassword == "" {
 		log.Fatal("ROOTGUARD_ADMIN_PASSWORD must be set")
 	}
+	requireSecretStrength("ROOTGUARD_API_TOKEN", coreToken, minTokenLength)
+	requireSecretStrength("ROOTGUARD_ADMIN_PASSWORD", adminPassword, minPasswordLength)
+	recoveryToken := os.Getenv("ROOTGUARD_RECOVERY_TOKEN")
+	// Empty deliberately skips the check: it's how recovery is turned off
+	// (see SessionAuth.recoveryEnabled), not a weak secret.
+	if recoveryToken != "" {
+		requireSecretStrength("ROOTGUARD_RECOVERY_TOKEN", recoveryToken, minTokenLength)
+	}
 
 	core := coreclient.New(
 		getEnv("ROOTGUARD_CORE_URL", "http://rootguard-core:8081"),
@@ -50,7 +59,7 @@ func main() {
 	sessionAuth := httpapi.NewSessionAuth(
 		getEnv("ROOTGUARD_ADMIN_USER", "admin"),
 		adminPassword,
-		os.Getenv("ROOTGUARD_RECOVERY_TOKEN"),
+		recoveryToken,
 		12*time.Hour,
 		getEnv("ROOTGUARD_SESSION_FILE", "/var/lib/rootguard-sessions/sessions.json"),
 	)
@@ -109,4 +118,31 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+const (
+	minPasswordLength = 12
+	minTokenLength    = 32
+	// placeholderPrefix matches every secret value in .env.release.example
+	// ("replace-with-a-long-random-token", "replace-with-a-strong-password",
+	// ...) - all of them happen to be long enough to pass the length checks
+	// above on their own, so an operator who copies the example file
+	// without editing it would otherwise start up "successfully" with a
+	// publicly known secret.
+	placeholderPrefix = "replace-with-"
+)
+
+// requireSecretStrength exits the process if value is too short or is
+// still an unedited .env.release.example placeholder - called for every
+// secret read from the environment at startup, so a weak admin password or
+// API token is caught immediately instead of only being enforced later
+// (e.g. the 12-character minimum the account-settings endpoint already
+// applies to a *changed* password, but never to the one it started with).
+func requireSecretStrength(name, value string, minLength int) {
+	if strings.HasPrefix(strings.ToLower(value), placeholderPrefix) {
+		log.Fatalf("%s is still set to its .env.release.example placeholder value - set a real secret", name)
+	}
+	if len(value) < minLength {
+		log.Fatalf("%s must be at least %d characters", name, minLength)
+	}
 }

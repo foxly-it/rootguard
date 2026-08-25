@@ -12,10 +12,10 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
-      ROOTGUARD_API_TOKEN: ci-rootguard-token
+      ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
-      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token
+      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token-not-a-real-secret-32
       ROOTGUARD_WEB_PORT: "18080"
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"
@@ -284,7 +284,7 @@ jobs:
           test "$(curl --fail --silent http://127.0.0.1:18080/api/auth/recovery | jq -r .enabled)" = "true"
           curl --fail --silent \
             --header 'Content-Type: application/json' \
-            --data '{"recovery_token":"ci-rootguard-recovery-token","new_password":"ci-new-rootguard-password"}' \
+            --data '{"recovery_token":"ci-rootguard-recovery-token-not-a-real-secret-32","new_password":"ci-new-rootguard-password"}' \
             http://127.0.0.1:18080/api/auth/recovery >/dev/null
           test "$(curl --silent --output /dev/null --write-out '%{http_code}' \
             --cookie /tmp/rootguard-ci-cookies.txt \

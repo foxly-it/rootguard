@@ -21,7 +21,7 @@ services:
     image: rootguard-updater:e2e
     container_name: rootguard-updater
     environment:
-      ROOTGUARD_UPDATER_TOKEN: integration-token
+      ROOTGUARD_UPDATER_TOKEN: integration-token-not-a-real-secret-32
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.e2e.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard-updater-e2e

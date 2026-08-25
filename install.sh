@@ -199,6 +199,39 @@ main() {
   fi
   echo
 
+  # Every prompt/validation happens up front, before anything below creates
+  # $TARGET_DIR or downloads a single byte - so a rejected (too short)
+  # password can't leave a half-set-up directory behind, the same principle
+  # as the existence check at the very top of this function.
+  local api_token recovery_token admin_user admin_password
+  api_token="$(random_secret)"
+  recovery_token="$(random_secret)"
+
+  admin_user="${ROOTGUARD_ADMIN_USER:-}"
+  if [ -z "$admin_user" ]; then
+    prompt admin_user "Benutzername für die RootGuard-WebGUI [admin]: " "admin"
+  fi
+
+  local generated_password=0
+  admin_password="${ROOTGUARD_ADMIN_PASSWORD:-}"
+  if [ -z "$admin_password" ]; then
+    prompt_secret admin_password "Passwort für die RootGuard-WebGUI (leer = zufällig generieren): "
+    echo
+  fi
+  if [ -z "$admin_password" ]; then
+    admin_password="$(random_secret | head -c 20)"
+    generated_password=1
+  fi
+  # Only reachable for a typed or ROOTGUARD_ADMIN_PASSWORD-supplied value -
+  # the generated fallback above is always 20 characters. Matches the
+  # backend's own minimum (see requireSecretStrength in
+  # rootguard-webapp/backend/cmd/rootguard-webapp/main.go), which would
+  # otherwise reject this password at container startup anyway, just with
+  # a far less helpful error buried in `docker compose logs`.
+  if [ "${#admin_password}" -lt 12 ]; then
+    die "Das WebGUI-Passwort muss mindestens 12 Zeichen lang sein. Setze ROOTGUARD_ADMIN_PASSWORD auf ein längeres Passwort oder lasse das Feld leer, um eines automatisch generieren zu lassen."
+  fi
+
   log "Ermittle die aktuelle RootGuard-Version…"
   local tag
   tag="$(resolve_latest_tag)"
@@ -221,26 +254,6 @@ main() {
   mkdir -p "$TARGET_DIR"
   mv "$staging/compose.release.yaml" "$staging/.env" "$TARGET_DIR/"
   cd "$TARGET_DIR"
-
-  local api_token recovery_token admin_user admin_password
-  api_token="$(random_secret)"
-  recovery_token="$(random_secret)"
-
-  admin_user="${ROOTGUARD_ADMIN_USER:-}"
-  if [ -z "$admin_user" ]; then
-    prompt admin_user "Benutzername für die RootGuard-WebGUI [admin]: " "admin"
-  fi
-
-  local generated_password=0
-  admin_password="${ROOTGUARD_ADMIN_PASSWORD:-}"
-  if [ -z "$admin_password" ]; then
-    prompt_secret admin_password "Passwort für die RootGuard-WebGUI (leer = zufällig generieren): "
-    echo
-  fi
-  if [ -z "$admin_password" ]; then
-    admin_password="$(random_secret | head -c 20)"
-    generated_password=1
-  fi
 
   # Values are passed through the environment, never interpolated into a
   # sed/awk program's own text - a password containing '&', '#', or a

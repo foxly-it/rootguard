@@ -21,7 +21,7 @@ trap cleanup EXIT
 guard_no_existing_resources
 
 normalized_arch="$(detect_arch)"
-export ROOTGUARD_API_TOKEN="clean-install-api-token-${normalized_arch}"
+export ROOTGUARD_API_TOKEN="clean-install-api-token-not-a-real-secret-${normalized_arch}"
 export ROOTGUARD_ADMIN_USER="admin"
 export ROOTGUARD_ADMIN_PASSWORD="clean-install-password-${normalized_arch}"
 export ROOTGUARD_RECOVERY_TOKEN="clean-install-recovery-token-${normalized_arch}"

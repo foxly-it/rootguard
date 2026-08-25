@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,6 +29,7 @@ func main() {
 	if token == "" {
 		log.Fatal("ROOTGUARD_API_TOKEN must be set")
 	}
+	requireSecretStrength("ROOTGUARD_API_TOKEN", token, minTokenLength)
 
 	port := envOrDefault("PORT", "8081")
 	manager := unbound.NewManager(
@@ -232,4 +234,25 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+const (
+	minTokenLength = 32
+	// placeholderPrefix matches every secret value in .env.release.example
+	// ("replace-with-a-long-random-token", ...) - it's long enough to pass
+	// minTokenLength on its own, so an operator who copies the example file
+	// without editing it would otherwise start up "successfully" with a
+	// publicly known token.
+	placeholderPrefix = "replace-with-"
+)
+
+// requireSecretStrength exits the process if value is too short or is
+// still an unedited .env.release.example placeholder.
+func requireSecretStrength(name, value string, minLength int) {
+	if strings.HasPrefix(strings.ToLower(value), placeholderPrefix) {
+		log.Fatalf("%s is still set to its .env.release.example placeholder value - set a real secret", name)
+	}
+	if len(value) < minLength {
+		log.Fatalf("%s must be at least %d characters", name, minLength)
+	}
 }

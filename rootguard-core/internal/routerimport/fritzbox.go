@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -66,8 +67,13 @@ func NewFritzBoxClient(address string) (*FritzBoxClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	// net.JoinHostPort brackets an IPv6 literal itself
+	// ("http://[fd00::1]:49000", not the invalid/ambiguous
+	// "http://fd00::1:49000" a bare Sprintf produced before) - strip any
+	// brackets the caller already included first, or it would double up.
+	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
 	return &FritzBoxClient{
-		baseURL: fmt.Sprintf("http://%s:%d", host, fritzBoxDefaultPort),
+		baseURL: "http://" + net.JoinHostPort(host, strconv.Itoa(fritzBoxDefaultPort)),
 		http:    &http.Client{Timeout: fritzBoxRequestTimeout},
 	}, nil
 }

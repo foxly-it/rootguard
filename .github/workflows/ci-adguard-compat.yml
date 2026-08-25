@@ -36,10 +36,10 @@ jobs:
             image: adguard/adguardhome:beta
     runs-on: ubuntu-latest
     env:
-      ROOTGUARD_API_TOKEN: ci-rootguard-token
+      ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
-      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token
+      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token-not-a-real-secret-32
       ROOTGUARD_WEB_PORT: "18080"
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"

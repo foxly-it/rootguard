@@ -89,7 +89,12 @@ func Extract(dataDir, passphrase string, encrypted io.Reader) (_ string, preview
 	var manifestData []byte
 	var expanded int64
 	for count := 0; ; count++ {
-		if count > MaxFiles {
+		// >= , not > : at count == MaxFiles, exactly MaxFiles entries have
+		// already been read successfully - the old > check let this
+		// iteration call archive.Next() one more time first, so a backup
+		// with MaxFiles+1 entries was silently accepted instead of
+		// rejected.
+		if count >= MaxFiles {
 			return "", Preview{}, fmt.Errorf("backup contains more than %d entries", MaxFiles)
 		}
 		header, err := archive.Next()
