@@ -171,12 +171,14 @@ install_docker() {
 
 main() {
   check_ports
+  echo
 
   if docker_present; then
     log "Docker ist bereits vorhanden."
   else
     install_docker
   fi
+  echo
 
   if [ -e "$TARGET_DIR" ]; then
     die "'$TARGET_DIR' existiert bereits - vermutlich läuft hier schon eine Installation. Abgebrochen, um nichts zu überschreiben."
@@ -233,6 +235,7 @@ main() {
   ' .env > .env.tmp
   mv .env.tmp .env
   chmod 600 .env
+  echo
 
   log "Starte den RootGuard-Stack…"
   docker_cmd compose -f compose.release.yaml up -d \
