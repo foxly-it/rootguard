@@ -411,7 +411,7 @@ func getAdGuardFilterReportHandler(manager *adguard.Manager) http.HandlerFunc {
 func setAdGuardFilteringHandler(manager *adguard.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input struct {
-			Enabled bool `json:"enabled"`
+			Enabled *bool `json:"enabled"`
 		}
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10))
 		decoder.DisallowUnknownFields()
@@ -419,7 +419,20 @@ func setAdGuardFilteringHandler(manager *adguard.Manager) http.HandlerFunc {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		status, err := manager.SetFiltering(r.Context(), input.Enabled)
+		// Found via code review: {} used to decode to Enabled=false with no
+		// way to tell it apart from an explicit {"enabled":false}, silently
+		// disabling filtering. Same class of bug as the protection endpoint
+		// above. decoder.More() catches a second JSON value appended after
+		// the first (a bare Decode call silently ignores it otherwise).
+		if input.Enabled == nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("enabled is required"))
+			return
+		}
+		if decoder.More() {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("unexpected trailing data after the JSON body"))
+			return
+		}
+		status, err := manager.SetFiltering(r.Context(), *input.Enabled)
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err)
 			return
@@ -462,6 +475,10 @@ func setAdGuardProtectionHandler(manager *adguard.Manager) http.HandlerFunc {
 		}
 		if err := validateAdGuardProtectionRequest(input.Enabled, input.DurationSeconds); err != nil {
 			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		if decoder.More() {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("unexpected trailing data after the JSON body"))
 			return
 		}
 		status, err := manager.SetProtection(r.Context(), *input.Enabled, time.Duration(input.DurationSeconds)*time.Second)
