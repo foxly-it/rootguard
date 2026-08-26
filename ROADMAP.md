@@ -1076,9 +1076,17 @@ number.
 
 Goal: freeze features and prove reliability.
 
-- [ ] No unresolved release-blocking defect - deferred to a final `gh issue
-      list` sweep immediately before cutting `1.0.0-rc.1`, not before; doing
-      it earlier would just need repeating.
+- [x] No unresolved release-blocking defect - final `gh issue list` sweep
+      before cutting `1.0.0-rc.1` (2026-08-26): 4 open issues, none
+      release-blocking -
+      [#328](https://github.com/foxly-it/rootguard/issues/328) (narrow
+      updater self-resync edge case),
+      [#271](https://github.com/foxly-it/rootguard/issues/271) (the
+      30-day endurance test's own tracking issue, see below),
+      [#186](https://github.com/foxly-it/rootguard/issues/186) (post-1.0
+      extension architecture, explicitly out of scope until after 1.0),
+      [#131](https://github.com/foxly-it/rootguard/issues/131) (an Unbound
+      scope decision that doesn't block anything shipped so far).
 - [x] Fresh install, upgrade, rollback, backup, and restore matrix is green -
       fresh install (`clean-install.yml`), upgrade
       (`release-alpha.yml`'s `upgrade-test`), and rollback
@@ -1142,6 +1150,15 @@ Goal: freeze features and prove reliability.
       doesn't exist yet - stays open until 1.0's scope is actually final.
 
 Exit: publish `1.0.0-rc.1`; only bug fixes and documentation may follow.
+
+**Exited 2026-08-26**: [`v1.0.0-rc.1`](https://github.com/foxly-it/rootguard/releases/tag/v1.0.0-rc.1)
+published - images built and pushed for all five components, smoke-test
+and upgrade-test (a real `0.1.0-beta.14` install upgraded in place through
+the control-plane updater) both green, site pinned to the release. From
+here on: only bug fixes and documentation, per the exit criterion above,
+until the two remaining 1.0.0-gating items close (the 30-day soak test and
+the migration/rollback docs it and the rest of 1.0.0's scope gate, see
+below).
 
 ---
 

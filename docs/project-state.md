@@ -2162,3 +2162,35 @@ non-blocking):
   identifier and a 20-digit major-version component, plus the full
   canonical SemVer.org chain and every previously-reported case again, to
   confirm nothing regressed.
+
+**PR #359 merged** (2026-08-26, commit `ab6b1bf`) after four independent
+review rounds - final `gh pr checks 359` confirmed fully green on the
+merged commit before merging.
+
+**`v1.0.0-rc.1` cut and published same day.** Final `gh issue list` sweep
+right before cutting: 4 open issues, none release-blocking (see
+`ROADMAP.md`'s 0.9 section for the per-issue reasoning). Triggered via
+`release-version-bump.yml`'s `version` override; tag, GitHub prerelease,
+and all five component images published cleanly - but `upgrade-test`
+failed on the first run, for exactly the reason `release-alpha.yml`'s own
+comments already warned about: `beta.14 -> 1.0.0-rc.1` is the *first*
+jump onto the release that ships PR #359's SemVer generalization, so
+`beta.14`'s still-running, pre-fix Core resolved "latest" back to itself
+instead of `1.0.0-rc.1` (`update_available: false`) - the identical
+bootstrap class as the earlier `beta.12 -> beta.13` failure, just
+triggered by a different fix this time. The existing workaround only
+special-cased `previous == 0.1.0-beta.12`; generalized properly this time
+(PR #360, merged same day) - `upgrade-test` now always calls the updater
+with an explicit `target_images` override instead of trusting whichever
+previous release's Core to resolve "latest" correctly, since this job
+already knows exactly which version it's testing and doesn't need live
+discovery at all. Re-ran `release-alpha.yml` for `1.0.0-rc.1` (images
+already published and immutable, so only `upgrade-test`,
+`update-alpha-pins`, and `smoke-test` did real work this time) - fully
+green. [`v1.0.0-rc.1`](https://github.com/foxly-it/rootguard/releases/tag/v1.0.0-rc.1)
+is out, correctly marked as a GitHub prerelease, site pinned to it.
+
+RootGuard is now in the `0.9` exit state: "only bug fixes and
+documentation" until the two remaining 1.0.0-gating items close (the
+30-day soak test, `rootguard#271`, and the migration/rollback docs that
+wait on 1.0.0's scope being final).
