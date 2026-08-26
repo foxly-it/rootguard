@@ -3,6 +3,27 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.0-rc.1] - 2026-08-26
+
+### Added
+
+- Generalize the release-cutting pipeline to real SemVer
+
+### Changed
+
+- Generalize the downgrade guard to real SemVer
+
+### Documentation
+
+- Record the downgrade-refusal safety net and confirm beta.14 is clean
+
+### Fixed
+
+- Correct SemVer handling in release/install/site scripts
+- Recognize hyphenated SemVer identifiers and stop losing stable-version tracking
+- Validate release-cut override before side effects, real SemVer sort in install.sh
+- Hyphen-tolerant tag lookup in cut workflow, overflow-safe SemVer compare
+
 ## [0.1.0-beta.14] - 2026-08-26
 
 ### Added
