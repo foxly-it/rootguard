@@ -13,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -386,6 +388,25 @@ func (m *manager) update(targetImages map[string]string) {
 			m.fail(err)
 			return
 		}
+		// Refuses to apply what would actually be a downgrade - found live:
+		// a resolution bug elsewhere (see digestFromPullOutput and
+		// pickLatestReleaseImage) could target an older release than the
+		// one currently running, and nothing here checked that before
+		// swapping. Both images carry org.opencontainers.image.version
+		// (every Dockerfile sets it from its own build), so this doesn't
+		// depend on either reference still carrying a tag by this point -
+		// oldID/candidateID work whether they're bare digests or not.
+		// Silently skips the check (comparable=false) for anything that
+		// isn't a RootGuard release version - a local :dev build, for
+		// instance - rather than blocking a build lacking that label.
+		if candidateVersion, err := m.imageVersion(ctx, candidateID); err == nil {
+			if oldVersion, err := m.imageVersion(ctx, oldID); err == nil {
+				if older, comparable := isOlderReleaseVersion(candidateVersion, oldVersion); comparable && older {
+					m.fail(fmt.Errorf("%s: refusing to install %s - it looks older than the currently running %s (the resolved update target may be stale)", spec.DisplayName, candidateVersion, oldVersion))
+					return
+				}
+			}
+		}
 		candidateImages[spec.Name] = targetImage
 		candidateIDs[spec.Name] = candidateID
 	}
@@ -603,6 +624,66 @@ func (m *manager) inspectImage(ctx context.Context, image string) (string, error
 		return "", fmt.Errorf("empty image ID for %s", image)
 	}
 	return id, nil
+}
+
+// imageVersion reads an image's org.opencontainers.image.version label -
+// every RootGuard Dockerfile sets it from its own build (see
+// release-alpha.yml's build-args), so this works regardless of whether the
+// image reference on hand is a tag, a digest, or a local image ID. Returns
+// an empty string (not an error) for an image with no such label - a local
+// :dev build, for instance - rather than failing the caller over a
+// cosmetic gap.
+func (m *manager) imageVersion(ctx context.Context, image string) (string, error) {
+	output, err := m.run(ctx, "image", "inspect", "--format", `{{index .Config.Labels "org.opencontainers.image.version"}}`, image)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+// releaseVersionPattern matches RootGuard's own release-version convention
+// as it appears in the image label above (no leading "v", unlike the git
+// tag it's built from) - mirrors releaseTagPattern in
+// rootguard-core/internal/updater/github_release.go, a different Go module
+// this one deliberately doesn't depend on (no outbound internet).
+var releaseVersionPattern = regexp.MustCompile(`^0\.1\.0-(alpha|beta)\.([0-9]+)$`)
+
+// isOlderReleaseVersion reports whether candidate is an older RootGuard
+// release than current. comparable is false whenever either string doesn't
+// match RootGuard's own release convention (a local/dev build, a missing
+// label, ...) - the caller should treat that as "can't tell, don't block."
+func isOlderReleaseVersion(candidate, current string) (older, comparable bool) {
+	candidateKey, ok := parseReleaseVersionKey(candidate)
+	if !ok {
+		return false, false
+	}
+	currentKey, ok := parseReleaseVersionKey(current)
+	if !ok {
+		return false, false
+	}
+	if candidateKey[0] != currentKey[0] {
+		return candidateKey[0] < currentKey[0], true
+	}
+	return candidateKey[1] < currentKey[1], true
+}
+
+// parseReleaseVersionKey extracts a comparable (series rank, build number)
+// pair from a version string - beta always outranks alpha regardless of
+// build number, matching pickLatestReleaseImage's own ranking.
+func parseReleaseVersionKey(version string) (key [2]int, ok bool) {
+	match := releaseVersionPattern.FindStringSubmatch(version)
+	if match == nil {
+		return key, false
+	}
+	seriesRank := 0
+	if match[1] == "beta" {
+		seriesRank = 1
+	}
+	build, err := strconv.Atoi(match[2])
+	if err != nil {
+		return key, false
+	}
+	return [2]int{seriesRank, build}, true
 }
 
 func (m *manager) writeOverride(images map[string]string) error {

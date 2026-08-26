@@ -52,6 +52,78 @@ func TestDigestFromPullOutputReturnsFalseForATaglessImage(t *testing.T) {
 	}
 }
 
+// TestIsOlderReleaseVersion is the regression test for the exact incident
+// that motivated this check: beta.12's own release resolution had a bug
+// (see rootguard-core's pickLatestReleaseImage) that could resolve
+// "latest" to beta.9 - an older release than the one actually running.
+// Nothing checked that before swapping.
+func TestIsOlderReleaseVersion(t *testing.T) {
+	tests := []struct {
+		candidate, current string
+		older, comparable  bool
+	}{
+		{"0.1.0-beta.9", "0.1.0-beta.12", true, true},
+		{"0.1.0-beta.13", "0.1.0-beta.12", false, true},
+		{"0.1.0-beta.12", "0.1.0-beta.12", false, true},
+		{"0.1.0-alpha.20", "0.1.0-beta.1", true, true},
+		{"0.1.0-beta.1", "0.1.0-alpha.20", false, true},
+		{"dev", "0.1.0-beta.12", false, false},
+		{"0.1.0-beta.9", "dev", false, false},
+		{"", "", false, false},
+	}
+	for _, test := range tests {
+		older, comparable := isOlderReleaseVersion(test.candidate, test.current)
+		if older != test.older || comparable != test.comparable {
+			t.Errorf("isOlderReleaseVersion(%q, %q) = (%v, %v), want (%v, %v)",
+				test.candidate, test.current, older, comparable, test.older, test.comparable)
+		}
+	}
+}
+
+// TestUpdateRefusesADowngrade reproduces the beta.12->beta.9 incident
+// end to end through update(): the resolved target image genuinely exists
+// and differs from what's running (so the plain ID-comparison "changed"
+// check alone would have let it through), but its
+// org.opencontainers.image.version label identifies it as an older
+// release. update() must refuse and report a failure instead of applying
+// it.
+func TestUpdateRefusesADowngrade(t *testing.T) {
+	imageVersions := map[string]string{
+		"sha256:core-old": "0.1.0-beta.12",
+		"sha256:core-new": "0.1.0-beta.9", // the "candidate" - actually older
+		"sha256:web-old":  "0.1.0-beta.12",
+		"sha256:web-new":  "0.1.0-beta.9",
+	}
+	current := map[string]string{"rootguard-core": "sha256:core-old", "rootguard-webapp": "sha256:web-old"}
+	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		switch {
+		case arguments[0] == "inspect":
+			container := arguments[len(arguments)-1]
+			return []byte(container + ":image|" + current[container]), nil
+		case len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" && strings.Contains(arguments[len(arguments)-2], "Labels"):
+			image := arguments[len(arguments)-1]
+			return []byte(imageVersions[image]), nil
+		case arguments[0] == "image":
+			return []byte(candidates[arguments[len(arguments)-1]]), nil
+		default:
+			t.Fatalf("unexpected docker command: %v", arguments)
+			return nil, nil
+		}
+	}
+	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", testSpecs(), run)
+	manager.skipPull = true
+
+	if _, err := manager.StartUpdate(nil); err != nil {
+		t.Fatal(err)
+	}
+	waitForState(t, manager, stateFailed)
+	result := manager.Status()
+	if !strings.Contains(result.Message, "older than the currently running") {
+		t.Fatalf("expected a downgrade-refusal message, got %q", result.Message)
+	}
+}
+
 func TestControlPlaneCheckComparesBothAllowlistedServices(t *testing.T) {
 	current := map[string]string{"rootguard-core": "sha256:core-old", "rootguard-webapp": "sha256:web-old"}
 	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
