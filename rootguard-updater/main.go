@@ -13,11 +13,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -641,49 +641,31 @@ func (m *manager) imageVersion(ctx context.Context, image string) (string, error
 	return strings.TrimSpace(string(output)), nil
 }
 
-// releaseVersionPattern matches RootGuard's own release-version convention
-// as it appears in the image label above (no leading "v", unlike the git
-// tag it's built from) - mirrors releaseTagPattern in
-// rootguard-core/internal/updater/github_release.go, a different Go module
-// this one deliberately doesn't depend on (no outbound internet).
-var releaseVersionPattern = regexp.MustCompile(`^0\.1\.0-(alpha|beta)\.([0-9]+)$`)
-
-// isOlderReleaseVersion reports whether candidate is an older RootGuard
-// release than current. comparable is false whenever either string doesn't
-// match RootGuard's own release convention (a local/dev build, a missing
-// label, ...) - the caller should treat that as "can't tell, don't block."
+// isOlderReleaseVersion reports whether candidate is an older release than
+// current, both given as bare version strings without a leading "v" (the
+// form org.opencontainers.image.version carries, e.g. "0.1.0-beta.12").
+// Uses full SemVer 2.0 precedence via golang.org/x/mod/semver rather than a
+// RootGuard-specific "0.1.0-(alpha|beta).N" parser, so this keeps working
+// correctly across any future version scheme change (0.2.0, 1.0.0,
+// 1.0.0-rc.1, ...) instead of silently going "not comparable" - and
+// therefore not blocking anything - the day the convention changes.
+// Confirmed empirically for both today's scheme and hypothetical future
+// ones: beta always outranks alpha at the same major.minor.patch
+// (identifiers compare lexically), a higher build number within the same
+// series wins (both-numeric identifiers compare numerically, not as
+// strings, so beta.9 correctly loses to beta.12), and a release with no
+// pre-release suffix outranks any pre-release of the same
+// major.minor.patch (0.2.0 beats 0.1.0-beta.14; 1.0.0 beats 1.0.0-rc.1).
+// comparable is false whenever either string isn't a valid semantic
+// version - a local/dev build, a missing label - the caller should treat
+// that as "can't tell, don't block."
 func isOlderReleaseVersion(candidate, current string) (older, comparable bool) {
-	candidateKey, ok := parseReleaseVersionKey(candidate)
-	if !ok {
+	candidateVersion := "v" + strings.TrimPrefix(candidate, "v")
+	currentVersion := "v" + strings.TrimPrefix(current, "v")
+	if !semver.IsValid(candidateVersion) || !semver.IsValid(currentVersion) {
 		return false, false
 	}
-	currentKey, ok := parseReleaseVersionKey(current)
-	if !ok {
-		return false, false
-	}
-	if candidateKey[0] != currentKey[0] {
-		return candidateKey[0] < currentKey[0], true
-	}
-	return candidateKey[1] < currentKey[1], true
-}
-
-// parseReleaseVersionKey extracts a comparable (series rank, build number)
-// pair from a version string - beta always outranks alpha regardless of
-// build number, matching pickLatestReleaseImage's own ranking.
-func parseReleaseVersionKey(version string) (key [2]int, ok bool) {
-	match := releaseVersionPattern.FindStringSubmatch(version)
-	if match == nil {
-		return key, false
-	}
-	seriesRank := 0
-	if match[1] == "beta" {
-		seriesRank = 1
-	}
-	build, err := strconv.Atoi(match[2])
-	if err != nil {
-		return key, false
-	}
-	return [2]int{seriesRank, build}, true
+	return semver.Compare(candidateVersion, currentVersion) < 0, true
 }
 
 func (m *manager) writeOverride(images map[string]string) error {
