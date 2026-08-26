@@ -1931,3 +1931,56 @@ static pin or unexpected output). `beta.10`'s images themselves are fine
 (fresh install verified via its own passing smoke-test) - only the
 *upgrade path* was affected; `beta.11` carries the fix and re-verifies the
 upgrade-test passes for real.
+
+**That fix wasn't the whole story - two more real bugs surfaced chasing
+this, across `beta.11` through `beta.13`:**
+
+- **Core has its own separate copy of the exact `digestQualify` bug**
+  (`rootguard-core/internal/updater/manager.go`, used for AdGuard/Unbound's
+  own self-update checking) - a different Go module than
+  `rootguard-updater`, so PR #352/#353's fix there didn't cover it. Same
+  `digestFromPullOutput` fix applied here too (PR #355).
+- **The GitHub Releases API doesn't reliably return releases newest-first**,
+  despite `pickLatestReleaseImage`'s own doc comment promising it. Directly
+  querying the live API showed `v0.1.0-beta.9` listed *ahead of*
+  `v0.1.0-beta.12`, on a repository that had several releases cut in quick
+  succession. Every live self-update resolution (core, webapp, updater,
+  unbound) silently trusted that ordering. Fixed by ranking every matching
+  release locally by `(series, build number)` parsed from the tag itself,
+  ignoring API response order entirely (PR #355).
+
+**Why the upgrade-test kept failing even after both of those landed** (root
+cause found by the user, not guessed): the upgrade-test's `check`/`install`
+calls run against the *previous* release's own Core - `beta.12`'s Core for
+the `beta.13` test - which still has the API-ordering bug, since that fix
+only ships *in* `beta.13`. Core resolves "latest core/webapp release"
+itself and sends that as a `target_images` override, which *wins* over the
+updater's own correctly-set `ROOTGUARD_*_UPDATE_IMAGE` env vars
+(`targetImageFor` in `rootguard-updater/main.go` prefers the override).
+`beta.12`'s Core kept resolving to whatever the live API listed first
+(`v0.1.0-beta.9`) and pushing that as the override - so the "upgrade"
+silently installed `beta.9` instead of `beta.13` every single time,
+explaining why the exact same wrong digest recurred across every version
+pair tested (`beta.10→11`, `11→12`, `12→13`). A fix only helps upgrades
+*after* the release that first ships it; it can't fix the one jump onto it,
+since the code doing the resolving at that point is still the old, buggy
+version. Worked around for exactly that one CI transition (PR #356):
+`release-alpha.yml` special-cases `previous == 0.1.0-beta.12` and calls the
+updater's own `/api/control-plane/{check,update}` directly with an explicit
+override via `docker exec rootguard-core wget ...`, bypassing only the old
+Core's resolution - still exercises the real
+updater/pull/digest/compose/verify/rollback path either way. Reverts to the
+normal path automatically once `beta.13` (which carries the fix) becomes
+"previous". **Confirmed working**: `beta.13`'s full release pipeline,
+including `upgrade-test`, passed end to end.
+
+**Real-installation impact, deliberately not mitigated further**: any
+`beta.12` installation clicking "check for updates" in the WebGUI could hit
+this same bug and silently resolve to an older release than `beta.13`.
+Given `beta.12` was published for roughly an hour before `beta.13` and this
+is pre-1.0 software with no known external adopters caught in that exact
+window, building dedicated tooling or public documentation for it was
+judged disproportionate. If anyone ever does report being stuck on
+`beta.12`, the same manual `docker exec rootguard-core wget ... http://
+updater:8082/api/control-plane/update` bootstrap documented above (with
+`target_images` pointed at the desired version) is the escape hatch.
