@@ -3,6 +3,16 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [0.1.0-beta.14] - 2026-08-26
+
+### Added
+
+- Updater refuses to install an older release than what's running
+
+### Documentation
+
+- Record the real update-mechanism bug chain (beta.10 through beta.13)
+
 ## [0.1.0-beta.13] - 2026-08-25
 
 ### Fixed
