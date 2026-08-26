@@ -436,6 +436,7 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "commit=${pin_commit}" >> "$GITHUB_OUTPUT"
           echo "compose_path=${pin_compose_path}" >> "$GITHUB_OUTPUT"
+          echo "version=${previous_version}" >> "$GITHUB_OUTPUT"
 
       - name: Extract the previous release's correctly pinned Compose model
         if: steps.previous.outputs.skip != 'true'
@@ -557,7 +558,30 @@ jobs:
             if [ -n "$code" ] && [ "$code" != "000" ]; then break; fi
             sleep 1
           done
-          call POST /api/control-plane-updates/check >/dev/null
+          # The previous release's own Core resolves "latest core/webapp
+          # release" itself and sends that as the target_images override -
+          # which wins over the updater's own correctly-set
+          # ROOTGUARD_*_UPDATE_IMAGE env vars (see targetImageFor in
+          # rootguard-updater/main.go). A previous release whose Core still
+          # has the pickLatestReleaseImage ordering bug (PR #355) can
+          # therefore resolve to some *older* release than the one this job
+          # is actually testing, deep-linking the wrong tag straight past
+          # the fix - the fix only helps releases *after* the one that
+          # first ships it, not the jump onto it. Bypass Core's resolution
+          # for exactly that one jump by calling the updater directly with
+          # an explicit override, using the same real updater/pull/digest/
+          # compose/verify/rollback path either way - only where the
+          # *target* tag comes from differs.
+          if [ "${{ steps.previous.outputs.version }}" = "0.1.0-beta.12" ]; then
+            target_body='{"target_images":{"core":"ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.value }}","webapp":"ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.value }}"}}'
+            docker exec rootguard-core wget -qO- \
+              --header='Authorization: Bearer alpha-upgrade-test-token-not-a-real-secret-32' \
+              --header='Content-Type: application/json' \
+              --post-data="$target_body" \
+              http://updater:8082/api/control-plane/check >/dev/null
+          else
+            call POST /api/control-plane-updates/check >/dev/null
+          fi
           state=""
           for attempt in {1..90}; do
             status="$(poll_status)"
@@ -568,7 +592,15 @@ jobs:
             sleep 2
           done
           test "$state" = idle
-          call POST /api/control-plane-updates/install >/dev/null
+          if [ "${{ steps.previous.outputs.version }}" = "0.1.0-beta.12" ]; then
+            docker exec rootguard-core wget -qO- \
+              --header='Authorization: Bearer alpha-upgrade-test-token-not-a-real-secret-32' \
+              --header='Content-Type: application/json' \
+              --post-data="$target_body" \
+              http://updater:8082/api/control-plane/update >/dev/null
+          else
+            call POST /api/control-plane-updates/install >/dev/null
+          fi
           # The install swaps the Core and WebApp containers themselves, so
           # the WebApp is expected to be briefly unreachable mid-poll here -
           # unlike everywhere else in this step, that's not a failure.
