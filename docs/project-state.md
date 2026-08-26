@@ -1984,3 +1984,22 @@ judged disproportionate. If anyone ever does report being stuck on
 `beta.12`, the same manual `docker exec rootguard-core wget ... http://
 updater:8082/api/control-plane/update` bootstrap documented above (with
 `target_images` pointed at the desired version) is the escape hatch.
+
+**Durable safety net added on top, for the future** (PR #357, user asked
+"and fixed going forward?" after the postmortem above): the fixes so far
+close the three *specific* bugs found, but nothing stopped `update()` from
+applying a *future* bad resolution the same way, whatever causes it -
+"different image ID" was treated as "newer," full stop. `update()` now
+compares both images' `org.opencontainers.image.version` label (every
+Dockerfile already sets it from its own build) using the same
+`(series, build number)` ranking `pickLatestReleaseImage` uses, and refuses
+with a clear error if the candidate is genuinely older - silently skipping
+the check for anything that doesn't parse as a RootGuard release version
+(a local `:dev` build) rather than blocking it. This can't rescue a release
+that shipped before it exists (the code doing the resolving during an
+upgrade is whichever version is *currently running*), but it protects
+every upgrade *from `beta.14` onward* against this entire bug class.
+Confirmed live: `beta.14`'s `upgrade-test` passed via the normal
+WebApp-proxied path (the `beta.12`-specific bypass in `release-alpha.yml`
+correctly stayed dormant, since `beta.13` - carrying the ordering fix - is
+now "previous").
