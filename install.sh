@@ -104,6 +104,29 @@ is_numeric_identifier() {
   [[ "$1" =~ ^[0-9]+$ ]]
 }
 
+# numeric_compare a b: echoes -1/0/1 for a<b / a==b / a>b, treating a and
+# b as arbitrary-precision unsigned decimal strings (no numeric identifier
+# has been rejected for size so far, and SemVer itself doesn't cap one at
+# 64 bits) - a plain `((10#$a < 10#$b))` would silently miscompare once a
+# value overflows bash's native integer type. Leading zeros stripped
+# first (kept possible here even though a real RootGuard tag never has
+# one - release-alpha.yml's own gate already refuses to mint one), then
+# the longer digit string wins (no leading zeros left means length alone
+# decides), and only a tie in length falls through to a lexical compare,
+# which is numerically correct once the lengths already match.
+numeric_compare() {
+  local a="$1" b="$2"
+  while [[ ${#a} -gt 1 && "${a:0:1}" == 0 ]]; do a="${a:1}"; done
+  while [[ ${#b} -gt 1 && "${b:0:1}" == 0 ]]; do b="${b:1}"; done
+  if ((${#a} != ${#b})); then
+    if ((${#a} < ${#b})); then echo -1; else echo 1; fi
+    return
+  fi
+  if [[ "$a" == "$b" ]]; then echo 0;
+  elif [[ "$a" < "$b" ]]; then echo -1;
+  else echo 1; fi
+}
+
 # compare_identifier a b: echoes -1/0/1 for a<b / a==b / a>b, per SemVer's
 # prerelease-identifier precedence rules (numeric identifiers compare
 # numerically and always rank below alphanumeric ones; alphanumeric
@@ -111,7 +134,7 @@ is_numeric_identifier() {
 compare_identifier() {
   local a="$1" b="$2"
   if is_numeric_identifier "$a" && is_numeric_identifier "$b"; then
-    if ((10#$a < 10#$b)); then echo -1; elif ((10#$a > 10#$b)); then echo 1; else echo 0; fi
+    numeric_compare "$a" "$b"
     return
   fi
   if is_numeric_identifier "$a"; then echo -1; return; fi
@@ -129,10 +152,11 @@ version_gt() {
   local -a __rg_core_parts
   version_core_parts "$a"; local -a acore=("${__rg_core_parts[@]}")
   version_core_parts "$b"; local -a bcore=("${__rg_core_parts[@]}")
-  local i
+  local i c
   for i in 0 1 2; do
-    if ((10#${acore[$i]} > 10#${bcore[$i]})); then return 0; fi
-    if ((10#${acore[$i]} < 10#${bcore[$i]})); then return 1; fi
+    c="$(numeric_compare "${acore[$i]}" "${bcore[$i]}")"
+    ((c > 0)) && return 0
+    ((c < 0)) && return 1
   done
   local apre bpre
   apre="$(version_prerelease "$a")"
@@ -143,7 +167,7 @@ version_gt() {
   local -a aids bids
   IFS='.' read -r -a aids <<< "$apre"
   IFS='.' read -r -a bids <<< "$bpre"
-  local n=${#aids[@]} idx c
+  local n=${#aids[@]} idx
   ((${#bids[@]} < n)) && n=${#bids[@]}
   for ((idx = 0; idx < n; idx++)); do
     c="$(compare_identifier "${aids[$idx]}" "${bids[$idx]}")"

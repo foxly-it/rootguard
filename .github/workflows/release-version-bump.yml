@@ -58,7 +58,7 @@ jobs:
           # change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...) without further
           # changes here.
           latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' | head -1 || true)"
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' | head -1 || true)"
           if [ -z "$latest_tag" ]; then
             echo "No existing release tag found" >&2
             exit 1

@@ -2137,3 +2137,28 @@ by the user as an explicit RC-readiness check ahead of triggering
   a `dd.mm.yyyy` date's 4-digit year, the whole reason that check exists)
   - flagged by the user themselves as low-priority and "practically far
   away," not something to chase now.
+
+**Same PR, fourth review round** (commit `deb46eb`, explicit RC-readiness
+check ahead of triggering `1.0.0-rc.1` - user's conclusion: no blocker
+left for that specific version, branch mergeable, both findings below
+non-blocking):
+
+- `release-version-bump.yml`'s own "find the previous tag" step (used to
+  pick `git-cliff`'s changelog range) still used the pre-fix, hyphen-less
+  regex - the one spot that hadn't been updated when every *other*
+  tag-recognition site (release-alpha.yml's gate, Core, the updater,
+  `install.sh`) already accepted a hyphenated prerelease identifier like
+  `rc-one.1`. Widened to match, for consistency - doesn't affect the
+  actually-planned `beta.N`/`rc.N` series either way.
+- `install.sh`'s new `version_gt` comparator used bash's native
+  `((10#$a < 10#$b))` arithmetic for numeric-identifier and version-core
+  comparisons, which silently overflows for a value beyond bash's integer
+  range - SemVer itself never caps a numeric identifier's size. Replaced
+  with `numeric_compare`: strips leading zeros, then decides by digit
+  *count* first (no leading zeros left means length alone is decisive),
+  falling back to a lexical compare only once lengths already match
+  (numerically correct at that point) - arbitrary-precision, no
+  conversion to a native integer anywhere. Verified with a 36-digit
+  identifier and a 20-digit major-version component, plus the full
+  canonical SemVer.org chain and every previously-reported case again, to
+  confirm nothing regressed.
