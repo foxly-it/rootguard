@@ -56,7 +56,13 @@ func TestDigestFromPullOutputReturnsFalseForATaglessImage(t *testing.T) {
 // that motivated this check: beta.12's own release resolution had a bug
 // (see rootguard-core's pickLatestReleaseImage) that could resolve
 // "latest" to beta.9 - an older release than the one actually running.
-// Nothing checked that before swapping.
+// Nothing checked that before swapping. Also covers version schemes
+// RootGuard doesn't use yet (a bare 0.2.0/1.0.0, a "-rc.N" pre-release) -
+// this is backed by golang.org/x/mod/semver's full SemVer 2.0 precedence
+// rather than a RootGuard-specific "0.1.0-(alpha|beta).N" parser
+// specifically so a future base-version change (found in review) doesn't
+// silently make the whole check "not comparable" and stop protecting
+// anything.
 func TestIsOlderReleaseVersion(t *testing.T) {
 	tests := []struct {
 		candidate, current string
@@ -70,6 +76,12 @@ func TestIsOlderReleaseVersion(t *testing.T) {
 		{"dev", "0.1.0-beta.12", false, false},
 		{"0.1.0-beta.9", "dev", false, false},
 		{"", "", false, false},
+		// A future base-version bump, not RootGuard's scheme today:
+		{"0.1.0-beta.14", "0.2.0", true, true},
+		{"0.2.0", "0.1.0-beta.14", false, true},
+		{"1.0.0-rc.1", "1.0.0", true, true},
+		{"1.0.0", "1.0.0-rc.1", false, true},
+		{"0.9.5", "0.10.0", true, true},
 	}
 	for _, test := range tests {
 		older, comparable := isOlderReleaseVersion(test.candidate, test.current)
