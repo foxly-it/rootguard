@@ -7,10 +7,11 @@ name: Cut next release
 # still decides *when* to cut a release, this only removes having to type
 # or remember the next version number by hand.
 #
-# Defaults to incrementing the latest v0.1.0-{alpha,beta}.N tag's own series.
-# Pass the optional "version" input to override it (e.g. 0.1.0-beta.1) for a
-# series transition that isn't a bare increment - release-alpha.yml itself
-# gates on *-alpha.*/*-beta.* and will refuse anything else.
+# Defaults to incrementing the latest release tag's own trailing number
+# (e.g. 0.1.0-beta.14 -> 0.1.0-beta.15). Pass the optional "version" input
+# to override it for anything that isn't a bare increment - a base-version
+# change (0.2.0, 1.0.0-rc.1, a bare 1.0.0), for instance. release-alpha.yml
+# validates it's a real semantic version either way.
 #
 # GitHub Actions never auto-triggers another workflow's "on: push: tags"
 # from a push made with the built-in GITHUB_TOKEN (an anti-recursion
@@ -48,9 +49,18 @@ jobs:
           VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          latest_tag="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate --format='%(refname:short)' | head -1)"
+          # Matches any RootGuard release tag, not just today's
+          # "v0.1.0-(alpha|beta).N" scheme - sorted by actual tag creation
+          # time (reliable regardless of version scheme, unlike trusting an
+          # external API's own list order - see pickLatestReleaseImage's
+          # own history for why that distinction matters), so this keeps
+          # finding the right "latest" tag across a future base-version
+          # change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...) without further
+          # changes here.
+          latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' | head -1 || true)"
           if [ -z "$latest_tag" ]; then
-            echo "No existing v0.1.0-* tag found" >&2
+            echo "No existing release tag found" >&2
             exit 1
           fi
           if [ -n "$VERSION_OVERRIDE" ]; then

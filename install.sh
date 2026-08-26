@@ -76,10 +76,24 @@ random_secret() {
 # Same picking logic as rootguard-core's own updater
 # (internal/updater/github_release.go): GitHub's own /releases/latest
 # excludes prereleases, and every RootGuard release is published as one -
-# so the full, newest-first list is queried and the first tag matching
-# RootGuard's own release-tag pattern wins. Kept dependency-free (no jq)
-# on purpose - this runs on whatever bare system a new user has, before
-# anything beyond curl is guaranteed to exist.
+# so the full list is queried and ranked locally instead of trusting the
+# API's own order. That distinction matters live, not just in theory: a
+# direct query once returned v0.1.0-beta.9 *ahead of* v0.1.0-beta.12 on
+# this exact repository, so "the newest-first list" isn't actually
+# guaranteed - taking the first matching entry would have silently
+# resolved to the older release. `sort -V` (GNU coreutils, present by
+# default on Debian/Ubuntu, this script's supported targets) ranks
+# version tags correctly for RootGuard's actual releases so far, with one
+# known gap accepted to stay dependency-free (no jq, no semver library):
+# it doesn't apply full SemVer precedence for a stable release against
+# its own prerelease (it would rank "1.0.0-rc.1" above "1.0.0" itself,
+# backwards) - a narrow edge case that only bites a fresh install running
+# in the brief window between an rc and the stable release it leads up
+# to, and even then only ever picks another real, buildable release, not
+# an older/broken one. The pattern below accepts any real semantic
+# version, not just RootGuard's current "0.1.0-(alpha|beta).N" scheme, so
+# a future base-version change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...)
+# keeps resolving correctly without another change here.
 resolve_latest_tag() {
   local body
   body="$(curl -fsSL -H 'Accept: application/vnd.github+json' \
@@ -88,8 +102,9 @@ resolve_latest_tag() {
   printf '%s' "$body" \
     | grep -o '"tag_name": *"[^"]*"' \
     | sed -E 's/.*"([^"]*)"$/\1/' \
-    | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' \
-    | head -1
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
+    | sort -V \
+    | tail -1
 }
 
 # Best-effort: only checks what ss/netstat can currently see (a container

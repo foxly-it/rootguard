@@ -68,9 +68,58 @@ func TestPickLatestReleaseImagePrefersBetaOverAlphaOnAHigherBuildNumber(t *testi
 	}
 }
 
+// TestPickLatestReleaseImageAcrossABaseVersionChange guards that a future
+// base-version bump correctly outranks every prerelease of the current
+// 0.1.0 series, and that an rc prerelease correctly loses to the stable
+// release it leads up to - the exact scenario a RootGuard-specific
+// "0.1.0-(alpha|beta).N" parser couldn't have handled without yet another
+// code change.
+func TestPickLatestReleaseImageAcrossABaseVersionChange(t *testing.T) {
+	body := []byte(`[
+		{"tag_name":"v0.1.0-beta.14"},
+		{"tag_name":"v0.2.0"},
+		{"tag_name":"v1.0.0-rc.1"}
+	]`)
+	image, err := pickLatestReleaseImage(body, "core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image != "ghcr.io/foxly-it/rootguard-core:1.0.0-rc.1" {
+		t.Fatalf("expected the rc prerelease to outrank both 0.2.0 and 0.1.0-beta.14, got %q", image)
+	}
+
+	stable := []byte(`[
+		{"tag_name":"v1.0.0-rc.1"},
+		{"tag_name":"v1.0.0"}
+	]`)
+	image, err = pickLatestReleaseImage(stable, "core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image != "ghcr.io/foxly-it/rootguard-core:1.0.0" {
+		t.Fatalf("expected the stable release to outrank its own rc, got %q", image)
+	}
+}
+
+// TestPickLatestReleaseImageAcceptsAnyValidSemver guards the intentional
+// generalization: v9.9.9 doesn't match RootGuard's own "0.1.0-*" scheme,
+// but it's a perfectly valid semantic version, and a future base-version
+// change is exactly what this ranking is meant to survive without another
+// code change - it must not be rejected just because it doesn't look like
+// today's convention.
+func TestPickLatestReleaseImageAcceptsAnyValidSemver(t *testing.T) {
+	image, err := pickLatestReleaseImage([]byte(`[{"tag_name":"v9.9.9"}]`), "unbound")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image != "ghcr.io/foxly-it/rootguard-unbound:9.9.9" {
+		t.Fatalf("unexpected image: %q", image)
+	}
+}
+
 func TestPickLatestReleaseImageRejectsUnmatchedList(t *testing.T) {
-	if _, err := pickLatestReleaseImage([]byte(`[{"tag_name":"v9.9.9"}]`), "unbound"); err == nil {
-		t.Fatal("expected an error for a release list with no matching RootGuard tag")
+	if _, err := pickLatestReleaseImage([]byte(`[{"tag_name":"not-a-version"},{"tag_name":"release-42"}]`), "unbound"); err == nil {
+		t.Fatal("expected an error for a release list with no valid semantic version tag")
 	}
 }
 
