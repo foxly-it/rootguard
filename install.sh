@@ -94,7 +94,13 @@ random_secret() {
 # dependency. The matching pattern accepts any real semantic version, not
 # just RootGuard's current "0.1.0-(alpha|beta).N" scheme, so a future
 # base-version change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...) keeps
-# resolving correctly without another change here.
+# resolving correctly without another change here. Each prerelease
+# identifier allows a literal hyphen too (real SemVer grammar, e.g.
+# "rc-one.1" - a version release-alpha.yml's own gate and Core's
+# semver.IsValid both already accept), not just letters/digits - this
+# script can't source scripts/version-pattern.sh (no repo checkout exists
+# yet on a fresh machine), so keep this pattern in sync with that file's
+# rootguard_version_pattern by hand if it ever changes.
 resolve_latest_tag() {
   local body
   body="$(curl -fsSL -H 'Accept: application/vnd.github+json' \
@@ -103,7 +109,7 @@ resolve_latest_tag() {
   printf '%s' "$body" \
     | grep -o '"tag_name": *"[^"]*"' \
     | sed -E 's/.*"([^"]*)"$/\1/' \
-    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' \
     | sed 's/-/~/' \
     | sort -V \
     | tail -1 \

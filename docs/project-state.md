@@ -2037,10 +2037,9 @@ existing checks exercise a stable (non-prerelease) or malformed version:
   live to reintroduce the exact SVG-path-coordinate false positives the
   letter requirement was added to fix in the first place (`site/*.html`
   is full of SVG icon path data shaped like fake dotted-number
-  "versions"). Documented as a known, narrower accepted gap: a
-  *correctly* written bare stable-version mention in prose becomes
-  invisible to the checker rather than confirmed, until real
-  stable-release site copy exists to design a safer heuristic against.
+  "versions"). Originally left as a documented accepted gap (a correct
+  bare mention would be invisible to the checker); superseded by a real
+  fix in the same PR's second review round - see below.
 
 All three verified directly against the user's own reported reproduction
 cases (glob-fooling strings, `v1.0.0`/`v1.0.0-rc.1` ordering, tag
@@ -2056,3 +2055,41 @@ generically, not one specific build, and an RC period is exactly what
 longer-running validation like this is for - there's no reason to hold
 `1.0.0-rc.1` itself hostage to the calendar. 0.9 is now 5/7 with only two
 non-time-bound items left (final blocker sweep, migration docs).
+
+**Same PR, second review round** (commit `17fafd1` reviewed independently
+by the user, two more real gaps found):
+
+- Different components recognized different subsets of valid SemVer:
+  `install.sh`'s tag regex and the site scripts' `tag_version_pattern`
+  both rejected a hyphen *inside* a prerelease identifier (`rc-one.1`),
+  even though release-alpha.yml's gate and Core's `semver.IsValid` both
+  accept it - a release using that shape could publish and be picked up
+  by Core's updater while `install.sh` and the site silently kept
+  ignoring it as "not a real release." Fixed by widening each identifier
+  character class to `[0-9A-Za-z-]+` everywhere a *tag* gets recognized
+  (not everywhere a *version gets minted* - release-alpha.yml's own gate
+  stays strict on purpose, leading zeros and all, since that's the one
+  place actually deciding what's allowed to exist).
+- The "accepted gap" from the first round turned out to be a real,
+  ongoing problem, not just a missing positive check: once site prose
+  says a bare `1.0.0` with no letter-suffix, `check-site-facts.sh`'s old
+  narrow pattern could never recognize *any* future bare mention again -
+  so a later `1.0.0` → `1.0.1` patch bump would go completely undetected
+  by CI forever after the first stable release, not just through the
+  rc→stable transition. Fixed for real rather than re-documented: added
+  `scripts/version-pattern.sh` (sourced by both site scripts;
+  `install.sh` can't source it - no repo checkout exists yet on a fresh
+  machine - so it keeps its own hand-synced copy of the tag grammar) with
+  a `rootguard_extract_versions` helper that strips SVG `<path d="...">`
+  coordinate data first (the original false-positive source), then keeps
+  a dotted-number candidate only if it has exactly three groups with a
+  ≤3-digit last group - cheap enough to reject a 4-group IP address and a
+  `dd.mm.yyyy` date (both proven live to otherwise look exactly like a
+  bare version) without needing lookahead, which check-site-facts.sh's
+  own header already rules out for BSD/GNU grep portability. Verified
+  live end to end: injected a fake stale `1.0.1` mention into `index.html`,
+  confirmed `check-site-facts.sh` flags it, confirmed
+  `bump-site-versions.sh` correctly fixes it and leaves an
+  already-correct bare mention untouched, confirmed the real repo content
+  still passes/no-ops afterward, all test edits reverted before
+  committing.
