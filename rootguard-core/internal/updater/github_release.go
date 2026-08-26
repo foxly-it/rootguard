@@ -6,17 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"regexp"
-	"strconv"
 	"strings"
-)
 
-// releaseTagPattern matches RootGuard's own release-tag convention, the same
-// pattern release-alpha.yml's own "version" job validates new tags against.
-// The two numbered capture groups (series, build number) let
-// pickLatestReleaseImage below rank releases itself instead of trusting the
-// API's own ordering.
-var releaseTagPattern = regexp.MustCompile(`^v0\.1\.0-(alpha|beta)\.([0-9]+)$`)
+	"golang.org/x/mod/semver"
+)
 
 type githubRelease struct {
 	TagName string `json:"tag_name"`
@@ -24,45 +17,38 @@ type githubRelease struct {
 
 // pickLatestReleaseImage scans a GitHub Releases API response body for the
 // newest RootGuard release tag and returns the matching ghcr.io image
-// reference for component. Ranks every matching release itself by
-// (series, build number) rather than trusting the API response's own
+// reference for component. Ranks every valid semantic-version tag itself
+// via golang.org/x/mod/semver rather than trusting the API response's own
 // ordering - found via a real CI failure: querying the live API directly
 // showed v0.1.0-beta.9 listed *ahead of* v0.1.0-beta.12, on a repository
 // that had several releases cut in quick succession, so "the full,
 // newest-first list" this function's doc comment used to promise isn't
-// actually guaranteed. beta ranks above alpha on a tie (RootGuard's series
-// only ever moves alpha -> beta, never back).
+// actually guaranteed. Using full SemVer precedence instead of a
+// RootGuard-specific "0.1.0-(alpha|beta).N" parser also means this keeps
+// working correctly across a future base-version change (0.2.0,
+// 1.0.0-rc.1, a bare 1.0.0, ...) without needing another fix the day the
+// scheme changes - mirrors the same choice made for rootguard-updater's
+// own isOlderReleaseVersion (a different Go module, so its own copy).
+// release.TagName is used as-is (GitHub returns it with the leading "v",
+// e.g. "v0.1.0-beta.14" - exactly what semver.IsValid/Compare expect).
 func pickLatestReleaseImage(body []byte, component string) (string, error) {
 	var releases []githubRelease
 	if err := json.Unmarshal(body, &releases); err != nil {
 		return "", fmt.Errorf("parse GitHub releases response: %w", err)
 	}
-	var bestVersion string
-	var bestSeriesRank, bestBuild int
-	found := false
+	var bestTag string
 	for _, release := range releases {
-		match := releaseTagPattern.FindStringSubmatch(release.TagName)
-		if match == nil {
+		if !semver.IsValid(release.TagName) {
 			continue
 		}
-		seriesRank := 0
-		if match[1] == "beta" {
-			seriesRank = 1
+		if bestTag == "" || semver.Compare(release.TagName, bestTag) > 0 {
+			bestTag = release.TagName
 		}
-		build, err := strconv.Atoi(match[2])
-		if err != nil {
-			continue
-		}
-		if found && (seriesRank < bestSeriesRank || (seriesRank == bestSeriesRank && build <= bestBuild)) {
-			continue
-		}
-		bestSeriesRank, bestBuild, found = seriesRank, build, true
-		bestVersion = strings.TrimPrefix(release.TagName, "v")
 	}
-	if !found {
+	if bestTag == "" {
 		return "", fmt.Errorf("no matching RootGuard release found")
 	}
-	return fmt.Sprintf("ghcr.io/foxly-it/rootguard-%s:%s", component, bestVersion), nil
+	return fmt.Sprintf("ghcr.io/foxly-it/rootguard-%s:%s", component, strings.TrimPrefix(bestTag, "v")), nil
 }
 
 // ResolveLatestReleaseImage queries the public GitHub Releases API for

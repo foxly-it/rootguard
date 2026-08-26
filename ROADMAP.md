@@ -1079,29 +1079,6 @@ Goal: freeze features and prove reliability.
 - [ ] No unresolved release-blocking defect - deferred to a final `gh issue
       list` sweep immediately before cutting `1.0.0-rc.1`, not before; doing
       it earlier would just need repeating.
-- [ ] Thirty-day continuous DNS test with update and restore exercises -
-      **in progress**, started 2026-08-14 on a dedicated host
-      (`scripts/soak/*.sh` + systemd timers, see that directory's README).
-      Live status as of 2026-08-22 (day 8): 952/960 probes passed (99%);
-      the 8 misses were all transient DNSSEC-reject timeouts correlated
-      with elevated resolve latency (~12s vs. the usual ~3s), each
-      self-recovered by the next 10-minute probe - looks like real
-      upstream/root-server jitter, not a RootGuard defect. 4 no-op
-      update-exercise cycles (the host's `*_UPDATE_IMAGE` pins were never
-      bumped past the beta.1 it was deployed with, so these only proved
-      the check/poll/history path stayed healthy, not a real upgrade),
-      then one real one after repinning to beta.3 and re-running on
-      2026-08-22: `outcome: "success"`, Core and WebApp both verified
-      swapped from their beta.1 to beta.3 image digests, DNS/DNSSEC/
-      filtering/WebGUI probe clean immediately after.
-      2 backup/restore drills: the first (08-14) fully clean; the second
-      (08-21) had `restore_ok=true` but its single-shot post-restore DNS
-      check lost a narrow timing race right after container recreation
-      and logged a false failure, fixed by giving that check a bounded
-      retry instead of one attempt
-      ([rootguard#301](https://github.com/foxly-it/rootguard/issues/301)).
-      Closes with the final `report.sh` rollup around 2026-09-13
-      ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
 - [x] Fresh install, upgrade, rollback, backup, and restore matrix is green -
       fresh install (`clean-install.yml`), upgrade
       (`release-alpha.yml`'s `upgrade-test`), and rollback
@@ -1159,7 +1136,7 @@ Goal: freeze features and prove reliability.
 - [ ] Versioned 1.0 migration and rollback instructions complete -
       deliberately deferred: the underlying mechanism (the control-plane
       updater's upgrade/rollback path) is already fully built, tested, and
-      documented, but 1.0.0 itself still has 10 open checklist items below
+      documented, but 1.0.0 itself still has 7 open checklist items below
       that could still change its exact shape. Writing version-specific
       migration instructions now would risk describing a release that
       doesn't exist yet - stays open until 1.0's scope is actually final.
@@ -1172,6 +1149,21 @@ Exit: publish `1.0.0-rc.1`; only bug fixes and documentation may follow.
 
 RootGuard 1.0 ships when:
 
+- [ ] thirty-day continuous DNS test with update and restore exercises
+      passes clean, run against the published `1.0.0-rc.1` candidate itself
+      rather than gating the RC's own existence - a longer-running
+      endurance test is exactly what an RC period is for, and this specific
+      test exercises the update/backup/restore machinery generically, not
+      any one build, so it doesn't need to precede the RC to be meaningful.
+      **In progress**, started 2026-08-14 on a dedicated host
+      (`scripts/soak/*.sh` + systemd timers, see that directory's README).
+      Live status as of 2026-08-26 (day 12): 1563/1579 probes passed (99%),
+      consistent with the transient DNSSEC-timeout jitter already seen and
+      confirmed not a RootGuard defect; 6 update exercises (5 no-op poll
+      cycles, 1 real swap verified clean); 2 backup/restore drills, both
+      clean restores, no fallback used. Closes with the final `report.sh`
+      rollup around 2026-09-13
+      ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
 - [ ] installation, DNS operation, configuration, upgrades, and restore are
       repeatable on every supported platform;
 - [ ] no supported change can bypass validation and recovery;

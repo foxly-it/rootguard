@@ -2003,3 +2003,162 @@ Confirmed live: `beta.14`'s `upgrade-test` passed via the normal
 WebApp-proxied path (the `beta.12`-specific bypass in `release-alpha.yml`
 correctly stayed dormant, since `beta.13` - carrying the ordering fix - is
 now "previous").
+
+**SemVer/tagging generalization, part 1** (PR #359, branch
+`feat/general-semver-release-tagging`): the Go-side update mechanism
+(`isOlderReleaseVersion`, `pickLatestReleaseImage`) was already moved onto
+`golang.org/x/mod/semver` for full generality (see above). The user's own
+review of the branch before merge found three real bugs in the
+*surrounding shell scripts*, none caught by CI because none of the
+existing checks exercise a stable (non-prerelease) or malformed version:
+
+- `release-alpha.yml`'s version-gate used a shell glob
+  (`[0-9]*.[0-9]*.[0-9]*`) that isn't a SemVer check at all - accepted
+  `1foo.2bar.3baz`, a leading-zero core like `01.2.3`, and build metadata
+  (`1.2.3+build.4`, which isn't even a legal Docker tag). Replaced with a
+  full SemVer 2.0 grammar via bash `[[ =~ ]]` (build metadata excluded on
+  purpose, same reason it's invalid in a tag).
+- `install.sh`'s `resolve_latest_tag` used `sort -V | tail -1`, which
+  ranks a prerelease *above* its own stable release (`1.0.0-rc.1` above
+  `1.0.0`) - verified empirically, and previously documented as an
+  "accepted gap" that turned out to be a real, fixable bug. Fixed by
+  rewriting each tag's version-core/prerelease separator from `-` to `~`
+  before sorting (GNU `sort -V` treats `~` as sorting before everything,
+  same as dpkg) and back after - correct precedence, still no jq/semver
+  dependency.
+- `check-site-facts.sh`/`bump-site-versions.sh` required a letter-leading
+  prerelease suffix on every version match, so a bare stable tag
+  (`v1.0.0`) was invisible to `latest_tag` resolution entirely - the
+  scripts would keep tracking an old `rc.N` as "current" forever. Split
+  into two patterns: a wider, suffix-optional `tag_version_pattern` for
+  resolving the latest real git tag (safe - no prose to false-positive
+  against), and the original letter-leading `version_pattern` kept
+  unchanged for prose scanning, since widening *that* one was verified
+  live to reintroduce the exact SVG-path-coordinate false positives the
+  letter requirement was added to fix in the first place (`site/*.html`
+  is full of SVG icon path data shaped like fake dotted-number
+  "versions"). Originally left as a documented accepted gap (a correct
+  bare mention would be invisible to the checker); superseded by a real
+  fix in the same PR's second review round - see below.
+
+All three verified directly against the user's own reported reproduction
+cases (glob-fooling strings, `v1.0.0`/`v1.0.0-rc.1` ordering, tag
+resolution finding a bare stable tag), plus a live run of
+`check-site-facts.sh`/`bump-site-versions.sh` against the real repo
+(idempotent, no site content changed) and `shellcheck` (clean).
+
+Also restructured `ROADMAP.md`'s 30-day soak test
+([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)) from
+a 0.9 (pre-`rc.1`) gate to a 1.0.0 (stable-promotion) gate, at the user's
+suggestion: the soak test exercises the update/backup/restore machinery
+generically, not one specific build, and an RC period is exactly what
+longer-running validation like this is for - there's no reason to hold
+`1.0.0-rc.1` itself hostage to the calendar. 0.9 is now 5/7 with only two
+non-time-bound items left (final blocker sweep, migration docs).
+
+**Same PR, second review round** (commit `17fafd1` reviewed independently
+by the user, two more real gaps found):
+
+- Different components recognized different subsets of valid SemVer:
+  `install.sh`'s tag regex and the site scripts' `tag_version_pattern`
+  both rejected a hyphen *inside* a prerelease identifier (`rc-one.1`),
+  even though release-alpha.yml's gate and Core's `semver.IsValid` both
+  accept it - a release using that shape could publish and be picked up
+  by Core's updater while `install.sh` and the site silently kept
+  ignoring it as "not a real release." Fixed by widening each identifier
+  character class to `[0-9A-Za-z-]+` everywhere a *tag* gets recognized
+  (not everywhere a *version gets minted* - release-alpha.yml's own gate
+  stays strict on purpose, leading zeros and all, since that's the one
+  place actually deciding what's allowed to exist).
+- The "accepted gap" from the first round turned out to be a real,
+  ongoing problem, not just a missing positive check: once site prose
+  says a bare `1.0.0` with no letter-suffix, `check-site-facts.sh`'s old
+  narrow pattern could never recognize *any* future bare mention again -
+  so a later `1.0.0` → `1.0.1` patch bump would go completely undetected
+  by CI forever after the first stable release, not just through the
+  rc→stable transition. Fixed for real rather than re-documented: added
+  `scripts/version-pattern.sh` (sourced by both site scripts;
+  `install.sh` can't source it - no repo checkout exists yet on a fresh
+  machine - so it keeps its own hand-synced copy of the tag grammar) with
+  a `rootguard_extract_versions` helper that strips SVG `<path d="...">`
+  coordinate data first (the original false-positive source), then keeps
+  a dotted-number candidate only if it has exactly three groups with a
+  ≤3-digit last group - cheap enough to reject a 4-group IP address and a
+  `dd.mm.yyyy` date (both proven live to otherwise look exactly like a
+  bare version) without needing lookahead, which check-site-facts.sh's
+  own header already rules out for BSD/GNU grep portability. Verified
+  live end to end: injected a fake stale `1.0.1` mention into `index.html`,
+  confirmed `check-site-facts.sh` flags it, confirmed
+  `bump-site-versions.sh` correctly fixes it and leaves an
+  already-correct bare mention untouched, confirmed the real repo content
+  still passes/no-ops afterward, all test edits reverted before
+  committing.
+
+**Same PR, third review round** (commit `9555e67` reviewed independently
+by the user as an explicit RC-readiness check ahead of triggering
+`1.0.0-rc.1`, three real findings plus one acknowledged-low-priority one):
+
+- `release-version-bump.yml` (the "Cut next release" workflow a human
+  runs by hand, optionally with a manual version override) accepted the
+  override completely unvalidated, then immediately ran `git-cliff`,
+  committed `CHANGELOG.md` to `main`, pushed a real tag, and created a
+  real GitHub Release - only the separately-dispatched
+  `release-alpha.yml` validated the version, by which point a typo'd
+  override would already have left a half-published release needing
+  manual cleanup. Exactly the risk that mattered right before triggering
+  the actual RC by hand with an override. Fixed by validating with the
+  same SemVer 2.0 grammar as release-alpha.yml's own gate, immediately
+  after `next_version` is computed and before anything external happens -
+  duplicated rather than shared (no simple way to share a bash snippet
+  across two separate workflow files without a composite action).
+- Same workflow's GitHub Release creation always passed `--prerelease`
+  unconditionally - correct for every version so far (all had a
+  suffix), silently wrong for a future bare stable release. Now
+  conditional on whether the version string contains a `-`.
+- `install.sh`'s `sort -V` + `-`→`~` precedence workaround (from the
+  first review round) turned out not to be genuine SemVer precedence in
+  every case: a prerelease identifier containing its own literal hyphen
+  ("rc-one.1") sorted *below* the plain "rc.1" it should rank above,
+  because the trick only ever repositions the version-core/prerelease
+  separator, not every hyphen SemVer identifiers are allowed to contain.
+  Doesn't affect the actually-planned `beta.N` → `rc.N` → stable series.
+  Replaced with a real, from-scratch SemVer 2.0 precedence comparator in
+  pure bash (`version_gt` + helpers) - numeric version-core comparison,
+  then prerelease-identifier-by-identifier comparison per spec (numeric
+  identifiers compare numerically and always rank below alphanumeric
+  ones; more identifiers with all preceding ones equal ranks higher) -
+  rather than trying to make `sort -V`'s undocumented ordering behavior
+  cover a case it was never designed for. Verified against SemVer.org's
+  own canonical precedence example chain, the specific reported bug case,
+  and a live call against the real GitHub API (still correctly resolves
+  `0.1.0-beta.14` as latest).
+- Acknowledged, left as is: `scripts/version-pattern.sh`'s website
+  extractor rejects a patch/build number over 3 digits (to keep excluding
+  a `dd.mm.yyyy` date's 4-digit year, the whole reason that check exists)
+  - flagged by the user themselves as low-priority and "practically far
+  away," not something to chase now.
+
+**Same PR, fourth review round** (commit `deb46eb`, explicit RC-readiness
+check ahead of triggering `1.0.0-rc.1` - user's conclusion: no blocker
+left for that specific version, branch mergeable, both findings below
+non-blocking):
+
+- `release-version-bump.yml`'s own "find the previous tag" step (used to
+  pick `git-cliff`'s changelog range) still used the pre-fix, hyphen-less
+  regex - the one spot that hadn't been updated when every *other*
+  tag-recognition site (release-alpha.yml's gate, Core, the updater,
+  `install.sh`) already accepted a hyphenated prerelease identifier like
+  `rc-one.1`. Widened to match, for consistency - doesn't affect the
+  actually-planned `beta.N`/`rc.N` series either way.
+- `install.sh`'s new `version_gt` comparator used bash's native
+  `((10#$a < 10#$b))` arithmetic for numeric-identifier and version-core
+  comparisons, which silently overflows for a value beyond bash's integer
+  range - SemVer itself never caps a numeric identifier's size. Replaced
+  with `numeric_compare`: strips leading zeros, then decides by digit
+  *count* first (no leading zeros left means length alone is decisive),
+  falling back to a lexical compare only once lengths already match
+  (numerically correct at that point) - arbitrary-precision, no
+  conversion to a native integer anywhere. Verified with a 36-digit
+  identifier and a 20-digit major-version component, plus the full
+  canonical SemVer.org chain and every previously-reported case again, to
+  confirm nothing regressed.

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Checks the checkable facts in site/*.html against reality: every mentioned
-# RootGuard alpha version string matches the latest real release tag, and
-# every local (non-http) href/src actually resolves to a file in the repo.
+# RootGuard version string matches the latest real release tag, and every
+# local (non-http) href/src actually resolves to a file in the repo.
 # Deliberately does not attempt to judge prose accuracy - see ROADMAP.md 0.6
 # ("Website status and Wiki updated as a required CI/release check"), scoped
 # to hard, checkable facts rather than content review.
@@ -11,10 +11,16 @@ set -Eeuo pipefail
 repository_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repository_dir}"
 
-latest_tag="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' | head -1)"
+# shellcheck source=version-pattern.sh
+. "${repository_dir}/scripts/version-pattern.sh"
+
+# Ranked by creation date (not sort -V), so a later-cut stable tag
+# correctly outranks an earlier rc for the same release without needing
+# install.sh's sort -V precedence workaround.
+latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
+  | grep -E "^v${rootguard_version_pattern}\$" | head -1)"
 if [[ -z "${latest_tag}" ]]; then
-  echo "No v0.1.0-alpha.*/beta.* tag found - cannot determine the current version" >&2
+  echo "No release tag found - cannot determine the current version" >&2
   exit 1
 fi
 latest_version="${latest_tag#v}"
@@ -30,11 +36,14 @@ echo "== Version references =="
 # Line-level, not lookbehind, to stay portable across BSD and GNU grep - the
 # bilingual data-de/data-en pair for a historical reference always carries
 # the marker phrase on the same physical (minified, one-element-per-line)
-# line as the version number itself.
-historical_reference_pattern='([Aa]b |Starting with |required from )0\.1\.0-(alpha|beta)\.[0-9]+'
+# line as the version number itself. Safe to use the bare-capable pattern
+# here even though the extraction below needs extra care (see
+# rootguard_extract_versions): the required marker phrase immediately
+# before it already rules out SVG/IP/date noise matching by accident.
+historical_reference_pattern="([Aa]b |Starting with |required from )${rootguard_version_pattern}"
 version_matches=""
 for file in site/*.html; do
-  matches="$(grep -vE "${historical_reference_pattern}" "${file}" | grep -Eo '0\.1\.0-(alpha|beta)\.[0-9]+' | sed "s#^#${file}:#" || true)"
+  matches="$(grep -vE "${historical_reference_pattern}" "${file}" | rootguard_extract_versions | sed "s#^#${file}:#" || true)"
   if [[ -n "${matches}" ]]; then
     version_matches+="${matches}"$'\n'
   fi

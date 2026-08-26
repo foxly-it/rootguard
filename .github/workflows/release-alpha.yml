@@ -3,8 +3,7 @@ name: Publish RootGuard release images
 on:
   push:
     tags:
-      - "v*-alpha.*"
-      - "v*-beta.*"
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
@@ -33,10 +32,21 @@ jobs:
           else
             version="${GITHUB_REF_NAME#v}"
           fi
-          case "$version" in
-            *-alpha.*|*-beta.*) ;;
-            *) echo "Refusing non-alpha/non-beta version: $version" >&2; exit 1 ;;
-          esac
+          # A shell glob like [0-9]*.[0-9]*.[0-9]* only checks "digit,
+          # anything, digit, anything, digit, anything" - it happily
+          # accepts "1foo.2bar.3baz", a leading-zero core like "01.2.3",
+          # and build metadata ("1.2.3+build.4", which Docker tags can't
+          # even represent since '+' isn't a legal tag character). Core
+          # would later reject such a tag via semver.IsValid, so a
+          # malformed tag here would publish images that automatic update
+          # discovery can never find. Full SemVer 2.0 core+prerelease
+          # grammar instead (build metadata deliberately excluded, for the
+          # same reason it's invalid in a Docker tag).
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
+          if [[ ! "$version" =~ $semver_pattern ]]; then
+            echo "Refusing non-semantic version: $version" >&2
+            exit 1
+          fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
   test:
@@ -382,15 +392,16 @@ jobs:
         id: previous
         run: |
           set -euo pipefail
-          # Sort by actual tag creation date across the whole v0.1.0-*
-          # series (alpha and beta both) rather than the previous
-          # alpha-only, trailing-number sort - that older approach always
-          # resolved to the highest alpha.N tag, even once the beta series
-          # existed, silently testing an upgrade from a much older release
-          # than the one directly before this one.
-          previous_version="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate \
+          # Sort by actual tag creation date across every release tag
+          # (any scheme, not just today's v0.1.0-(alpha|beta).N) rather
+          # than a trailing-number sort - the latter always resolved to
+          # the highest alpha.N tag even once the beta series existed,
+          # silently testing an upgrade from a much older release than the
+          # one directly before this one, and wouldn't survive a future
+          # base-version change at all.
+          previous_version="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate \
             --format='%(refname:short)' \
-            | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
             | grep -v "^v${{ needs.version.outputs.value }}\$" \
             | head -1 | sed 's/^v//' || true)"
           if [ -z "${previous_version}" ]; then

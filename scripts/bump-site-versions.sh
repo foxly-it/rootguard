@@ -15,10 +15,13 @@ set -Eeuo pipefail
 repository_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${repository_dir}"
 
-latest_tag="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E '^v0\.1\.0-(alpha|beta)\.[0-9]+$' | head -1 || true)"
+# shellcheck source=version-pattern.sh
+. "${repository_dir}/scripts/version-pattern.sh"
+
+latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
+  | grep -E "^v${rootguard_version_pattern}\$" | head -1 || true)"
 if [[ -z "${latest_tag}" ]]; then
-  echo "No v0.1.0-alpha.*/beta.* tag found - cannot determine the current version" >&2
+  echo "No release tag found - cannot determine the current version" >&2
   exit 1
 fi
 latest_version="${latest_tag#v}"
@@ -26,7 +29,7 @@ latest_version="${latest_tag#v}"
 # Same exclusion as check-site-facts.sh: a line naming the version a
 # feature shipped in ("Starting with 0.1.0-beta.1, ...") is a historical
 # fact, not a current-version claim, and must never be bumped.
-historical_reference_pattern='([Aa]b |Starting with |required from )0\.1\.0-(alpha|beta)\.[0-9]+'
+historical_reference_pattern="([Aa]b |Starting with |required from )${rootguard_version_pattern}"
 # The two docs.html .env-example lines carry a version *and* a digest -
 # a plain version-string substitution would leave the old digest in
 # place, so they're excluded here and handled explicitly below instead.
@@ -36,7 +39,7 @@ changed_files=()
 for file in site/*.html; do
   stale_versions="$(grep -vE "${historical_reference_pattern}" "${file}" \
     | grep -vE "${update_image_line_pattern}" \
-    | grep -Eo '0\.1\.0-(alpha|beta)\.[0-9]+' | sort -u || true)"
+    | rootguard_extract_versions | sort -u || true)"
   file_changed=0
   for stale in ${stale_versions}; do
     [[ "${stale}" == "${latest_version}" ]] && continue

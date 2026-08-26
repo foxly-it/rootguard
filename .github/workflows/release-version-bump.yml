@@ -7,10 +7,11 @@ name: Cut next release
 # still decides *when* to cut a release, this only removes having to type
 # or remember the next version number by hand.
 #
-# Defaults to incrementing the latest v0.1.0-{alpha,beta}.N tag's own series.
-# Pass the optional "version" input to override it (e.g. 0.1.0-beta.1) for a
-# series transition that isn't a bare increment - release-alpha.yml itself
-# gates on *-alpha.*/*-beta.* and will refuse anything else.
+# Defaults to incrementing the latest release tag's own trailing number
+# (e.g. 0.1.0-beta.14 -> 0.1.0-beta.15). Pass the optional "version" input
+# to override it for anything that isn't a bare increment - a base-version
+# change (0.2.0, 1.0.0-rc.1, a bare 1.0.0), for instance. release-alpha.yml
+# validates it's a real semantic version either way.
 #
 # GitHub Actions never auto-triggers another workflow's "on: push: tags"
 # from a push made with the built-in GITHUB_TOKEN (an anti-recursion
@@ -48,9 +49,18 @@ jobs:
           VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          latest_tag="$(git for-each-ref 'refs/tags/v0.1.0-*' --sort=-creatordate --format='%(refname:short)' | head -1)"
+          # Matches any RootGuard release tag, not just today's
+          # "v0.1.0-(alpha|beta).N" scheme - sorted by actual tag creation
+          # time (reliable regardless of version scheme, unlike trusting an
+          # external API's own list order - see pickLatestReleaseImage's
+          # own history for why that distinction matters), so this keeps
+          # finding the right "latest" tag across a future base-version
+          # change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...) without further
+          # changes here.
+          latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' | head -1 || true)"
           if [ -z "$latest_tag" ]; then
-            echo "No existing v0.1.0-* tag found" >&2
+            echo "No existing release tag found" >&2
             exit 1
           fi
           if [ -n "$VERSION_OVERRIDE" ]; then
@@ -60,6 +70,25 @@ jobs:
             latest_n="${latest_tag##*.}"
             next_n=$((latest_n + 1))
             next_version="${series#v}.${next_n}"
+          fi
+          # Validate *before* git-cliff, commit, tag, push, or GitHub
+          # Release creation below - all of those already ran and had to
+          # be manually cleaned up once, found in review, before this
+          # check existed: only release-alpha.yml (dispatched last, as a
+          # separate workflow run) validated the version, by which point
+          # a typo'd override (1.0.0-rc.01, 1foo.2bar.3baz, 1.0.0+build)
+          # had already produced a real commit on main, a real tag, and a
+          # real GitHub Release that needed undoing by hand. Same SemVer
+          # 2.0 grammar as release-alpha.yml's own gate (build metadata
+          # excluded - not a legal Docker tag either); kept as a literal
+          # duplicate rather than shared, since there's no straightforward
+          # way to share a bash snippet between two separate workflow
+          # files without a composite action - keep both in sync by hand
+          # if this ever changes.
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
+          if [[ ! "$next_version" =~ $semver_pattern ]]; then
+            echo "Refusing non-semantic version: $next_version" >&2
+            exit 1
           fi
           if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ] && [ -z "$VERSION_OVERRIDE" ]; then
             echo "No commits since ${latest_tag} - nothing to release" >&2
@@ -107,11 +136,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          # A bare "X.Y.Z" (no "-" suffix) is a stable release and must
+          # not be marked as a prerelease on GitHub - only relevant once
+          # 1.0.0 itself ships (every version so far has had a suffix),
+          # but wrong by default otherwise: gh release create always
+          # applies whatever flag is passed, it doesn't infer this itself.
+          prerelease_flag=()
+          case "${{ steps.next.outputs.version }}" in
+            *-*) prerelease_flag=(--prerelease) ;;
+          esac
           gh release create "${{ steps.next.outputs.tag }}" \
             --repo "${{ github.repository }}" \
             --title "${{ steps.next.outputs.version }}" \
             --notes-file /tmp/release-notes.md \
-            --prerelease
+            "${prerelease_flag[@]}"
 
       - name: Dispatch the image-publishing release pipeline
         env:
