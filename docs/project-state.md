@@ -2093,3 +2093,47 @@ by the user, two more real gaps found):
   already-correct bare mention untouched, confirmed the real repo content
   still passes/no-ops afterward, all test edits reverted before
   committing.
+
+**Same PR, third review round** (commit `9555e67` reviewed independently
+by the user as an explicit RC-readiness check ahead of triggering
+`1.0.0-rc.1`, three real findings plus one acknowledged-low-priority one):
+
+- `release-version-bump.yml` (the "Cut next release" workflow a human
+  runs by hand, optionally with a manual version override) accepted the
+  override completely unvalidated, then immediately ran `git-cliff`,
+  committed `CHANGELOG.md` to `main`, pushed a real tag, and created a
+  real GitHub Release - only the separately-dispatched
+  `release-alpha.yml` validated the version, by which point a typo'd
+  override would already have left a half-published release needing
+  manual cleanup. Exactly the risk that mattered right before triggering
+  the actual RC by hand with an override. Fixed by validating with the
+  same SemVer 2.0 grammar as release-alpha.yml's own gate, immediately
+  after `next_version` is computed and before anything external happens -
+  duplicated rather than shared (no simple way to share a bash snippet
+  across two separate workflow files without a composite action).
+- Same workflow's GitHub Release creation always passed `--prerelease`
+  unconditionally - correct for every version so far (all had a
+  suffix), silently wrong for a future bare stable release. Now
+  conditional on whether the version string contains a `-`.
+- `install.sh`'s `sort -V` + `-`→`~` precedence workaround (from the
+  first review round) turned out not to be genuine SemVer precedence in
+  every case: a prerelease identifier containing its own literal hyphen
+  ("rc-one.1") sorted *below* the plain "rc.1" it should rank above,
+  because the trick only ever repositions the version-core/prerelease
+  separator, not every hyphen SemVer identifiers are allowed to contain.
+  Doesn't affect the actually-planned `beta.N` → `rc.N` → stable series.
+  Replaced with a real, from-scratch SemVer 2.0 precedence comparator in
+  pure bash (`version_gt` + helpers) - numeric version-core comparison,
+  then prerelease-identifier-by-identifier comparison per spec (numeric
+  identifiers compare numerically and always rank below alphanumeric
+  ones; more identifiers with all preceding ones equal ranks higher) -
+  rather than trying to make `sort -V`'s undocumented ordering behavior
+  cover a case it was never designed for. Verified against SemVer.org's
+  own canonical precedence example chain, the specific reported bug case,
+  and a live call against the real GitHub API (still correctly resolves
+  `0.1.0-beta.14` as latest).
+- Acknowledged, left as is: `scripts/version-pattern.sh`'s website
+  extractor rejects a patch/build number over 3 digits (to keep excluding
+  a `dd.mm.yyyy` date's 4-digit year, the whole reason that check exists)
+  - flagged by the user themselves as low-priority and "practically far
+  away," not something to chase now.

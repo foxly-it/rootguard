@@ -71,6 +71,25 @@ jobs:
             next_n=$((latest_n + 1))
             next_version="${series#v}.${next_n}"
           fi
+          # Validate *before* git-cliff, commit, tag, push, or GitHub
+          # Release creation below - all of those already ran and had to
+          # be manually cleaned up once, found in review, before this
+          # check existed: only release-alpha.yml (dispatched last, as a
+          # separate workflow run) validated the version, by which point
+          # a typo'd override (1.0.0-rc.01, 1foo.2bar.3baz, 1.0.0+build)
+          # had already produced a real commit on main, a real tag, and a
+          # real GitHub Release that needed undoing by hand. Same SemVer
+          # 2.0 grammar as release-alpha.yml's own gate (build metadata
+          # excluded - not a legal Docker tag either); kept as a literal
+          # duplicate rather than shared, since there's no straightforward
+          # way to share a bash snippet between two separate workflow
+          # files without a composite action - keep both in sync by hand
+          # if this ever changes.
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
+          if [[ ! "$next_version" =~ $semver_pattern ]]; then
+            echo "Refusing non-semantic version: $next_version" >&2
+            exit 1
+          fi
           if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ] && [ -z "$VERSION_OVERRIDE" ]; then
             echo "No commits since ${latest_tag} - nothing to release" >&2
             exit 1
@@ -117,11 +136,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          # A bare "X.Y.Z" (no "-" suffix) is a stable release and must
+          # not be marked as a prerelease on GitHub - only relevant once
+          # 1.0.0 itself ships (every version so far has had a suffix),
+          # but wrong by default otherwise: gh release create always
+          # applies whatever flag is passed, it doesn't infer this itself.
+          prerelease_flag=()
+          case "${{ steps.next.outputs.version }}" in
+            *-*) prerelease_flag=(--prerelease) ;;
+          esac
           gh release create "${{ steps.next.outputs.tag }}" \
             --repo "${{ github.repository }}" \
             --title "${{ steps.next.outputs.version }}" \
             --notes-file /tmp/release-notes.md \
-            --prerelease
+            "${prerelease_flag[@]}"
 
       - name: Dispatch the image-publishing release pipeline
         env:

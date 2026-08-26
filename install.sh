@@ -73,6 +73,87 @@ random_secret() {
   fi
 }
 
+# version_core_parts/version_prerelease/is_numeric_identifier/
+# compare_identifier/version_gt implement real SemVer 2.0 precedence
+# comparison in pure bash - no jq/semver library, still dependency-free
+# for a script that has to run on a fresh machine before anything but
+# curl is guaranteed. Replaced an earlier `sort -V` + "-" -> "~"
+# workaround (GNU coreutils' version-sort treats "~" as sorting before
+# everything, dpkg-style, which fixed the common "1.0.0-rc.1 ranks above
+# 1.0.0" case) once review found it still mis-sorts once a prerelease
+# identifier contains a literal hyphen itself: "1.0.0-rc-one.1" sorted
+# *below* "1.0.0-rc.1" under that trick, backwards from real SemVer
+# precedence (comparing "rc-one" against "rc" identifier-by-identifier,
+# "rc" - the shorter, equal-prefix string - has lower precedence). A
+# one-off pairwise comparator sidesteps relying on sort -V's exact,
+# undocumented multi-key behavior entirely; verified against SemVer.org's
+# own canonical precedence example chain plus this specific bug case.
+version_core_parts() {
+  local core="${1%%-*}"
+  IFS='.' read -r -a __rg_core_parts <<< "$core"
+}
+
+version_prerelease() {
+  case "$1" in
+    *-*) printf '%s' "${1#*-}" ;;
+    *) printf '' ;;
+  esac
+}
+
+is_numeric_identifier() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+# compare_identifier a b: echoes -1/0/1 for a<b / a==b / a>b, per SemVer's
+# prerelease-identifier precedence rules (numeric identifiers compare
+# numerically and always rank below alphanumeric ones; alphanumeric
+# identifiers compare byte-for-byte).
+compare_identifier() {
+  local a="$1" b="$2"
+  if is_numeric_identifier "$a" && is_numeric_identifier "$b"; then
+    if ((10#$a < 10#$b)); then echo -1; elif ((10#$a > 10#$b)); then echo 1; else echo 0; fi
+    return
+  fi
+  if is_numeric_identifier "$a"; then echo -1; return; fi
+  if is_numeric_identifier "$b"; then echo 1; return; fi
+  if [[ "$a" == "$b" ]]; then echo 0;
+  elif [[ "$a" < "$b" ]]; then echo -1;
+  else echo 1; fi
+}
+
+# version_gt a b: succeeds (exit 0) if a has strictly higher SemVer
+# precedence than b. Both a and b are "X.Y.Z" or "X.Y.Z-prerelease",
+# without the leading "v".
+version_gt() {
+  local a="$1" b="$2"
+  local -a __rg_core_parts
+  version_core_parts "$a"; local -a acore=("${__rg_core_parts[@]}")
+  version_core_parts "$b"; local -a bcore=("${__rg_core_parts[@]}")
+  local i
+  for i in 0 1 2; do
+    if ((10#${acore[$i]} > 10#${bcore[$i]})); then return 0; fi
+    if ((10#${acore[$i]} < 10#${bcore[$i]})); then return 1; fi
+  done
+  local apre bpre
+  apre="$(version_prerelease "$a")"
+  bpre="$(version_prerelease "$b")"
+  [[ -z "$apre" && -z "$bpre" ]] && return 1
+  [[ -z "$apre" ]] && return 0
+  [[ -z "$bpre" ]] && return 1
+  local -a aids bids
+  IFS='.' read -r -a aids <<< "$apre"
+  IFS='.' read -r -a bids <<< "$bpre"
+  local n=${#aids[@]} idx c
+  ((${#bids[@]} < n)) && n=${#bids[@]}
+  for ((idx = 0; idx < n; idx++)); do
+    c="$(compare_identifier "${aids[$idx]}" "${bids[$idx]}")"
+    ((c > 0)) && return 0
+    ((c < 0)) && return 1
+  done
+  ((${#aids[@]} > ${#bids[@]})) && return 0
+  return 1
+}
+
 # Same picking logic as rootguard-core's own updater
 # (internal/updater/github_release.go): GitHub's own /releases/latest
 # excludes prereleases, and every RootGuard release is published as one -
@@ -81,23 +162,10 @@ random_secret() {
 # direct query once returned v0.1.0-beta.9 *ahead of* v0.1.0-beta.12 on
 # this exact repository, so "the newest-first list" isn't actually
 # guaranteed - taking the first matching entry would have silently
-# resolved to the older release. `sort -V` (GNU coreutils, present by
-# default on Debian/Ubuntu, this script's supported targets) ranks
-# version tags correctly, with one adjustment: plain `sort -V` ranks a
-# prerelease *after* its own stable release ("1.0.0-rc.1" above "1.0.0",
-# backwards - verified empirically), because it has no concept of a
-# prerelease suffix demoting precedence. Coreutils' version-sort treats
-# `~` the way dpkg does - sorting before everything, even the empty
-# string - so rewriting each tag's version-core/prerelease separator from
-# `-` to `~` before sorting (and back after picking the winner) gives
-# correct SemVer precedence for free, still with no jq/semver library
-# dependency. The matching pattern accepts any real semantic version, not
-# just RootGuard's current "0.1.0-(alpha|beta).N" scheme, so a future
-# base-version change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...) keeps
-# resolving correctly without another change here. Each prerelease
-# identifier allows a literal hyphen too (real SemVer grammar, e.g.
-# "rc-one.1" - a version release-alpha.yml's own gate and Core's
-# semver.IsValid both already accept), not just letters/digits - this
+# resolved to the older release. The matching pattern accepts any real
+# semantic version, not just RootGuard's current "0.1.0-(alpha|beta).N"
+# scheme, so a future base-version change (0.2.0, 1.0.0-rc.1, a bare
+# 1.0.0, ...) keeps resolving correctly without another change here. This
 # script can't source scripts/version-pattern.sh (no repo checkout exists
 # yet on a fresh machine), so keep this pattern in sync with that file's
 # rootguard_version_pattern by hand if it ever changes.
@@ -106,14 +174,17 @@ resolve_latest_tag() {
   body="$(curl -fsSL -H 'Accept: application/vnd.github+json' \
     "https://api.github.com/repos/${RG_REPO}/releases")" \
     || die "Konnte die GitHub-Releases-API nicht erreichen."
-  printf '%s' "$body" \
+  local best="" candidate
+  while IFS= read -r candidate; do
+    [[ -z "$candidate" ]] && continue
+    if [[ -z "$best" ]] || version_gt "${candidate#v}" "${best#v}"; then
+      best="$candidate"
+    fi
+  done < <(printf '%s' "$body" \
     | grep -o '"tag_name": *"[^"]*"' \
     | sed -E 's/.*"([^"]*)"$/\1/' \
-    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' \
-    | sed 's/-/~/' \
-    | sort -V \
-    | tail -1 \
-    | tr '~' '-'
+    | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$')
+  printf '%s' "$best"
 }
 
 # Best-effort: only checks what ss/netstat can currently see (a container
