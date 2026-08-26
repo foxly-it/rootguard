@@ -21,10 +21,32 @@ cd "${repository_dir}"
 # references. Generalized past "alpha|beta" specifically (accepts "rc", a
 # letter revision, ...) so a prerelease scheme change doesn't silently stop
 # this script from finding anything.
+#
+# Accepted gap once a stable release exists: this pattern still can't
+# positively match a bare "1.0.0" prose mention (no suffix to require),
+# so a *correctly* updated stable-version mention becomes invisible to
+# this check rather than confirmed - it'll still correctly flag a
+# leftover stale prerelease mention as stale (that comparison happens
+# below, against latest_version, which tag_version_pattern below can be
+# bare). Not widened without the false-positive risk above being solved
+# first, and there's no real stable-release site copy to design that
+# against yet - revisit once one exists.
 version_pattern='[0-9]+\.[0-9]+\.[0-9]+-[A-Za-z][0-9A-Za-z]*(\.[0-9A-Za-z]+)*'
 
+# Tag resolution needs a *different, wider* pattern than the prose scan
+# below: the site's own release-pipeline (release-alpha.yml) and the Core
+# now both support a stable release with no prerelease suffix at all
+# ("1.0.0"), so a real stable tag must still be found here - unlike
+# version_pattern above, whose mandatory suffix exists to keep the prose
+# scan from matching bare-number noise (SVG path coordinates, AdGuard's
+# own "v0.107.78", ...) that has nothing to do with a RootGuard version.
+# That false-positive risk doesn't apply to real git tags, so it's safe to
+# make the suffix optional here. Ranked by creation date (not sort -V), so
+# a later-cut stable tag correctly outranks an earlier rc for the same
+# release without needing install.sh's sort -V precedence workaround.
+tag_version_pattern='[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z][0-9A-Za-z]*(\.[0-9A-Za-z]+)*)?'
 latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E "^v${version_pattern}\$" | head -1)"
+  | grep -E "^v${tag_version_pattern}\$" | head -1)"
 if [[ -z "${latest_tag}" ]]; then
   echo "No release tag found - cannot determine the current version" >&2
   exit 1

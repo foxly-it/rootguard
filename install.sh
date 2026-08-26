@@ -83,17 +83,18 @@ random_secret() {
 # guaranteed - taking the first matching entry would have silently
 # resolved to the older release. `sort -V` (GNU coreutils, present by
 # default on Debian/Ubuntu, this script's supported targets) ranks
-# version tags correctly for RootGuard's actual releases so far, with one
-# known gap accepted to stay dependency-free (no jq, no semver library):
-# it doesn't apply full SemVer precedence for a stable release against
-# its own prerelease (it would rank "1.0.0-rc.1" above "1.0.0" itself,
-# backwards) - a narrow edge case that only bites a fresh install running
-# in the brief window between an rc and the stable release it leads up
-# to, and even then only ever picks another real, buildable release, not
-# an older/broken one. The pattern below accepts any real semantic
-# version, not just RootGuard's current "0.1.0-(alpha|beta).N" scheme, so
-# a future base-version change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...)
-# keeps resolving correctly without another change here.
+# version tags correctly, with one adjustment: plain `sort -V` ranks a
+# prerelease *after* its own stable release ("1.0.0-rc.1" above "1.0.0",
+# backwards - verified empirically), because it has no concept of a
+# prerelease suffix demoting precedence. Coreutils' version-sort treats
+# `~` the way dpkg does - sorting before everything, even the empty
+# string - so rewriting each tag's version-core/prerelease separator from
+# `-` to `~` before sorting (and back after picking the winner) gives
+# correct SemVer precedence for free, still with no jq/semver library
+# dependency. The matching pattern accepts any real semantic version, not
+# just RootGuard's current "0.1.0-(alpha|beta).N" scheme, so a future
+# base-version change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...) keeps
+# resolving correctly without another change here.
 resolve_latest_tag() {
   local body
   body="$(curl -fsSL -H 'Accept: application/vnd.github+json' \
@@ -103,8 +104,10 @@ resolve_latest_tag() {
     | grep -o '"tag_name": *"[^"]*"' \
     | sed -E 's/.*"([^"]*)"$/\1/' \
     | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
+    | sed 's/-/~/' \
     | sort -V \
-    | tail -1
+    | tail -1 \
+    | tr '~' '-'
 }
 
 # Best-effort: only checks what ss/netstat can currently see (a container

@@ -2003,3 +2003,56 @@ Confirmed live: `beta.14`'s `upgrade-test` passed via the normal
 WebApp-proxied path (the `beta.12`-specific bypass in `release-alpha.yml`
 correctly stayed dormant, since `beta.13` - carrying the ordering fix - is
 now "previous").
+
+**SemVer/tagging generalization, part 1** (PR #359, branch
+`feat/general-semver-release-tagging`): the Go-side update mechanism
+(`isOlderReleaseVersion`, `pickLatestReleaseImage`) was already moved onto
+`golang.org/x/mod/semver` for full generality (see above). The user's own
+review of the branch before merge found three real bugs in the
+*surrounding shell scripts*, none caught by CI because none of the
+existing checks exercise a stable (non-prerelease) or malformed version:
+
+- `release-alpha.yml`'s version-gate used a shell glob
+  (`[0-9]*.[0-9]*.[0-9]*`) that isn't a SemVer check at all - accepted
+  `1foo.2bar.3baz`, a leading-zero core like `01.2.3`, and build metadata
+  (`1.2.3+build.4`, which isn't even a legal Docker tag). Replaced with a
+  full SemVer 2.0 grammar via bash `[[ =~ ]]` (build metadata excluded on
+  purpose, same reason it's invalid in a tag).
+- `install.sh`'s `resolve_latest_tag` used `sort -V | tail -1`, which
+  ranks a prerelease *above* its own stable release (`1.0.0-rc.1` above
+  `1.0.0`) - verified empirically, and previously documented as an
+  "accepted gap" that turned out to be a real, fixable bug. Fixed by
+  rewriting each tag's version-core/prerelease separator from `-` to `~`
+  before sorting (GNU `sort -V` treats `~` as sorting before everything,
+  same as dpkg) and back after - correct precedence, still no jq/semver
+  dependency.
+- `check-site-facts.sh`/`bump-site-versions.sh` required a letter-leading
+  prerelease suffix on every version match, so a bare stable tag
+  (`v1.0.0`) was invisible to `latest_tag` resolution entirely - the
+  scripts would keep tracking an old `rc.N` as "current" forever. Split
+  into two patterns: a wider, suffix-optional `tag_version_pattern` for
+  resolving the latest real git tag (safe - no prose to false-positive
+  against), and the original letter-leading `version_pattern` kept
+  unchanged for prose scanning, since widening *that* one was verified
+  live to reintroduce the exact SVG-path-coordinate false positives the
+  letter requirement was added to fix in the first place (`site/*.html`
+  is full of SVG icon path data shaped like fake dotted-number
+  "versions"). Documented as a known, narrower accepted gap: a
+  *correctly* written bare stable-version mention in prose becomes
+  invisible to the checker rather than confirmed, until real
+  stable-release site copy exists to design a safer heuristic against.
+
+All three verified directly against the user's own reported reproduction
+cases (glob-fooling strings, `v1.0.0`/`v1.0.0-rc.1` ordering, tag
+resolution finding a bare stable tag), plus a live run of
+`check-site-facts.sh`/`bump-site-versions.sh` against the real repo
+(idempotent, no site content changed) and `shellcheck` (clean).
+
+Also restructured `ROADMAP.md`'s 30-day soak test
+([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)) from
+a 0.9 (pre-`rc.1`) gate to a 1.0.0 (stable-promotion) gate, at the user's
+suggestion: the soak test exercises the update/backup/restore machinery
+generically, not one specific build, and an RC period is exactly what
+longer-running validation like this is for - there's no reason to hold
+`1.0.0-rc.1` itself hostage to the calendar. 0.9 is now 5/7 with only two
+non-time-bound items left (final blocker sweep, migration docs).

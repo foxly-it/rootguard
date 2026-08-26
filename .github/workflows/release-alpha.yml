@@ -32,10 +32,21 @@ jobs:
           else
             version="${GITHUB_REF_NAME#v}"
           fi
-          case "$version" in
-            [0-9]*.[0-9]*.[0-9]*) ;;
-            *) echo "Refusing non-semantic version: $version" >&2; exit 1 ;;
-          esac
+          # A shell glob like [0-9]*.[0-9]*.[0-9]* only checks "digit,
+          # anything, digit, anything, digit, anything" - it happily
+          # accepts "1foo.2bar.3baz", a leading-zero core like "01.2.3",
+          # and build metadata ("1.2.3+build.4", which Docker tags can't
+          # even represent since '+' isn't a legal tag character). Core
+          # would later reject such a tag via semver.IsValid, so a
+          # malformed tag here would publish images that automatic update
+          # discovery can never find. Full SemVer 2.0 core+prerelease
+          # grammar instead (build metadata deliberately excluded, for the
+          # same reason it's invalid in a Docker tag).
+          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
+          if [[ ! "$version" =~ $semver_pattern ]]; then
+            echo "Refusing non-semantic version: $version" >&2
+            exit 1
+          fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
   test:

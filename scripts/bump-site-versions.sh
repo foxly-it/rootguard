@@ -19,11 +19,20 @@ cd "${repository_dir}"
 # letter-leading prerelease suffix) as check-site-facts.sh: matches any
 # RootGuard release, not just today's "0.1.0-(alpha|beta).N" scheme, and
 # specifically avoids matching bare dotted-number sequences like SVG path
-# coordinate data or an IP address mentioned in prose.
+# coordinate data or an IP address mentioned in prose. Accepted gap: this
+# means a bare stable mention ("1.0.0", no suffix) can never be found or
+# bumped by the substitution loop below either - not widened without the
+# same false-positive risk check-site-facts.sh documents, and there's no
+# real stable-release site copy to design that against yet.
 version_pattern='[0-9]+\.[0-9]+\.[0-9]+-[A-Za-z][0-9A-Za-z]*(\.[0-9A-Za-z]+)*'
 
+# Tag resolution itself needs the wider, suffix-optional pattern though -
+# see check-site-facts.sh's tag_version_pattern comment for why that's
+# safe (no prose to false-positive against) and necessary (a stable
+# release must be found as "latest" once one exists).
+tag_version_pattern='[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z][0-9A-Za-z]*(\.[0-9A-Za-z]+)*)?'
 latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E "^v${version_pattern}\$" | head -1 || true)"
+  | grep -E "^v${tag_version_pattern}\$" | head -1 || true)"
 if [[ -z "${latest_tag}" ]]; then
   echo "No release tag found - cannot determine the current version" >&2
   exit 1
