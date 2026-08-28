@@ -78,18 +78,13 @@ jobs:
           # separate workflow run) validated the version, by which point
           # a typo'd override (1.0.0-rc.01, 1foo.2bar.3baz, 1.0.0+build)
           # had already produced a real commit on main, a real tag, and a
-          # real GitHub Release that needed undoing by hand. Same SemVer
-          # 2.0 grammar as release-alpha.yml's own gate (build metadata
-          # excluded - not a legal Docker tag either); kept as a literal
-          # duplicate rather than shared, since there's no straightforward
-          # way to share a bash snippet between two separate workflow
-          # files without a composite action - keep both in sync by hand
-          # if this ever changes.
-          semver_pattern='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*)?$'
-          if [[ ! "$next_version" =~ $semver_pattern ]]; then
-            echo "Refusing non-semantic version: $next_version" >&2
-            exit 1
-          fi
+          # real GitHub Release that needed undoing by hand. require_semver
+          # enforces the same SemVer 2.0 grammar as release-alpha.yml's own
+          # gate - shared via scripts/lib/semver-validate.sh now instead of
+          # a hand-kept duplicate, since this exact incident is what a
+          # future silent drift between the two copies would risk again.
+          source scripts/lib/semver-validate.sh
+          require_semver "$next_version"
           if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ] && [ -z "$VERSION_OVERRIDE" ]; then
             echo "No commits since ${latest_tag} - nothing to release" >&2
             exit 1
