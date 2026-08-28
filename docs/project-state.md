@@ -2773,3 +2773,29 @@ Workflow-only change with no way to exercise a real release run in CI -
 verified locally instead: the YAML parses, the appended-section shell
 logic was run standalone against a fixture notes file and produces the
 expected output.
+
+**Code compression 1, done: a shared atomic-file writer.** The
+audit's own lower-priority code-compression suggestions, worked through
+after the full findings list: the write-temp-then-rename pattern was
+hand-rolled separately in `installer`, `updater` (twice - one copy in
+`manager.go`, another in `backups.go`), `unbound` (twice), and `adguard`
+- six call sites within `rootguard-core` alone, and they'd genuinely
+drifted: some cleaned up their temp file on a failed rename, some
+didn't (a stray `.tmp` left behind on error); one used `json.Marshal`,
+another `json.MarshalIndent`.
+
+New `internal/atomicfile` package (`WriteFile`, `WriteJSON`) replaces
+all six - only `adguard/manager.go`'s credentials write is left as-is,
+since it deliberately delays its rename past an unrelated HTTP call
+(a real two-phase-commit shape, not the same pattern). Behavior-
+preserving: every existing test in the module passes unchanged, plus
+three new tests for the new package itself (one a genuine regression
+test - proves the failed-rename cleanup the consolidation fixed for
+free, revert-verified).
+
+`rootguard-updater` and `rootguard-webapp` keep their own small,
+independent copies - they're separate Go modules from `rootguard-core`
+(and from each other), and this codebase already established this
+session that sharing code across that boundary means a new shared
+module, real machinery for a handful of lines each already keeps
+correct on its own.
