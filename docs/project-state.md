@@ -2274,3 +2274,25 @@ names that don't match a real `ghcr.io/foxly-it/...` prefix, which the
 real, now-default verifier correctly refuses as `"not_applicable"` -
 fail-closed, working as intended, just not what those particular tests
 were testing).
+
+**Found by PR #365's own CI, not by local testing**: `ci-updater.yml`'s
+real Docker E2E integration test (`integration/run.sh`, a genuinely
+separate thing from the Go unit tests above - builds real local fixture
+images and runs the real compiled binary through a real paired
+core/webapp update+rollback) failed the same way, for the same reason -
+its fixture images (`rootguard-e2e-core:new`, no `ghcr.io/foxly-it/...`
+prefix, and with `ROOTGUARD_UPDATER_SKIP_PULL=true` already set, never
+even digest-qualified) correctly fail the new attestation gate every
+time, so the update can never reach `idle`. Fixed with the same kind of
+test-only escape hatch `ROOTGUARD_UPDATER_SKIP_PULL` already is -
+`ROOTGUARD_UPDATER_SKIP_ATTESTATION`, read once in `main()`, set only in
+`integration/compose.e2e.yaml`. Documented plainly in the code that this
+one is a real security control, not just a convenience skip like
+`SKIP_PULL` - anything setting it in production loses the whole point of
+this fix. Verified the exact env-var-driven override logic in isolation
+(a standalone Go snippet mirroring `main.go`'s wiring, run with and
+without the variable set) since the shared `.7` test host's own
+long-running containers made a real `integration/run.sh` pass there
+unsafe - fixed `container_name:` values in `compose.e2e.yaml` would have
+collided with (and risked disrupting) an unrelated 3-day-old deployment
+already running there.

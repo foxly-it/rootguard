@@ -28,6 +28,7 @@ services:
       ROOTGUARD_CORE_UPDATE_IMAGE: rootguard-e2e-core:new
       ROOTGUARD_WEBAPP_UPDATE_IMAGE: "rootguard-e2e-webapp:${WEB_TARGET_TAG:-new}"
       ROOTGUARD_UPDATER_SKIP_PULL: "true"
+      ROOTGUARD_UPDATER_SKIP_ATTESTATION: "true"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock

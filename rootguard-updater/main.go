@@ -192,6 +192,16 @@ func main() {
 		runDocker,
 	)
 	manager.skipPull = strings.EqualFold(os.Getenv("ROOTGUARD_UPDATER_SKIP_PULL"), "true")
+	// Same test-only escape hatch as ROOTGUARD_UPDATER_SKIP_PULL right
+	// above, for the same reason: integration/run.sh's E2E fixtures are
+	// locally built images with no real cosign attestation to check -
+	// unlike SKIP_PULL, this one disables a real security control, so it's
+	// worth spelling out plainly: any deployment that sets this in
+	// production loses the activation gate this update added entirely.
+	// Nothing in this codebase sets it outside integration/compose.e2e.yaml.
+	if strings.EqualFold(os.Getenv("ROOTGUARD_UPDATER_SKIP_ATTESTATION"), "true") {
+		manager.attestationVerifier = func(context.Context, string, string) error { return nil }
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
