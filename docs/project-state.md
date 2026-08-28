@@ -2746,3 +2746,30 @@ each hook wire-up/log call, confirmed the corresponding test fails,
 restored) using the same broken-path-through-a-file trick already
 established this session (point a path through a file that was just
 written, so `MkdirAll` reliably fails on any OS).
+
+**Minor 6, fixed: the release tag's move to a pin-update commit
+complicated forensic traceability.** An earlier RC-blocker fix this
+session moved the release tag to point at the pin-update commit (the one
+that records this release's own image digests in
+`compose.release.yaml`/`.env.release.example`), so the documented quick
+start resolves to the right files. But the published images are built
+*before* that pin commit exists (the pin needs the digests the build
+produces - chicken-and-egg), so each image's own
+`org.opencontainers.image.revision` label and provenance attestation
+reference the earlier build commit, not the tag. Someone tracing a
+published image back to source without already knowing this would land
+on the wrong commit.
+
+Not fixable by skipping the tag move (that's the RC-blocker this would
+revert to) or by building from the pin commit (still impossible for the
+same chicken-and-egg reason) - recorded explicitly instead. The release
+notes now get a "Build provenance" section naming both commits: the one
+the images were actually built from (`github.sha`, matching their labels
+and attestations) and the one the tag now points at (the pin-update
+commit, one commit ahead). A one-line lookup instead of something to
+reverse-engineer from git history.
+
+Workflow-only change with no way to exercise a real release run in CI -
+verified locally instead: the YAML parses, the appended-section shell
+logic was run standalone against a fixture notes file and produces the
+expected output.

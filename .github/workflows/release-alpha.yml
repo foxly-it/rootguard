@@ -321,11 +321,17 @@ jobs:
       # completes *this* release, keeps it self-consistent going forward.
       # Idempotent: a no-op if the tag already points at the pinned commit.
       - name: Point the release tag at the pin-update commit
+        id: point-tag
         run: |
           set -euo pipefail
           tag="v${{ needs.version.outputs.value }}"
           git fetch origin main
           target="$(git rev-parse origin/main)"
+          # Recorded as a step output either way (before the idempotent
+          # early-exit below) - the release notes' "Build provenance"
+          # section needs it regardless of whether this run actually moved
+          # the tag or found it already correct.
+          echo "pin_commit=${target}" >> "$GITHUB_OUTPUT"
           if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1 && \
              [ "$(git rev-parse "refs/tags/${tag}")" = "${target}" ]; then
             echo "Tag ${tag} already points at the correctly pinned commit"
@@ -376,6 +382,32 @@ jobs:
           [ -n "${{ steps.previous-tag.outputs.value }}" ] && range="${{ steps.previous-tag.outputs.value }}..HEAD"
           git-cliff --config cliff.toml --tag "v${{ needs.version.outputs.value }}" \
             "$range" --strip header -o /tmp/release-notes.md
+
+      # Found in review: the tag this release publishes under (moved above,
+      # to the pin-update commit, so the documented quick start resolves to
+      # the right compose.release.yaml/.env.release.example) is never the
+      # commit the published images were actually built from - that build
+      # happened in the publish job, against the commit this whole workflow
+      # run started at, one commit *before* the pin update it doesn't and
+      # can't include yet (the pin needs the digests the build produces).
+      # Each image's own org.opencontainers.image.revision label and
+      # provenance attestation reference that earlier commit, not the tag -
+      # a real, structural gap for anyone trying to trace a published image
+      # back to source without already knowing this. Not fixable by
+      # skipping the tag move (that's the RC-blocker this reverts to) or by
+      # building from the pin commit (impossible: chicken-and-egg on the
+      # digests) - recorded explicitly instead, so it's a one-line lookup
+      # rather than something to reverse-engineer from git history.
+      - name: Append build provenance to the release notes
+        run: |
+          set -euo pipefail
+          {
+            echo
+            echo "## Build provenance"
+            echo
+            echo "- Published images were built from commit \`${{ github.sha }}\` - matches each image's \`org.opencontainers.image.revision\` label and provenance attestation."
+            echo "- This tag (\`v${{ needs.version.outputs.value }}\`) points at \`${{ steps.point-tag.outputs.pin_commit }}\`, one commit ahead - the pin update that records this release's own image digests in \`compose.release.yaml\`/\`.env.release.example\`."
+          } >> /tmp/release-notes.md
 
       - name: Create GitHub Release
         env:
