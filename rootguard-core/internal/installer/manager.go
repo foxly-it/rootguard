@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/atomicfile"
 )
 
 const (
@@ -595,12 +597,8 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 		return "", err
 	}
 	path := filepath.Join(m.dataDir, "compose.yaml")
-	temp := path + ".tmp"
-	if err := os.WriteFile(temp, []byte(content), 0600); err != nil {
-		return "", fmt.Errorf("write temporary stack definition: %w", err)
-	}
-	if err := os.Rename(temp, path); err != nil {
-		return "", fmt.Errorf("activate stack definition: %w", err)
+	if err := atomicfile.WriteFile(path, []byte(content), 0600); err != nil {
+		return "", fmt.Errorf("write stack definition: %w", err)
 	}
 	return path, nil
 }
@@ -1006,16 +1004,7 @@ func (m *Manager) persistLocked() (returnErr error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(m.status, "", "  ")
-	if err != nil {
-		return err
-	}
-	path := filepath.Join(m.dataDir, "status.json")
-	temp := path + ".tmp"
-	if err := os.WriteFile(temp, data, 0600); err != nil {
-		return err
-	}
-	return os.Rename(temp, path)
+	return atomicfile.WriteJSON(filepath.Join(m.dataDir, "status.json"), m.status)
 }
 
 func cloneStatus(status Status) Status {

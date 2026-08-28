@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/atomicfile"
 )
 
 const (
@@ -244,11 +246,7 @@ func writeBackupManifest(directory string, spec ServiceSpec) error {
 		SchemaVersion: backupManifestSchemaVersion,
 		Service:       spec.Name, Container: spec.Container, Image: spec.TargetImage, Files: files,
 	}
-	data, err := json.MarshalIndent(manifest, "", "  ")
-	if err != nil {
-		return err
-	}
-	return writeAtomic(filepath.Join(directory, manifestFileName), data)
+	return atomicfile.WriteJSON(filepath.Join(directory, manifestFileName), manifest)
 }
 
 // verifyBackupManifest recomputes checksums for directory and compares them
@@ -351,7 +349,7 @@ func (m *Manager) persistBackupSettingsLocked() error {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}
-	return writeJSONAtomic(filepath.Join(m.dataDir, "backup-settings.json"), BackupSettings{RetentionPerService: m.backupRetention})
+	return atomicfile.WriteJSON(filepath.Join(m.dataDir, "backup-settings.json"), BackupSettings{RetentionPerService: m.backupRetention})
 }
 
 func (m *Manager) loadBackupSettings() {

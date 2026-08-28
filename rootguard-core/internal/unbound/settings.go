@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/atomicfile"
 )
 
 var ErrInvalidSettings = errors.New("invalid unbound settings")
@@ -793,10 +795,10 @@ func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custo
 		return fmt.Errorf("read previous custom unbound config: %w", err)
 	}
 
-	if err := writeAtomic(configPath, config, 0644); err != nil {
+	if err := atomicfile.WriteFile(configPath, config, 0644); err != nil {
 		return fmt.Errorf("activate unbound config: %w", err)
 	}
-	if err := writeAtomic(settingsPath, settingsData, 0600); err != nil {
+	if err := atomicfile.WriteFile(settingsPath, settingsData, 0600); err != nil {
 		_ = restoreFile(configPath, oldConfig, configExisted, 0644)
 		return fmt.Errorf("activate settings: %w", err)
 	}
@@ -835,7 +837,7 @@ func writeOrRemove(path string, data []byte, mode os.FileMode) error {
 		}
 		return nil
 	}
-	return writeAtomic(path, data, mode)
+	return atomicfile.WriteFile(path, data, mode)
 }
 
 func restoreState(configPath, settingsPath, customPath string, config, settings, custom []byte, configExisted, settingsExisted, customExisted bool) error {
@@ -857,18 +859,6 @@ func (m *Manager) activeConfig(settings Settings) ([]byte, error) {
 	return data, nil
 }
 
-func writeAtomic(path string, data []byte, mode os.FileMode) error {
-	temporary := path + ".tmp"
-	if err := os.WriteFile(temporary, data, mode); err != nil {
-		return err
-	}
-	if err := os.Rename(temporary, path); err != nil {
-		_ = os.Remove(temporary)
-		return err
-	}
-	return nil
-}
-
 func readOptional(path string) ([]byte, bool, error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -887,5 +877,5 @@ func restoreFile(path string, data []byte, existed bool, mode os.FileMode) error
 		}
 		return nil
 	}
-	return writeAtomic(path, data, mode)
+	return atomicfile.WriteFile(path, data, mode)
 }

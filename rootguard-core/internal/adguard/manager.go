@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/atomicfile"
 )
 
 type Credentials struct {
@@ -286,13 +288,9 @@ func (m *Manager) publishBlockpageAuthToken(credentials Credentials) error {
 		return fmt.Errorf("create blockpage auth directory: %w", err)
 	}
 	token := base64.StdEncoding.EncodeToString([]byte(credentials.Username + ":" + credentials.Password))
-	tempPath := filepath.Join(m.blockpageAuthDir, ".basic-auth-token.tmp")
-	if err := os.WriteFile(tempPath, []byte(token), 0600); err != nil {
+	path := filepath.Join(m.blockpageAuthDir, "basic-auth-token")
+	if err := atomicfile.WriteFile(path, []byte(token), 0600); err != nil {
 		return fmt.Errorf("write blockpage auth token: %w", err)
-	}
-	defer os.Remove(tempPath)
-	if err := os.Rename(tempPath, filepath.Join(m.blockpageAuthDir, "basic-auth-token")); err != nil {
-		return fmt.Errorf("activate blockpage auth token: %w", err)
 	}
 	return nil
 }

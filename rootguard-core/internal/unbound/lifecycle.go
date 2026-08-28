@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/atomicfile"
 )
 
 const historyLimit = 20
@@ -328,7 +330,7 @@ func (m *Manager) recordSnapshot(settings Settings, config, custom []byte) error
 	if err := os.MkdirAll(directory, 0700); err != nil {
 		return err
 	}
-	if err := writeAtomic(filepath.Join(directory, id+".json"), append(data, '\n'), 0600); err != nil {
+	if err := atomicfile.WriteFile(filepath.Join(directory, id+".json"), append(data, '\n'), 0600); err != nil {
 		return err
 	}
 	return m.pruneHistory(directory)

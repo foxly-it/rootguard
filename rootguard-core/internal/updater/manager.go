@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/foxly-it/rootguard-core/internal/atomicfile"
 	"github.com/foxly-it/rootguard-core/internal/stack"
 )
 
@@ -788,10 +789,10 @@ func (m *Manager) persistLocked() (returnErr error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(m.dataDir, "status.json"), m.status); err != nil {
+	if err := atomicfile.WriteJSON(filepath.Join(m.dataDir, "status.json"), m.status); err != nil {
 		return err
 	}
-	if err := writeJSONAtomic(filepath.Join(m.dataDir, "images.json"), m.selected); err != nil {
+	if err := atomicfile.WriteJSON(filepath.Join(m.dataDir, "images.json"), m.selected); err != nil {
 		return err
 	}
 	return m.writeOverrideLocked()
@@ -807,23 +808,7 @@ func (m *Manager) writeOverrideLocked() error {
 		}
 		content.WriteString("  " + service + ":\n    image: " + strconv.Quote(image) + "\n")
 	}
-	return writeAtomic(filepath.Join(m.dataDir, "updates.yaml"), []byte(content.String()))
-}
-
-func writeJSONAtomic(path string, value any) error {
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return err
-	}
-	return writeAtomic(path, data)
-}
-
-func writeAtomic(path string, data []byte) error {
-	temp := path + ".tmp"
-	if err := os.WriteFile(temp, data, 0600); err != nil {
-		return err
-	}
-	return os.Rename(temp, path)
+	return atomicfile.WriteFile(filepath.Join(m.dataDir, "updates.yaml"), []byte(content.String()), 0600)
 }
 
 func cloneStatus(status Status) Status {
