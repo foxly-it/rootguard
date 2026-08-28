@@ -371,6 +371,18 @@ main() {
   if [ "${#admin_password}" -lt 12 ]; then
     die "Das WebGUI-Passwort muss mindestens 12 Zeichen lang sein. Setze ROOTGUARD_ADMIN_PASSWORD auf ein längeres Passwort oder lasse das Feld leer, um eines automatisch generieren zu lassen."
   fi
+  # A typed value can never contain one (read -r stops at the first
+  # newline) - only reachable via ROOTGUARD_ADMIN_USER/
+  # ROOTGUARD_ADMIN_PASSWORD supplied directly in the environment for a
+  # non-interactive install. Rejected outright rather than relying on the
+  # .env quoting below to contain it: a value spanning multiple physical
+  # lines in .env is a real ambiguity across dotenv-style parsers (some
+  # treat a quoted value as continuing past the newline, some don't), not
+  # something worth trusting for something that's supposed to also become
+  # this account's actual password.
+  case "$admin_user$admin_password" in
+    *$'\n'*) die "Benutzername und Passwort dürfen keinen Zeilenumbruch enthalten." ;;
+  esac
 
   log "Ermittle die aktuelle RootGuard-Version…"
   local tag
@@ -399,17 +411,27 @@ main() {
   # sed/awk program's own text - a password containing '&', '#', or a
   # backslash would otherwise corrupt the substitution (or worse) with any
   # editor-style in-place replacement.
+  #
+  # Each value is also double-quoted in the .env output itself (q(),
+  # below) - found in review: an unquoted value is re-read by Docker
+  # Compose later, which treats '#' as starting a comment and a literal
+  # newline as a new KEY=VALUE line outside of quotes. A password or
+  # token containing either would otherwise get silently truncated at
+  # the '#', or inject an extra variable into .env entirely. q() escapes
+  # any backslash or double-quote already in the value first, so the
+  # quoting itself can't be broken out of.
   ROOTGUARD_API_TOKEN="$api_token" \
   ROOTGUARD_RECOVERY_TOKEN="$recovery_token" \
   ROOTGUARD_ADMIN_USER="$admin_user" \
   ROOTGUARD_ADMIN_PASSWORD="$admin_password" \
   ROOTGUARD_WEB_PORT="$WEB_PORT" \
   awk '
-    /^ROOTGUARD_API_TOKEN=/      { print "ROOTGUARD_API_TOKEN=" ENVIRON["ROOTGUARD_API_TOKEN"]; next }
-    /^ROOTGUARD_RECOVERY_TOKEN=/ { print "ROOTGUARD_RECOVERY_TOKEN=" ENVIRON["ROOTGUARD_RECOVERY_TOKEN"]; next }
-    /^ROOTGUARD_ADMIN_USER=/     { print "ROOTGUARD_ADMIN_USER=" ENVIRON["ROOTGUARD_ADMIN_USER"]; next }
-    /^ROOTGUARD_ADMIN_PASSWORD=/ { print "ROOTGUARD_ADMIN_PASSWORD=" ENVIRON["ROOTGUARD_ADMIN_PASSWORD"]; next }
-    /^ROOTGUARD_WEB_PORT=/       { print "ROOTGUARD_WEB_PORT=" ENVIRON["ROOTGUARD_WEB_PORT"]; next }
+    function q(v) { gsub(/\\/, "\\\\", v); gsub(/"/, "\\\"", v); return "\"" v "\"" }
+    /^ROOTGUARD_API_TOKEN=/      { print "ROOTGUARD_API_TOKEN=" q(ENVIRON["ROOTGUARD_API_TOKEN"]); next }
+    /^ROOTGUARD_RECOVERY_TOKEN=/ { print "ROOTGUARD_RECOVERY_TOKEN=" q(ENVIRON["ROOTGUARD_RECOVERY_TOKEN"]); next }
+    /^ROOTGUARD_ADMIN_USER=/     { print "ROOTGUARD_ADMIN_USER=" q(ENVIRON["ROOTGUARD_ADMIN_USER"]); next }
+    /^ROOTGUARD_ADMIN_PASSWORD=/ { print "ROOTGUARD_ADMIN_PASSWORD=" q(ENVIRON["ROOTGUARD_ADMIN_PASSWORD"]); next }
+    /^ROOTGUARD_WEB_PORT=/       { print "ROOTGUARD_WEB_PORT=" q(ENVIRON["ROOTGUARD_WEB_PORT"]); next }
     { print }
   ' .env > .env.tmp
   mv .env.tmp .env
