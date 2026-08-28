@@ -571,3 +571,33 @@ func TestRenderedComposeRejectsInvalidInternalNetwork(t *testing.T) {
 		t.Fatal("expected invalid internal network to be rejected")
 	}
 }
+
+// TestPersistLockedReportsFailureViaOnPersistError is the regression
+// test for a review finding: nearly every call site of persistLocked
+// discards its returned error entirely ("_ = m.persistLocked()"), so a
+// full disk or permissions problem could leave Status silently out of
+// date with no visibility anywhere. persistLocked now reports any
+// failure through the injectable OnPersistError hook before returning
+// it, regardless of what the caller does with the return value.
+func TestPersistLockedReportsFailureViaOnPersistError(t *testing.T) {
+	// A regular file where DataDir expects a directory - os.MkdirAll
+	// reliably fails against this on every OS.
+	blocker := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Join(blocker, "installation")
+
+	var reported error
+	manager := NewManager(Options{
+		DataDir:        dataDir,
+		OnPersistError: func(err error) { reported = err },
+	})
+
+	if err := manager.persist(); err == nil {
+		t.Fatal("expected persist to fail against a path blocked by a file")
+	}
+	if reported == nil {
+		t.Fatal("expected OnPersistError to be called with the failure")
+	}
+}

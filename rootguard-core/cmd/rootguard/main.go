@@ -24,6 +24,19 @@ import (
 	"github.com/foxly-it/rootguard-core/internal/updater"
 )
 
+// logPersistError makes an installer/updater manager's otherwise-silent
+// state-write failures ("_ = m.persistLocked()" at nearly every call
+// site - found in review) visible in the container's own logs, instead
+// of only in the return value almost nothing checks. Not a fix for the
+// underlying full-disk/permissions problem itself, just the difference
+// between "invisible" and "diagnosable" when Status quietly stops
+// reflecting reality.
+func logPersistError(component string) func(error) {
+	return func(err error) {
+		log.Printf("%s: failed to persist state: %v", component, err)
+	}
+}
+
 func main() {
 	token := os.Getenv("ROOTGUARD_API_TOKEN")
 	if token == "" {
@@ -52,6 +65,7 @@ func main() {
 		AdGuardBetaImage: envOrDefault("ROOTGUARD_ADGUARD_BETA_IMAGE", "adguard/adguardhome:beta"),
 		BlockpageImage:   envOrDefault("ROOTGUARD_BLOCKPAGE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
 		DNSNetworkCIDR:   "172.29.53.0/24",
+		OnPersistError:   logPersistError("installation manager"),
 		Bootstrap: func(ctx context.Context, dnsBindAddress string) error {
 			status, err := adguardManager.Bootstrap(ctx, dnsBindAddress)
 			if err != nil {
@@ -65,8 +79,9 @@ func main() {
 	})
 	githubClient := &http.Client{Timeout: 8 * time.Second}
 	updateManager := updater.NewManager(updater.Options{
-		DataDir:    envOrDefault("ROOTGUARD_UPDATE_DIR", "/var/lib/rootguard/updates"),
-		ComposeDir: envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
+		DataDir:        envOrDefault("ROOTGUARD_UPDATE_DIR", "/var/lib/rootguard/updates"),
+		ComposeDir:     envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
+		OnPersistError: logPersistError("update manager"),
 		Services: []updater.ServiceSpec{
 			{
 				Name: "adguard", DisplayName: "AdGuard Home",
@@ -131,6 +146,7 @@ func main() {
 		DataDir:        envOrDefault("ROOTGUARD_SELF_UPDATE_DIR", "/var/lib/rootguard/updater-self-update"),
 		ComposeDir:     filepath.Dir(controlPlaneComposeFile),
 		ComposeProject: envOrDefault("ROOTGUARD_COMPOSE_PROJECT", "rootguard"),
+		OnPersistError: logPersistError("updater self-update manager"),
 		Services: []updater.ServiceSpec{{
 			Name: "updater", DisplayName: "RootGuard Updater",
 			Container:   "rootguard-updater",

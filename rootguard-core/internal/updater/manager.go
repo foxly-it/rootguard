@@ -35,6 +35,18 @@ type VerifyFunc func(context.Context, string) error
 // AttestationVerifier's doc comment on Options.
 type AttestationVerifierFunc func(ctx context.Context, service, image string) error
 
+// PersistErrorHandler is called whenever persistLocked fails to write
+// state to disk - found in review: nearly every one of persistLocked's
+// many call sites discards its return value entirely (`_ =
+// m.persistLocked()`), which on a full disk or a permissions problem
+// meant an update, cleanup, or rollback could report success in Status
+// while its outcome was never actually written down. Rather than thread
+// error handling through every one of those call sites individually,
+// persistLocked calls this hook itself on failure - defaults to a no-op,
+// so callers that want visibility (main.go logs it) can opt in without
+// every internal package call needing to know about logging.
+type PersistErrorHandler func(error)
+
 type ServiceSpec struct {
 	Name                string
 	DisplayName         string
@@ -121,6 +133,9 @@ type Options struct {
 	// unconditionally) - injectable here purely so tests can simulate a
 	// failed/missing/unavailable attestation without a real cosign binary.
 	AttestationVerifier AttestationVerifierFunc
+	// OnPersistError is called whenever a state write fails - see
+	// PersistErrorHandler's doc comment. Defaults to a no-op.
+	OnPersistError PersistErrorHandler
 }
 
 type Manager struct {
@@ -132,6 +147,7 @@ type Manager struct {
 	run                 CommandRunner
 	verify              VerifyFunc
 	attestationVerifier AttestationVerifierFunc
+	onPersistError      PersistErrorHandler
 	specs               map[string]ServiceSpec
 	selected            map[string]string
 	backupRetention     int
@@ -153,6 +169,9 @@ func NewManager(options Options) *Manager {
 	if options.AttestationVerifier == nil {
 		options.AttestationVerifier = stack.RequireAttestation
 	}
+	if options.OnPersistError == nil {
+		options.OnPersistError = func(error) {}
+	}
 	if options.VerifyAttempts <= 0 {
 		options.VerifyAttempts = 30
 	}
@@ -166,6 +185,7 @@ func NewManager(options Options) *Manager {
 		run:                 options.Run,
 		verify:              options.Verify,
 		attestationVerifier: options.AttestationVerifier,
+		onPersistError:      options.OnPersistError,
 		specs:               make(map[string]ServiceSpec, len(options.Services)),
 		selected:            map[string]string{},
 		backupRetention:     DefaultBackupRetention,
@@ -756,7 +776,15 @@ func (m *Manager) persist() error {
 	return m.persistLocked()
 }
 
-func (m *Manager) persistLocked() error {
+// persistLocked writes state to disk, reporting any failure via
+// onPersistError before returning it - see PersistErrorHandler's doc
+// comment for why: most callers discard the returned error outright.
+func (m *Manager) persistLocked() (returnErr error) {
+	defer func() {
+		if returnErr != nil {
+			m.onPersistError(returnErr)
+		}
+	}()
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}

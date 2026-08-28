@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -909,7 +910,18 @@ func securePassword(password string) ([]byte, []byte, error) {
 	return salt, passwordHash, nil
 }
 
-func (a *SessionAuth) persistLocked() error {
+// persistLocked writes session state to disk. Several call sites discard
+// its return value entirely ("_ = a.persistLocked()", found in review),
+// which on a full disk or permissions problem meant a session change
+// could silently fail to survive a restart with no evidence anywhere -
+// logged here, at the one place that actually knows the write failed,
+// rather than at each call site that doesn't.
+func (a *SessionAuth) persistLocked() (returnErr error) {
+	defer func() {
+		if returnErr != nil {
+			log.Printf("session store: failed to persist state: %v", returnErr)
+		}
+	}()
 	if a.persistencePath == "" {
 		return nil
 	}

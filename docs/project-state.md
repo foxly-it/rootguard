@@ -2708,3 +2708,41 @@ this is a pre-existing gap, not introduced or widened here, and out of
 scope for this fix. Verified locally: `bash -n` syntax check, and the
 awk pipeline and newline-rejection logic run standalone against a set
 of adversarial values (`#`, embedded `"` and `\`, an injected newline).
+
+**Minor 5, fixed: persistence errors were swallowed via `_ = persist...`
+in many places.** ~20 call sites across `rootguard-core`'s installer and
+updater managers (`_ = m.persistLocked()`) and `rootguard-webapp`'s
+session/audit stores (`_ = a.persistLocked()`, `_ = a.persistAuditLocked()`)
+discarded the write error entirely. On a full disk or a permissions
+problem, an install step, update, cleanup, rollback, session change, or
+audit entry could report success while its outcome was never actually
+written down - invisible anywhere, not even in the container's own logs.
+
+Fixed at the single choke point each package already had rather than at
+every call site: `persistLocked` (both `installer` and `updater` in
+`rootguard-core`) now takes an injectable `OnPersistError` hook -
+defaults to a no-op, matching this codebase's existing
+`CommandRunner`/`BootstrapFunc`-style option pattern - and calls it on
+every failure before returning, so all ~15 existing `_ =` call sites get
+visibility for free without themselves changing. `cmd/rootguard/main.go`
+wires all three manager instances to log it. `rootguard-webapp`'s
+`SessionAuth` doesn't have that same options-struct constructor (its
+`NewSessionAuth` has a fixed positional signature used at 29+ existing
+call sites, mostly in tests - not worth restructuring for this), so
+`persistLocked`/`persistAuditLocked` log directly instead, at the one
+place each already knows a write failed.
+
+None of this changes what any caller does with the returned error or
+what the UI reports on success/failure - it only makes an already-silent
+failure mode observable in logs, closing the "invisible even to someone
+troubleshooting a full disk" gap the audit described. A full fail-closed
+redesign (surfacing every one of these to the UI, refusing to report
+success at all) would be a much larger change or a longer-term goal,
+matching how the same call was made for logout/session persistence
+earlier this session.
+
+Four new regression tests (two per repo, all revert-verified: reverted
+each hook wire-up/log call, confirmed the corresponding test fails,
+restored) using the same broken-path-through-a-file trick already
+established this session (point a path through a file that was just
+written, so `MkdirAll` reliably fails on any OS).
