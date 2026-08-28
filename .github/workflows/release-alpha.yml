@@ -17,6 +17,9 @@ permissions:
   id-token: write
   attestations: write
 
+env:
+  GIT_CLIFF_VERSION: "2.13.1"
+
 jobs:
   version:
     runs-on: ubuntu-latest
@@ -57,11 +60,11 @@ jobs:
         with:
           go-version-file: rootguard-core/go.mod
           cache: false
-      - run: go test ./...
+      - run: go vet ./... && go test ./...
         working-directory: rootguard-core
-      - run: go test ./...
+      - run: go vet ./... && go test ./...
         working-directory: rootguard-updater
-      - run: go test ./...
+      - run: go vet ./... && go test ./...
         working-directory: rootguard-webapp/backend
       - uses: actions/setup-node@v7
         with:
@@ -71,6 +74,13 @@ jobs:
       - run: npm ci
         working-directory: rootguard-webapp/frontend
       - run: npm run lint
+        working-directory: rootguard-webapp/frontend
+      # Was missing entirely - found in review: ci-webapp.yml's own PR
+      # checks run this, but a release cut has no PR and this job never
+      # ran it, so a frontend regression that only unit tests would catch
+      # (not lint, not the production build) could slip straight into a
+      # published release.
+      - run: npm test
         working-directory: rootguard-webapp/frontend
       - run: npm run build
         working-directory: rootguard-webapp/frontend
@@ -188,8 +198,14 @@ jobs:
   # both files must be kept in lockstep, not just the compose file. blockpage
   # is excluded: it isn't referenced in either file at all (Core provisions
   # it dynamically), so there's nothing here to update for it.
+  # Requires both E2E test jobs to have actually passed, not just publish -
+  # found in review: this job used to run in parallel with smoke-test and
+  # upgrade-test, so a failing upgrade-test still left final image tags,
+  # committed pins on main, and a moved release tag all live and visible.
+  # (The GitHub Release itself moved here too, for the same reason - see
+  # its own step below.)
   update-alpha-pins:
-    needs: [version, publish]
+    needs: [version, publish, smoke-test, upgrade-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -235,6 +251,24 @@ jobs:
             # line itself being matched here.
             sed -i -E "s|^(# RootGuard )[0-9]+\.[0-9]+\.[0-9]+-[a-z]+\.[0-9]+|\1${VERSION}|" "$file"
           done
+
+      # Found in review, and confirmed by the comment right above this one:
+      # the pin-sed's greedy match once swallowed a closing brace and broke
+      # compose.release.yaml's YAML syntax outright on a real release cut,
+      # undetected because this commit carries [skip ci] and nothing here
+      # ever re-validated the file it just rewrote. Same assertions
+      # ci.yml's own "Validate public release Compose model" step already
+      # runs on every PR - can't drift apart from that, and can't ship a
+      # release whose pins are silently missing a digest or still pointing
+      # at a mutable :latest tag.
+      - name: Validate the rewritten public release Compose model
+        run: |
+          set -euo pipefail
+          docker compose -f compose.release.yaml config --quiet
+          model="$(docker compose -f compose.release.yaml config --format json)"
+          test "$(jq -r 'any(.services[]; has("build"))' <<<"$model")" = false
+          test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
+          test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false
 
       # site/*.html's version references went stale twice in the two days
       # after v0.1.0-beta.2 and v0.1.0-beta.3 each shipped - nothing here
@@ -292,6 +326,74 @@ jobs:
           fi
           git tag -f -a "${tag}" -m "${{ needs.version.outputs.value }}" "${target}"
           git push --force origin "refs/tags/${tag}"
+
+      # The GitHub Release is created here, not by release-version-bump.yml
+      # (which used to create it immediately after tagging, before this
+      # workflow had even started) - found in review: a failed
+      # smoke-test/upgrade-test still left a real, publicly visible Release
+      # behind needing manual cleanup, and since Core's/install.sh's live
+      # release discovery both query the Releases API (not raw git tags), a
+      # published-but-broken Release was immediately eligible to be
+      # auto-discovered as "latest" by any existing installation. Notes are
+      # regenerated here (not passed from release-version-bump.yml, a
+      # separate workflow run) since git-cliff's output is fully
+      # deterministic from commit history - identical range, identical
+      # result.
+      - name: Determine the previous release tag for changelog notes
+        id: previous-tag
+        run: |
+          set -euo pipefail
+          previous="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' \
+            | grep -v "^v${{ needs.version.outputs.value }}\$" \
+            | head -1 || true)"
+          echo "value=${previous}" >> "$GITHUB_OUTPUT"
+
+      - name: Install git-cliff
+        run: |
+          set -euo pipefail
+          curl -fsSL -o git-cliff.tar.gz \
+            "https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          tar -xzf git-cliff.tar.gz "git-cliff-${GIT_CLIFF_VERSION}/git-cliff"
+          install "git-cliff-${GIT_CLIFF_VERSION}/git-cliff" /usr/local/bin/git-cliff
+
+      - name: Generate release notes
+        run: |
+          set -euo pipefail
+          range="HEAD"
+          [ -n "${{ steps.previous-tag.outputs.value }}" ] && range="${{ steps.previous-tag.outputs.value }}..HEAD"
+          git-cliff --config cliff.toml --tag "v${{ needs.version.outputs.value }}" \
+            "$range" --strip header -o /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v${{ needs.version.outputs.value }}"
+          # Idempotent, matching every other step in this job: a re-run
+          # against an already-published version (e.g. re-running after a
+          # transient upgrade-test failure was fixed, as happened live for
+          # 1.0.0-rc.1) must not fail here just because the Release from an
+          # earlier run already exists.
+          if gh release view "$tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists"
+            exit 0
+          fi
+          # A bare "X.Y.Z" (no "-" suffix) is a stable release and must
+          # not be marked as a prerelease on GitHub - only relevant once
+          # 1.0.0 itself ships (every version so far has had a suffix),
+          # but wrong by default otherwise: gh release create always
+          # applies whatever flag is passed, it doesn't infer this itself.
+          prerelease_flag=()
+          case "${{ needs.version.outputs.value }}" in
+            *-*) prerelease_flag=(--prerelease) ;;
+          esac
+          gh release create "$tag" \
+            --repo "${{ github.repository }}" \
+            --title "${{ needs.version.outputs.value }}" \
+            --notes-file /tmp/release-notes.md \
+            "${prerelease_flag[@]}"
 
       # GitHub never auto-triggers another workflow's "on: push" from a
       # push made with the built-in GITHUB_TOKEN (the same anti-recursion

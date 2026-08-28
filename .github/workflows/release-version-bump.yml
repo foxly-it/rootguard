@@ -112,14 +112,10 @@ jobs:
           git-cliff --version
 
       - name: Generate this release's changelog section
-        id: changelog
         run: |
           set -euo pipefail
-          range="${{ steps.next.outputs.latest_tag }}..HEAD"
           git-cliff --config cliff.toml --tag "${{ steps.next.outputs.tag }}" \
-            "$range" --strip header -o /tmp/release-notes.md
-          git-cliff --config cliff.toml --tag "${{ steps.next.outputs.tag }}" \
-            "$range" --prepend CHANGELOG.md
+            "${{ steps.next.outputs.latest_tag }}..HEAD" --prepend CHANGELOG.md
 
       - name: Commit changelog and tag the release
         run: |
@@ -132,26 +128,18 @@ jobs:
           git push origin HEAD:main
           git push origin "${{ steps.next.outputs.tag }}"
 
-      - name: Create GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          # A bare "X.Y.Z" (no "-" suffix) is a stable release and must
-          # not be marked as a prerelease on GitHub - only relevant once
-          # 1.0.0 itself ships (every version so far has had a suffix),
-          # but wrong by default otherwise: gh release create always
-          # applies whatever flag is passed, it doesn't infer this itself.
-          prerelease_flag=()
-          case "${{ steps.next.outputs.version }}" in
-            *-*) prerelease_flag=(--prerelease) ;;
-          esac
-          gh release create "${{ steps.next.outputs.tag }}" \
-            --repo "${{ github.repository }}" \
-            --title "${{ steps.next.outputs.version }}" \
-            --notes-file /tmp/release-notes.md \
-            "${prerelease_flag[@]}"
-
+      # The GitHub Release itself is *not* created here anymore - found in
+      # review that this workflow used to create it right after tagging,
+      # before release-alpha.yml (dispatched below) had even started, let
+      # alone passed its smoke-test/upgrade-test gates. A failed upgrade
+      # test still left a real, publicly visible GitHub Release behind,
+      # needing manual cleanup - and since Core's/install.sh's live release
+      # discovery both query the Releases API (not raw git tags), a
+      # published-but-broken Release was also immediately eligible to be
+      # auto-discovered as "latest" by any existing installation checking
+      # for updates. release-alpha.yml's update-alpha-pins job creates the
+      # Release now, gated behind both E2E tests actually passing (see its
+      # own comment for the full rationale).
       - name: Dispatch the image-publishing release pipeline
         env:
           GH_TOKEN: ${{ github.token }}
