@@ -21,6 +21,12 @@ const (
 	StateDeploying    = "deploying"
 	StateInstalled    = "installed"
 	StateFailed       = "failed"
+
+	// blockpagePort is the host port the blockpage container is published
+	// on when config.BlockpageEnabled is set (see composeDNSFile's
+	// "%s:80:8080/tcp" port mapping) - not configurable, so a plain
+	// constant rather than a Config field.
+	blockpagePort = 80
 )
 
 var (
@@ -241,6 +247,43 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 			checks = append(checks, Check{
 				ID: "dns_port_available", Code: "dns_port_available", OK: true,
 				Message: "No conflicting port publication was found.",
+			})
+		}
+	}
+
+	// Blockpage port 80 is a second, separate publication (composeDNSFile
+	// below), independent of the DNS port and only made when
+	// config.BlockpageEnabled is set - checked here too, not just at
+	// deploy time, so a host that already has something bound to :80 (a
+	// common case - many hosts run a web server) is caught by the
+	// preflight instead of surfacing only after DNS deployment already
+	// succeeded.
+	if dockerOK && validNetworkConfig(config) && config.BlockpageEnabled {
+		output, err := m.run(ctx, "ps", "--format", "{{.Names}}|{{.Ports}}")
+		if err != nil {
+			checks = append(checks, Check{
+				ID: "blockpage_port_available", Code: "port_check_failed", OK: false,
+				Message: "Docker port assignments could not be inspected.",
+				Action:  "Verify Docker access and run the preflight again.",
+			})
+		} else if owner := occupiedDockerPort(string(output), config.DNSBindAddress, blockpagePort); owner != "" {
+			checks = append(checks, Check{
+				ID: "blockpage_port_available", Code: "blockpage_port_occupied", OK: false,
+				Message: fmt.Sprintf("Blockpage port %s:%d is already published.", config.DNSBindAddress, blockpagePort),
+				Detail:  owner,
+				Action:  "Stop or reconfigure the conflicting service, or disable the blockpage, then run the preflight again.",
+			})
+		} else if busy, detail := m.probeHostPortBusy(ctx, config.DNSBindAddress, blockpagePort); busy {
+			checks = append(checks, Check{
+				ID: "blockpage_port_available", Code: "blockpage_port_occupied", OK: false,
+				Message: fmt.Sprintf("Blockpage port %s:%d is already in use on this host.", config.DNSBindAddress, blockpagePort),
+				Detail:  detail,
+				Action:  "Stop or reconfigure the conflicting service - a web server listening on port 80 is a common cause - or disable the blockpage, then run the preflight again.",
+			})
+		} else {
+			checks = append(checks, Check{
+				ID: "blockpage_port_available", Code: "blockpage_port_available", OK: true,
+				Message: "No conflicting port publication was found for the blockpage.",
 			})
 		}
 	}
