@@ -21,6 +21,12 @@ services:
       ROOTGUARD_ADGUARD_IMAGE: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0}"
       ROOTGUARD_ADGUARD_BETA_IMAGE: "${ROOTGUARD_ADGUARD_BETA_IMAGE:-adguard/adguardhome:beta@sha256:2b77703b27730d5c0c7045fcd6c98834169cd5c69af5f86a43947425f2d367fd}"
       ROOTGUARD_ADGUARD_UPDATE_IMAGE: "${ROOTGUARD_ADGUARD_UPDATE_IMAGE:-adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0}"
+      # Digest-pinned like every other RootGuard-built component now -
+      # found in review: this was unset here entirely before, so Core
+      # silently fell back to its own code default of a mutable :latest
+      # tag with no digest pin and no attestation ever checked, unlike
+      # core/webapp/unbound/the updater.
+      ROOTGUARD_BLOCKPAGE_IMAGE: "${ROOTGUARD_BLOCKPAGE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:1.0.0-rc.1@sha256:d20fe18434697ee7d92890f27024c9d19378a35e187415229dd27908de1289b4}"
       ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.1@sha256:992bd11fc1e7a4039ff459f1758faf362be9e0a0e3b8f626a36d939561ef9a3e}"
       ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
