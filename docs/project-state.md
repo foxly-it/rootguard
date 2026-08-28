@@ -2676,3 +2676,35 @@ request-derived.) No automated test covers this specific rendering path
 Node.js-syntax-checked, curl-smoke-tested-only script), and building one
 for a single low-severity hygiene fix wasn't judged worth the new CI
 surface; verified by inspection and by `node --check` for syntax only.
+
+**Minor 4, fixed: install.sh wrote the WebGUI username/password into
+.env unquoted.** The awk rewrite that injects the generated tokens and
+typed credentials into the downloaded `.env` file printed each value
+raw. Docker Compose re-reads that file later and treats an unquoted `#`
+as starting a comment - a password containing one would get silently
+truncated, corrupting it without any visible error - and a literal
+newline as starting a new `KEY=VALUE` line, which a value supplied via
+`ROOTGUARD_ADMIN_PASSWORD` in a non-interactive install could exploit to
+inject an extra variable into `.env` entirely.
+
+Fixed two ways: every value the awk script writes is now double-quoted,
+with any backslash or embedded double-quote in the value itself escaped
+first so the quoting can't be broken out of (verified locally against
+values containing `#`, embedded quotes, and backslashes - all come out
+correctly preserved inside the quotes). Separately, `admin_user`/
+`admin_password` are now rejected outright if either contains a literal
+newline - not relied on the quoting alone to contain one, since whether
+a dotenv-style parser treats a quoted value as continuing past a
+newline varies enough across implementations that it wasn't worth
+trusting for something that becomes an actual account password. A typed
+value can never contain a newline in the first place (`read -r` stops
+at the first one); this only matters for the non-interactive,
+environment-supplied path.
+
+No CI coverage exists for install.sh's own logic at all (the existing
+`clean-install.yml` workflow exercises `compose.release.yaml`/
+`.env.release.example` directly, never invokes `install.sh` itself) -
+this is a pre-existing gap, not introduced or widened here, and out of
+scope for this fix. Verified locally: `bash -n` syntax check, and the
+awk pipeline and newline-rejection logic run standalone against a set
+of adversarial values (`#`, embedded `"` and `\`, an injected newline).
