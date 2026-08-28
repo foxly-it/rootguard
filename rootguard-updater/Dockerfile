@@ -5,6 +5,8 @@ COPY go.mod ./
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /rootguard-updater .
 
+FROM ghcr.io/sigstore/cosign/cosign:v3.0.6@sha256:de9c65609e6bde17e6b48de485ee788407c9502fa08b8f4459f595b21f56cd00 AS cosign
+
 FROM docker:29-cli
 
 ARG VERSION=dev
@@ -20,6 +22,7 @@ LABEL org.opencontainers.image.title="RootGuard Updater" \
 
 RUN apk add --no-cache docker-cli-compose ca-certificates
 COPY --from=builder /rootguard-updater /usr/local/bin/rootguard-updater
+COPY --from=cosign /ko-app/cosign /usr/local/bin/cosign
 
 # Deliberately no USER instruction: like Core, the Updater holds the Docker
 # socket to drive paired update/rollback across the managed services, and

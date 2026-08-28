@@ -2218,3 +2218,59 @@ callout's `0.1.0-beta.14` mention doesn't get flagged as a stale
 current-version claim - verified the callout's `1.0.0-rc.1` mentions
 still get checked and will auto-update via `bump-site-versions.sh` on
 every future release, same as everywhere else on the site.
+
+## Full security audit against 60dc447 (2026-08-28)
+
+User ran a complete independent audit of the codebase at commit `60dc447`
+(the RC.1 tree plus the site-polish work above). Found 3 release-blocking
+issues, 7 medium findings, and several minor ones - Claude verified each
+high-severity finding directly against the code before agreeing, all
+confirmed accurate. User chose to work the full list in priority order,
+one issue/PR each, same discipline as always.
+
+**Blocker 1, fixed: attestation was never enforced on activation, only
+displayed.** `stack.CheckStackAttestations` was wired into the stack
+status API only (`routes.go`'s `stackStatusHandler`/`servicesHandler`),
+never into either updater's actual `update()` path - a pulled,
+digest-resolved image was activated (`selectImage`/`writeOverride` +
+`compose up`) the moment its post-swap health check passed, with no
+attestation check anywhere in between. Directly contradicted
+`docs/threat-model.md`'s explicit claim that releases are "checked via
+Cosign against the signed SLSA provenance before activation" - a real gap
+between documented and actual behavior, not just a missing feature.
+
+Fixed in both updaters:
+- `rootguard-core/internal/stack/attestation.go`: new exported
+  `RequireAttestation(ctx, service, image) error`, wrapping the existing
+  `verifyReleaseAttestation` - no-ops for a service with no RootGuard
+  signing policy (AdGuard, a third-party image), demands literally
+  `"verified"` and nothing else (not `"missing"`, `"failed"`,
+  `"unavailable"`, or an unexpected `"not_applicable"`) for every other
+  service.
+- `rootguard-core/internal/updater/manager.go`: new injectable
+  `Options.AttestationVerifier` (defaults to `stack.RequireAttestation`),
+  called right before `selectImage`/`composeUp` - the actual point of no
+  return, not just logged for display.
+- `rootguard-updater/main.go` + new `attestation.go`: a separate Go
+  module, can't import Core's internal package, so it carries its own
+  minimal standalone cosign-verify-attestation call (core/webapp are the
+  only two services it ever manages, both always requiring verification -
+  no AdGuard-style exemption needed here). Injectable
+  `manager.attestationVerifier`, defaults to the real `verifyAttestation`.
+- `rootguard-updater/Dockerfile`: didn't carry the `cosign` binary at all
+  before this - added the same digest-pinned
+  `ghcr.io/sigstore/cosign/cosign:v3.0.6@sha256:de9c65...` COPY step Core's
+  Dockerfile already uses. Built for real on the `.7` test host (no local
+  Docker daemon) to confirm the multi-stage COPY actually works and
+  `cosign version` runs inside the image - it does.
+
+Regression tests in both modules prove the gate has teeth: a failing
+verifier must stop the update before any `compose`/activation command
+runs at all, not just fail afterward - verified by temporarily reverting
+each fix and confirming the new test fails without it, then restoring.
+Existing tests that exercise a full successful `update()` needed an
+explicit no-op `AttestationVerifier` injected (they use fixture image
+names that don't match a real `ghcr.io/foxly-it/...` prefix, which the
+real, now-default verifier correctly refuses as `"not_applicable"` -
+fail-closed, working as intended, just not what those particular tests
+were testing).

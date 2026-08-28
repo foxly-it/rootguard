@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -17,6 +18,13 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 func (function roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
 	return function(request)
 }
+
+// noopAttestationVerifier lets tests that aren't specifically about the
+// attestation gate itself exercise a real update() flow without needing
+// actual cosign infrastructure or a ghcr.io-shaped image reference - the
+// real default (verifyAttestation) refuses any image that isn't, which
+// every fixture target image in this file's tests is.
+func noopAttestationVerifier(context.Context, string, string) error { return nil }
 
 // TestDigestFromPullOutputParsesARealPullTranscript is the regression test
 // for a real bug caught live in CI: digestQualify's RepoDigests lookup
@@ -196,6 +204,7 @@ func TestControlPlaneUpdateRollsBackBothImagesWhenHealthFails(t *testing.T) {
 	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", testSpecs(), run)
 	manager.skipPull = true
 	manager.verifyAttempts = 1
+	manager.attestationVerifier = noopAttestationVerifier
 	manager.httpClient = &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -215,6 +224,46 @@ func TestControlPlaneUpdateRollsBackBothImagesWhenHealthFails(t *testing.T) {
 	}
 	if !strings.Contains(result.Message, "rolled back safely") {
 		t.Fatalf("expected safe rollback status, got %q", result.Message)
+	}
+}
+
+// TestControlPlaneUpdateRefusesActivationWhenAttestationFails is the
+// regression test for a real gap found in review: this updater activated
+// a pulled, digest-resolved image (writeOverride + compose up) as soon as
+// the health check passed, with no attestation check anywhere in the
+// path at all - not even a display-only one, unlike Core's own updater.
+// Proves the gate has teeth: a failing verifier must stop the update
+// before any "compose" (activation) command is ever issued.
+func TestControlPlaneUpdateRefusesActivationWhenAttestationFails(t *testing.T) {
+	current := map[string]string{"rootguard-core": "sha256:core-old", "rootguard-webapp": "sha256:web-old"}
+	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		switch {
+		case arguments[0] == "inspect":
+			container := arguments[len(arguments)-1]
+			return []byte(container + ":image|" + current[container]), nil
+		case arguments[0] == "image":
+			return []byte(candidates[arguments[len(arguments)-1]]), nil
+		case arguments[0] == "compose":
+			t.Fatalf("activation command ran despite refused attestation: %v", arguments)
+			return nil, nil
+		default:
+			t.Fatalf("unexpected docker command: %v", arguments)
+			return nil, nil
+		}
+	}
+	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", testSpecs(), run)
+	manager.skipPull = true
+	manager.attestationVerifier = func(context.Context, string, string) error {
+		return errors.New("no matching signatures")
+	}
+
+	if _, err := manager.StartUpdate(nil); err != nil {
+		t.Fatal(err)
+	}
+	result := waitForState(t, manager, stateFailed)
+	if !strings.Contains(result.Message, "no matching signatures") {
+		t.Fatalf("expected a failed update citing the attestation error, got %q", result.Message)
 	}
 }
 

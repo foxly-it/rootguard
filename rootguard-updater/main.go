@@ -151,16 +151,17 @@ func decodeTargetOverrides(body io.Reader) (map[string]string, error) {
 type runner func(context.Context, ...string) ([]byte, error)
 
 type manager struct {
-	mu             sync.RWMutex
-	status         status
-	specs          []serviceSpec
-	dataDir        string
-	composeFile    string
-	projectName    string
-	run            runner
-	httpClient     *http.Client
-	skipPull       bool
-	verifyAttempts int
+	mu                  sync.RWMutex
+	status              status
+	specs               []serviceSpec
+	dataDir             string
+	composeFile         string
+	projectName         string
+	run                 runner
+	httpClient          *http.Client
+	skipPull            bool
+	verifyAttempts      int
+	attestationVerifier attestationVerifierFunc
 }
 
 func main() {
@@ -264,8 +265,9 @@ func newManager(dataDir, composeFile, projectName string, specs []serviceSpec, r
 	m := &manager{
 		dataDir: dataDir, composeFile: composeFile, projectName: projectName,
 		specs: specs, run: run, httpClient: &http.Client{Timeout: 8 * time.Second},
-		verifyAttempts: 45,
-		status:         status{State: stateIdle, Message: "Noch keine Control-Plane-Prüfung durchgeführt.", UpdatedAt: time.Now().UTC()},
+		verifyAttempts:      45,
+		attestationVerifier: verifyAttestation,
+		status:              status{State: stateIdle, Message: "Noch keine Control-Plane-Prüfung durchgeführt.", UpdatedAt: time.Now().UTC()},
 	}
 	for _, spec := range specs {
 		m.status.Services = append(m.status.Services, serviceStatus{
@@ -406,6 +408,11 @@ func (m *manager) update(targetImages map[string]string) {
 					return
 				}
 			}
+		}
+		m.progress("Prüfe die Release-Attestierung von " + spec.DisplayName + ".")
+		if err := m.attestationVerifier(ctx, spec.Name, targetImage); err != nil {
+			m.fail(fmt.Errorf("attestation: %w", err))
+			return
 		}
 		candidateImages[spec.Name] = targetImage
 		candidateIDs[spec.Name] = candidateID

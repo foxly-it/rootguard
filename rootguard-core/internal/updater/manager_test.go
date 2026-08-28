@@ -11,6 +11,14 @@ import (
 	"time"
 )
 
+// noopAttestationVerifier lets tests that aren't specifically about the
+// attestation gate itself exercise a real update() flow without needing
+// actual cosign infrastructure or a ghcr.io-shaped image reference -
+// stack.RequireAttestation (the real default) fails closed on a
+// non-matching image for any service with a real signing policy, "unbound"
+// included, which every fixture target image here is.
+func noopAttestationVerifier(context.Context, string, string) error { return nil }
+
 func TestCheckComparesRunningAndPulledImageIDs(t *testing.T) {
 	manager := NewManager(Options{
 		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
@@ -56,6 +64,7 @@ func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 			Name: "unbound", DisplayName: "Unbound", Container: "rootguard-unbound",
 			TargetImage: "rootguard-unbound:latest", BackupPaths: []string{"/etc/unbound/unbound.d"},
 		}},
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			mu.Lock()
 			commands = append(commands, strings.Join(arguments, " "))
@@ -95,6 +104,65 @@ func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 	}
 }
 
+// TestUpdateRefusesActivationWhenAttestationFails is the regression test
+// for a real gap found in review: attestation was only ever checked for
+// display (the stack status API), never enforced before an update actually
+// activated the new image - selectImage/compose up ran unconditionally as
+// soon as the health check passed. Proves the gate has teeth: a failing
+// verifier must stop the update before any "compose" (activation) command
+// is ever issued, not just after the fact.
+func TestUpdateRefusesActivationWhenAttestationFails(t *testing.T) {
+	dataDir := t.TempDir()
+	composeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var commands []string
+	manager := NewManager(Options{
+		DataDir: dataDir, ComposeDir: composeDir,
+		Services: []ServiceSpec{{
+			Name: "unbound", DisplayName: "Unbound", Container: "rootguard-unbound",
+			TargetImage: "rootguard-unbound:latest", BackupPaths: []string{"/etc/unbound/unbound.d"},
+		}},
+		AttestationVerifier: func(context.Context, string, string) error {
+			return errors.New("no matching signatures")
+		},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			mu.Lock()
+			commands = append(commands, strings.Join(arguments, " "))
+			mu.Unlock()
+			switch arguments[0] {
+			case "inspect":
+				return []byte("rootguard-unbound:v1|sha256:old"), nil
+			case "image":
+				return []byte("sha256:new"), nil
+			default:
+				return []byte("ok"), nil
+			}
+		},
+		Verify: func(context.Context, string) error {
+			t.Fatal("health check must not run when attestation was refused")
+			return nil
+		},
+	})
+
+	if _, err := manager.StartUpdate("unbound"); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	result := manager.Status()
+	if result.State != StateFailed || !strings.Contains(result.Services[0].Error, "no matching signatures") {
+		t.Fatalf("expected a failed update citing the attestation error, got %#v", result)
+	}
+	mu.Lock()
+	all := strings.Join(commands, "\n")
+	mu.Unlock()
+	if strings.Contains(all, "compose") {
+		t.Fatalf("activation command ran despite refused attestation:\n%s", all)
+	}
+}
+
 func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
@@ -111,6 +179,7 @@ func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T)
 				Volume: "rootguard-unbound-state", Path: "/var/lib/unbound", UID: 100, GID: 101,
 			}},
 		}},
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			command := strings.Join(arguments, " ")
 			commands = append(commands, command)
@@ -166,6 +235,7 @@ func TestFailedUpdateRestoresPreviousVolumeOwnershipBeforeRollback(t *testing.T)
 				Volume: "rootguard-unbound-state", Path: "/var/lib/unbound", UID: 100, GID: 101,
 			}},
 		}},
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			command := strings.Join(arguments, " ")
 			commands = append(commands, command)
