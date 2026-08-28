@@ -2826,3 +2826,34 @@ byte, just relocated - confirmed by every existing test passing
 unchanged (gofmt/go vet/go build/go test -race/staticcheck all clean),
 which requires nothing about behavior or the public shape of any type
 to have shifted.
+
+**Code compression 3, done: shared SemVer validation between the two
+release workflows.** `release-alpha.yml` and `release-version-bump.yml`
+each kept a byte-for-byte identical SemVer 2.0 regex, deliberately - the
+existing comment on the second copy said sharing "needs a composite
+action" and wasn't worth it. That's not quite right: both jobs already
+check out the full repo, so a plain shared shell script works without a
+composite action. Worth fixing given the history the same comment
+recorded: this exact duplication had already drifted apart for real once
+- only `release-alpha.yml` validated a version at all until the second
+check was added by hand, so a typo'd override had already produced a
+real commit, tag, and GitHub Release before anything caught it.
+
+New `scripts/lib/semver-validate.sh` (`require_semver "$value"`, exits
+non-zero with a message on an invalid version) replaces both inline
+copies; `release-alpha.yml`'s `version` job gained a checkout step it
+didn't need before, purely to read this one file (a small, deliberate
+trade - cheap CI overhead for one source of truth on a check with a real
+past-incident history). `install.sh`'s own, much larger SemVer
+comparator (real precedence comparison, not just format validation) is
+untouched - it runs standalone via `curl | bash` with no repo access at
+that point, so it can't source this file the same way; already
+established this session as a case where duplication is the correct
+trade, not an oversight.
+
+Verified locally (no way to exercise a real release run in CI): the
+regex's behavior is unchanged (same pattern, byte for byte) - checked
+against every case the removed comments themselves named
+(`1.0.0-rc.01`, `1foo.2bar.3baz`, `1.0.0+build`, `01.2.3`, plus valid
+alpha/beta/rc/bare versions), all matching the prior inline behavior
+exactly.
