@@ -2511,3 +2511,21 @@ gap in a synchronous test even at high goroutine counts - confirmed the
 race is real a different way instead (a throwaway direct probe against
 the raw rate limiter, bypassing the HTTP layer, showed extra accepted
 attempts in roughly 1 of 3 runs).
+
+**Medium 6, fixed: Setup preflight didn't check the blockpage's port 80.**
+`Preflight` only ever checked the DNS port; a host with something already
+bound to :80 (a common case - many hosts run a web server) was reported
+"ready", then failed only later, during deployment, when the blockpage
+container's own port publish (`composeDNSFile`, gated on
+`config.BlockpageEnabled`) collided with it.
+
+Fixed: `Preflight` now runs the same `occupiedDockerPort`/
+`probeHostPortBusy` pair it already uses for the DNS port against port 80
+too, gated on `config.BlockpageEnabled` (the same flag that decides
+whether the blockpage - and therefore that port publish - exists at
+all), with its own `blockpage_port_occupied`/`blockpage_port_available`
+check codes and a blockpage-specific action message. Two new regression
+tests: one proves the occupied-port case fails preflight (reverted,
+confirmed the test fails, restored), the other proves a disabled
+blockpage doesn't fail preflight just because something else happens to
+hold port 80.

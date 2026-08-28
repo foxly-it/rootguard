@@ -175,6 +175,63 @@ func TestPreflightPassesWhenHostPortIsFree(t *testing.T) {
 	}
 }
 
+// TestPreflightReportsOccupiedBlockpagePort is the regression test for a
+// gap found in review: Preflight only ever checked the DNS port, so a host
+// with something already bound to :80 (a common case - many hosts run a web
+// server) was reported "ready", then failed only later, during deployment,
+// when the blockpage container's own port publish collided with it. Mirrors
+// TestPreflightReportsOccupiedDockerDNSPort, but for the blockpage's fixed
+// port 80 with BlockpageEnabled set - the setting that actually gates
+// whether that port gets published at all (see composeDNSFile).
+func TestPreflightReportsOccupiedBlockpagePort(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "ps" {
+				return []byte("existing-web|0.0.0.0:80->80/tcp\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress:   "192.168.1.2",
+		DNSPort:          53,
+		BlockpageEnabled: true,
+	})
+	if report.Ready {
+		t.Fatal("expected occupied blockpage port to fail preflight")
+	}
+	check := report.Checks[len(report.Checks)-1]
+	if check.Code != "blockpage_port_occupied" || check.Detail != "existing-web" || check.Action == "" {
+		t.Fatalf("unexpected occupied-blockpage-port diagnostic: %#v", check)
+	}
+}
+
+// TestPreflightSkipsBlockpagePortCheckWhenDisabled ensures a host with
+// something on port 80 doesn't fail preflight when the blockpage - the only
+// thing that would ever publish that port - isn't even enabled.
+func TestPreflightSkipsBlockpagePortCheckWhenDisabled(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "ps" {
+				return []byte("existing-web|0.0.0.0:80->80/tcp\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress:   "192.168.1.2",
+		DNSPort:          53,
+		BlockpageEnabled: false,
+	})
+	if !report.Ready {
+		t.Fatalf("expected a disabled blockpage to skip the port-80 check, got %#v", report)
+	}
+}
+
 // TestRunComposeUpRetriesTransientPortBindConflict covers the race a static
 // `docker ps` preflight check cannot rule out: a container that just
 // stopped can hold its published port for a moment after it's gone from
