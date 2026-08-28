@@ -267,7 +267,7 @@ function initializeInstallDemoReveal() {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const lines = terminal.querySelectorAll(".line");
   lines.forEach((line, index) => {
-    line.style.transitionDelay = `${index * 70}ms`;
+    line.style.transitionDelay = `${index * 130}ms`;
   });
   const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
