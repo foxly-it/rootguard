@@ -51,7 +51,11 @@ fetch("/api/reason", { cache: "no-store", signal: AbortSignal.timeout(2500) })
     span.textContent = " " + info.label + ".";
     headline.textContent = "Diese Seite ist blockiert -";
     headline.appendChild(span);
-    document.getElementById("lead").innerHTML =
-      "RootGuard hat den Zugriff auf <strong>" + location.hostname + "</strong> blockiert, " + info.clause + ".";
+    const lead = document.getElementById("lead");
+    const hostname = document.createElement("strong");
+    hostname.textContent = location.hostname;
+    lead.textContent = "RootGuard hat den Zugriff auf ";
+    lead.appendChild(hostname);
+    lead.appendChild(document.createTextNode(" blockiert, " + info.clause + "."));
   })
   .catch(() => {});

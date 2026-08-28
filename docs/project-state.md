@@ -2656,3 +2656,23 @@ where `Path=/` appears in the string. A cookie whose path isn't exactly
 same scope the old code had, just reliably. Two new tests cover the
 realistic variance the audit named (all revert-verified against the old
 implementation) and confirm the "leave it alone" cases still work.
+
+**Minor 3, fixed: the blockpage used innerHTML with location.hostname
+unnecessarily.** The block-reason renderer built its "lead" paragraph via
+`element.innerHTML = "...<strong>" + location.hostname + "</strong>..."`.
+`location.hostname` can't practically carry HTML-special characters (DNS
+hostname syntax and browser URL parsing both rule that out), so the
+audit rated this low practical exploitability - but it's still needless:
+nothing about this line needs raw HTML construction.
+
+Fixed: rebuilt via `textContent`/`createElement`/`appendChild`, the same
+pattern this file already uses two lines above for the headline's
+reason span - no `innerHTML` anywhere in the reason-rendering path
+anymore. (The one other `innerHTML` use in this component, `theme.js`'s
+icon swap, stays as-is: it only ever assigns one of three hardcoded SVG
+strings keyed by an internal `mode` value, never anything
+request-derived.) No automated test covers this specific rendering path
+- this component has no JS test harness at all (a static
+Node.js-syntax-checked, curl-smoke-tested-only script), and building one
+for a single low-severity hygiene fix wasn't judged worth the new CI
+surface; verified by inspection and by `node --check` for syntax only.
