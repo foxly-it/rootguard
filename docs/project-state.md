@@ -2366,3 +2366,44 @@ real download's checksum matches, and a deliberately wrong expected value
 is correctly rejected. Documented directly in the script how to
 intentionally update the pin later (bump the commit SHA, recompute the
 checksum from that exact URL).
+
+## Medium findings from the same audit
+
+**Medium 1, fixed (the digest-pinning half): blockpage wasn't
+reproducibly bound to a release.** `release-alpha.yml`'s publish job
+explicitly excluded blockpage from digest capture
+(`if: matrix.component != 'blockpage'`), and neither
+`compose.release.yaml` nor `.env.release.example` referenced
+`ROOTGUARD_BLOCKPAGE_IMAGE` at all - Core's own Go default
+(`ghcr.io/foxly-it/rootguard-blockpage:latest`) was always what actually
+ran. A fresh install could get a blockpage image from an entirely
+different commit than the rest of the release, with no digest pin and no
+attestation ever checked for it (unlike core/webapp/unbound/updater,
+which already all have real signing policies in
+`attestationPolicies["blockpage"]` - that policy existed already, it was
+just never reachable because nothing pinned a digest-qualified reference
+to check it against).
+
+Fixed: `release-alpha.yml` now captures blockpage's digest like every
+other component, `rootguard-blockpage` was added to the pin-rewrite loop,
+and both `compose.release.yaml` and `.env.release.example` now pin
+`ROOTGUARD_BLOCKPAGE_IMAGE` explicitly (with today's real digest,
+verified live via `docker buildx imagetools inspect`). The `docker
+compose config` digest-pinned assertion (both the copy in `ci.yml` and
+the one added to `release-alpha.yml` for the earlier release-gate fix)
+now checks it too, so the two can't drift apart.
+
+**Deliberately deferred, not folded into this fix** (two related but
+separable pieces the same finding raised):
+- Full dashboard/attestation-status visibility for blockpage
+  (`StackStatus` has no `Blockpage` field at all yet - adding one means
+  wiring container inspection, health, and attestation status through
+  the API and frontend end-to-end, a materially bigger change than
+  closing the actual "unpinned mutable image" security gap above).
+- The architectural fix for blockpage holding a reversible (base64,
+  trivially decodable) copy of the real AdGuard admin credentials
+  (`publishBlockpageAuthToken` in `rootguard-core/internal/adguard/
+  manager.go`) - the review's own recommendation frames this as a
+  longer-term redesign (a narrow Core-side endpoint the blockpage
+  queries instead of ever holding real credentials at all), not a
+  same-size fix as the others in this list.

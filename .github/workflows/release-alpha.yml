@@ -168,10 +168,12 @@ jobs:
       # is only set when the build actually ran (see "Check for an immutable
       # existing release image" above), so a re-run against an already-published
       # version falls back to looking the digest up directly from the registry.
-      # compose.release.yaml's pins need a real digest either way.
+      # compose.release.yaml's pins need a real digest either way. blockpage
+      # is included here too now - found in review: it was excluded, so it
+      # ran a mutable, never-pinned :latest tag with no attestation ever
+      # checked, unlike every other RootGuard-built component.
       - name: Record published digest
         id: digest
-        if: matrix.component != 'blockpage'
         env:
           RELEASE_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.value }}
         run: |
@@ -184,7 +186,6 @@ jobs:
           printf '%s' "$digest" > "/tmp/digests/${{ matrix.image }}.digest"
 
       - uses: actions/upload-artifact@v4
-        if: matrix.component != 'blockpage'
         with:
           name: digest-${{ matrix.component }}
           path: /tmp/digests/${{ matrix.image }}.digest
@@ -196,8 +197,12 @@ jobs:
   # quick start actually tells users to download as their .env, and its
   # values there take precedence over compose.release.yaml's own defaults - so
   # both files must be kept in lockstep, not just the compose file. blockpage
-  # is excluded: it isn't referenced in either file at all (Core provisions
-  # it dynamically), so there's nothing here to update for it.
+  # is included in the pin loop below now too - found in review: it used to
+  # be excluded ("Core provisions it dynamically" isn't a reason to leave it
+  # unpinned, just a reason it lives in a different variable than the
+  # updater-managed services), which meant a fresh install could run a
+  # blockpage image from an entirely different commit than the rest of the
+  # release, with no digest pin and no attestation ever checked for it.
   # Requires both E2E test jobs to have actually passed, not just publish -
   # found in review: this job used to run in parallel with smoke-test and
   # upgrade-test, so a failing upgrade-test still left final image tags,
@@ -228,7 +233,7 @@ jobs:
         run: |
           set -euo pipefail
           for file in compose.release.yaml .env.release.example; do
-            for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound; do
+            for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage; do
               digest="$(cat "/tmp/digests/${image}.digest")"
               test -n "$digest"
               # [^@\"}] - not just [^@\"] - because ROOTGUARD_UPDATER_UPDATE_IMAGE
@@ -267,7 +272,7 @@ jobs:
           docker compose -f compose.release.yaml config --quiet
           model="$(docker compose -f compose.release.yaml config --format json)"
           test "$(jq -r 'any(.services[]; has("build"))' <<<"$model")" = false
-          test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
+          test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
           test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false
 
       # site/*.html's version references went stale twice in the two days
