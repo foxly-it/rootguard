@@ -65,10 +65,32 @@ func rewriteAdGuardUIResponse(response *http.Response) error {
 	cookies := response.Header.Values("Set-Cookie")
 	if len(cookies) > 0 {
 		response.Header.Del("Set-Cookie")
-		for _, cookie := range cookies {
-			cookie = strings.Replace(cookie, "Path=/;", "Path="+publicUIProxyPrefix+"/;", 1)
-			response.Header.Add("Set-Cookie", cookie)
+		for _, raw := range cookies {
+			response.Header.Add("Set-Cookie", rewriteAdGuardSetCookie(raw))
 		}
 	}
 	return nil
+}
+
+// rewriteAdGuardSetCookie repoints a root-scoped cookie from AdGuard's own
+// Path=/ to this proxy's mount point, so the browser keeps sending it back
+// on later requests that all live under publicUIProxyPrefix instead of at
+// the real root. Found in review: the previous implementation did a plain
+// strings.Replace looking for the literal substring "Path=/;", which
+// missed a cookie where Path=/ is the *last* attribute (no trailing
+// semicolon - a completely ordinary, spec-legal Set-Cookie shape), any
+// other attribute-name casing ("path=/"), or extra whitespace. Parsing the
+// cookie properly (net/http already implements RFC 6265 for this) and
+// only touching the Path field sidesteps all of that, and leaves every
+// other attribute (Secure, HttpOnly, SameSite, Expires, ...) intact
+// either way. A cookie whose Path isn't exactly "/" - or that fails to
+// parse at all - is passed through unchanged, matching what the old code
+// did for those cases too.
+func rewriteAdGuardSetCookie(raw string) string {
+	cookie, err := http.ParseSetCookie(raw)
+	if err != nil || cookie.Path != "/" {
+		return raw
+	}
+	cookie.Path = publicUIProxyPrefix + "/"
+	return cookie.String()
 }

@@ -20,3 +20,43 @@ func TestRewriteAdGuardUIResponseKeepsProxyPrefix(t *testing.T) {
 		t.Fatalf("unexpected rewritten cookie %q", cookie)
 	}
 }
+
+// TestRewriteAdGuardSetCookieHandlesRealisticVariance is the regression
+// test for a review finding: the old implementation looked for the exact
+// substring "Path=/;", which missed every one of these - all perfectly
+// ordinary, spec-legal Set-Cookie shapes.
+func TestRewriteAdGuardSetCookieHandlesRealisticVariance(t *testing.T) {
+	tests := map[string]string{
+		// Path=/ as the last attribute - no trailing semicolon.
+		"agh_session=value; HttpOnly; Path=/": "agh_session=value; Path=/adguard-ui/; HttpOnly",
+		// Different attribute-name casing.
+		"agh_session=value; path=/; HttpOnly": "agh_session=value; Path=/adguard-ui/; HttpOnly",
+		// Extra whitespace around the attribute.
+		"agh_session=value;  Path=/ ; HttpOnly": "agh_session=value; Path=/adguard-ui/; HttpOnly",
+		// Path=/ with no other attributes at all.
+		"agh_session=value; Path=/": "agh_session=value; Path=/adguard-ui/",
+	}
+	for input, want := range tests {
+		if got := rewriteAdGuardSetCookie(input); got != want {
+			t.Errorf("rewriteAdGuardSetCookie(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+// TestRewriteAdGuardSetCookieLeavesOthersAlone ensures the rewrite stays
+// scoped to exactly what the old code touched: a cookie with no Path
+// attribute, or a Path that isn't the bare root, is passed through
+// unchanged - and an unparseable Set-Cookie value doesn't get dropped or
+// corrupted, just left as-is.
+func TestRewriteAdGuardSetCookieLeavesOthersAlone(t *testing.T) {
+	tests := []string{
+		"agh_session=value; HttpOnly",
+		"agh_session=value; Path=/api; HttpOnly",
+		"not a valid set-cookie at all;;;",
+	}
+	for _, raw := range tests {
+		if got := rewriteAdGuardSetCookie(raw); got != raw {
+			t.Errorf("rewriteAdGuardSetCookie(%q) = %q, want it unchanged", raw, got)
+		}
+	}
+}
