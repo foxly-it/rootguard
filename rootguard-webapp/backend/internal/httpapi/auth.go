@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -138,7 +139,9 @@ func NewSessionAuth(expectedUser, expectedPassword, recoveryToken string, ttl ti
 		auth.credentialsPath = filepath.Join(filepath.Dir(persistencePath), "credentials.json")
 		auth.auditPath = filepath.Join(filepath.Dir(persistencePath), "audit.json")
 	}
-	auth.loadCredentials()
+	if err := auth.loadCredentials(); err != nil {
+		panic("unable to load persisted credentials: " + err.Error())
+	}
 	auth.loadSessions()
 	auth.loadAudit()
 	go auth.sweepLimitersPeriodically()
@@ -796,28 +799,47 @@ func (a *SessionAuth) loadSessions() {
 	}
 }
 
-func (a *SessionAuth) loadCredentials() {
+// loadCredentials reconciles the env-var-configured initial username/
+// password (already set by NewSessionAuth before this runs) against a
+// previously persisted change from the account settings UI. Only a
+// genuinely absent file is a silent no-op - that's the expected state for
+// a fresh install that has never changed its password, and the
+// env-configured credentials are exactly what should stay active. Every
+// other failure now returns a real error instead: found in review, this
+// used to treat *every* error identically (missing, unreadable, corrupt
+// JSON, wrong algorithm, malformed salt/hash all fell through to the same
+// no-op), which meant a corrupted or tampered credentials.json silently
+// reactivated the original env password even after an admin had
+// deliberately changed it in the UI - a real risk if that original
+// password was ever exposed (an old .env backup, a log, someone who saw
+// it during initial setup). NewSessionAuth panics on this error the same
+// way it already does for a password-hashing init failure, rather than
+// starting up with a credential state nobody can see was silently reset.
+func (a *SessionAuth) loadCredentials() error {
 	if a.credentialsPath == "" {
-		return
+		return nil
 	}
 	data, err := os.ReadFile(a.credentialsPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
-		return
+		return fmt.Errorf("read %s: %w", a.credentialsPath, err)
 	}
 	var stored persistedCredentials
-	if json.Unmarshal(data, &stored) != nil {
-		return
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return fmt.Errorf("parse %s: %w", a.credentialsPath, err)
 	}
 	if stored.Algorithm != "pbkdf2-sha256" || stored.Iterations != passwordIterations {
-		return
+		return fmt.Errorf("%s: unexpected algorithm %q or iteration count %d", a.credentialsPath, stored.Algorithm, stored.Iterations)
 	}
 	salt, err := base64.RawStdEncoding.DecodeString(stored.Salt)
 	if err != nil || len(salt) != 16 {
-		return
+		return fmt.Errorf("%s: invalid salt", a.credentialsPath)
 	}
 	passwordHash, err := base64.RawStdEncoding.DecodeString(stored.PasswordHash)
 	if err != nil || len(passwordHash) != sha256.Size {
-		return
+		return fmt.Errorf("%s: invalid password hash", a.credentialsPath)
 	}
 	a.passwordSalt = salt
 	a.expectedPasswordHash = passwordHash
@@ -825,6 +847,7 @@ func (a *SessionAuth) loadCredentials() {
 		a.expectedUsername = stored.Username
 		a.expectedUserHash = sha256.Sum256([]byte(stored.Username))
 	}
+	return nil
 }
 
 func (a *SessionAuth) persistCredentialsLocked() error {

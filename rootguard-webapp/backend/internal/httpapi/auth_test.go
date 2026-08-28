@@ -158,15 +158,20 @@ func TestPasswordRecoveryPersistsPasswordAndInvalidatesSessions(t *testing.T) {
 func TestPasswordRecoveryRollsBackOnCredentialPersistFailure(t *testing.T) {
 	dir := t.TempDir()
 	sessionFile := filepath.Join(dir, "sessions.json")
-	// Force the credentials write to fail at the final os.Rename step: a
-	// directory already sitting at the exact path persistCredentialsLocked
-	// needs to rename its temp file onto.
-	if err := os.MkdirAll(filepath.Join(dir, "credentials.json"), 0700); err != nil {
-		t.Fatalf("failed to set up credentials.json as a directory: %v", err)
-	}
 
 	auth := NewSessionAuth("admin", "old-password", "recovery-secret", time.Hour, sessionFile)
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	// Force the credentials write to fail at the final os.Rename step: a
+	// directory already sitting at the exact path persistCredentialsLocked
+	// needs to rename its temp file onto. Only done *after* NewSessionAuth
+	// above succeeded normally - loadCredentials now treats anything other
+	// than a genuinely absent file as a hard startup failure, so doing
+	// this beforehand would panic during construction instead of reaching
+	// the actual point of this test (a persist failure, not a load one).
+	if err := os.MkdirAll(filepath.Join(dir, "credentials.json"), 0700); err != nil {
+		t.Fatalf("failed to set up credentials.json as a directory: %v", err)
+	}
 
 	resetBody := []byte(`{"recovery_token":"recovery-secret","new_password":"new-password-123"}`)
 	resetRequest := httptest.NewRequest(http.MethodPost, "/api/auth/recovery", bytes.NewReader(resetBody))
@@ -729,12 +734,53 @@ func TestAccountUpdateRejectsWrongCurrentPasswordAndInvalidInput(t *testing.T) {
 	}
 }
 
+// TestNewSessionAuthPanicsOnCorruptCredentialsFile is the regression test
+// for a real gap found in review: loadCredentials treated every failure
+// identically (a genuinely missing file, an unreadable one, corrupt JSON,
+// an unexpected algorithm, a malformed salt/hash) as a silent no-op that
+// left the env-configured initial username/password active. That's the
+// right behavior for a fresh install that never changed its password
+// (file genuinely absent), but wrong for real corruption: an admin who'd
+// deliberately changed the password in the UI would have that change
+// silently, invisibly reverted to the original env password on the next
+// restart - a real risk if that original password was ever exposed (an
+// old .env backup, a log, whoever was present during initial setup).
+func TestNewSessionAuthPanicsOnCorruptCredentialsFile(t *testing.T) {
+	dir := t.TempDir()
+	sessionFile := filepath.Join(dir, "sessions.json")
+	credentialsFile := filepath.Join(dir, "credentials.json")
+	if err := os.WriteFile(credentialsFile, []byte("not valid json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			t.Fatal("expected NewSessionAuth to panic on a corrupt credentials.json")
+		}
+		if message := fmt.Sprint(recovered); !strings.Contains(message, "credentials") {
+			t.Fatalf("expected the panic message to mention credentials, got %q", message)
+		}
+	}()
+	NewSessionAuth("admin", "secret", "", time.Hour, sessionFile)
+	t.Fatal("expected NewSessionAuth to panic before reaching this point")
+}
+
+// TestNewSessionAuthAcceptsAMissingCredentialsFile is the companion
+// positive case: a genuinely absent credentials.json (every fresh
+// install, until a password is ever changed) must not panic - only real
+// corruption should.
+func TestNewSessionAuthAcceptsAMissingCredentialsFile(t *testing.T) {
+	dir := t.TempDir()
+	sessionFile := filepath.Join(dir, "sessions.json")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, sessionFile)
+	if auth.expectedUsername != "admin" {
+		t.Fatalf("expected the env-configured username to stay active, got %q", auth.expectedUsername)
+	}
+}
+
 func TestAccountUpdateRollsBackOnCredentialPersistFailure(t *testing.T) {
 	dir := t.TempDir()
 	sessionFile := filepath.Join(dir, "sessions.json")
-	if err := os.MkdirAll(filepath.Join(dir, "credentials.json"), 0700); err != nil {
-		t.Fatalf("failed to set up credentials.json as a directory: %v", err)
-	}
 
 	auth := NewSessionAuth("admin", "old-password", "", time.Hour, sessionFile)
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
@@ -743,6 +789,17 @@ func TestAccountUpdateRollsBackOnCredentialPersistFailure(t *testing.T) {
 	login := httptest.NewRecorder()
 	handler.ServeHTTP(login, loginRequest)
 	cookie := login.Result().Cookies()[0]
+
+	// Only made a directory *after* NewSessionAuth/login above succeeded
+	// normally - loadCredentials now treats anything other than a
+	// genuinely absent file as a hard startup failure (see
+	// TestNewSessionAuthPanicsOnCorruptCredentialsFile), so setting this
+	// up beforehand would panic during construction instead of reaching
+	// the actual point of this test: a *persist* failure during account
+	// update, not a *load* failure at startup.
+	if err := os.MkdirAll(filepath.Join(dir, "credentials.json"), 0700); err != nil {
+		t.Fatalf("failed to set up credentials.json as a directory: %v", err)
+	}
 
 	updateBody, _ := json.Marshal(accountUpdate{CurrentPassword: "old-password", NewUsername: "root"})
 	updateRequest := httptest.NewRequest(http.MethodPost, "/api/auth/account", bytes.NewReader(updateBody))

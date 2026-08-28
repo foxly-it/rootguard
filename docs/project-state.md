@@ -2456,3 +2456,30 @@ reliably fails on any OS) prove: logout's cookie is cleared even when
 persistence fails (reverted, confirmed the test fails, restored), and a
 broken-persist revoke still returns a clear error while the session
 stays gone from memory.
+
+**Medium 4, fixed: a corrupted credentials.json silently reactivated the
+old env password.** `loadCredentials` treated every failure identically
+- a genuinely missing file, an unreadable one, corrupt JSON, an
+unexpected algorithm, a malformed salt/hash - as a silent no-op that
+left the env-configured initial username/password active. Correct for a
+fresh install that never changed its password (file genuinely absent),
+wrong for real corruption: an admin who'd deliberately changed the
+password in the UI would have that change silently, invisibly reverted
+to the original env password on the next restart - a real risk if that
+original password was ever exposed (an old `.env` backup, a log,
+whoever was present during initial setup).
+
+Fixed: `loadCredentials` now returns an error, distinguishing
+`os.ErrNotExist` (the one legitimate silent case) from every other
+failure (returns a real error). `NewSessionAuth` panics on that error
+the same way it already does for a password-hashing init failure -
+consistent with this constructor's own existing "fail loudly at
+startup" convention, not a new one. Two of this package's existing
+tests deliberately made `credentials.json` a directory *before*
+constructing `SessionAuth` (to force a later *persist* failure) - moved
+that setup to *after* construction in both, since it would otherwise now
+correctly panic during construction itself (a directory where a file
+should be is exactly the kind of corruption this fix is meant to catch).
+New regression test proves the panic has teeth (reverted, confirmed the
+test fails, restored) alongside a companion positive test confirming a
+genuinely missing file still doesn't panic.
