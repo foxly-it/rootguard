@@ -2296,3 +2296,50 @@ long-running containers made a real `integration/run.sh` pass there
 unsafe - fixed `container_name:` values in `compose.e2e.yaml` would have
 collided with (and risked disrupting) an unrelated 3-day-old deployment
 already running there.
+
+**Blocker 2, fixed: releases became publicly visible before smoke-test/
+upgrade-test passed.** `update-alpha-pins` (pin commit + moved release tag)
+ran with `needs: [version, publish]` - a sibling of, not gated behind,
+`smoke-test`/`upgrade-test`. The GitHub Release itself was created even
+earlier, by `release-version-bump.yml`, before `release-alpha.yml` had even
+started. A failing `upgrade-test` (which has happened live, for exactly
+this reason, during the `1.0.0-rc.1` cut) still left the final image tags,
+a real GitHub Release, committed pins on `main`, and a moved release tag
+all publicly visible - and since Core's/`install.sh`'s live release
+discovery both query the Releases API (not raw git tags), a
+published-but-broken Release was immediately eligible for auto-discovery
+by any existing installation checking for updates.
+
+Fixed: `release-version-bump.yml` no longer creates the GitHub Release (it
+still tags + pushes the version-bump commit itself, a low-risk internal
+history marker, not a publicly promoted artifact). `update-alpha-pins` now
+`needs: [version, publish, smoke-test, upgrade-test]` and creates the
+GitHub Release itself as its last step, after the tag has already been
+moved to the correctly-pinned commit - notes are regenerated with
+git-cliff right there (deterministic from commit history, so identical to
+what the other workflow would have produced) rather than passed across the
+two separate workflow runs. Both the tag-move and the new Release-creation
+step stay idempotent, matching the rest of this job, since a re-run against
+an already-published version (exactly what happened live for `1.0.0-rc.1`)
+must not fail just because an earlier run already did the work.
+
+Also closed the two smaller gaps the same review flagged in this job:
+`docker compose -f compose.release.yaml config` (plus the same
+digest-pinned/no-`:latest` assertions `ci.yml`'s own PR check already
+runs) now validates the pin-sed's output before it's committed - the
+`[skip ci]` pin commit's own comment already documented a *real* past
+incident where a broken sed match silently shipped invalid YAML because
+nothing re-checked it. And the release pipeline's own `test` job gained
+`go vet` (all three Go modules) and `npm test` (the frontend unit suite,
+previously not run there at all, only by `ci-webapp.yml`'s own PR checks -
+a release cut has no PR).
+
+Deliberately deferred, not folded into this fix: making the release
+pipeline depend on `ci-security.yml`'s scans (trivy/gitleaks/govulncheck/
+staticcheck) passing. They already run on every push to main via that
+separate workflow, but - found while investigating this - `main` isn't
+actually a GitHub-protected branch (`gh api .../branches/main/protection`
+returns 404), so that's convention, not an enforced gate. Wiring a
+security-scan dependency into the release pipeline for real means turning
+`ci-security.yml` into a reusable `workflow_call` workflow, a larger,
+separate change; flagged to the user rather than rushed into this PR.
