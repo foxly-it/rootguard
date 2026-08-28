@@ -63,7 +63,7 @@ func main() {
 		12*time.Hour,
 		getEnv("ROOTGUARD_SESSION_FILE", "/var/lib/rootguard-sessions/sessions.json"),
 	)
-	router := httpapi.RequireSameOriginWrites(sessionAuth.Handler(httpapi.NewRouter(core, sessionAuth)))
+	router := httpapi.SecurityHeaders(httpapi.RequireSameOriginWrites(sessionAuth.Handler(httpapi.NewRouter(core, sessionAuth))))
 
 	server := &http.Server{
 		Addr:              ":" + port,

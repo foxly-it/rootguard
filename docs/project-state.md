@@ -2529,3 +2529,39 @@ tests: one proves the occupied-port case fails preflight (reverted,
 confirmed the test fails, restored), the other proves a disabled
 blockpage doesn't fail preflight just because something else happens to
 hold port 80.
+
+**Medium 7, fixed: the WebApp sent no browser security headers.** Every
+response - the SPA, the API, the proxied AdGuard UI - carried no
+`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, or `Permissions-Policy`. None of this is the primary
+defense against anything (that's `RequireSameOriginWrites` and
+`SessionAuth`), but its absence meant a same-origin script-injection bug
+anywhere else in the app would have had no browser-side backstop, and the
+admin UI could be framed by another site.
+
+Fixed: a new `SecurityHeaders` middleware, wrapped outermost around the
+whole router in `main.go`, sets all five. The CSP's `script-src` is
+same-origin plus a hash for the one inline script the SPA actually has
+(`frontend/index.html`'s theme-flash-prevention script, which can't be
+externalized without reintroducing the flash it exists to avoid) -
+locked down, since script execution is the directive that actually
+matters for XSS. `style-src` keeps `'unsafe-inline'` deliberately: a
+handful of components apply the React `style` prop, which CSS-in-JS
+research shows browsers don't reliably attribute to CSP's HTML-attribute
+style-src restriction the same way across versions - not worth risking a
+silent rendering break in the field to tighten a directive that isn't
+the injection-relevant one. The CSP is withheld specifically for
+`/adguard-ui/` (AdGuard Home's own reverse-proxied admin UI, a separate
+frontend whose asset layout this app doesn't control); the other four
+headers still apply there.
+
+Three new tests: the headers are actually set (and withheld for
+`/adguard-ui/`, both revert-verified - reverted to a no-op middleware,
+confirmed both tests fail, restored), plus a drift guard that hashes the
+real `frontend/index.html` inline script at test time and fails if it no
+longer matches the hardcoded CSP hash, so a future edit to that script
+can't silently start breaking under the new CSP.
+
+Not verified in a live browser (no local Docker daemon, same constraint
+as the rest of this session) - worth a manual DevTools-console check for
+CSP violations on the actual built SPA before the next release.
