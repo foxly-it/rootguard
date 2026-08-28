@@ -2343,3 +2343,26 @@ returns 404), so that's convention, not an enforced gate. Wiring a
 security-scan dependency into the release pipeline for real means turning
 `ci-security.yml` into a reusable `workflow_call` workflow, a larger,
 separate change; flagged to the user rather than rushed into this PR.
+
+**Blocker 3, fixed: the one-line installer ran an unpinned, unverified
+script as root.** `install.sh`'s `install_docker()` downloaded
+`dockerinstall.sh` from `foxly-it/dockerinstall`'s moving `main` branch
+and immediately ran it via `sudo`, with no digest, signature, or checksum
+check at all - a compromised commit to that separate repository would
+have been live on every fresh RootGuard install within minutes. That repo
+has no tags or releases to pin to instead (confirmed via the GitHub API),
+so there's no "latest stable version" to point at.
+
+Fixed with the two-part guarantee the review itself recommended: pinned
+`DOCKERINSTALL_URL` to a specific commit SHA (fixes *which* content is
+expected - a real git commit's content is immutable, unlike a branch tip)
+plus a hardcoded `DOCKERINSTALL_SHA256`, checked against the actual
+download before it's ever `chmod +x`'d or executed (the part that
+actually verifies what was *received* still matches that commit - a
+commit-pinned URL alone doesn't protect against a compromised CDN edge,
+DNS spoofing, or a tampered mirror serving something else at the same
+URL). Verified both directions live against the real pinned URL: the
+real download's checksum matches, and a deliberately wrong expected value
+is correctly rejected. Documented directly in the script how to
+intentionally update the pin later (bump the commit SHA, recompute the
+checksum from that exact URL).

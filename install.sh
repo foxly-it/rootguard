@@ -19,7 +19,19 @@
 set -Eeuo pipefail
 
 RG_REPO="foxly-it/rootguard"
-DOCKERINSTALL_URL="https://raw.githubusercontent.com/foxly-it/dockerinstall/main/dockerinstall.sh"
+# Pinned to a specific commit, not the moving main branch - found in
+# review: this script downloads and runs dockerinstall.sh as root
+# (install_docker below), and a plain .../main/dockerinstall.sh URL meant
+# a compromised commit to that separate repository would be live on every
+# fresh RootGuard install within minutes, no review or release process in
+# between (foxly-it/dockerinstall has no tags or releases to pin to
+# instead). The SHA-256 check below is the actual integrity guarantee -
+# the commit pin alone only fixes *which* content is expected, it doesn't
+# verify what was actually received still matches it. To intentionally
+# update dockerinstall.sh: pin the new commit's SHA below, then set
+# DOCKERINSTALL_SHA256 to `curl -fsSL "$DOCKERINSTALL_URL" | sha256sum`.
+DOCKERINSTALL_URL="https://raw.githubusercontent.com/foxly-it/dockerinstall/f359cbdaef0f09ab04b7151f21fb649850e22d42/dockerinstall.sh"
+DOCKERINSTALL_SHA256="1c2cc0df617d94bb8728ac3690139e66782e1c5888840b469922f4fb5795554c"
 NON_INTERACTIVE=0
 TARGET_DIR="rootguard"
 
@@ -288,11 +300,20 @@ docker_cmd() {
 install_docker() {
   log "Docker wurde nicht gefunden - Installation über Foxly dockerinstall wird gestartet."
   command -v sudo >/dev/null 2>&1 || die "sudo wird benötigt, um Docker zu installieren."
-  local installer
+  command -v sha256sum >/dev/null 2>&1 || die "sha256sum wird benötigt, um den Docker-Installer zu verifizieren."
+  local installer actual_sha256
   installer="$(mktemp)"
   trap 'rm -f "$installer"' RETURN
   curl -fsSL "$DOCKERINSTALL_URL" -o "$installer" \
     || die "Docker-Installer konnte nicht heruntergeladen werden."
+  # The commit pin above fixes *which* content is expected; this is what
+  # actually verifies the download matches it, closing the gap a pinned
+  # URL alone leaves open (a compromised CDN edge, DNS spoofing, or a
+  # tampered mirror could still serve something else at the same URL).
+  actual_sha256="$(sha256sum "$installer" | cut -d' ' -f1)"
+  if [ "$actual_sha256" != "$DOCKERINSTALL_SHA256" ]; then
+    die "Docker-Installer hat eine unerwartete Prüfsumme (erwartet ${DOCKERINSTALL_SHA256}, erhalten ${actual_sha256}) - Installation abgebrochen."
+  fi
   chmod +x "$installer"
   sudo "$installer" install --non-interactive --no-hello --add-user="$(id -un)" \
     || die "Docker-Installation fehlgeschlagen. Manuelle Anleitung: https://docs.docker.com/engine/install/"
