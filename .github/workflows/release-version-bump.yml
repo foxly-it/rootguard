@@ -39,7 +39,7 @@ jobs:
   version-and-changelog:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
@@ -103,10 +103,15 @@ jobs:
           echo "tag=v${next_version}" >> "$GITHUB_OUTPUT"
 
       - name: Install git-cliff
+        env:
+          # Matches GIT_CLIFF_VERSION above - update together if that ever
+          # changes (sha256sum of the .tar.gz asset for that version).
+          GIT_CLIFF_SHA256: 9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546
         run: |
           set -euo pipefail
           curl -fsSL -o git-cliff.tar.gz \
             "https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${GIT_CLIFF_SHA256}  git-cliff.tar.gz" | sha256sum -c -
           tar -xzf git-cliff.tar.gz "git-cliff-${GIT_CLIFF_VERSION}/git-cliff"
           install "git-cliff-${GIT_CLIFF_VERSION}/git-cliff" /usr/local/bin/git-cliff
           git-cliff --version

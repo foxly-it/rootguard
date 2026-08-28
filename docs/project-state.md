@@ -2588,3 +2588,37 @@ is covered directly (a table test on the pure range-check function, and a
 dial-level test using a fake `net.Conn` with an arbitrary `RemoteAddr` so
 rejecting a public IP doesn't depend on outbound network access in CI) -
 both of those also revert-verified.
+
+**Medium 9, fixed: GitHub Actions supply-chain and permission hygiene.**
+Every third-party action was pinned by a mutable major-version tag
+(`@v7`, `@v4`, ...) rather than a commit SHA; two scanner installs
+(gitleaks, trivy) downloaded a binary over HTTPS with no checksum
+verification, and trivy's installer additionally came from the `main`
+branch of a script - a genuinely moving target, re-fetched fresh (and
+potentially different) on every run; `govulncheck`/`staticcheck` ran via
+`@latest`, so a new upstream release could change CI behavior with zero
+review; and several workflows granted `packages: write`/`id-token: write`/
+`attestations: write` at the workflow level, so their test-only jobs
+inherited registry-write and OIDC-attestation capabilities they never use.
+
+Fixed: every `uses:` across all 15 workflow files now pins a full commit
+SHA with the original tag kept as a trailing comment. `govulncheck` and
+`staticcheck` are pinned to specific versions (`v1.7.0`/`v0.8.1`, the
+versions already in use) instead of `@latest` - `go run pkg@version` also
+gets Go's own module checksum verification (GOSUMDB) for free, unlike a
+raw download. gitleaks and trivy are now installed by downloading the
+exact release asset directly (bypassing trivy's third-party install
+script entirely) and verifying its sha256 against a hardcoded hash before
+extracting; git-cliff's existing download (both release workflows) gained
+the same checksum check. Elevated permissions moved from workflow-level
+to job-level in `ci-unbound.yml`, `ci-updater.yml`, `ci-webapp.yml`, and
+`release-alpha.yml`'s `publish` job (the only jobs that actually push
+images or attest), with `smoke-test`/`upgrade-test` getting `packages:
+read` (they pull published images but never push). `ci-blockpage.yml` and
+`pages.yml` are single-job workflows where the one job both builds and
+(conditionally) publishes - permission scoping doesn't help there without
+splitting into a build/publish pair with an image handoff between them, a
+larger restructure left for later since the practical exposure is low
+(fork-PR runs already get a read-only token from GitHub regardless of
+what a workflow declares, and same-repo runs push in that same job
+anyway).

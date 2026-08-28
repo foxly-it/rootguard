@@ -13,9 +13,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  attestations: write
 
 env:
   GIT_CLIFF_VERSION: "2.13.1"
@@ -55,8 +52,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: rootguard-core/go.mod
           cache: false
@@ -66,7 +63,7 @@ jobs:
         working-directory: rootguard-updater
       - run: go vet ./... && go test ./...
         working-directory: rootguard-webapp/backend
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -88,6 +85,11 @@ jobs:
   publish:
     needs: [version, test]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -108,10 +110,10 @@ jobs:
             image: rootguard-blockpage
             context: rootguard-blockpage
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -129,7 +131,7 @@ jobs:
       - name: Determine build timestamp
         id: build-time
         run: echo "value=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         id: push
         if: steps.existing.outputs.exists != 'true'
         with:
@@ -158,7 +160,7 @@ jobs:
             COMMIT=${{ github.sha }}
       - name: Attest published image provenance
         if: steps.existing.outputs.exists != 'true'
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -185,7 +187,7 @@ jobs:
           mkdir -p /tmp/digests
           printf '%s' "$digest" > "/tmp/digests/${{ matrix.image }}.digest"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: digest-${{ matrix.component }}
           path: /tmp/digests/${{ matrix.image }}.digest
@@ -216,11 +218,11 @@ jobs:
       contents: write
       actions: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: digest-*
           path: /tmp/digests
@@ -355,10 +357,15 @@ jobs:
           echo "value=${previous}" >> "$GITHUB_OUTPUT"
 
       - name: Install git-cliff
+        env:
+          # Matches GIT_CLIFF_VERSION above - update together if that ever
+          # changes (sha256sum of the .tar.gz asset for that version).
+          GIT_CLIFF_SHA256: 9a1263f24e59a2f508c7b3d3283c9dea94a8bf697f96dbc18cc783cac6284546
         run: |
           set -euo pipefail
           curl -fsSL -o git-cliff.tar.gz \
             "https://github.com/orhun/git-cliff/releases/download/v${GIT_CLIFF_VERSION}/git-cliff-${GIT_CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${GIT_CLIFF_SHA256}  git-cliff.tar.gz" | sha256sum -c -
           tar -xzf git-cliff.tar.gz "git-cliff-${GIT_CLIFF_VERSION}/git-cliff"
           install "git-cliff-${GIT_CLIFF_VERSION}/git-cliff" /usr/local/bin/git-cliff
 
@@ -416,6 +423,9 @@ jobs:
   smoke-test:
     needs: [version, publish]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     env:
       ROOTGUARD_CORE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.value }}
       ROOTGUARD_WEBAPP_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.value }}
@@ -431,8 +441,8 @@ jobs:
       ROOTGUARD_WEB_BIND: 127.0.0.1
       ROOTGUARD_WEB_PORT: "18080"
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -490,8 +500,11 @@ jobs:
   upgrade-test:
     needs: [version, publish]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
 
@@ -572,7 +585,7 @@ jobs:
             cp compose.release.yaml "${{ steps.previous.outputs.compose_path }}"
           fi
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         if: steps.previous.outputs.skip != 'true'
         with:
           registry: ghcr.io

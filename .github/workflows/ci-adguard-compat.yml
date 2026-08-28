@@ -45,7 +45,7 @@ jobs:
       ROOTGUARD_DNS_PORT: "1053"
       ROOTGUARD_ADGUARD_IMAGE: ${{ matrix.image }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Build RootGuard stack
         run: docker compose -f compose.integration.yaml build
