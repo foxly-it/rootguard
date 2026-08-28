@@ -12,6 +12,7 @@
   <title>RootGuard Dokumentation</title>
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="docs.css">
+  <link rel="stylesheet" href="project.css">
 </head>
 <body data-title-de="RootGuard Dokumentation" data-title-en="RootGuard Documentation"
       data-description-de="RootGuard Dokumentation: Installation, Einrichtung, DNS-Konfiguration, Updates, Sicherheit und Fehlerbehebung."
@@ -21,7 +22,7 @@
     <header class="topbar">
       <a class="brand" href="index.html" aria-label="RootGuard Startseite"><img class="brand-logo" src="rootguard-icon.svg" alt=""><span>Root<span>Guard</span></span></a>
       <div class="nav-group">
-        <nav class="links" aria-label="Hauptnavigation"><a class="nav-home" href="index.html" aria-label="Startseite" title="Startseite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg></a><details class="nav-dropdown active"><summary aria-current="page" data-de="Menü" data-en="Menu">Menü</summary><div class="nav-dropdown-menu"><a href="index.html#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a><a class="active" href="docs.html" aria-current="page" data-de="Docs" data-en="Documentation">Docs</a><a href="wiki.html">Wiki</a><a href="roadmap.html">Roadmap</a></div></details><div class="language-switch nav-language" aria-label="Sprache"><button class="lang-button" id="btn-de" type="button" data-language="de">DE</button><button class="lang-button" id="btn-en" type="button" data-language="en">EN</button></div></nav><a class="github-button" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" aria-label="RootGuard auf GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.2.8-.5v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.3 11.3 0 0 0 12 .7Z"/></svg></a>
+        <nav class="links" aria-label="Hauptnavigation"><a class="nav-home" href="index.html" aria-label="Startseite" title="Startseite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg></a><details class="nav-dropdown active"><summary aria-current="page" data-de="Menü" data-en="Menu">Menü</summary><div class="nav-dropdown-menu"><a href="index.html#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a><a class="active" href="docs.html" aria-current="page" data-de="Docs" data-en="Documentation">Docs</a><a href="roadmap.html">Roadmap</a></div></details><div class="language-switch nav-language" aria-label="Sprache"><button class="lang-button" id="btn-de" type="button" data-language="de">DE</button><button class="lang-button" id="btn-en" type="button" data-language="en">EN</button></div></nav><a class="github-button" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" aria-label="RootGuard auf GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.2.8-.5v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.3 11.3 0 0 0 12 .7Z"/></svg></a>
       </div>
     </header>
 
@@ -30,14 +31,14 @@
         <div>
           <p class="eyebrow" data-de="RootGuard Docs" data-en="RootGuard documentation">RootGuard Docs</p>
           <h1 data-de="Installation, Betrieb<br><em>und Kontrolle.</em>" data-en="Install, operate,<br><em>and stay in control.</em>">Installation, Betrieb<br><em>und Kontrolle.</em></h1>
-          <p class="lead" data-de="Von Docker Compose bis zum sicheren Update: Diese Dokumentation beschreibt den aktuellen Pre-Release-Beta-Stand von RootGuard und wird zusammen mit dem Projekt weiterentwickelt." data-en="From Docker Compose to safe updates: this documentation covers the current RootGuard pre-release beta and evolves together with the project.">Von Docker Compose bis zum sicheren Update: Diese Dokumentation beschreibt den aktuellen Pre-Release-Beta-Stand von RootGuard und wird zusammen mit dem Projekt weiterentwickelt.</p>
+          <p class="lead" data-de="Von Docker Compose bis zum sicheren Update: Diese Dokumentation beschreibt den aktuellen Release-Candidate-Stand von RootGuard und wird zusammen mit dem Projekt weiterentwickelt." data-en="From Docker Compose to safe updates: this documentation covers the current RootGuard release candidate and evolves together with the project.">Von Docker Compose bis zum sicheren Update: Diese Dokumentation beschreibt den aktuellen Release-Candidate-Stand von RootGuard und wird zusammen mit dem Projekt weiterentwickelt.</p>
           <div class="actions">
             <a class="button" href="#quickstart" data-de="Schnellstart" data-en="Quickstart">Schnellstart</a>
             <a class="button secondary" href="https://github.com/foxly-it/rootguard/issues" target="_blank" rel="noopener noreferrer" data-de="Problem melden ↗" data-en="Report an issue ↗">Problem melden ↗</a>
           </div>
         </div>
         <aside class="manual-status">
-          <span>DOCUMENTATION · PRE-RELEASE BETA</span>
+          <span>DOCUMENTATION · RELEASE CANDIDATE</span>
           <strong data-de="Aktueller Funktionsumfang" data-en="Current feature set">Aktueller Funktionsumfang</strong>
           <ul>
             <li data-de="Geführte AIO-Einrichtung" data-en="Guided AIO setup">Geführte AIO-Einrichtung</li>
@@ -73,11 +74,13 @@
             <p class="eyebrow" data-de="01 · Überblick" data-en="01 · Overview">01 · Überblick</p>
             <h2 data-de="Was RootGuard bereitstellt" data-en="What RootGuard provides">Was RootGuard bereitstellt</h2>
             <p data-de="RootGuard kombiniert AdGuard Home als Netzwerkfilter mit Unbound als eigenem rekursiven und DNSSEC-validierenden Resolver. WebApp und Core verwalten den Stack; ein separater Updater tauscht Core und WebApp sicher als Paar aus." data-en="RootGuard combines AdGuard Home as a network filter with Unbound as a dedicated recursive, DNSSEC-validating resolver. WebApp and Core manage the stack; a separate updater safely replaces Core and WebApp as a pair.">RootGuard kombiniert AdGuard Home als Netzwerkfilter mit Unbound als eigenem rekursiven und DNSSEC-validierenden Resolver. WebApp und Core verwalten den Stack; ein separater Updater tauscht Core und WebApp sicher als Paar aus.</p>
-            <div class="manual-cards">
-              <article><b>WebApp</b><span data-de="Login, Dashboard und geführte Bedienung" data-en="Login, dashboard, and guided controls">Login, Dashboard und geführte Bedienung</span></article>
-              <article><b>Core</b><span data-de="Orchestrierung und geprüfte Konfigurationsänderungen" data-en="Orchestration and validated configuration changes">Orchestrierung und geprüfte Konfigurationsänderungen</span></article>
-              <article><b>Updater</b><span data-de="Atomare Core-/WebApp-Updates mit Rollback" data-en="Atomic Core/WebApp updates with rollback">Atomare Core-/WebApp-Updates mit Rollback</span></article>
-              <article><b>AdGuard + Unbound</b><span data-de="Filterung, Rekursion und DNSSEC" data-en="Filtering, recursion, and DNSSEC">Filterung, Rekursion und DNSSEC</span></article>
+            <h3 data-de="Fünf Komponenten, klare Verantwortung" data-en="Five components, clear responsibilities">Fünf Komponenten, klare Verantwortung</h3>
+            <div class="component-list">
+              <a href="https://github.com/foxly-it/rootguard/tree/main/rootguard-webapp" target="_blank" rel="noopener noreferrer"><b>WebApp</b><span data-de="Login, Dashboard, geführte Bedienung und enger API-Proxy" data-en="Login, dashboard, guided controls, and narrow API proxy">Login, Dashboard, geführte Bedienung und enger API-Proxy</span><em>UI</em></a>
+              <a href="https://github.com/foxly-it/rootguard/tree/main/rootguard-core" target="_blank" rel="noopener noreferrer"><b>Core</b><span data-de="Orchestrierung, Konfiguration, Validierung und DNS-Lebenszyklus" data-en="Orchestration, configuration, validation, and DNS lifecycle">Orchestrierung, Konfiguration, Validierung und DNS-Lebenszyklus</span><em>CONTROL</em></a>
+              <a href="https://github.com/foxly-it/rootguard/tree/main/rootguard-updater" target="_blank" rel="noopener noreferrer"><b>Updater</b><span data-de="Atomarer Austausch von Core und WebApp mit gemeinsamem Rollback" data-en="Atomic replacement of Core and WebApp with paired rollback">Atomarer Austausch von Core und WebApp mit gemeinsamem Rollback</span><em>UPDATE</em></a>
+              <a href="https://github.com/foxly-it/rootguard/tree/main/rootguard-unbound" target="_blank" rel="noopener noreferrer"><b>Unbound</b><span data-de="Gehärteter rekursiver und DNSSEC-validierender Resolver" data-en="Hardened recursive and DNSSEC-validating resolver">Gehärteter rekursiver und DNSSEC-validierender Resolver</span><em>DNS</em></a>
+              <a href="https://github.com/foxly-it/rootguard/tree/main/rootguard-blockpage" target="_blank" rel="noopener noreferrer"><b>Blockpage</b><span data-de="Eigene, verständliche Blockseite statt AdGuards Standardantwort" data-en="Dedicated, plain-language block page instead of AdGuard's default response">Eigene, verständliche Blockseite statt AdGuards Standardantwort</span><em>UI</em></a>
             </div>
           </section>
 
@@ -297,7 +300,7 @@ dig @192.168.178.10 example.com A  # durch die eigene Host-IP ersetzen</code></p
 
     <footer class="footer">
       <div><strong>RootGuard</strong><span data-de="Selbst betriebener DNS-Schutz für dein Netzwerk." data-en="Self-hosted DNS protection for your network.">Selbst betriebener DNS-Schutz für dein Netzwerk.</span></div>
-      <nav aria-label="Rechtliches und Projekt"><a href="index.html" data-de="Startseite" data-en="Home">Startseite</a><a href="wiki.html">Wiki</a><a href="roadmap.html">Roadmap</a><a href="tools.html" data-de="Weitere Tools" data-en="More tools">Weitere Tools</a><a href="https://github.com/foxly-it/rootguard">GitHub</a><a href="https://github.com/foxly-it/rootguard/blob/main/LICENSE">AGPL-3.0</a><a href="privacy.html" data-de="Datenschutz" data-en="Privacy">Datenschutz</a><a href="imprint.html" data-de="Impressum" data-en="Legal notice">Impressum</a></nav>
+      <nav aria-label="Rechtliches und Projekt"><a href="index.html" data-de="Startseite" data-en="Home">Startseite</a><a href="roadmap.html">Roadmap</a><a href="tools.html" data-de="Weitere Tools" data-en="More tools">Weitere Tools</a><a href="https://github.com/foxly-it/rootguard">GitHub</a><a href="https://github.com/foxly-it/rootguard/blob/main/LICENSE">AGPL-3.0</a><a href="privacy.html" data-de="Datenschutz" data-en="Privacy">Datenschutz</a><a href="imprint.html" data-de="Impressum" data-en="Legal notice">Impressum</a></nav>
       <small>© <span id="year"></span> Mark Schenk · Made with 💜 by Foxly IT</small>
     </footer>
   </div>
