@@ -2857,3 +2857,31 @@ against every case the removed comments themselves named
 (`1.0.0-rc.01`, `1foo.2bar.3baz`, `1.0.0+build`, `01.2.3`, plus valid
 alpha/beta/rc/bare versions), all matching the prior inline behavior
 exactly.
+
+**Code compression 4, done: the last item on the audit's list -
+cross-referenced (not merged) the digest-resolution duplication between
+Core's updater and the control-plane updater.** `digestQualify` and
+`digestFromPullOutput` are near-identical between
+`rootguard-core/internal/updater/github_release.go` and
+`rootguard-updater/image.go` - the audit's own suggestion was to share
+this logic. Deliberately not done: the two are separate Go modules (this
+session already established that pattern for the attestation verifier
+and, again, for the atomic-file-write consolidation two items back), and
+standing up a third shared module for ~30 lines of stable logic that
+hasn't meaningfully drifted in practice wasn't judged worth the ongoing
+versioning/import overhead.
+
+What actually closes the audit's real concern (silent drift between the
+two copies) without that cost: each function's doc comment on both sides
+now names the other file explicitly and says to check it too on any
+change - previously only loose, non-actionable prose ("a different Go
+module, so its own copy") pointed at the duplication's existence at all,
+with no precise pointer either way.
+
+With this, all four of the audit's code-compression suggestions are
+addressed - three with real consolidation (atomic-file writer, the
+updater's file split, shared SemVer validation) and this one with an
+explicit, deliberate "not worth a new module" call plus the
+cross-referencing that keeps the trade-off honest going forward. Every
+finding in the original audit, from the three RC-blockers down to this
+lowest-priority suggestion, has now been worked through.

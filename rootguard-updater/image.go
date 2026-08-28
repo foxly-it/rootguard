@@ -23,6 +23,12 @@ func targetImageFor(spec serviceSpec, targetImages map[string]string) string {
 // without one; an already-qualified (static pin) target passes through
 // unchanged, and a lookup failure falls back to the original reference
 // rather than failing the check/update over a cosmetic gap.
+//
+// Kept in sync by hand with rootguard-core's identical copy
+// (internal/updater/github_release.go, also digestQualify) - separate Go
+// modules can't share an internal package, and standing up a third shared
+// module was judged not worth it for ~30 lines of stable, rarely-changing
+// logic. Check that file too if this one changes.
 func digestQualify(ctx context.Context, run runner, image string) string {
 	if strings.Contains(image, "@sha256:") {
 		return image
@@ -56,6 +62,9 @@ func digestQualify(ctx context.Context, run runner, image string) string {
 // digestQualify when it can parse pull's own output; digestQualify stays
 // as the fallback for an already-qualified static pin (whose "pull" prints
 // the same digest back anyway) or an unexpected output format.
+//
+// Also kept in sync by hand with rootguard-core's identical copy - see
+// digestQualify's own doc comment above for why.
 func digestFromPullOutput(image string, output []byte) (string, bool) {
 	repo, _, ok := strings.Cut(image, ":")
 	if !ok {

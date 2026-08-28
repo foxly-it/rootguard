@@ -100,6 +100,13 @@ func resolveTargetImage(ctx context.Context, spec ServiceSpec) string {
 // an already-qualified (static pin) target passes through unchanged, and a
 // lookup failure falls back to the original reference rather than failing
 // the check/update over a cosmetic gap.
+//
+// Kept in sync by hand with rootguard-updater/image.go's identical copy
+// (also digestQualify) - separate Go modules can't share an internal
+// package, and standing up a third shared module was judged not worth it
+// for ~30 lines of stable, rarely-changing logic (see this session's
+// docs/project-state.md entry on the atomic-file-write consolidation for
+// the same call made there). Check that file too if this one changes.
 func digestQualify(ctx context.Context, run CommandRunner, image string) string {
 	if strings.Contains(image, "@sha256:") {
 		return image
@@ -131,6 +138,9 @@ func digestQualify(ctx context.Context, run CommandRunner, image string) string 
 // pattern; preferred here over digestQualify whenever it can parse pull's
 // own output, with digestQualify kept as the fallback for an
 // already-qualified static pin or an unexpected output format.
+//
+// Also kept in sync by hand with rootguard-updater/image.go's identical
+// copy - see digestQualify's own doc comment above for why.
 func digestFromPullOutput(image string, output []byte) (string, bool) {
 	repo, _, ok := strings.Cut(image, ":")
 	if !ok {
