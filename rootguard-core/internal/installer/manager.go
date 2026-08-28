@@ -85,6 +85,19 @@ type CommandRunner func(context.Context, ...string) ([]byte, error)
 type BootstrapFunc func(context.Context, string) error
 type RestoreFunc func(context.Context) error
 
+// PersistErrorHandler is called whenever persistLocked fails to write
+// state to disk - found in review: nearly every one of persistLocked's
+// many call sites discards its return value entirely (`_ =
+// m.persistLocked()`), which on a full disk or a permissions problem
+// meant an installation, restore, or migration step could report success
+// in Status while its outcome was never actually written down. Rather
+// than thread error handling through every one of those call sites
+// individually, persistLocked calls this hook itself on failure -
+// defaults to a no-op, so callers that want visibility (main.go logs it)
+// can opt in without every internal package call needing to know about
+// logging.
+type PersistErrorHandler func(error)
+
 type Options struct {
 	DataDir          string
 	CoreContainer    string
@@ -100,6 +113,9 @@ type Options struct {
 	// to 3 attempts / 2s when unset; tests may override for faster runs.
 	ComposeUpRetryAttempts int
 	ComposeUpRetryDelay    time.Duration
+	// OnPersistError is called whenever a state write fails - see
+	// PersistErrorHandler's doc comment. Defaults to a no-op.
+	OnPersistError PersistErrorHandler
 }
 
 type Manager struct {
@@ -116,6 +132,7 @@ type Manager struct {
 	bootstrap              BootstrapFunc
 	composeUpRetryAttempts int
 	composeUpRetryDelay    time.Duration
+	onPersistError         PersistErrorHandler
 }
 
 func NewManager(options Options) *Manager {
@@ -131,6 +148,9 @@ func NewManager(options Options) *Manager {
 	if options.ComposeUpRetryDelay <= 0 {
 		options.ComposeUpRetryDelay = 2 * time.Second
 	}
+	if options.OnPersistError == nil {
+		options.OnPersistError = func(error) {}
+	}
 	manager := &Manager{
 		dataDir:                options.DataDir,
 		coreContainer:          options.CoreContainer,
@@ -143,6 +163,7 @@ func NewManager(options Options) *Manager {
 		bootstrap:              options.Bootstrap,
 		composeUpRetryAttempts: options.ComposeUpRetryAttempts,
 		composeUpRetryDelay:    options.ComposeUpRetryDelay,
+		onPersistError:         options.OnPersistError,
 		status: Status{
 			State:     StateNotInstalled,
 			Steps:     []Step{},
@@ -973,7 +994,15 @@ func (m *Manager) persist() error {
 	return m.persistLocked()
 }
 
-func (m *Manager) persistLocked() error {
+// persistLocked writes state to disk, reporting any failure via
+// onPersistError before returning it - see PersistErrorHandler's doc
+// comment for why: most callers discard the returned error outright.
+func (m *Manager) persistLocked() (returnErr error) {
+	defer func() {
+		if returnErr != nil {
+			m.onPersistError(returnErr)
+		}
+	}()
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}

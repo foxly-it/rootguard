@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -332,6 +333,61 @@ func TestLogoutClearsCookieEvenWhenPersistFails(t *testing.T) {
 	logoutCookies := logoutResponse.Result().Cookies()
 	if len(logoutCookies) != 1 || logoutCookies[0].Value != "" || logoutCookies[0].MaxAge >= 0 {
 		t.Fatalf("expected the session cookie to be cleared even though persist failed, got %#v", logoutCookies)
+	}
+}
+
+// TestPersistLockedLogsFailure is the regression test for a review
+// finding: several call sites discard persistLocked's return value
+// entirely ("_ = a.persistLocked()"), which on a full disk or
+// permissions problem meant a session change could silently fail to
+// survive a restart with no evidence anywhere. persistLocked now logs
+// any failure itself, regardless of what the caller does with the
+// return value.
+func TestPersistLockedLogsFailure(t *testing.T) {
+	dir := t.TempDir()
+	persistPath := filepath.Join(dir, "sessions.json")
+	if err := os.WriteFile(persistPath, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, persistPath)
+	// persistPath is a real file, so MkdirAll for anything nested under it
+	// reliably fails on any OS - the same trick TestLogoutClearsCookie...
+	// above uses.
+	auth.persistencePath = filepath.Join(persistPath, "unwritable", "sessions.json")
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	if err := auth.persistLocked(); err == nil {
+		t.Fatal("expected persist to fail against a path blocked by a file")
+	}
+	if !strings.Contains(output.String(), "failed to persist state") {
+		t.Fatalf("expected the persist failure to be logged, got: %q", output.String())
+	}
+}
+
+// TestPersistAuditLockedLogsFailure is the same regression test as
+// TestPersistLockedLogsFailure, for the audit log's own persist path
+// (recordAuditDetail's "_ = a.persistAuditLocked()").
+func TestPersistAuditLockedLogsFailure(t *testing.T) {
+	dir := t.TempDir()
+	persistPath := filepath.Join(dir, "sessions.json")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, persistPath)
+	if err := os.WriteFile(auth.auditPath, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	auth.auditPath = filepath.Join(auth.auditPath, "unwritable", "audit.json")
+
+	var output bytes.Buffer
+	log.SetOutput(&output)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	if err := auth.persistAuditLocked(); err == nil {
+		t.Fatal("expected audit persist to fail against a path blocked by a file")
+	}
+	if !strings.Contains(output.String(), "failed to persist state") {
+		t.Fatalf("expected the audit persist failure to be logged, got: %q", output.String())
 	}
 }
 

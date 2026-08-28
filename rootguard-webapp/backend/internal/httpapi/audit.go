@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"time"
 )
@@ -106,7 +107,18 @@ func (a *SessionAuth) loadAudit() {
 	_ = json.Unmarshal(data, &a.auditEvents)
 }
 
-func (a *SessionAuth) persistAuditLocked() error {
+// persistAuditLocked writes the audit log to disk. Its only call site
+// (recordAuditDetail) discards the return value entirely ("_ =
+// a.persistAuditLocked()", found in review), which on a full disk or
+// permissions problem meant the audit trail could silently stop being
+// durable while every caller kept reporting success - logged here, at
+// the one place that actually knows the write failed.
+func (a *SessionAuth) persistAuditLocked() (returnErr error) {
+	defer func() {
+		if returnErr != nil {
+			log.Printf("audit log: failed to persist state: %v", returnErr)
+		}
+	}()
 	if a.auditPath == "" {
 		return nil
 	}
