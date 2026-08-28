@@ -2636,3 +2636,23 @@ entries (limit: %d)" - accurate regardless of which case triggered it.
 New regression test builds an archive with exactly `MaxFiles` (100000)
 entries and checks both that it's still rejected and that the message no
 longer says "more than" (revert-verified).
+
+**Minor 2, fixed: the AdGuard UI proxy's Set-Cookie rewrite was a fragile
+string match.** `rewriteAdGuardUIResponse` repoints AdGuard's root-scoped
+session cookie (`Path=/`) to this proxy's own mount point
+(`/adguard-ui/`), so the browser keeps sending it back on later requests.
+It did that with `strings.Replace(cookie, "Path=/;", ...)`, which missed
+every one of: `Path=/` as the *last* attribute (no trailing semicolon - a
+completely ordinary, spec-legal shape), different attribute-name casing
+(`path=/`), and extra whitespace around the attribute.
+
+Fixed: `rewriteAdGuardSetCookie` now parses the cookie properly via
+`http.ParseSetCookie` (net/http already implements RFC 6265 for this)
+and only touches the `Path` field, instead of substring-matching the raw
+header text - which also means every other attribute (`Secure`,
+`HttpOnly`, `SameSite`, `Expires`, ...) survives untouched regardless of
+where `Path=/` appears in the string. A cookie whose path isn't exactly
+`/`, or that fails to parse at all, is passed through unchanged - the
+same scope the old code had, just reliably. Two new tests cover the
+realistic variance the audit named (all revert-verified against the old
+implementation) and confirm the "leave it alone" cases still work.
