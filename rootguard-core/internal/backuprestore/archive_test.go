@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -88,6 +89,33 @@ func TestExtractRejectsUnsafeAndManifestMismatchedArchives(t *testing.T) {
 				t.Fatal("expected archive rejection")
 			}
 		})
+	}
+}
+
+// TestExtractRejectsEntryCountAtTheLimitWithAnAccurateMessage is the
+// regression test for a review finding: the entry-count guard rejects at
+// count == MaxFiles (exactly MaxFiles entries already read - see its own
+// comment in archive.go for why >= is correct there), without ever
+// checking whether a real MaxFiles+1th entry exists. The old message
+// ("backup contains more than %d entries") claimed something this code
+// path doesn't actually know to be true; this test builds an archive
+// with exactly MaxFiles entries (no more) and checks it's still rejected,
+// but with wording that doesn't overclaim.
+func TestExtractRejectsEntryCountAtTheLimitWithAnAccurateMessage(t *testing.T) {
+	entries := make(map[string]string, MaxFiles)
+	for i := range MaxFiles {
+		entries[fmt.Sprintf("rootguard/installation/%d", i)] = ""
+	}
+	archive := encryptedTar(t, entries)
+	_, _, err := Extract(t.TempDir(), testPassphrase, bytes.NewReader(archive))
+	if err == nil {
+		t.Fatal("expected an archive at exactly the entry limit to be rejected")
+	}
+	if strings.Contains(err.Error(), "more than") {
+		t.Fatalf("error message overclaims what was actually found: %v", err)
+	}
+	if !strings.Contains(err.Error(), "too many entries") {
+		t.Fatalf("unexpected error message: %v", err)
 	}
 }
 
