@@ -29,18 +29,9 @@ func newRateLimiter(window time.Duration, maxFailure int) *rateLimiter {
 	}
 }
 
-// blocked reports whether key has hit the failure limit within the current
-// window, and prunes any failures that have aged out while it's here.
-func (rl *rateLimiter) blocked(key string) bool {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	rl.pruneLocked(key, time.Now())
-	return len(rl.failures[key]) >= rl.maxFailure
-}
-
-// beginAttempt atomically combines the blocked check with reserving a slot
-// for one verification attempt - closing a timing gap the plain
-// blocked()-then-recordFailure() pattern below has: many concurrent
+// beginAttempt atomically combines a failure-limit check with reserving a
+// slot for one verification attempt - closing a timing gap a plain
+// separate-check-then-recordFailure() pattern has: many concurrent
 // requests could all observe zero recorded failures, all start their own
 // (for login/account, PBKDF2-based and genuinely expensive) verification in
 // parallel, and only get counted afterward once that work is already done,
