@@ -2194,3 +2194,27 @@ RootGuard is now in the `0.9` exit state: "only bug fixes and
 documentation" until the two remaining 1.0.0-gating items close (the
 30-day soak test, `rootguard#271`, and the migration/rollback docs that
 wait on 1.0.0's scope being final).
+
+**The `upgrade-test` failure above isn't only a CI artifact.** Verified
+directly against the `v0.1.0-beta.14` source: its Core's
+`releaseTagPattern` is `^v0\.1\.0-(alpha|beta)\.([0-9]+)$` - hard-limited
+to the pre-#359 scheme, so `v1.0.0-rc.1` isn't merely ranked wrong, it's
+completely invisible to `pickLatestReleaseImage`. Every installation still
+running `beta.14` or earlier (i.e. every installation, since that pattern
+was unchanged since `alpha.2`) has the identical blind spot: its WebGUI
+"check for updates" will never surface `1.0.0-rc.1` at all. Structurally
+unfixable after the fact (the fix ships *in* the release that needs it),
+same as the `beta.12` case earlier - except this is the actual 1.0-line
+transition, not an interim beta bump, so it warranted more than "note it
+and move on." Added a warning callout plus the exact one-time
+`docker exec rootguard-core wget ... /api/control-plane/update` bootstrap
+command to `docs.html`'s Updates & Rollback section (the same escape
+hatch already used for `beta.12`, now public and documented rather than
+only living in this file). Also widened `check-site-facts.sh`/
+`bump-site-versions.sh`'s `historical_reference_pattern` with a "bis
+einschließlich"/"up to and including" marker (mirroring the existing
+"Ab"/"Starting with" one, just for the opposite direction) so the new
+callout's `0.1.0-beta.14` mention doesn't get flagged as a stale
+current-version claim - verified the callout's `1.0.0-rc.1` mentions
+still get checked and will auto-update via `bump-site-versions.sh` on
+every future release, same as everywhere else on the site.

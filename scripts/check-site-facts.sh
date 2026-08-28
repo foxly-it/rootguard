@@ -30,17 +30,20 @@ failures=0
 
 echo
 echo "== Version references =="
-# Skips whole lines matching "Ab/ab/Starting with/required from 0.1.0-alpha.N"
-# - phrasing that deliberately names the version a feature shipped in, not a
-# claim that it's the current one (e.g. "Starting with 0.1.0-alpha.2, ...").
-# Line-level, not lookbehind, to stay portable across BSD and GNU grep - the
+# Skips whole lines matching a version reference that names a boundary,
+# not a claim about the current release: "Ab/ab/Starting with/required
+# from 0.1.0-alpha.N" (a feature shipped starting there) and "bis
+# einschließlich/up to and including 0.1.0-beta.14" (a bug applied up to
+# and including there - added for the beta.14 -> 1.0.0-rc.1 transition
+# note, the same kind of historical fact in the other direction). Line-
+# level, not lookbehind, to stay portable across BSD and GNU grep - the
 # bilingual data-de/data-en pair for a historical reference always carries
 # the marker phrase on the same physical (minified, one-element-per-line)
 # line as the version number itself. Safe to use the bare-capable pattern
 # here even though the extraction below needs extra care (see
 # rootguard_extract_versions): the required marker phrase immediately
 # before it already rules out SVG/IP/date noise matching by accident.
-historical_reference_pattern="([Aa]b |Starting with |required from )${rootguard_version_pattern}"
+historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
 version_matches=""
 for file in site/*.html; do
   matches="$(grep -vE "${historical_reference_pattern}" "${file}" | rootguard_extract_versions | sed "s#^#${file}:#" || true)"

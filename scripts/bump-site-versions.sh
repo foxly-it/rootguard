@@ -26,10 +26,11 @@ if [[ -z "${latest_tag}" ]]; then
 fi
 latest_version="${latest_tag#v}"
 
-# Same exclusion as check-site-facts.sh: a line naming the version a
-# feature shipped in ("Starting with 0.1.0-beta.1, ...") is a historical
-# fact, not a current-version claim, and must never be bumped.
-historical_reference_pattern="([Aa]b |Starting with |required from )${rootguard_version_pattern}"
+# Same exclusion as check-site-facts.sh: a line naming a version boundary
+# ("Starting with 0.1.0-beta.1, ..." or "bis einschließlich 0.1.0-beta.14
+# ...") is a historical fact, not a current-version claim, and must never
+# be bumped.
+historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
 # The two docs.html .env-example lines carry a version *and* a digest -
 # a plain version-string substitution would leave the old digest in
 # place, so they're excluded here and handled explicitly below instead.
