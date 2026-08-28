@@ -20,7 +20,7 @@ jobs:
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Test verification-common.sh's resource-ownership state machine
         run: ./scripts/verification-common.test.sh
