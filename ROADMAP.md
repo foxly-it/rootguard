@@ -1185,7 +1185,7 @@ RootGuard 1.0 ships when:
       repeatable on every supported platform;
 - [ ] no supported change can bypass validation and recovery;
 - [ ] immutable signed artifacts and complete source are published;
-- [ ] the Wiki matches the shipped UI and configuration model;
+- [ ] the documentation matches the shipped UI and configuration model;
 - [ ] security, accessibility, backup, and release gates above are complete;
 - [ ] a tested rollback path from 1.0 to the previous stable state is documented.
 
@@ -1221,7 +1221,7 @@ For each development slice:
 
 1. Select one unchecked item and assign a stable issue ID.
 2. Write acceptance tests before or with the implementation.
-3. Update code, API, WebGUI translations, Wiki, and project state together.
+3. Update code, API, WebGUI translations, documentation, and project state together.
 4. Record verification and mark the checkbox only after it passes.
 5. Do not start the next release phase while an earlier safety gate remains
    unresolved unless the work is independent and explicitly tracked.

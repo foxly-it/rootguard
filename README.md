@@ -32,7 +32,6 @@ DNS-Filterung, rekursive DNS-Auflösung und DNSSEC-Validierung.
 
 [Website](https://rootguard.foxly.de/) ·
 [Handbuch](https://rootguard.foxly.de/docs.html) ·
-[Wiki](https://rootguard.foxly.de/wiki.html) ·
 [Roadmap](https://rootguard.foxly.de/roadmap.html) ·
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
@@ -182,7 +181,6 @@ and DNSSEC validation.
 
 [Website](https://rootguard.foxly.de/) ·
 [Documentation](https://rootguard.foxly.de/docs.html) ·
-[Wiki](https://rootguard.foxly.de/wiki.html) ·
 [Roadmap](https://rootguard.foxly.de/roadmap.html) ·
 [Releases](https://github.com/foxly-it/rootguard/releases)
 

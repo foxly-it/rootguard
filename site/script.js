@@ -318,6 +318,10 @@ fetch("project-data.json", { cache: "no-cache" })
     return response.json();
   })
   .then((data) => {
+    const staticVersion = document.getElementById("current-version")?.textContent.trim();
+    if (staticVersion && data.current_version && data.current_version !== staticVersion) {
+      throw new Error(`Stale project data: ${data.current_version} != ${staticVersion}`);
+    }
     projectData = data;
     renderProjectData();
   })
