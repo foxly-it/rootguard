@@ -71,6 +71,30 @@ func TestCustomConfigRejectsManagedAndDangerousDirectives(t *testing.T) {
 	}
 }
 
+// TestCustomConfigRejectsDNSSECBypasses is the regression test for a real
+// gap found in review: docs.html claims the expert editor "blocks...
+// DNSSEC bypasses", but domain-insecure was completely unrestricted (a
+// bare `domain-insecure: "."` disables DNSSEC validation for the entire
+// namespace, not just one zone) and harden-dnssec-stripped: no only
+// produced a soft "warning" advisory a user could activate anyway.
+func TestCustomConfigRejectsDNSSECBypasses(t *testing.T) {
+	for _, content := range []string{
+		"server:\n    domain-insecure: \".\"\n",
+		"server:\n    domain-insecure: \"example.internal\"\n",
+		"server:\n    harden-dnssec-stripped: no\n",
+	} {
+		if _, err := normalizeCustom(content); !errors.Is(err, ErrInvalidCustomConfig) {
+			t.Fatalf("expected policy rejection for %q, got %v", content, err)
+		}
+	}
+	// The recommended, secure value must still be accepted - only "no"
+	// weakens DNSSEC, "yes" (the default DirectiveReferences itself
+	// recommends) must not be blocked outright.
+	if _, err := normalizeCustom("server:\n    harden-dnssec-stripped: yes\n"); err != nil {
+		t.Fatalf("harden-dnssec-stripped: yes must remain accepted, got %v", err)
+	}
+}
+
 func TestCustomConfigRestoresFilesWhenEffectiveCheckFails(t *testing.T) {
 	manager := newTestManager(t)
 	initial := "server:\n    hide-identity: yes\n"

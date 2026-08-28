@@ -190,6 +190,19 @@ func normalizeCustom(content string) (string, error) {
 		if reason, blocked := blockedDirectives[key]; blocked {
 			return "", fmt.Errorf("%w: line %d: %s (%s)", ErrInvalidCustomConfig, lineNumber+1, key, reason)
 		}
+		// Not in blockedDirectives above because "yes" (the default, and
+		// what DirectiveReferences below recommends) is fine and expected
+		// to be used - only the value that actually weakens DNSSEC
+		// matters. Found in review: this used to only produce a
+		// low-severity "warning" advisory (adviseCustom below, alongside
+		// cosmetic settings like hide-identity), which a user could
+		// activate anyway - a real DNSSEC-stripping bypass deserves the
+		// same hard refusal every other DNSSEC weakening already gets
+		// (val-permissive-mode, the trust-anchor directives, and
+		// domain-insecure above).
+		if key == "harden-dnssec-stripped" && strings.HasSuffix(strings.ToLower(strings.TrimSpace(line)), ": no") {
+			return "", fmt.Errorf("%w: line %d: harden-dnssec-stripped: no (DNSSEC validation must not be weakened)", ErrInvalidCustomConfig, lineNumber+1)
+		}
 	}
 	return content, nil
 }
@@ -207,27 +220,37 @@ func directiveKey(line string) string {
 }
 
 var blockedDirectives = map[string]string{
-	"include":                      "additional file access is not allowed",
-	"include-toplevel":             "additional file access is not allowed",
-	"chroot":                       "container security is managed by RootGuard",
-	"directory":                    "container paths are managed by RootGuard",
-	"username":                     "the container user is managed by RootGuard",
-	"logfile":                      "file logging is not allowed in the read-only container",
-	"pidfile":                      "runtime files are managed by the image",
-	"interface":                    "listen addresses are managed by RootGuard",
-	"port":                         "the resolver port is managed by RootGuard",
-	"remote-control":               "remote control is not exposed by RootGuard",
-	"control-enable":               "remote control is not exposed by RootGuard",
-	"control-interface":            "remote control is not exposed by RootGuard",
-	"server-key-file":              "secret and file paths are managed by RootGuard",
-	"server-cert-file":             "secret and file paths are managed by RootGuard",
-	"control-key-file":             "secret and file paths are managed by RootGuard",
-	"control-cert-file":            "secret and file paths are managed by RootGuard",
-	"root-hints":                   "trust bootstrap is managed by the Unbound image",
-	"auto-trust-anchor-file":       "DNSSEC trust anchors are managed by the Unbound image",
-	"trust-anchor-file":            "DNSSEC trust anchors are managed by the Unbound image",
-	"module-config":                "DNSSEC validation modules are managed by the Unbound image",
-	"val-permissive-mode":          "DNSSEC validation must not be weakened",
+	"include":                "additional file access is not allowed",
+	"include-toplevel":       "additional file access is not allowed",
+	"chroot":                 "container security is managed by RootGuard",
+	"directory":              "container paths are managed by RootGuard",
+	"username":               "the container user is managed by RootGuard",
+	"logfile":                "file logging is not allowed in the read-only container",
+	"pidfile":                "runtime files are managed by the image",
+	"interface":              "listen addresses are managed by RootGuard",
+	"port":                   "the resolver port is managed by RootGuard",
+	"remote-control":         "remote control is not exposed by RootGuard",
+	"control-enable":         "remote control is not exposed by RootGuard",
+	"control-interface":      "remote control is not exposed by RootGuard",
+	"server-key-file":        "secret and file paths are managed by RootGuard",
+	"server-cert-file":       "secret and file paths are managed by RootGuard",
+	"control-key-file":       "secret and file paths are managed by RootGuard",
+	"control-cert-file":      "secret and file paths are managed by RootGuard",
+	"root-hints":             "trust bootstrap is managed by the Unbound image",
+	"auto-trust-anchor-file": "DNSSEC trust anchors are managed by the Unbound image",
+	"trust-anchor-file":      "DNSSEC trust anchors are managed by the Unbound image",
+	"module-config":          "DNSSEC validation modules are managed by the Unbound image",
+	"val-permissive-mode":    "DNSSEC validation must not be weakened",
+	// domain-insecure disables DNSSEC validation for the named zone
+	// entirely - "." (the root zone) turns it off for the whole
+	// namespace. RootGuard already has a real, safe way to configure this
+	// (the guided private-domain/reverse-DNS setting, which renders it
+	// itself, scoped, from validated Go code - a separate path from this
+	// free-text expert editor entirely, so blocking it here doesn't touch
+	// that feature). Found in review: this was previously unrestricted
+	// here, contradicting docs.html's own claim that the expert editor
+	// "blocks... DNSSEC bypasses".
+	"domain-insecure":              "use the guided private-domain/reverse-DNS setting instead",
 	"tls-service-key":              "TLS listener secrets are managed by RootGuard",
 	"tls-service-pem":              "TLS listener secrets are managed by RootGuard",
 	"tls-port":                     "resolver listener ports are managed by RootGuard",
@@ -261,7 +284,7 @@ func adviseCustom(content string) []CustomAdvice {
 			advice = append(advice, CustomAdvice{ID: fmt.Sprintf("%s-%d", id, index+1), Severity: severity, Line: index + 1, Title: title, Description: description, Suggestion: suggestion})
 		}
 		switch {
-		case (key == "hide-identity" || key == "hide-version" || key == "harden-glue" || key == "harden-dnssec-stripped") && strings.HasSuffix(lower, ": no"):
+		case (key == "hide-identity" || key == "hide-version" || key == "harden-glue") && strings.HasSuffix(lower, ": no"):
 			add("hardening-disabled", "warning", "Schutzfunktion deaktiviert", "Diese Zeile schwächt Datenschutz oder DNS-Härtung.", "Nur bei einem nachgewiesenen Kompatibilitätsproblem deaktivieren.")
 		case key == "access-control" && strings.Contains(lower, " allow"):
 			add("access-control", "warning", "Zusätzlicher Client-Zugriff", "Eine Allow-Regel kann den erreichbaren Resolver-Kreis erweitern.", "Netzbereich eng begrenzen und niemals einen offenen Resolver erzeugen.")

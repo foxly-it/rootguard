@@ -2407,3 +2407,26 @@ separable pieces the same finding raised):
   longer-term redesign (a narrow Core-side endpoint the blockpage
   queries instead of ever holding real credentials at all), not a
   same-size fix as the others in this list.
+
+**Medium 2, fixed: expert config could disable DNSSEC entirely.**
+`blockedDirectives` in `rootguard-core/internal/unbound/custom.go`
+blocked `val-permissive-mode` and the trust-anchor directives, but not
+`domain-insecure` at all - a bare `domain-insecure: "."` disables DNSSEC
+validation for the whole namespace, not just one zone. Separately,
+`harden-dnssec-stripped: no` (accepting a stripped-DNSSEC-data attack
+instead of treating it as an error) only produced a soft "warning"
+advisory, lumped in with cosmetic settings like `hide-identity` - a user
+could activate it anyway. Both directly contradicted `docs.html`'s own
+claim (written earlier this same session) that the expert editor
+"blocks... DNSSEC bypasses".
+
+Fixed: `domain-insecure` added to `blockedDirectives` (doesn't affect the
+guided private-domain/reverse-DNS feature, which renders this directive
+itself from validated Go code - a separate path from this free-text
+editor entirely); `harden-dnssec-stripped: no` specifically (not the key
+unconditionally - `: yes`, the recommended default, must stay accepted)
+is now a hard `normalizeCustom` rejection instead of an `adviseCustom`
+warning, removed from that warning's case since it's now unreachable
+there. New regression test proves both refusals have teeth (reverted
+each, confirmed the test fails, restored) and that `harden-dnssec-
+stripped: yes` still passes.
