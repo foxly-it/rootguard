@@ -2456,3 +2456,31 @@ reliably fails on any OS) prove: logout's cookie is cleared even when
 persistence fails (reverted, confirmed the test fails, restored), and a
 broken-persist revoke still returns a clear error while the session
 stays gone from memory.
+
+**Medium 5, fixed: the destructive-action rate limit was bypassable under
+concurrency and shared across an account's sessions.** `guardDestructive`
+had the same `blocked()`-then-`recordFailure()` TOCTOU gap already fixed
+for login/recovery this session - many truly concurrent requests could
+all observe zero recorded uses and all be admitted before any got
+counted. Separately, it keyed the limiter by *username*, so every session
+the same admin account happens to have open (session inventory
+explicitly allows more than one) shared a single combined budget -
+directly contradicting the limiter's own documented purpose ("bound how
+much a single... session can do", right there in its own construction in
+`NewSessionAuth`).
+
+Fixed: `guardDestructive` now uses `beginAttempt`/`endAttempt` (every
+attempt counts, matching its pre-existing "bound request volume, not
+repeated wrong guesses" semantics), keyed by a new `authenticatedSessionID`
+helper (the session's own opaque `.ID`, already designed to be safe to
+hand out, not the bearer token itself) instead of username, falling back
+to the IP-based key only when there's genuinely no session. New
+per-session regression test proves the keying fix has teeth (reverted,
+confirmed the test fails with a 429 that should have succeeded,
+restored). The concurrency test is honest about its own limits: unlike
+login/recovery's PBKDF2-widened window, there's no expensive work between
+the old two calls here, so Go's scheduler rarely interleaves into that
+gap in a synchronous test even at high goroutine counts - confirmed the
+race is real a different way instead (a throwaway direct probe against
+the raw rate limiter, bypassing the HTTP layer, showed extra accepted
+attempts in roughly 1 of 3 runs).

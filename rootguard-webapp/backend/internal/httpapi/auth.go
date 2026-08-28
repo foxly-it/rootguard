@@ -747,6 +747,29 @@ func (a *SessionAuth) authenticatedUser(r *http.Request) (string, bool) {
 	return entry.Username, true
 }
 
+// authenticatedSessionID mirrors authenticatedUser but returns the
+// session's own opaque ID instead of the account's username - see
+// guardDestructive, which needs a key that's unique per browser session,
+// not shared across every session the same admin account happens to have
+// open. Deliberately a separate function rather than a third return value
+// on authenticatedUser: that one has several callers that only ever need
+// the boolean, and entry.ID (unlike the bearer token itself) is already
+// designed to be safe to hand out - see session.ID's own doc comment.
+func (a *SessionAuth) authenticatedSessionID(r *http.Request) (string, bool) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		return "", false
+	}
+	now := time.Now()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	entry, ok := a.sessions[cookie.Value]
+	if !ok || !entry.ExpiresAt.After(now) {
+		return "", false
+	}
+	return entry.ID, true
+}
+
 func (a *SessionAuth) deleteExpiredLocked(now time.Time) {
 	for token, entry := range a.sessions {
 		if !entry.ExpiresAt.After(now) {
