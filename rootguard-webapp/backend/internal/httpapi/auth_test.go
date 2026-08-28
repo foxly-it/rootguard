@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -284,6 +285,110 @@ func TestSessionInventoryListsAndRevokes(t *testing.T) {
 	handler.ServeHTTP(missingRevokeResponse, missingRevokeRequest)
 	if missingRevokeResponse.Code != http.StatusNotFound {
 		t.Fatalf("expected revoking an unknown session id to return 404, got %d", missingRevokeResponse.Code)
+	}
+}
+
+// TestLogoutClearsCookieEvenWhenPersistFails is the regression test for a
+// real gap found in review: the delete-cookie call used to run only after
+// persistLocked succeeded, so a persist failure returned a 500 with the
+// browser's session cookie still live. If a stale sessions.json then
+// revived that exact session on the next restart, the browser would still
+// be holding a valid cookie for it - silently undoing a logout the user
+// had already been told succeeded.
+func TestLogoutClearsCookieEvenWhenPersistFails(t *testing.T) {
+	dir := t.TempDir()
+	persistPath := filepath.Join(dir, "sessions.json")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, persistPath)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"admin","password":"secret"}`))
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	if loginResponse.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", loginResponse.Code)
+	}
+	cookie := loginResponse.Result().Cookies()[0]
+
+	// persistPath (a real file, just written by the login above) now
+	// stands in the way of MkdirAll for anything nested under it -
+	// os.MkdirAll(".../sessions.json/unwritable", ...) fails on any OS,
+	// portably and without needing root-independent permission tricks.
+	auth.persistencePath = filepath.Join(persistPath, "unwritable", "sessions.json")
+
+	logoutRequest := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	logoutRequest.Header.Set("Origin", "http://example.com")
+	logoutRequest.Host = "example.com"
+	logoutRequest.AddCookie(cookie)
+	logoutResponse := httptest.NewRecorder()
+	handler.ServeHTTP(logoutResponse, logoutRequest)
+	if logoutResponse.Code != http.StatusInternalServerError {
+		t.Fatalf("expected logout to surface the persist failure as 500, got %d", logoutResponse.Code)
+	}
+	logoutCookies := logoutResponse.Result().Cookies()
+	if len(logoutCookies) != 1 || logoutCookies[0].Value != "" || logoutCookies[0].MaxAge >= 0 {
+		t.Fatalf("expected the session cookie to be cleared even though persist failed, got %#v", logoutCookies)
+	}
+}
+
+// TestRevokeSessionSurvivesAPersistFailure proves revocation still takes
+// effect in memory immediately (an admin's revoke isn't silently
+// swallowed) and still surfaces a clear error, even when the durability
+// write is broken - a permanently broken write can never be made
+// durable by retrying, but the in-memory effect and the error response
+// must never regress into a silent success or a hang.
+func TestRevokeSessionSurvivesAPersistFailure(t *testing.T) {
+	dir := t.TempDir()
+	persistPath := filepath.Join(dir, "sessions.json")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, persistPath)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	login := func() *http.Cookie {
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"username":"admin","password":"secret"}`))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("expected login 200, got %d", response.Code)
+		}
+		return response.Result().Cookies()[0]
+	}
+	currentCookie := login()
+	login() // a second session to revoke
+
+	auth.mu.Lock()
+	var otherID string
+	for token, entry := range auth.sessions {
+		if token != currentCookie.Value {
+			otherID = entry.ID
+		}
+	}
+	auth.mu.Unlock()
+	if otherID == "" {
+		t.Fatal("expected to find the other session's id")
+	}
+
+	auth.persistencePath = filepath.Join(persistPath, "unwritable", "sessions.json")
+
+	start := time.Now()
+	revokeRequest := httptest.NewRequest(http.MethodDelete, "/api/auth/sessions/"+otherID, nil)
+	revokeRequest.Header.Set("Origin", "http://example.com")
+	revokeRequest.Host = "example.com"
+	revokeRequest.AddCookie(currentCookie)
+	revokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokeResponse, revokeRequest)
+	if revokeResponse.Code != http.StatusInternalServerError {
+		t.Fatalf("expected the persist failure to surface as 500, got %d", revokeResponse.Code)
+	}
+	if elapsed := time.Since(start); elapsed < 100*time.Millisecond {
+		t.Fatalf("expected the bounded retry to take at least ~100ms (2 retries x 50ms), took %s", elapsed)
+	}
+	auth.mu.Lock()
+	var stillPresent bool
+	for _, entry := range auth.sessions {
+		stillPresent = stillPresent || entry.ID == otherID
+	}
+	auth.mu.Unlock()
+	if stillPresent {
+		t.Fatal("expected the revoked session to stay removed from memory despite the persist failure")
 	}
 }
 

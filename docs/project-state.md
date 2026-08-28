@@ -2407,7 +2407,6 @@ separable pieces the same finding raised):
   longer-term redesign (a narrow Core-side endpoint the blockpage
   queries instead of ever holding real credentials at all), not a
   same-size fix as the others in this list.
-
 **Medium 2, fixed: expert config could disable DNSSEC entirely.**
 `blockedDirectives` in `rootguard-core/internal/unbound/custom.go`
 blocked `val-permissive-mode` and the trust-anchor directives, but not
@@ -2430,3 +2429,30 @@ warning, removed from that warning's case since it's now unreachable
 there. New regression test proves both refusals have teeth (reverted
 each, confirmed the test fails, restored) and that `harden-dnssec-
 stripped: yes` still passes.
+
+**Medium 3, fixed: logout could be silently undone by a restart.**
+`handleLogout` only cleared the browser's session cookie *after*
+`persistLocked` succeeded - a persist failure returned a 500 with the
+cookie still live, even though the comment right there claimed it was
+"already gone" (false: the delete-cookie call was below the early
+return, unreached). If a stale `sessions.json` then revived that exact
+session on the next restart, the browser would still hold a valid
+cookie for it, undoing a logout the user had already been told
+succeeded. `handleRevokeSession` had the same durability gap for an
+*admin*-revoked foreign session (no cookie involved there, but the same
+"in-memory revoked, not-yet-persisted, restart brings it back" window).
+
+Fixed: the cookie-clearing call in `handleLogout` now runs
+unconditionally, before the persist attempt - the browser-side effect of
+logout is durable regardless of what happens to the server-side record.
+`handleRevokeSession` gained a bounded retry (3 attempts, 50ms apart)
+around its persist call, closing the common transient-I/O-hiccup case;
+a permanently broken write still can't be made durable by retrying, so
+it still surfaces as an error rather than a silent success, and the
+revoked session still stays removed from memory immediately either way.
+Two new regression tests (a real broken-path filesystem trick: point
+`persistencePath` through a file that was just written, so `MkdirAll`
+reliably fails on any OS) prove: logout's cookie is cleared even when
+persistence fails (reverted, confirmed the test fails, restored), and a
+broken-persist revoke still returns a clear error while the session
+stays gone from memory.

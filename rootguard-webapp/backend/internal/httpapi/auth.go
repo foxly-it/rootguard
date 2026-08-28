@@ -572,17 +572,29 @@ func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	// Cleared unconditionally, before the persist attempt below, not
+	// after - found in review: this used to run only on the success path,
+	// so a persist failure returned early with the browser's cookie still
+	// live. The comment right here used to claim the cookie was "already
+	// gone" in that case, which was false: the delete-cookie call was
+	// below the early return, unreached. If a stale sessions.json then
+	// revived this exact session on the next restart, the browser would
+	// still be holding a cookie for it - silently undoing the logout the
+	// user had already gotten a "you're logged out" response for.
+	a.setSessionCookie(w, r, "", time.Unix(1, 0), -1)
+	w.Header().Set("Cache-Control", "no-store")
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		a.mu.Lock()
 		entry, existed := a.sessions[cookie.Value]
 		delete(a.sessions, cookie.Value)
 		persistErr := a.persistLocked()
 		a.mu.Unlock()
-		// Mirrors handleRevokeSession: a failed persist here can leave a
-		// stale sessions.json that revives this exact session on the next
-		// restart, even though the browser's own cookie is already gone -
-		// worth surfacing as an error rather than silently reporting a
-		// clean logout that isn't durable yet.
+		// The browser side of the logout is already durable at this point
+		// (cookie cleared above) regardless of what happens here - this is
+		// now purely about whether the *server's* revocation record
+		// survives a restart, worth surfacing as an error rather than
+		// silently reporting success on a revocation that isn't durable
+		// yet.
 		if persistErr != nil {
 			http.Error(w, "Unable to persist session revocation", http.StatusInternalServerError)
 			return
@@ -591,8 +603,6 @@ func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
 			a.recordAudit(auditLogout, entry.Username, clientAddress(r))
 		}
 	}
-	a.setSessionCookie(w, r, "", time.Unix(1, 0), -1)
-	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, map[string]any{"authenticated": false})
 }
 
@@ -676,7 +686,22 @@ func (a *SessionAuth) handleRevokeSession(w http.ResponseWriter, r *http.Request
 	}
 	var persistErr error
 	if found {
-		persistErr = a.persistLocked()
+		// Unlike a browser's own logout cookie, there's nothing else to
+		// clear here if this fails - the only durable record of the
+		// revocation *is* sessions.json, so a transient write failure
+		// (a momentary disk hiccup, not a persistently full disk) getting
+		// only one attempt was needless: found in review, a crash or
+		// restart before the next unrelated persist happened to succeed
+		// would revive the session an admin had just revoked. Bounded
+		// retry closes that common case without turning a rare, real
+		// write failure into a request that hangs.
+		for attempt := 0; attempt < 3; attempt++ {
+			persistErr = a.persistLocked()
+			if persistErr == nil {
+				break
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
 	a.mu.Unlock()
 
