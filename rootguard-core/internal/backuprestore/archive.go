@@ -93,9 +93,13 @@ func Extract(dataDir, passphrase string, encrypted io.Reader) (_ string, preview
 		// already been read successfully - the old > check let this
 		// iteration call archive.Next() one more time first, so a backup
 		// with MaxFiles+1 entries was silently accepted instead of
-		// rejected.
+		// rejected. Note this means an archive with exactly MaxFiles
+		// entries is rejected too, since nothing has looked past it yet
+		// to confirm a real MaxFiles+1th entry exists - found in review:
+		// the message used to claim "more than %d entries", which isn't
+		// always true at this point.
 		if count >= MaxFiles {
-			return "", Preview{}, fmt.Errorf("backup contains more than %d entries", MaxFiles)
+			return "", Preview{}, fmt.Errorf("backup contains too many entries (limit: %d)", MaxFiles)
 		}
 		header, err := archive.Next()
 		if errors.Is(err, io.EOF) {

@@ -2622,3 +2622,17 @@ larger restructure left for later since the practical exposure is low
 (fork-PR runs already get a read-only token from GitHub regardless of
 what a workflow declares, and same-repo runs push in that same job
 anyway).
+
+**Minor 1, fixed: backup-restore's entry-limit error message overclaimed
+what was found.** The guard rejects at `count >= MaxFiles`, i.e. as soon
+as `MaxFiles` entries have already been read successfully - without ever
+checking whether a real `MaxFiles+1`th entry exists (that's correct: see
+the surrounding comment for why `>=` and not `>`, from an earlier fix
+this session). But its message said "backup contains more than %d
+entries", which isn't always true at that point - an archive with
+*exactly* `MaxFiles` entries and no more triggers the same rejection with
+the same overclaiming message. Reworded to "backup contains too many
+entries (limit: %d)" - accurate regardless of which case triggered it.
+New regression test builds an archive with exactly `MaxFiles` (100000)
+entries and checks both that it's still rejected and that the message no
+longer says "more than" (revert-verified).
