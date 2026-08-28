@@ -2565,3 +2565,26 @@ can't silently start breaking under the new CSP.
 Not verified in a live browser (no local Docker daemon, same constraint
 as the rest of this session) - worth a manual DevTools-console check for
 CSP violations on the actual built SPA before the next release.
+
+**Medium 8, fixed (audit rated it "gering"/low): router-import allowed
+SSRF via redirects and arbitrary addresses.** `FritzBoxClient` only ever
+gave `address` a syntax check (`normalizeRouterAddress`); it was never
+restricted to plausible router locations, and its `http.Client` followed
+redirects with its default behavior. An admin (or anything able to drive
+this endpoint through them) could point host discovery at any reachable
+address, public or otherwise, or have a redirect steer the request - with
+its Digest `Authorization` header intact on a same-host redirect -
+somewhere else entirely.
+
+Fixed with the two changes the audit itself suggested: `CheckRedirect`
+now refuses every redirect outright, and a custom `DialContext` checks
+the *actually-dialed* remote IP - not the pre-resolution hostname, which
+closes a DNS-rebinding gap a string-only check would leave open - against
+private/link-local/loopback ranges only, rejecting anything globally
+routable. Five new tests: the happy path still works through both new
+guards (a real `httptest.Server` on loopback), redirect rejection is
+revert-verified against a real HTTP redirect, and the address-range logic
+is covered directly (a table test on the pure range-check function, and a
+dial-level test using a fake `net.Conn` with an arbitrary `RemoteAddr` so
+rejecting a public IP doesn't depend on outbound network access in CI) -
+both of those also revert-verified.

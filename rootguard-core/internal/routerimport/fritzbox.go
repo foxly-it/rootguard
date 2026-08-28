@@ -74,8 +74,70 @@ func NewFritzBoxClient(address string) (*FritzBoxClient, error) {
 	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
 	return &FritzBoxClient{
 		baseURL: "http://" + net.JoinHostPort(host, strconv.Itoa(fritzBoxDefaultPort)),
-		http:    &http.Client{Timeout: fritzBoxRequestTimeout},
+		http: &http.Client{
+			Timeout:       fritzBoxRequestTimeout,
+			CheckRedirect: rejectRedirects,
+			Transport:     &http.Transport{DialContext: dialPrivateOnly},
+		},
 	}, nil
+}
+
+// rejectRedirects found in review: address only ever gets a light
+// syntax check (normalizeRouterAddress), never a network-reachability
+// one, so a router responding with a redirect - or an attacker-supplied
+// address doing the same - could otherwise steer this client's request
+// (including, on a same-host redirect, its Digest Authorization header)
+// wherever it likes. Nothing about "import hosts from my router" needs a
+// redirect ever followed.
+func rejectRedirects(*http.Request, []*http.Request) error {
+	return fmt.Errorf("%w: router responded with a redirect, refusing to follow it", ErrRouterDiscovery)
+}
+
+// dialPrivateOnly is the other half of the same review finding: even
+// without redirects, address itself was never restricted to plausible
+// router locations, so this client would happily speak TR-064 to any
+// public IP an admin (or anything that can drive this endpoint through
+// them) supplied. Checking after the real dial, against the actually
+// -connected remote IP rather than the pre-resolution hostname, is what
+// closes DNS rebinding here too - a hostname that resolved to a private
+// address during an earlier check could otherwise repoint to a public
+// one by the time the real connection happens. Delegates the actual
+// connecting to rawDial, an indirection whose only purpose is letting
+// tests substitute a fake connection with an arbitrary RemoteAddr - real
+// callers always get the production dialer below.
+func dialPrivateOnly(ctx context.Context, network, address string) (net.Conn, error) {
+	return dialPrivateOnlyWith(ctx, network, address, rawDial)
+}
+
+var rawDial = (&net.Dialer{Timeout: fritzBoxRequestTimeout}).DialContext
+
+func dialPrivateOnlyWith(ctx context.Context, network, address string, dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
+	conn, err := dial(ctx, network, address)
+	if err != nil {
+		return nil, err
+	}
+	host, _, splitErr := net.SplitHostPort(conn.RemoteAddr().String())
+	if splitErr != nil {
+		conn.Close()
+		return nil, fmt.Errorf("%w: could not determine the dialed address", ErrRouterDiscovery)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !isRouterReachable(ip) {
+		conn.Close()
+		return nil, fmt.Errorf("%w: refusing to contact %s - not a private network address", ErrRouterDiscovery, host)
+	}
+	return conn, nil
+}
+
+// isRouterReachable accepts private (RFC 1918 / ULA), link-local, and
+// loopback addresses - the ranges a home or small-office router
+// plausibly sits on - and rejects everything globally routable.
+// Loopback is included mainly for testability (this package's own tests
+// exercise the client against httptest servers, which bind there); it's
+// also not meaningfully riskier than the private ranges above it for
+// this client's actual blast radius.
+func isRouterReachable(ip net.IP) bool {
+	return ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()
 }
 
 func normalizeRouterAddress(address string) (string, error) {

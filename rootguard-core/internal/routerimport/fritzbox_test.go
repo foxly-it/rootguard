@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -207,6 +208,131 @@ func TestDigestChallengeAuthorizationHeaderIsWellFormed(t *testing.T) {
 	for _, expected := range []string{`username="tester"`, `realm="F!Box SL"`, `nonce="abc123"`, `qop=auth`, `nc=00000001`, `uri="/upnp/control/hosts"`} {
 		if !strings.Contains(header, expected) {
 			t.Errorf("authorization header missing %q: %s", expected, header)
+		}
+	}
+}
+
+// newGuardedTestClient is like newTestClient, but with the production
+// http.Client configuration (redirect rejection, private-only dialing)
+// instead of a bare client - used by the tests below that specifically
+// exercise those guards, so the many tests above that don't care about
+// them can stay on the simpler client.
+func newGuardedTestClient(_ *testing.T, baseURL string) *FritzBoxClient {
+	return &FritzBoxClient{
+		baseURL: baseURL,
+		http: &http.Client{
+			Timeout:       fritzBoxRequestTimeout,
+			CheckRedirect: rejectRedirects,
+			Transport:     &http.Transport{DialContext: dialPrivateOnly},
+		},
+	}
+}
+
+// TestDiscoverHostsSucceedsThroughTheProductionGuards is the sanity check
+// that the two guards below don't break the ordinary case: a real
+// httptest.Server binds to loopback, which both guards must allow.
+func TestDiscoverHostsSucceedsThroughTheProductionGuards(t *testing.T) {
+	_, address := fritzBoxFixtureServer(t, false)
+	client := newGuardedTestClient(t, address)
+	result, err := client.DiscoverHosts(context.Background(), Credentials{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result.Hosts) != len(fixtureHosts) {
+		t.Fatalf("expected %d hosts, got %d", len(fixtureHosts), len(result.Hosts))
+	}
+}
+
+// TestDiscoverHostsRejectsRedirects is the regression test for a review
+// finding: nothing stopped this client from following a redirect
+// anywhere the router (or an attacker-supplied address) pointed it.
+func TestDiscoverHostsRejectsRedirects(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc(fritzBoxHostsControlURL, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://169.254.169.254/latest/meta-data/", http.StatusFound)
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+
+	client := newGuardedTestClient(t, server.URL)
+	_, err := client.DiscoverHosts(context.Background(), Credentials{})
+	if !errors.Is(err, ErrRouterDiscovery) || !strings.Contains(err.Error(), "redirect") {
+		t.Fatalf("expected a redirect-refused error, got %v", err)
+	}
+}
+
+// fakeAddr is a minimal net.Addr with a fixed, test-chosen IP - net.Pipe's
+// own addresses can't be customized, so a real net.Conn wrapper is used
+// instead to make dialPrivateOnlyWith see an arbitrary RemoteAddr without
+// any real network I/O.
+type fakeAddr struct{ ip string }
+
+func (a fakeAddr) Network() string { return "tcp" }
+func (a fakeAddr) String() string  { return net.JoinHostPort(a.ip, "80") }
+
+type fakeConn struct {
+	net.Conn
+	remote net.Addr
+}
+
+func (c fakeConn) RemoteAddr() net.Addr { return c.remote }
+
+// TestDialPrivateOnlyWithRejectsPublicAddresses is the regression test for
+// the other half of the same finding: even without a redirect, nothing
+// stopped this client from being pointed at a public IP directly. Uses a
+// fake connection instead of a real dial to a public address, both so the
+// test doesn't depend on outbound network access in CI and so it can't be
+// flaky about what a real public server happens to do.
+func TestDialPrivateOnlyWithRejectsPublicAddresses(t *testing.T) {
+	client, server := net.Pipe()
+	t.Cleanup(func() { client.Close(); server.Close() })
+
+	tests := map[string]bool{
+		"192.168.1.1":   true,
+		"10.0.0.1":      true,
+		"172.16.0.5":    true,
+		"127.0.0.1":     true,
+		"169.254.1.1":   true,
+		"fe80::1":       true,
+		"fd00::1":       true,
+		"8.8.8.8":       false,
+		"1.1.1.1":       false,
+		"93.184.216.34": false,
+	}
+	for ip, wantAllowed := range tests {
+		fake := func(context.Context, string, string) (net.Conn, error) {
+			return fakeConn{Conn: client, remote: fakeAddr{ip: ip}}, nil
+		}
+		_, err := dialPrivateOnlyWith(context.Background(), "tcp", "ignored:80", fake)
+		allowed := err == nil
+		if allowed != wantAllowed {
+			t.Errorf("ip %s: allowed = %v, want %v (err: %v)", ip, allowed, wantAllowed, err)
+		}
+	}
+}
+
+func TestIsRouterReachable(t *testing.T) {
+	tests := map[string]bool{
+		"192.168.1.1":  true,
+		"10.0.0.1":     true,
+		"172.31.255.1": true,
+		"127.0.0.1":    true,
+		"169.254.1.1":  true,
+		"fe80::1":      true,
+		"fd00::1":      true,
+		"::1":          true,
+		"8.8.8.8":      false,
+		"1.1.1.1":      false,
+		"2001:4860::1": false,
+		"0.0.0.0":      false,
+	}
+	for raw, want := range tests {
+		ip := net.ParseIP(raw)
+		if ip == nil {
+			t.Fatalf("test bug: %q does not parse as an IP", raw)
+		}
+		if got := isRouterReachable(ip); got != want {
+			t.Errorf("isRouterReachable(%s) = %v, want %v", raw, got, want)
 		}
 	}
 }
