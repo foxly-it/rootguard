@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/stack"
 )
 
 const (
@@ -28,6 +30,10 @@ var (
 
 type CommandRunner func(context.Context, ...string) ([]byte, error)
 type VerifyFunc func(context.Context, string) error
+
+// AttestationVerifierFunc gates activation, not just display - see
+// AttestationVerifier's doc comment on Options.
+type AttestationVerifierFunc func(ctx context.Context, service, image string) error
 
 type ServiceSpec struct {
 	Name                string
@@ -103,22 +109,35 @@ type Options struct {
 	Services       []ServiceSpec
 	VerifyAttempts int
 	RetryDelay     time.Duration
+	// AttestationVerifier gates activation immediately before selectImage:
+	// found in review that the only place attestation was ever checked was
+	// the stack status API (what the dashboard displays), never here - a
+	// pulled, digest-resolved image was activated the moment its post-swap
+	// health check passed, no attestation check anywhere in between,
+	// contradicting docs/threat-model.md's explicit claim that releases are
+	// "checked via Cosign... before activation". Defaults to
+	// stack.RequireAttestation, which already knows which services have a
+	// real RootGuard signing policy (AdGuard doesn't and is let through
+	// unconditionally) - injectable here purely so tests can simulate a
+	// failed/missing/unavailable attestation without a real cosign binary.
+	AttestationVerifier AttestationVerifierFunc
 }
 
 type Manager struct {
-	mu              sync.RWMutex
-	status          Status
-	dataDir         string
-	composeDir      string
-	composeProject  string
-	run             CommandRunner
-	verify          VerifyFunc
-	specs           map[string]ServiceSpec
-	selected        map[string]string
-	backupRetention int
-	backupError     string
-	verifyAttempts  int
-	retryDelay      time.Duration
+	mu                  sync.RWMutex
+	status              Status
+	dataDir             string
+	composeDir          string
+	composeProject      string
+	run                 CommandRunner
+	verify              VerifyFunc
+	attestationVerifier AttestationVerifierFunc
+	specs               map[string]ServiceSpec
+	selected            map[string]string
+	backupRetention     int
+	backupError         string
+	verifyAttempts      int
+	retryDelay          time.Duration
 }
 
 func NewManager(options Options) *Manager {
@@ -131,6 +150,9 @@ func NewManager(options Options) *Manager {
 	if options.Verify == nil {
 		options.Verify = func(context.Context, string) error { return nil }
 	}
+	if options.AttestationVerifier == nil {
+		options.AttestationVerifier = stack.RequireAttestation
+	}
 	if options.VerifyAttempts <= 0 {
 		options.VerifyAttempts = 30
 	}
@@ -138,16 +160,17 @@ func NewManager(options Options) *Manager {
 		options.RetryDelay = time.Second
 	}
 	manager := &Manager{
-		dataDir:         options.DataDir,
-		composeDir:      options.ComposeDir,
-		composeProject:  options.ComposeProject,
-		run:             options.Run,
-		verify:          options.Verify,
-		specs:           make(map[string]ServiceSpec, len(options.Services)),
-		selected:        map[string]string{},
-		backupRetention: DefaultBackupRetention,
-		verifyAttempts:  options.VerifyAttempts,
-		retryDelay:      options.RetryDelay,
+		dataDir:             options.DataDir,
+		composeDir:          options.ComposeDir,
+		composeProject:      options.ComposeProject,
+		run:                 options.Run,
+		verify:              options.Verify,
+		attestationVerifier: options.AttestationVerifier,
+		specs:               make(map[string]ServiceSpec, len(options.Services)),
+		selected:            map[string]string{},
+		backupRetention:     DefaultBackupRetention,
+		verifyAttempts:      options.VerifyAttempts,
+		retryDelay:          options.RetryDelay,
 		status: Status{
 			State:     StateIdle,
 			Message:   "Noch keine Update-Prüfung durchgeführt.",
@@ -330,6 +353,12 @@ func (m *Manager) update(service string) {
 			Message: "Der Dienst verwendet bereits das aktuelle Image.", CreatedAt: time.Now().UTC(),
 		})
 		m.finish(service, currentImage, oldID, candidateID, false, "Der Dienst verwendet bereits das aktuelle Image.")
+		return
+	}
+
+	m.setProgress(service, "Prüfe die Release-Attestierung des Ziel-Images.")
+	if err := m.attestationVerifier(ctx, service, targetImage); err != nil {
+		m.fail(service, fmt.Errorf("attestation: %w", err))
 		return
 	}
 

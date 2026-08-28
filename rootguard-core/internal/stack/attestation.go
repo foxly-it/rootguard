@@ -3,6 +3,7 @@ package stack
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
@@ -70,6 +71,32 @@ var attestationRun attestationRunner = runAttestationCommand
 
 func verifyReleaseAttestation(ctx context.Context, service, image string) (string, string) {
 	return verifyReleaseAttestationWith(ctx, service, image, attestationRun, time.Now)
+}
+
+// RequireAttestation gates activation, not just display: found in review
+// that CheckStackAttestations above was only ever wired into the stack
+// status API (what the dashboard shows), never into the updater's actual
+// update() path - a pulled, digest-resolved image gets activated as soon
+// as its post-swap health check passes, with no attestation check in
+// between at all, contradicting docs/threat-model.md's explicit claim that
+// releases are "checked via Cosign against the signed SLSA provenance
+// before activation". Call this right before the point of no return
+// (selectImage/compose up) instead. A service with no RootGuard signing
+// policy (AdGuard - a third-party image, see attestationPolicies) has
+// nothing to attest and is deliberately let through; every other service
+// must come back "verified" and nothing else - "missing", "failed",
+// "unavailable", and even an unexpected "not_applicable" (e.g. image not
+// yet digest-qualified, which should never happen at this call site but
+// fails closed if it somehow does) are all refused.
+func RequireAttestation(ctx context.Context, service, image string) error {
+	if _, supported := attestationPolicies[service]; !supported {
+		return nil
+	}
+	status, _ := verifyReleaseAttestation(ctx, service, image)
+	if status == "verified" {
+		return nil
+	}
+	return fmt.Errorf("release attestation for %s (%s) is %s, refusing to activate", service, image, status)
 }
 
 func verifyReleaseAttestationWith(ctx context.Context, service, image string, run attestationRunner, now func() time.Time) (string, string) {

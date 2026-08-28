@@ -151,16 +151,17 @@ func decodeTargetOverrides(body io.Reader) (map[string]string, error) {
 type runner func(context.Context, ...string) ([]byte, error)
 
 type manager struct {
-	mu             sync.RWMutex
-	status         status
-	specs          []serviceSpec
-	dataDir        string
-	composeFile    string
-	projectName    string
-	run            runner
-	httpClient     *http.Client
-	skipPull       bool
-	verifyAttempts int
+	mu                  sync.RWMutex
+	status              status
+	specs               []serviceSpec
+	dataDir             string
+	composeFile         string
+	projectName         string
+	run                 runner
+	httpClient          *http.Client
+	skipPull            bool
+	verifyAttempts      int
+	attestationVerifier attestationVerifierFunc
 }
 
 func main() {
@@ -191,6 +192,16 @@ func main() {
 		runDocker,
 	)
 	manager.skipPull = strings.EqualFold(os.Getenv("ROOTGUARD_UPDATER_SKIP_PULL"), "true")
+	// Same test-only escape hatch as ROOTGUARD_UPDATER_SKIP_PULL right
+	// above, for the same reason: integration/run.sh's E2E fixtures are
+	// locally built images with no real cosign attestation to check -
+	// unlike SKIP_PULL, this one disables a real security control, so it's
+	// worth spelling out plainly: any deployment that sets this in
+	// production loses the activation gate this update added entirely.
+	// Nothing in this codebase sets it outside integration/compose.e2e.yaml.
+	if strings.EqualFold(os.Getenv("ROOTGUARD_UPDATER_SKIP_ATTESTATION"), "true") {
+		manager.attestationVerifier = func(context.Context, string, string) error { return nil }
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
@@ -264,8 +275,9 @@ func newManager(dataDir, composeFile, projectName string, specs []serviceSpec, r
 	m := &manager{
 		dataDir: dataDir, composeFile: composeFile, projectName: projectName,
 		specs: specs, run: run, httpClient: &http.Client{Timeout: 8 * time.Second},
-		verifyAttempts: 45,
-		status:         status{State: stateIdle, Message: "Noch keine Control-Plane-Prüfung durchgeführt.", UpdatedAt: time.Now().UTC()},
+		verifyAttempts:      45,
+		attestationVerifier: verifyAttestation,
+		status:              status{State: stateIdle, Message: "Noch keine Control-Plane-Prüfung durchgeführt.", UpdatedAt: time.Now().UTC()},
 	}
 	for _, spec := range specs {
 		m.status.Services = append(m.status.Services, serviceStatus{
@@ -406,6 +418,11 @@ func (m *manager) update(targetImages map[string]string) {
 					return
 				}
 			}
+		}
+		m.progress("Prüfe die Release-Attestierung von " + spec.DisplayName + ".")
+		if err := m.attestationVerifier(ctx, spec.Name, targetImage); err != nil {
+			m.fail(fmt.Errorf("attestation: %w", err))
+			return
 		}
 		candidateImages[spec.Name] = targetImage
 		candidateIDs[spec.Name] = candidateID

@@ -188,6 +188,7 @@ func TestUpdateUsesResolveTargetWhenSet(t *testing.T) {
 			ResolveTarget: func(context.Context) (string, error) { return "unbound:resolved", nil },
 			BackupPaths:   []string{"/etc/unbound/unbound.d"},
 		}},
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
 			case "inspect":
