@@ -1391,3 +1391,50 @@ continuing to enumerate every spelling of the unsafe one a future
 Unbound-accepted quoting or aliasing might produce. `custom_test.go`
 gained regression cases for both quoted-`no` spellings, an ambiguous
 non-yes/no value, and quoted-`yes` acceptance (must still be allowed).
+
+**Critical, fixed: the guided setup's first-ever deploy would refuse
+activation of a real, correctly signed release image.** Round 2 wired
+`stack.RequireAttestation` into `installer.Manager`, gating both
+`deploy()` and `restoreDeploy()` right before `compose up`. It called
+that gate with `Options.UnboundImage`/`Options.BlockpageImage`
+unchanged, though - plain `repo:tag` references, exactly what a release
+hands the installer (see `release-alpha.yml`). `RequireAttestation`
+requires an explicit `repo@sha256:...` reference and short-circuits to
+`not_applicable` - itself a hard refusal, not a skip - for anything else,
+without ever invoking cosign. So every real deploy, correctly signed
+release included, failed here the same way a forged one would have, just
+for an unrelated reason: this would have surfaced as soon as a genuine
+end user ran the actual guided setup against a real release, not just in
+this review.
+
+Root cause was purely a missing digest-resolution step: `rootguard-updater`
+and `internal/updater` both already resolve a freshly pulled image to its
+digest before their own attestation check (`digestFromPullOutput`/
+`digestQualify`), but `installer.Manager` never had the equivalent.
+Fixed with a `resolveDigest`/`resolveAndPinDigests` pair in
+`internal/installer/manager.go` - a third by-hand copy of the same
+~15-line `docker image inspect` lookup (separate Go modules, and here
+also a separate manager with its own `CommandRunner` wiring, can't share
+an `internal/` package for it; see `digestQualify`'s own comment for why
+a shared module wasn't judged worth it). Called right after `pull`
+succeeds and before `create`/`start`: resolves Unbound's (and, when
+enabled, Blockpage's) pulled image to its digest, then rewrites the
+stack definition to reference that digest instead of the original tag -
+so `create`/`up` actually starts the exact image that was attested, not
+whatever the tag points at if it moves in between attestation and
+activation.
+
+New regression test `TestDeployResolvesDigestBeforeAttestation`
+deliberately leaves `AttestationVerifier` unset (defaults to the real
+`stack.RequireAttestation`, unlike every existing attestation test here,
+which uses a fake verifier that can't catch a bug in what's actually
+passed to it) and asserts the resulting failure is a real, failed
+attestation attempt - not the `not_applicable` short-circuit that made
+every deploy fail closed regardless of whether the image was ever really
+signed - plus that the written `compose.yaml` references the resolved
+digest, not the original mutable tag. Also updated the existing
+`TestWriteComposeSelectsBetaImage` and both call sites in `deploy()`/
+`restoreDeploy()` for `writeCompose`'s new explicit
+`(unboundImage, blockpageImage string)` parameters (previously read
+`m.unboundImage`/`m.blockpageImage` directly, which the digest-resolved
+rewrite now needs to override).
