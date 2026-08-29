@@ -82,6 +82,17 @@ func TestCustomConfigRejectsDNSSECBypasses(t *testing.T) {
 		"server:\n    domain-insecure: \".\"\n",
 		"server:\n    domain-insecure: \"example.internal\"\n",
 		"server:\n    harden-dnssec-stripped: no\n",
+		// Regression cases found in review: the old check matched a
+		// literal ": no" suffix against the raw line, which missed every
+		// one of these - all ordinary, spec-legal Unbound config shapes.
+		"server:\n    harden-dnssec-stripped:    no\n",         // extra internal whitespace
+		"server:\n    harden-dnssec-stripped: no # allow it\n", // trailing comment
+		"server:\n    harden-dnssec-stripped:no\n",             // no space after the colon
+		// Not itself a regression (the old whole-line lowercase already
+		// covered this) - kept as a companion case now that the value
+		// comparison is its own explicit EqualFold rather than inherited
+		// from a whole-line lowercase.
+		"server:\n    HARDEN-DNSSEC-STRIPPED: NO\n",
 	} {
 		if _, err := normalizeCustom(content); !errors.Is(err, ErrInvalidCustomConfig) {
 			t.Fatalf("expected policy rejection for %q, got %v", content, err)
