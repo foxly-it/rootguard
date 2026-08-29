@@ -10,6 +10,25 @@ on:
         description: Version without the leading v
         required: true
         default: 0.1.0-alpha.4
+      source_sha:
+        description: >-
+          Exact commit to build from (set by release-version-bump.yml).
+          Leave empty to build from whatever the dispatch ref resolves to
+          - only safe for a manual by-hand dispatch, never for automation.
+        required: false
+        default: ""
+
+# Serializes the entire release process, not just this workflow -
+# release-version-bump.yml pushes to main and shares this same group name
+# deliberately. Found in review: without this, two release attempts
+# running at once (a manual dispatch overlapping the scheduled/automated
+# one, or two manual dispatches) could each push conflicting pin/tag
+# commits to main, or move the same release tag out from under each
+# other. cancel-in-progress is deliberately false - a partially-applied
+# git push or a half-published set of images is worse than a queued wait.
+concurrency:
+  group: release-pipeline
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -22,8 +41,21 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       value: ${{ steps.release.outputs.value }}
+      # source_ref is what every other job's checkout below actually
+      # builds from - found in review: every job used to default to
+      # actions/checkout's own ambient github.sha, which for a
+      # workflow_dispatch run is resolved from the *ref* (main) at
+      # whatever moment this run's checkout actually happens - not
+      # necessarily the exact commit whoever/whatever triggered the
+      # dispatch intended, if anything else pushed to main in between.
+      # inputs.source_sha (set by release-version-bump.yml) pins it
+      # explicitly; a manual by-hand dispatch with no source_sha still
+      # gets today's previous behavior (github.sha).
+      source_ref: ${{ inputs.source_sha || github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
       - id: release
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
@@ -49,9 +81,12 @@ jobs:
           echo "value=$version" >> "$GITHUB_OUTPUT"
 
   test:
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.version.outputs.source_ref }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: rootguard-core/go.mod
@@ -110,6 +145,8 @@ jobs:
             context: rootguard-blockpage
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.version.outputs.source_ref }}
       - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
@@ -152,11 +189,11 @@ jobs:
           # with the RootGuard release tag.
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ needs.version.outputs.source_ref }}
             org.opencontainers.image.created=${{ steps.build-time.outputs.value }}
           build-args: |
             VERSION=${{ needs.version.outputs.value }}
-            COMMIT=${{ github.sha }}
+            COMMIT=${{ needs.version.outputs.source_ref }}
       - name: Attest published image provenance
         if: steps.existing.outputs.exists != 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
@@ -219,6 +256,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ needs.version.outputs.source_ref }}
           fetch-depth: 0
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -294,6 +332,7 @@ jobs:
         run: ./scripts/check-site-facts.sh
 
       - name: Commit updated pins
+        id: commit-pins
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -307,6 +346,13 @@ jobs:
           git fetch origin main
           git rebase origin/main
           git push origin HEAD:main
+          # Recorded so the next step can point the release tag at exactly
+          # this commit, instead of re-fetching origin/main a second time
+          # later and risking a *different* race: something else landing
+          # on main in the window between this push and that later fetch
+          # would otherwise move the tag past a commit this release never
+          # actually built or tested.
+          echo "pin_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The release tag is created before this job ever runs (by
       # release-version-bump.yml, or by hand for a workflow_dispatch run),
@@ -321,11 +367,23 @@ jobs:
       # Idempotent: a no-op if the tag already points at the pinned commit.
       - name: Point the release tag at the pin-update commit
         id: point-tag
+        env:
+          # Set only when "Commit updated pins" actually pushed a new
+          # commit - the exact one to point the tag at, no re-fetch
+          # needed. Empty on its idempotent "nothing to commit" path
+          # (pins already matched), where re-fetching origin/main's
+          # current tip below is the correct, pre-existing fallback:
+          # nothing this release itself needs to add is missing from it.
+          PIN_COMMIT: ${{ steps.commit-pins.outputs.pin_commit }}
         run: |
           set -euo pipefail
           tag="v${{ needs.version.outputs.value }}"
-          git fetch origin main
-          target="$(git rev-parse origin/main)"
+          if [ -n "$PIN_COMMIT" ]; then
+            target="$PIN_COMMIT"
+          else
+            git fetch origin main
+            target="$(git rev-parse origin/main)"
+          fi
           # Recorded as a step output either way (before the idempotent
           # early-exit below) - the release notes' "Build provenance"
           # section needs it regardless of whether this run actually moved
@@ -404,7 +462,7 @@ jobs:
             echo
             echo "## Build provenance"
             echo
-            echo "- Published images were built from commit \`${{ github.sha }}\` - matches each image's \`org.opencontainers.image.revision\` label and provenance attestation."
+            echo "- Published images were built from commit \`${{ needs.version.outputs.source_ref }}\` - matches each image's \`org.opencontainers.image.revision\` label and provenance attestation."
             echo "- This tag (\`v${{ needs.version.outputs.value }}\`) points at \`${{ steps.point-tag.outputs.pin_commit }}\`, one commit ahead - the pin update that records this release's own image digests in \`compose.release.yaml\`/\`.env.release.example\`."
           } >> /tmp/release-notes.md
 
@@ -473,6 +531,8 @@ jobs:
       ROOTGUARD_WEB_PORT: "18080"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.version.outputs.source_ref }}
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
         with:
           registry: ghcr.io
@@ -537,6 +597,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ needs.version.outputs.source_ref }}
           fetch-depth: 0
 
       - name: Determine the previous published release

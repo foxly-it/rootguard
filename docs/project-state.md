@@ -2967,3 +2967,46 @@ independently re-verified a second time before committing, after an
 early copy-paste slip in this same change corrupted one digest and was
 caught by a `diff` between the two Dockerfiles' identical cosign pins
 before it ever reached a commit.
+
+**Medium, fixed: the release pipeline could build from, tag, or attribute
+provenance to the wrong commit under a race.** Two distinct races, both
+from trusting a mutable git ref re-resolved at a *later* moment than
+when the intent to release was actually captured:
+
+1. `release-version-bump.yml` dispatched `release-alpha.yml` with
+   `--ref main` and no pinned commit. `github.sha` for that dispatched
+   run resolves from whatever `main` is *when its own checkout actually
+   runs* - not necessarily the commit `release-version-bump.yml` just
+   committed and tagged, if anything else landed on `main` in the
+   window between the two. Every job's checkout, the published images'
+   `org.opencontainers.image.revision` label and `COMMIT` build-arg, and
+   the release notes' own provenance section all inherited this
+   ambiguity.
+2. `update-alpha-pins`'s "Point the release tag" step re-fetched
+   `origin/main`'s tip at that later point, independent of what its own
+   preceding "Commit updated pins" step had just pushed - a second,
+   narrower race window with the same shape.
+
+Fixed by threading an explicit commit through instead of re-resolving a
+ref: `release-version-bump.yml` now pushes commit+tag atomically
+(`git push --atomic`, closing the window between the two ref updates
+too) and passes the exact resulting SHA as a new `source_sha`
+`workflow_dispatch` input; `release-alpha.yml`'s `version` job resolves
+`source_ref` once (`inputs.source_sha || github.sha` - a manual dispatch
+with no `source_sha` keeps today's behavior) and every other job's
+checkout, the image labels, and the release notes all reference that
+same value. The tag-move step now uses the exact commit
+"Commit updated pins" just pushed (captured as that step's own output)
+instead of re-fetching `origin/main`, falling back to the fetch only on
+its pre-existing idempotent "nothing to commit" path, where there's no
+"just pushed" commit to reference. Both workflows also gained a shared
+`concurrency: group: release-pipeline` lock (the audit's own
+recommendation) - previously absent entirely, so two overlapping release
+attempts could have raced each other's pushes directly, a strictly worse
+version of the same problem.
+
+Workflow-only change with no way to exercise a real release run in CI -
+verified locally: YAML parses on both files, `git push --atomic` tested
+against a real local bare repo (both refs land in one transaction), and
+the new conditional shell logic (prefer the captured commit, fall back
+to a fresh fetch only when nothing was pushed) checked standalone.
