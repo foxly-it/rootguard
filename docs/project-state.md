@@ -2949,3 +2949,21 @@ PR touching `rootguard-core` right now. Bumped via `go get
 golang.org/x/crypto@v0.55.0 && go mod tidy` (pulled `golang.org/x/sys`
 along with it); `rootguard-updater`/`rootguard-webapp/backend` don't
 depend on it at all, so this is scoped to `rootguard-core` alone.
+
+**Medium, fixed: build-time base images weren't digest-pinned.**
+`golang:1.26-alpine`/`docker:29-cli` (`rootguard-core`, `rootguard-updater`)
+and `node:22-bookworm`/`golang:1.26-bookworm` (`rootguard-webapp`'s two
+builder stages) were still tag-only - `rootguard-unbound`,
+`rootguard-blockpage`, cosign, and the webapp runtime's own
+`gcr.io/distroless` base were already digest-pinned, this closes the
+remaining gap. Matters even for a builder stage that never ships in the
+final image: it's what compiled the shipped binary, so a repointed tag
+(a compromised or re-pushed upstream image) could tamper with the build
+toolchain itself without any change to this repo.
+
+Digests resolved live against the real registry (`docker buildx
+imagetools inspect <image> --format '{{.Manifest.Digest}}'`) and
+independently re-verified a second time before committing, after an
+early copy-paste slip in this same change corrupted one digest and was
+caught by a `diff` between the two Dockerfiles' identical cosign pins
+before it ever reached a commit.
