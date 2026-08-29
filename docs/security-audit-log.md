@@ -2052,3 +2052,22 @@ platforms, correct label on both) passed cleanly, since nothing checked
 *which* two. Now compares the sorted platform key set against the exact
 pair the publish job's build matrix always produces
 (`["linux/amd64","linux/arm64"]`), not just its length.
+
+**Medium, fixed: a failed `updates.yaml` write still left the new image
+selected in `state.json`.** `selectImage` set `m.selected[service]` to
+the new image *before* persisting - a persist failure (updates.yaml's
+own write failing, while state.json's own write inside the same attempt
+succeeded, exactly what round 4's own fix guarantees) still left that
+new image selected, both in memory and on disk, even though every real
+caller treats a `selectImage` failure as the whole operation failing and
+rolls back everything else it already did (volume ownership migration,
+the container swap that never happens). `manager_test.go`'s own round-4
+test explicitly demonstrated this as the expected behavior. `selectImage`
+now reverts the selection (and re-persists that reversion - state.json's
+own rename still isn't blocked by updates.yaml failing again, per round
+4's design) before returning the error, so a failed operation means
+nothing changed, full stop. The two round-4 tests that asserted the old
+behavior now exercise `persistLocked` directly instead (still correctly
+proving that lower-level, still-true property); a new
+`TestSelectImageRevertsSelectionOnPersistFailure` proves the higher-level
+revert.
