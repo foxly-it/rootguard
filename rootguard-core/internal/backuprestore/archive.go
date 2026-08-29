@@ -88,25 +88,27 @@ func Extract(dataDir, passphrase string, encrypted io.Reader) (_ string, preview
 	seen := map[string]bool{}
 	var manifestData []byte
 	var expanded int64
-	for count := 0; ; count++ {
-		// >= , not > : at count == MaxFiles, exactly MaxFiles entries have
-		// already been read successfully - the old > check let this
-		// iteration call archive.Next() one more time first, so a backup
-		// with MaxFiles+1 entries was silently accepted instead of
-		// rejected. Note this means an archive with exactly MaxFiles
-		// entries is rejected too, since nothing has looked past it yet
-		// to confirm a real MaxFiles+1th entry exists - found in review:
-		// the message used to claim "more than %d entries", which isn't
-		// always true at this point.
-		if count >= MaxFiles {
-			return "", Preview{}, fmt.Errorf("backup contains too many entries (limit: %d)", MaxFiles)
-		}
+	var count int
+	for {
 		header, err := archive.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
 			return "", Preview{}, fmt.Errorf("read backup archive: %w", err)
+		}
+		// Counted (and checked) only after a real entry has actually been
+		// read - found in a follow-up review: the previous version
+		// checked count *before* calling archive.Next(), against a
+		// pre-loop-body count that had already reached MaxFiles once
+		// exactly MaxFiles entries were read - rejecting an archive with
+		// precisely MaxFiles entries (the limit, not over it) without
+		// ever looking far enough to confirm a real MaxFiles+1th entry
+		// exists. Incrementing here instead means the guard only fires
+		// once that extra entry has been genuinely read.
+		count++
+		if count > MaxFiles {
+			return "", Preview{}, fmt.Errorf("backup contains too many entries (limit: %d)", MaxFiles)
 		}
 		name, err := safeName(header.Name)
 		if err != nil {

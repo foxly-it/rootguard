@@ -3252,3 +3252,30 @@ non-regression casing case, kept as a companion now that the value
 comparison is its own explicit step rather than inherited from a
 whole-line lowercase) - revert-verified: reverted to the old suffix
 match, confirmed the whitespace case fails, restored.
+
+**Small, fixed: an archive with exactly `MaxFiles` entries was still
+rejected.** Round 1 fixed this same off-by-one's *message* (it used to
+claim "more than %d entries", not always true at that point) but not the
+underlying semantics: the entry-count guard checked `count` - starting at
+0, incremented per loop iteration before `archive.Next()` was even called
+- against `MaxFiles` *before* reading each entry. Once exactly `MaxFiles`
+entries had already been read successfully, the guard fired on the next
+iteration without ever looking far enough to confirm a genuine
+`MaxFiles+1`th entry actually exists - rejecting an archive precisely at
+the limit, not over it.
+
+Fixed by restructuring the loop to count (and check) only after a real
+entry has actually been read: `count++` moved to immediately after a
+successful `archive.Next()`, with the guard now `count > MaxFiles` -
+`MaxFiles` entries read is no longer over the limit, only the
+genuine `MaxFiles+1`th read trips it.
+
+`TestExtractAcceptsExactlyTheEntryLimit` builds an archive with exactly
+`MaxFiles` entries and confirms the entry-count guard no longer rejects
+it (deliberately narrower than "the whole restore succeeds" - a
+100000-entry archive's manifest would need matching hashes for every one
+of them, unrelated overhead for what this specifically targets; whatever
+Extract fails on afterward, here the always-expected missing manifest, is
+a separately-covered path). `TestExtractRejectsEntryCountOverTheLimit`
+is the counterpart: one entry over the limit is still correctly rejected,
+with the message a prior round already corrected staying accurate.
