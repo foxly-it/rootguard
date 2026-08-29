@@ -100,8 +100,44 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	root.HandleFunc("GET /api/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	// Deliberately registered on root, not apiMux - it must NOT sit behind
+	// requireBearerToken(deps.Token, ...) below, since deps.Token is Core's
+	// own admin token (also handed to the WebApp and the updater), far more
+	// powerful than anything this endpoint needs to expose. blockpage's
+	// nginx authenticates with its own, much narrower service token
+	// instead (checked inside the handler itself via
+	// AdGuard.VerifyBlockpageServiceToken) - found in review: blockpage
+	// used to hold the full AdGuard admin credentials directly (reversibly
+	// encoded, not even hashed) just to make this same check_host call
+	// itself; now only Core ever holds those. Go's ServeMux (1.22+)
+	// dispatches by longest/most-specific pattern match regardless of
+	// registration order, so this exact-path registration on root wins
+	// over the broader "/api/" one below - the same trick /api/health
+	// above already relies on.
+	root.HandleFunc("GET /api/blockpage/reason", blockpageReasonHandler(deps.AdGuard))
 	root.Handle("/api/", requireBearerToken(deps.Token, apiMux))
 	return root
+}
+
+func blockpageReasonHandler(manager *adguard.Manager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if token == "" || !manager.VerifyBlockpageServiceToken(token) {
+			writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+			return
+		}
+		host := r.URL.Query().Get("host")
+		reason, err := manager.ReasonForHost(r.Context(), host)
+		if err != nil {
+			status := http.StatusBadGateway
+			if errors.Is(err, adguard.ErrInvalidBlockpageHost) {
+				status = http.StatusBadRequest
+			}
+			writeError(w, status, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"reason": reason})
+	}
 }
 
 func unboundNetworkCapabilitiesHandler(manager *unbound.Manager) http.HandlerFunc {

@@ -1,6 +1,8 @@
 #!/bin/sh
-# Renders blockpage.conf from its template, substituting the AdGuard
-# Basic-Auth token Core publishes to the shared read-only volume.
+# Renders blockpage.conf from its template, substituting the narrow
+# service token Core publishes to the shared read-only volume - not an
+# AdGuard credential at all (see blockpage.conf.template's own comment on
+# /api/reason for why this changed from proxying straight to AdGuard).
 #
 # Deliberately self-contained (reads its own token, does its own envsubst
 # with an explicit variable allowlist, writes its own output) rather than
@@ -14,10 +16,10 @@
 # directory (see Dockerfile) and only this script ever touches it. A
 # missing or empty token degrades to an empty Authorization header rather
 # than failing the container start - the /api/reason location in the
-# template treats that as "unavailable", same as AdGuard being down.
+# template treats that as "unavailable", same as Core being unreachable.
 set -eu
 
-token="$(cat /etc/nginx/secrets/basic-auth-token 2>/dev/null || true)"
-ADGUARD_AUTH_TOKEN="$token" envsubst '${ADGUARD_AUTH_TOKEN}' \
+token="$(cat /etc/nginx/secrets/service-token 2>/dev/null || true)"
+BLOCKPAGE_SERVICE_TOKEN="$token" envsubst '${BLOCKPAGE_SERVICE_TOKEN}' \
   < /etc/nginx/blockpage.conf.template \
   > /etc/nginx/conf.d/blockpage.conf

@@ -2412,6 +2412,9 @@ separable pieces the same finding raised):
   longer-term redesign (a narrow Core-side endpoint the blockpage
   queries instead of ever holding real credentials at all), not a
   same-size fix as the others in this list.
+  **Follow-up (2026-08-29): done** - see the "blockpage no longer holds
+  any AdGuard credential" entry further down under "Follow-up review,
+  round 2" for the actual Core-side endpoint and service-token redesign.
 **Medium 2, fixed: expert config could disable DNSSEC entirely.**
 `blockedDirectives` in `rootguard-core/internal/unbound/custom.go`
 blocked `val-permissive-mode` and the trust-anchor directives, but not
@@ -3142,3 +3145,60 @@ was swept via `grep` before and after to confirm none were missed (the
 handful of remaining `value` references are all genuinely about the git
 tag/GitHub Release name, not a Docker image reference, and were left
 alone deliberately).
+
+**Fixed (not deferred - see the correction above): blockpage no longer
+holds any AdGuard credential.** Round 1 explicitly deferred this as a
+"longer-term redesign"; the user's own correction on this second review
+was direct: a mandate to fix a review's findings doesn't leave room for
+unilaterally downgrading one to "document only" because it looks bigger
+than the others, even when the review itself calls it a long-term
+recommendation. Implemented as originally scoped:
+
+`publishBlockpageAuthToken` (`base64(adguard_username+":"+adguard_password)`,
+written to the volume shared with the blockpage container) is gone.
+`Manager.publishBlockpageServiceToken` now writes a 32-byte random,
+AdGuard-unrelated token there instead, and a new `GET
+/api/blockpage/reason` endpoint in `rootguard-core/internal/api/routes.go`
+performs the actual AdGuard `check_host` call server-side - only Core
+ever holds the real AdGuard credentials now, and only returns the block
+`reason` string (the only field blockpage's own frontend, `meta.js`,
+actually reads). Registered on the root mux (not the bearer-token-gated
+`apiMux` subtree) with its own, much narrower auth check
+(`Manager.VerifyBlockpageServiceToken`, constant-time-compared) - putting
+it behind Core's own admin token (shared with the WebApp and the updater)
+would have been almost as bad as the problem being fixed. Host input is
+validated against an RFC-1123-style hostname pattern
+(`ErrInvalidBlockpageHost`) before ever reaching AdGuard's admin API.
+
+`rootguard-blockpage`'s nginx template and its `19-render-blockpage-conf.sh`
+entrypoint script both updated to match: `/api/reason` now proxies to
+`http://rootguard-core:8081/api/blockpage/reason?host=$host` with `Authorization:
+Bearer ${BLOCKPAGE_SERVICE_TOKEN}`, resolved the same Docker-embedded-DNS
+way the old direct-to-AdGuard proxy already was. Reachability confirmed by
+reading the actual network topology, not assumed: blockpage only joins the
+dynamically-rendered `rootguard-dns` network (see `renderCompose` in
+`installer/manager.go`), and Core is already `docker network connect`ed to
+that same network at deploy time (for its own DNSSEC-adjacent reasons,
+predating this fix) - so `rootguard-core:8081` was already reachable from
+there, no new network wiring needed.
+
+Regenerating the token on every `Bootstrap` call (rather than persisting
+and reusing one) is intentional, not an oversight: `installer.Manager`
+already re-renders blockpage's nginx config and reloads it
+(`docker exec rootguard-blockpage sh /docker-entrypoint.d/19-render-blockpage-conf.sh`
++ `nginx -s reload`) immediately after `Bootstrap` returns, in the same
+deploy step that existed before this fix - so there's no window where
+blockpage would be left holding a stale token.
+
+Tests: `adguard` package - the token is 32 random bytes (64 hex chars),
+provably unrelated to the AdGuard credentials, and round-trips through
+`VerifyBlockpageServiceToken` (accepts the real one, rejects a tampered
+one, rejects empty, fails closed before any `Bootstrap` has ever run);
+`ReasonForHost` proxies correctly and rejects malformed hosts. `api`
+package - the handler rejects a missing/wrong service token, rejects a
+malformed host with a valid token, and - the routing half of the fix,
+proven separately - a request bearing the service token (never Core's
+admin token) reaches past `requireBearerToken`, revert-verified: removing
+the route's own `root.HandleFunc` registration and re-running that exact
+test flips it to a 401, confirming the route precedence is what the test
+depends on, not something it would pass by accident either way.
