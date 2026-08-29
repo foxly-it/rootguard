@@ -3375,3 +3375,96 @@ navigation instead of upfront. `tsc -b`, `npm run lint`, and the existing
 26-test suite all stay clean - none of them render pages through `App.tsx`'s
 routing (the one component test, `AdGuard.test.tsx`, imports the page
 module directly), so none needed a `Suspense`-aware update.
+
+**Code-compression, revisited and partly implemented: the atomic-write
+pattern is now consistently fixed everywhere it's duplicated, not just in
+`rootguard-core`.** Round 1 explicitly judged a shared module "not worth
+it" for ~40 lines of stable atomic-write logic; the user re-raised this
+suggestion in this round's review. Re-examining it turned up something
+the compression framing alone wouldn't have: `rootguard-updater`
+(`writeAtomic` in `docker.go`) and `rootguard-webapp/backend`
+(`internal/httpapi`'s three separate call sites for credentials,
+sessions, and the audit log) still had the *exact* old, vulnerable
+`path+".tmp"` pattern this round's own `atomicfile.WriteFile` fix (see
+above) had just closed in `rootguard-core` alone - not concurrency-safe,
+follows an existing file/symlink at that name rather than refusing it,
+and silently inherits a stale leftover's permissions instead of applying
+the requested mode.
+
+Fixed by porting the same `os.CreateTemp`-based implementation into both
+other modules - a small local `writeAtomic`/`writeAtomicFile` function
+each, not a new shared Go module: separate Go modules in this repo can't
+share an `internal/` package directly (an existing architectural
+constraint, not new to this fix), and a real shared module would need
+its own versioning/dependency-management overhead for logic that rarely
+changes. Round 1's "not worth a new module" call stands - what changed is
+that leaving the *duplication* unfixed had also left the *bug* it
+inherited unfixed in two more places, which the original compression
+framing didn't surface. `rootguard-webapp/backend` additionally
+consolidated its own three previously-triplicated copies into one
+package-local helper (`atomicfile.go`), so this pass also delivers a
+literal reduction in duplicated code where a shared module wasn't
+warranted.
+
+Regression tests mirror `rootguard-core`'s own
+`TestWriteFileIgnoresStaleLegacyTempFile`: `rootguard-updater`'s
+`TestWriteAtomicIgnoresStaleLegacyTempFile` and
+`rootguard-webapp/backend`'s `TestWriteAtomicFileIgnoresStaleLegacyTempFile`
+both pre-plant a stale `path+".tmp"` at world-writable mode `0777` and
+confirm a fresh write is unaffected by it. Revert-verified in both
+modules: reverting to the old fixed-name implementation fails exactly
+the mode assertion (`0777` leaked through instead of the requested
+`0600`) in each.
+
+**Code-compression, done: `rootguard-webapp/Dockerfile` trimmed from 123
+to 60 lines.** Decorative box-drawn section headers, German inline
+comments, and doubled blank lines between stages made this file a clear
+outlier - `rootguard-core/Dockerfile` and `rootguard-updater/Dockerfile`
+never adopted that style, keeping comments only where they carry real
+information (a security rationale, a non-obvious decision). Trimmed to
+match: every substantive comment (the two digest-pinning rationales, the
+`ARG`-redeclaration note) is kept verbatim; everything else - headers,
+translated filler like "Nur Dependency Files kopieren" or "Sicherheit:
+kein root", and the extra blank lines - is gone.
+
+Verified mechanically, not just by eye: every non-comment, non-blank
+line (every `FROM`/`ARG`/`COPY`/`RUN`/`WORKDIR`/`LABEL`/`EXPOSE`/`USER`/
+`ENTRYPOINT` instruction) diffed byte-for-byte identical between the old
+and new file, sorted and compared with `diff` - confirming this is a
+pure comment/whitespace trim with zero functional change, not just an
+assumption. No local Docker daemon available to do a real build in this
+environment; the real build/push verification happens via this PR's own
+CI, which builds and pushes the actual multi-arch image from this exact
+file.
+
+**Code-compression, partly implemented: added `docs/release-process.md`,
+the architecture-level map `release-alpha.yml`'s own inline comments
+never tried to be.** The audit's suggestion had two halves: move some of
+the workflow's incident-driven explanations out to a doc, and extract its
+pin-update/compose-verification/release-notes logic into separate,
+independently-testable scripts (the pattern
+`scripts/lib/semver-validate.sh`/`scripts/bump-site-versions.sh` already
+use elsewhere in this same pipeline).
+
+Did the first half, deliberately scoped narrower than "move the
+comments": the workflow's own inline comments stay exactly where they
+are - they explain the specific, often incident-driven "why" behind
+individual steps, positioned right where a future maintainer would
+otherwise be tempted to "simplify" away a hard-won fix, which is the
+opposite of what moving them elsewhere would achieve. What was actually
+missing was the *overview* those comments don't individually provide -
+`docs/release-process.md` is new, additive documentation covering the
+trigger/identity flow, the build/test/security gate, the candidate-tag
+promotion model, the pin-update/tag-move/Release-creation sequence, and
+the upgrade-test rationale - written by reading the current workflow file
+directly and cross-checking every specific claim (job names, output
+names, the exact `docker buildx imagetools create` invocation, the
+`[skip ci]` commit message, the two referenced scripts' actual paths)
+against it via `grep`, not from memory.
+
+Deliberately did not attempt the second half (extracting pin-update/
+compose-verification/release-notes logic into standalone scripts) in this
+pass: a release pipeline is exactly the kind of file where a rushed
+refactor risks a real regression for a marginal readability gain,
+explicitly noted as a separate, future piece of work in the new doc's own
+closing section rather than folded in hastily here.
