@@ -457,7 +457,7 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 	}
 	_ = m.setStep("prepare", "running", "Writing the versioned RootGuard stack definition")
 	var err error
-	composePath, err = m.writeCompose(config)
+	composePath, err = m.writeCompose(config, m.unboundImage, m.blockpageImage)
 	if err != nil {
 		return fail("prepare", err)
 	}
@@ -467,6 +467,11 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 		return fail("pull", err)
 	}
 	_ = m.setStep("pull", "done", "Service images are available")
+	var unboundImage, blockpageImage string
+	composePath, unboundImage, blockpageImage, err = m.resolveAndPinDigests(ctx, config)
+	if err != nil {
+		return fail("create", err)
+	}
 	_ = m.setStep("create", "running", "Creating stopped containers and empty service volumes")
 	if _, err = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "create"); err != nil {
 		return fail("create", err)
@@ -478,7 +483,7 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 		return fail("restore", err)
 	}
 	_ = m.setStep("restore", "done", "Verified backup data is restored")
-	if err := m.verifyStackAttestation(ctx, config); err != nil {
+	if err := m.verifyStackAttestation(ctx, config, unboundImage, blockpageImage); err != nil {
 		return fail("start", err)
 	}
 	_ = m.setStep("start", "running", "Starting restored Unbound and AdGuard Home")
@@ -530,7 +535,7 @@ func (m *Manager) deploy(config Config) {
 		m.fail("prepare", err)
 		return
 	}
-	composePath, err := m.writeCompose(config)
+	composePath, err := m.writeCompose(config, m.unboundImage, m.blockpageImage)
 	if err != nil {
 		m.fail("prepare", err)
 		return
@@ -544,7 +549,12 @@ func (m *Manager) deploy(config Config) {
 	}
 	_ = m.setStep("pull", "done", "Service images are available")
 
-	if err := m.verifyStackAttestation(ctx, config); err != nil {
+	composePath, unboundImage, blockpageImage, err := m.resolveAndPinDigests(ctx, config)
+	if err != nil {
+		m.fail("start", err)
+		return
+	}
+	if err := m.verifyStackAttestation(ctx, config, unboundImage, blockpageImage); err != nil {
 		m.fail("start", err)
 		return
 	}
@@ -624,7 +634,7 @@ func (m *Manager) waitForUnbound(ctx context.Context) error {
 	}
 }
 
-func (m *Manager) writeCompose(config Config) (string, error) {
+func (m *Manager) writeCompose(config Config, unboundImage, blockpageImage string) (string, error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return "", fmt.Errorf("create installation data directory: %w", err)
 	}
@@ -632,7 +642,7 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 	if config.AdGuardChannel == "beta" {
 		adGuardImage = m.adGuardBetaImage
 	}
-	content, err := renderCompose(config, m.unboundImage, adGuardImage, m.blockpageImage, m.dnsNetworkCIDR)
+	content, err := renderCompose(config, unboundImage, adGuardImage, blockpageImage, m.dnsNetworkCIDR)
 	if err != nil {
 		return "", err
 	}
@@ -641,6 +651,64 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 		return "", fmt.Errorf("write stack definition: %w", err)
 	}
 	return path, nil
+}
+
+// resolveDigest turns a possibly-mutable "repo:tag" image reference into an
+// immutable "repo@sha256:..." one, using the digest of the image that was
+// just pulled locally. Found in review: verifyStackAttestation used to be
+// called with the plain, mutable image references from Options
+// (m.unboundImage/m.blockpageImage) - stack.RequireAttestation reports
+// "not_applicable" (and therefore refuses to activate) for anything
+// without an explicit "@sha256:" reference, so the very first deploy of a
+// real, correctly-signed release always failed here, since a release only
+// ever hands the installer a tag (or, for a release candidate, a
+// commit-scoped tag - see release-alpha.yml). Mirrors
+// rootguard-updater's own resolveTargetImage/digestQualify pattern for the
+// exact same reason - this is a third by-hand copy of that ~15-line
+// lookup (see internal/updater/github_release.go's digestQualify for the
+// first two and why a shared module wasn't judged worth it), now needed
+// here too since installer and updater are separate managers with their
+// own CommandRunner wiring.
+func (m *Manager) resolveDigest(ctx context.Context, image string) string {
+	if strings.Contains(image, "@sha256:") {
+		return image
+	}
+	repo, _, ok := strings.Cut(image, ":")
+	if !ok {
+		return image
+	}
+	output, err := m.run(ctx, "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}|{{end}}", image)
+	if err != nil {
+		return image
+	}
+	for _, digestRef := range strings.Split(strings.TrimSpace(string(output)), "|") {
+		if strings.HasPrefix(digestRef, repo+"@") {
+			return digestRef
+		}
+	}
+	return image
+}
+
+// resolveAndPinDigests resolves unbound's (and, when enabled, blockpage's)
+// just-pulled image to its immutable digest and rewrites the stack
+// definition to reference that digest instead of the original mutable
+// tag - so every step from here on (attestation, create/up) is anchored to
+// exactly the image that was inspected, not whatever the tag happens to
+// point at if it moves in between. Must be called after the "pull" step
+// succeeds (the digest lookup needs the image present locally) and before
+// "create"/"start" so containers are actually built from the pinned
+// reference, not the original tag-based compose file.
+func (m *Manager) resolveAndPinDigests(ctx context.Context, config Config) (composePath, unboundImage, blockpageImage string, err error) {
+	unboundImage = m.resolveDigest(ctx, m.unboundImage)
+	blockpageImage = m.blockpageImage
+	if config.BlockpageEnabled {
+		blockpageImage = m.resolveDigest(ctx, m.blockpageImage)
+	}
+	composePath, err = m.writeCompose(config, unboundImage, blockpageImage)
+	if err != nil {
+		return "", "", "", fmt.Errorf("pin attested image digests into the stack definition: %w", err)
+	}
+	return composePath, unboundImage, blockpageImage, nil
 }
 
 func renderCompose(config Config, unboundImage, adGuardImage, blockpageImage, networkCIDR string) (string, error) {
@@ -858,12 +926,12 @@ func validateConfig(config Config) []Check {
 // RequireAttestation's own no-op behavior for it; Blockpage is only
 // checked when config.BlockpageEnabled, since it isn't part of the
 // stack at all otherwise.
-func (m *Manager) verifyStackAttestation(ctx context.Context, config Config) error {
-	if err := m.attestationVerifier(ctx, "unbound", m.unboundImage); err != nil {
+func (m *Manager) verifyStackAttestation(ctx context.Context, config Config, unboundImage, blockpageImage string) error {
+	if err := m.attestationVerifier(ctx, "unbound", unboundImage); err != nil {
 		return fmt.Errorf("attestation: %w", err)
 	}
 	if config.BlockpageEnabled {
-		if err := m.attestationVerifier(ctx, "blockpage", m.blockpageImage); err != nil {
+		if err := m.attestationVerifier(ctx, "blockpage", blockpageImage); err != nil {
 			return fmt.Errorf("attestation: %w", err)
 		}
 	}

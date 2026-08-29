@@ -54,7 +54,7 @@ func TestWriteComposeSelectsBetaImage(t *testing.T) {
 		DataDir: t.TempDir(), UnboundImage: "unbound:test", AdGuardImage: "adguard:stable",
 		AdGuardBetaImage: "adguard:beta", DNSNetworkCIDR: "172.29.53.0/24",
 	})
-	path, err := manager.writeCompose(Config{DNSBindAddress: "0.0.0.0", DNSPort: 53, AdGuardChannel: "beta"})
+	path, err := manager.writeCompose(Config{DNSBindAddress: "0.0.0.0", DNSPort: 53, AdGuardChannel: "beta"}, manager.unboundImage, manager.blockpageImage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -698,6 +698,78 @@ func TestDeployRefusesActivationWhenAttestationFails(t *testing.T) {
 	}
 	if !strings.Contains(status.Error, "attestation") {
 		t.Fatalf("expected the failure to mention attestation, got %q", status.Error)
+	}
+}
+
+// TestDeployResolvesDigestBeforeAttestation is the regression test for a
+// follow-up review finding: TestDeployRefusesActivationWhenAttestationFails
+// above uses a fake AttestationVerifier, which happily accepts whatever
+// image string it's handed - it can't catch a bug in what deploy() actually
+// hands the real verifier. In production, deploy() passed
+// Options.UnboundImage straight through unchanged: a plain "repo:tag"
+// reference. stack.RequireAttestation (the real, default verifier) requires
+// an explicit "repo@sha256:..." reference and short-circuits to
+// "not_applicable" - itself a hard refusal, see RequireAttestation's own
+// doc comment - for anything else, without ever invoking cosign at all. So
+// every real deploy, even of a correctly signed release, failed here
+// exactly the same way a forged one would have, just for a different
+// reason. This test leaves AttestationVerifier unset (defaults to the real
+// stack.RequireAttestation) and gives Run a "docker image inspect" stub
+// that reports a digest, the same shape `docker pull` leaves behind
+// locally - deploy() must resolve that digest and hand
+// stack.RequireAttestation a "@sha256:"-qualified reference, so the
+// resulting failure comes from an actual (failing, since no real cosign
+// binary or signed image exists in this test) attestation attempt, not
+// from the short-circuit that made every deploy fail closed regardless of
+// whether the image was ever really attested.
+func TestDeployResolvesDigestBeforeAttestation(t *testing.T) {
+	dataDir := t.TempDir()
+	const digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	manager := NewManager(Options{
+		DataDir:        dataDir,
+		CoreContainer:  "rootguard-core",
+		UnboundImage:   "rootguard-unbound:test",
+		AdGuardImage:   "adguard:test",
+		DNSNetworkCIDR: "172.29.53.0/24",
+		// AttestationVerifier intentionally left unset: NewManager defaults
+		// it to the real stack.RequireAttestation, not a fake.
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" {
+				return []byte("rootguard-unbound@" + digest + "|\n"), nil
+			}
+			if arguments[0] == "inspect" {
+				return []byte("healthy\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	if _, err := manager.Start(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	status := manager.Status()
+	if status.State != StateFailed {
+		t.Fatalf("expected deployment to fail closed (no real cosign attestation available in tests), got %#v", status)
+	}
+	if !strings.Contains(status.Error, "attestation") {
+		t.Fatalf("expected the failure to mention attestation, got %q", status.Error)
+	}
+	if strings.Contains(status.Error, "not_applicable") {
+		t.Fatalf("attestation must have been checked against a digest-qualified image, not short-circuited as not_applicable: %q", status.Error)
+	}
+	written, err := os.ReadFile(filepath.Join(dataDir, "compose.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(written), "rootguard-unbound@"+digest) {
+		t.Fatalf("expected the stack definition to be pinned to the resolved digest, got:\n%s", written)
+	}
+	if strings.Contains(string(written), "rootguard-unbound:test") {
+		t.Fatalf("expected the mutable tag reference to be replaced, got:\n%s", written)
 	}
 }
 
