@@ -618,6 +618,53 @@ func TestLoginRateLimitIgnoresSpoofedForwardedForHeader(t *testing.T) {
 	}
 }
 
+// TestAuditLogIgnoresSpoofedForwardedForHeader is the regression test for
+// a follow-up review finding: clientAddress used to trust X-Forwarded-For
+// unconditionally, letting anyone who can reach this container set an
+// arbitrary value and have it recorded as their own session's address in
+// the audit log/session inventory - not just a display quirk, since an
+// operator reviewing "who logged in from where" for incident response
+// would see attacker-controlled garbage instead of the real peer address.
+func TestAuditLogIgnoresSpoofedForwardedForHeader(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(wrongBody))
+	request.RemoteAddr = "203.0.113.5:54321"
+	request.Header.Set("X-Forwarded-For", "10.13.37.1")
+	handler.ServeHTTP(httptest.NewRecorder(), request)
+
+	correctBody := []byte(`{"username":"admin","password":"secret"}`)
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(correctBody))
+	loginRequest.RemoteAddr = "203.0.113.5:54321"
+	loginRequest.Header.Set("X-Forwarded-For", "10.13.37.1")
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, loginRequest)
+	cookie := loginResponse.Result().Cookies()[0]
+
+	auditRequest := httptest.NewRequest(http.MethodGet, "/api/auth/audit", nil)
+	auditRequest.AddCookie(cookie)
+	auditResponse := httptest.NewRecorder()
+	handler.ServeHTTP(auditResponse, auditRequest)
+	if auditResponse.Code != http.StatusOK {
+		t.Fatalf("expected audit log 200, got %d", auditResponse.Code)
+	}
+
+	var events []auditEvent
+	if err := json.Unmarshal(auditResponse.Body.Bytes(), &events); err != nil {
+		t.Fatalf("failed to decode audit log: %v", err)
+	}
+	for _, event := range events {
+		if strings.Contains(event.RemoteIP, "10.13.37.1") {
+			t.Fatalf("audit event %q recorded the spoofed X-Forwarded-For value instead of the real peer address: %+v", event.Event, event)
+		}
+		if !strings.HasPrefix(event.RemoteIP, "203.0.113.5") {
+			t.Fatalf("audit event %q did not record the real peer address: %+v", event.Event, event)
+		}
+	}
+}
+
 func TestAuditLogRecordsLoginLogoutAndRateLimitEvents(t *testing.T) {
 	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))

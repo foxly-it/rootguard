@@ -955,25 +955,35 @@ func requestIsHTTPS(r *http.Request) bool {
 	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
 }
 
-// clientAddress is purely descriptive - shown in the session inventory and
-// audit log so an operator can recognize their own devices - never used for
-// any access-control decision. See rateLimitKey for the address actually
-// used to make a decision.
+// clientAddress is shown in the session inventory and audit log so an
+// operator can recognize their own devices, and in security-relevant audit
+// entries an operator might rely on for incident response - never used for
+// any access-control decision (that's rateLimitKey, below).
+//
+// Found in a follow-up review: this used to trust X-Forwarded-For
+// unconditionally, so anyone who can reach this container at all could set
+// an arbitrary value and have it recorded as their own session's address -
+// not just a display quirk, since an operator reviewing "who logged in
+// from where" would see attacker-controlled garbage instead of the real
+// peer address. The same reasoning rateLimitKey's own doc comment already
+// gave for never trusting this header applies identically here: RootGuard's
+// WebApp container publishes its port directly (no built-in reverse proxy
+// hop by default), and none of the documented reverse-proxy setups
+// (docs/https-reverse-proxy.md) ask an operator to forward X-Forwarded-For
+// - only X-Forwarded-Proto. There's no legitimate deployment this header
+// could be trustworthy in, so this is now identical to rateLimitKey - kept
+// as its own named function (rather than every caller just calling
+// rateLimitKey directly) purely to preserve the distinct display-vs-access-
+// control intent at each call site.
 func clientAddress(r *http.Request) string {
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		if first, _, ok := strings.Cut(forwarded, ","); ok {
-			return strings.TrimSpace(first)
-		}
-		return strings.TrimSpace(forwarded)
-	}
-	return r.RemoteAddr
+	return rateLimitKey(r)
 }
 
 // rateLimitKey is the actual TCP peer address, used to key every rate
-// limiter. Unlike clientAddress, this must never trust a client-controlled
-// header: RootGuard's WebApp container publishes its port directly (no
-// built-in reverse proxy hop), and none of the documented reverse-proxy
-// setups (docs/https-reverse-proxy.md) ask an operator to forward
+// limiter. This must never trust a client-controlled header: RootGuard's
+// WebApp container publishes its port directly (no built-in reverse proxy
+// hop), and none of the documented reverse-proxy setups
+// (docs/https-reverse-proxy.md) ask an operator to forward
 // X-Forwarded-For - only X-Forwarded-Proto, for the session cookie's Secure
 // flag. Trusting X-Forwarded-For here would let a caller send a different
 // value on every request, both bypassing the limit entirely and growing the
