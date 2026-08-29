@@ -891,11 +891,7 @@ func (a *SessionAuth) persistCredentialsLocked() error {
 	if err != nil {
 		return err
 	}
-	temp := a.credentialsPath + ".tmp"
-	if err := os.WriteFile(temp, data, 0600); err != nil {
-		return err
-	}
-	return os.Rename(temp, a.credentialsPath)
+	return writeAtomicFile(a.credentialsPath, data, 0600)
 }
 
 func securePassword(password string) ([]byte, []byte, error) {
@@ -932,11 +928,7 @@ func (a *SessionAuth) persistLocked() (returnErr error) {
 	if err != nil {
 		return err
 	}
-	temp := a.persistencePath + ".tmp"
-	if err := os.WriteFile(temp, data, 0600); err != nil {
-		return err
-	}
-	return os.Rename(temp, a.persistencePath)
+	return writeAtomicFile(a.persistencePath, data, 0600)
 }
 
 func randomSessionToken() (string, error) {
