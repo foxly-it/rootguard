@@ -3,7 +3,9 @@ package adguard
 import (
 	"context"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -167,7 +169,15 @@ func bootstrapSuccessHandler() http.HandlerFunc {
 	})
 }
 
-func TestBootstrapPublishesBlockpageAuthToken(t *testing.T) {
+// TestBootstrapPublishesRandomBlockpageServiceToken is the regression test
+// for a follow-up review finding: this token used to be
+// base64(adguard_username+":"+adguard_password) - the real AdGuard admin
+// credentials in a reversible encoding, not a derived secret at all. It
+// must now be unrelated to those credentials entirely (an opaque random
+// value) and must actually be usable to authenticate through
+// VerifyBlockpageServiceToken - the two ends of the same contract
+// routes.go's blockpageReasonHandler relies on.
+func TestBootstrapPublishesRandomBlockpageServiceToken(t *testing.T) {
 	authDir := t.TempDir()
 	manager := newTestManagerWithDir(bootstrapSuccessHandler(), t.TempDir(), authDir)
 
@@ -175,16 +185,75 @@ func TestBootstrapPublishesBlockpageAuthToken(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	token, err := os.ReadFile(filepath.Join(authDir, "basic-auth-token"))
+	token, err := os.ReadFile(filepath.Join(authDir, "service-token"))
 	if err != nil {
-		t.Fatalf("expected blockpage auth token to be written: %v", err)
+		t.Fatalf("expected blockpage service token to be written: %v", err)
 	}
-	decoded, err := base64.StdEncoding.DecodeString(string(token))
+	tokenStr := string(token)
+	if len(tokenStr) != 64 {
+		t.Fatalf("expected a 32-byte hex token (64 chars), got %d chars: %q", len(tokenStr), tokenStr)
+	}
+	if _, err := hex.DecodeString(tokenStr); err != nil {
+		t.Fatalf("token is not valid hex: %v", err)
+	}
+	// Must bear no relationship to the AdGuard admin credentials - the
+	// entire point of this fix.
+	if reconstructed := base64.StdEncoding.EncodeToString([]byte("rootguard:" + "anything")); tokenStr == reconstructed {
+		t.Fatalf("token must not be derivable from AdGuard credentials")
+	}
+	if !manager.VerifyBlockpageServiceToken(tokenStr) {
+		t.Fatal("expected the published token to verify successfully")
+	}
+	if manager.VerifyBlockpageServiceToken(tokenStr + "x") {
+		t.Fatal("expected a tampered token to be rejected")
+	}
+	if manager.VerifyBlockpageServiceToken("") {
+		t.Fatal("expected an empty token to be rejected")
+	}
+}
+
+func TestVerifyBlockpageServiceTokenFailsClosedBeforeBootstrap(t *testing.T) {
+	authDir := t.TempDir()
+	manager := newTestManagerWithDir(bootstrapSuccessHandler(), t.TempDir(), authDir)
+	if manager.VerifyBlockpageServiceToken("anything") {
+		t.Fatal("expected verification to fail before any token has ever been published")
+	}
+}
+
+func TestReasonForHostReturnsAdGuardsVerdict(t *testing.T) {
+	var gotHost string
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, password, ok := r.BasicAuth()
+		if !ok || user != "rootguard-user" || password != "rootguard-pass" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		gotHost = r.URL.Query().Get("name")
+		_ = json.NewEncoder(w).Encode(map[string]string{"reason": "FilteredBlackList"})
+	})
+	manager := newTestManagerWithDir(handler, t.TempDir(), t.TempDir())
+	if err := writeCredentials(filepath.Join(manager.dataDir, "credentials.json"), Credentials{Username: "rootguard-user", Password: "rootguard-pass"}); err != nil {
+		t.Fatal(err)
+	}
+
+	reason, err := manager.ReasonForHost(context.Background(), "ads.example.com")
 	if err != nil {
-		t.Fatalf("token is not valid base64: %v", err)
+		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(decoded), "rootguard:") {
-		t.Fatalf("expected token to encode the rootguard admin credentials, got %q", decoded)
+	if reason != "FilteredBlackList" {
+		t.Fatalf("expected FilteredBlackList, got %q", reason)
+	}
+	if gotHost != "ads.example.com" {
+		t.Fatalf("expected AdGuard to be queried for ads.example.com, got %q", gotHost)
+	}
+}
+
+func TestReasonForHostRejectsMalformedHosts(t *testing.T) {
+	manager := newTestManagerWithDir(bootstrapSuccessHandler(), t.TempDir(), t.TempDir())
+	for _, host := range []string{"", "-leading-dash.example.com", "has a space", "semi;colon.example", strings.Repeat("a", 254), "trailing-dot.example.com."} {
+		if _, err := manager.ReasonForHost(context.Background(), host); !errors.Is(err, ErrInvalidBlockpageHost) {
+			t.Errorf("host %q: expected ErrInvalidBlockpageHost, got %v", host, err)
+		}
 	}
 }
 

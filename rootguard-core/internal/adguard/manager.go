@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -267,32 +270,110 @@ func (m *Manager) Bootstrap(ctx context.Context, blockPageIP string) (Status, er
 		return Status{}, err
 	}
 	if blockPageIP != "" {
-		if err := m.publishBlockpageAuthToken(credentials); err != nil {
-			return Status{}, fmt.Errorf("publish blockpage auth token: %w", err)
+		if err := m.publishBlockpageServiceToken(); err != nil {
+			return Status{}, fmt.Errorf("publish blockpage service token: %w", err)
 		}
 	}
 	return m.Status(ctx)
 }
 
-// publishBlockpageAuthToken derives a Basic-Auth token from the AdGuard
-// admin credentials and writes it to the volume shared with the blockpage
-// container, so the blockpage's own nginx can proxy /api/reason to AdGuard's
-// check_host endpoint without ever holding the raw username/password - the
-// one component here that's reachable, unauthenticated, by anyone who gets
-// DNS-sinkholed to it.
-func (m *Manager) publishBlockpageAuthToken(credentials Credentials) error {
+// publishBlockpageServiceToken generates a fresh, opaque, random token and
+// writes it to the volume shared with the blockpage container. Found in
+// review: the token this used to write was
+// base64(adguard_username+":"+adguard_password) - not a derived secret at
+// all, just the real AdGuard admin credentials in a reversible encoding.
+// The blockpage container is the one component in this stack reachable,
+// unauthenticated, by anyone who gets DNS-sinkholed to it - a compromise
+// there (an nginx CVE, a container escape) handed over full AdGuard admin
+// access, not just the narrow "is this host blocked" lookup blockpage
+// actually needs.
+//
+// The token now carries no derivable relationship to the AdGuard
+// credentials at all: Core alone still holds those (see loadCredentials),
+// and this token only authenticates blockpage's nginx to Core's own new
+// GET /api/blockpage/reason endpoint (see routes.go), which performs the
+// actual AdGuard check_host call server-side and returns just the block
+// reason string. Regenerating on every Bootstrap call (rather than
+// persisting and reusing one token) is safe and intentional: the caller
+// (installer.Manager) already re-renders blockpage's nginx config and
+// reloads it immediately after this returns, in the same deploy step -
+// see the "render blockpage nginx config with its AdGuard auth token"
+// step - so there's no window where blockpage would be left holding a
+// stale token.
+func (m *Manager) publishBlockpageServiceToken() error {
 	if m.blockpageAuthDir == "" {
 		return nil
 	}
 	if err := os.MkdirAll(m.blockpageAuthDir, 0700); err != nil {
 		return fmt.Errorf("create blockpage auth directory: %w", err)
 	}
-	token := base64.StdEncoding.EncodeToString([]byte(credentials.Username + ":" + credentials.Password))
-	path := filepath.Join(m.blockpageAuthDir, "basic-auth-token")
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return fmt.Errorf("generate blockpage service token: %w", err)
+	}
+	token := hex.EncodeToString(tokenBytes)
+	path := filepath.Join(m.blockpageAuthDir, "service-token")
 	if err := atomicfile.WriteFile(path, []byte(token), 0600); err != nil {
-		return fmt.Errorf("write blockpage auth token: %w", err)
+		return fmt.Errorf("write blockpage service token: %w", err)
 	}
 	return nil
+}
+
+// VerifyBlockpageServiceToken checks a token presented by blockpage's own
+// nginx (via the shared volume publishBlockpageServiceToken writes to)
+// against Core's GET /api/blockpage/reason handler in routes.go. Reads the
+// file fresh on every call rather than caching it in memory: this is a
+// low-QPS endpoint (nginx itself rate-limits /api/reason to 5rps), and
+// reading fresh means a re-Bootstrap's freshly rotated token takes effect
+// immediately, with no in-memory staleness to reason about. An unreadable
+// or empty file (no successful Bootstrap yet) fails closed.
+func (m *Manager) VerifyBlockpageServiceToken(token string) bool {
+	if token == "" || m.blockpageAuthDir == "" {
+		return false
+	}
+	expected, err := os.ReadFile(filepath.Join(m.blockpageAuthDir, "service-token"))
+	if err != nil {
+		return false
+	}
+	expectedTrimmed := strings.TrimSpace(string(expected))
+	if expectedTrimmed == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(token), []byte(expectedTrimmed)) == 1
+}
+
+// blockpageReasonHostPattern is deliberately strict - RFC 1123 hostname
+// labels only, no wildcards, no trailing dot, no IPv6/bracket forms. host
+// here comes from blockpage's nginx forwarding its own $host (the
+// Host header of whatever request got DNS-sinkholed to it), never a raw
+// client-supplied query parameter, but this endpoint still shouldn't
+// forward anything but a plausible hostname into an AdGuard admin API
+// call.
+var blockpageReasonHostPattern = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
+
+var ErrInvalidBlockpageHost = errors.New("invalid host")
+
+// ReasonForHost is the narrow, server-side AdGuard call Core now performs
+// on blockpage's behalf: blockpage's nginx no longer holds any AdGuard
+// credential at all (see VerifyBlockpageServiceToken), only Core does.
+// Returns just the check_host "reason" string (e.g. "FilteredBlackList") -
+// nothing else from AdGuard's response is exposed through this path.
+func (m *Manager) ReasonForHost(ctx context.Context, host string) (string, error) {
+	if len(host) > 253 || !blockpageReasonHostPattern.MatchString(host) {
+		return "", ErrInvalidBlockpageHost
+	}
+	credentials, err := m.loadCredentials()
+	if err != nil {
+		return "", err
+	}
+	var result struct {
+		Reason string `json:"reason"`
+	}
+	endpoint := m.apiURL + "/control/filtering/check_host?name=" + url.QueryEscape(host)
+	if err := m.request(ctx, http.MethodGet, endpoint, nil, &result, &credentials); err != nil {
+		return "", fmt.Errorf("check adguard filter for %s: %w", host, err)
+	}
+	return result.Reason, nil
 }
 
 func (m *Manager) install(ctx context.Context) (Credentials, error) {

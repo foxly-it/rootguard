@@ -32,23 +32,33 @@ server {
     # request sinkholed here, so the page can show the real block reason
     # instead of a decorative always-checked list. $host only - never a
     # client-supplied parameter - so this can't become a free "is domain X
-    # blocked" oracle against the reader's own AdGuard instance, and the
-    # proxied path is hardcoded so a compromised request here can't reach
-    # any other AdGuard admin endpoint even though the credential behind it
-    # is a full-admin one.
+    # blocked" oracle against the reader's own AdGuard instance.
+    #
+    # Proxies to Core, not AdGuard directly - found in review: this used to
+    # proxy straight to AdGuard's own admin API with a Basic-Auth token that
+    # was just the real AdGuard admin credentials, reversibly encoded. This
+    # container is the one component in the whole stack reachable,
+    # unauthenticated, by anyone who gets DNS-sinkholed here - a compromise
+    # here (an nginx CVE, a container escape) used to hand over full AdGuard
+    # admin access for a feature that only ever needs one host's block
+    # reason. Core now performs the actual AdGuard call server-side (see
+    # GET /api/blockpage/reason in rootguard-core/internal/api/routes.go)
+    # and returns just the reason string; this container only ever holds a
+    # narrow, unrelated service token that authenticates it to that one
+    # endpoint, nothing else.
     location = /api/reason {
         limit_req zone=reason_lookup burst=10 nodelay;
         limit_req_status 429;
 
         # Docker's embedded resolver, re-resolved per request via the
-        # variable in proxy_pass below - if AdGuard's container is ever
+        # variable in proxy_pass below - if Core's container is ever
         # recreated (image update) its IP can change, and without this
         # nginx would keep proxying to a stale address until its own
         # restart.
         resolver 127.0.0.11 valid=10s ipv6=off;
-        set $adguard_upstream "http://rootguard-adguard";
-        proxy_pass $adguard_upstream/control/filtering/check_host?name=$host;
-        proxy_set_header Authorization "Basic ${ADGUARD_AUTH_TOKEN}";
+        set $core_upstream "http://rootguard-core:8081";
+        proxy_pass $core_upstream/api/blockpage/reason?host=$host;
+        proxy_set_header Authorization "Bearer ${BLOCKPAGE_SERVICE_TOKEN}";
         proxy_connect_timeout 2s;
         proxy_read_timeout 2s;
 
