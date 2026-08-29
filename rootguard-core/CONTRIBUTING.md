@@ -10,7 +10,7 @@ Use an issue to discuss changes that affect API contracts, security boundaries,
 managed Compose content, or persistent configuration formats.
 
 Security vulnerabilities must be reported privately through
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## Development
 

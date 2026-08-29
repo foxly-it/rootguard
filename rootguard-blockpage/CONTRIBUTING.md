@@ -10,7 +10,7 @@ This directory is part of the `rootguard` monorepo; open one pull request
 there touching whichever directories a change needs.
 
 Security vulnerabilities must be reported privately through
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## Development
 

@@ -2071,3 +2071,16 @@ behavior now exercise `persistLocked` directly instead (still correctly
 proving that lower-level, still-true property); a new
 `TestSelectImageRevertsSelectionOnPersistFailure` proves the higher-level
 revert.
+
+**Medium, fixed: eight files linked to the per-component `SECURITY.md`
+files round 4 deleted.** Each component's own `README.md`/
+`CONTRIBUTING.md` linked to its own `SECURITY.md` via a plain,
+unqualified `[SECURITY.md](SECURITY.md)` - correct before round 4's
+deletion (dead monorepo-migration leftovers, confirmed via a narrow grep
+for those specific paths only), broken after it, since nothing checked
+markdown links generally. Repointed all eight at the canonical root
+`SECURITY.md` (`../SECURITY.md`). Added `scripts/check-markdown-links.sh`
+- checks every local link across every tracked markdown file in the repo
+resolves to a real file, wired into `ci.yml`'s existing always-runs
+`validate` job - and verified it live both ways: reports exactly these
+eight breakages against the pre-fix files, reports clean once fixed.

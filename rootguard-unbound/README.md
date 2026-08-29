@@ -132,7 +132,7 @@ the update procedure are documented in [BUILDING.md](BUILDING.md).
 - Hides resolver identity and minimizes responses.
 - Applies DNSSEC and private-address protections by default.
 
-Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Report vulnerabilities privately as described in [SECURITY.md](../SECURITY.md).
 
 ## Contributing
 

@@ -10,7 +10,7 @@ Discuss changes to the immutable base configuration, trust-anchor handling,
 access controls, image tags, or runtime privileges before implementation.
 
 Security vulnerabilities must be reported privately through
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## Development
 

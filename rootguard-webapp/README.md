@@ -93,7 +93,7 @@ starting points are issues labeled
 [`good first issue`](https://github.com/foxly-it/rootguard-webapp/labels/good%20first%20issue)
 or [`help wanted`](https://github.com/foxly-it/rootguard-webapp/labels/help%20wanted).
 Visible changes should include a screenshot. Report vulnerabilities privately
-through [SECURITY.md](SECURITY.md).
+through [SECURITY.md](../SECURITY.md).
 
 ## License
 

@@ -10,7 +10,7 @@ step, no external dependencies, automatic light/dark theme.
 
 [RootGuard](https://github.com/foxly-it/rootguard) ·
 [Manual](https://rootguard.foxly.de/docs.html) ·
-[Security](SECURITY.md)
+[Security](../SECURITY.md)
 
 ## How it fits into RootGuard
 
