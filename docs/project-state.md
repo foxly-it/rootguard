@@ -3232,3 +3232,23 @@ by it - both in the final file's content and in its mode actually being
 fixed-name implementation makes exactly the mode assertion fail (got
 `0777`, wanted `0600`), confirming the test targets the real bug, not
 just the file-content half of it.
+
+**Medium, fixed: the DNSSEC-bypass check still had reachable bypasses.**
+Round 1's fix for `harden-dnssec-stripped: no` matched a literal `": no"`
+suffix against the raw config line - real, but still bypassable with any
+of `harden-dnssec-stripped:    no` (extra internal whitespace),
+`harden-dnssec-stripped: no # allow it` (a trailing comment - the *key*
+extraction already stripped comments, the value check never did), or
+`harden-dnssec-stripped:no` (no space after the colon) - all ordinary,
+spec-legal Unbound config shapes.
+
+Fixed by parsing the value the same principled way the key was already
+parsed: new `directiveValue` (comment-stripped, colon-split, trimmed -
+mirrors the existing `directiveKey`) replaces the raw-line suffix match,
+compared via `strings.EqualFold` instead of a pre-lowercased literal
+match. Four new cases added to the existing
+`TestCustomConfigRejectsDNSSECBypasses` (the three real bypasses plus a
+non-regression casing case, kept as a companion now that the value
+comparison is its own explicit step rather than inherited from a
+whole-line lowercase) - revert-verified: reverted to the old suffix
+match, confirmed the whitespace case fails, restored.

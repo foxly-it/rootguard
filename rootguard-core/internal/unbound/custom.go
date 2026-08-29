@@ -200,7 +200,17 @@ func normalizeCustom(content string) (string, error) {
 		// same hard refusal every other DNSSEC weakening already gets
 		// (val-permissive-mode, the trust-anchor directives, and
 		// domain-insecure above).
-		if key == "harden-dnssec-stripped" && strings.HasSuffix(strings.ToLower(strings.TrimSpace(line)), ": no") {
+		//
+		// Parses the value the same way directiveKey parses the key
+		// (comment-stripped, colon-split, trimmed) instead of matching a
+		// literal ": no" suffix against the raw line - found in review:
+		// that suffix match missed "harden-dnssec-stripped:    no" (extra
+		// internal whitespace), "harden-dnssec-stripped: no # comment"
+		// (a trailing comment - directiveKey already strips these for the
+		// key, the old value check never did), and
+		// "harden-dnssec-stripped:no" (no space after the colon) - all
+		// three are ordinary, spec-legal Unbound config shapes.
+		if key == "harden-dnssec-stripped" && strings.EqualFold(directiveValue(line), "no") {
 			return "", fmt.Errorf("%w: line %d: harden-dnssec-stripped: no (DNSSEC validation must not be weakened)", ErrInvalidCustomConfig, lineNumber+1)
 		}
 	}
@@ -217,6 +227,22 @@ func directiveKey(line string) string {
 		return ""
 	}
 	return strings.ToLower(strings.TrimSpace(key))
+}
+
+// directiveValue mirrors directiveKey: comment-stripped, colon-split,
+// trimmed - so a value comparison (like harden-dnssec-stripped's above)
+// is robust to the same whitespace/comment/no-space-after-colon
+// variance directiveKey already handles for the key side.
+func directiveValue(line string) string {
+	line = strings.TrimSpace(strings.SplitN(line, "#", 2)[0])
+	if line == "" {
+		return ""
+	}
+	_, value, found := strings.Cut(line, ":")
+	if !found {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 var blockedDirectives = map[string]string{
