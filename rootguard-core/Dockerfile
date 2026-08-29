@@ -26,8 +26,20 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
       org.opencontainers.image.revision="${COMMIT}" \
       org.opencontainers.image.created="${CREATED}"
 
-RUN apk add --no-cache docker-cli-compose \
-    && mkdir -p /var/lib/rootguard/unbound
+# Found in review: docker-cli-compose used to be apk-installed here
+# unpinned (a real reproducible-builds gap - the exact package version
+# fetched could drift between two builds of the same commit). Verified
+# against the upstream docker-library/docker source for this exact
+# pinned digest (the "29/cli" variant's own Dockerfile) that
+# docker:29-cli already bundles docker compose (currently v5.5.0) as a
+# CLI plugin at /usr/local/libexec/docker/cli-plugins/docker-compose -
+# one of Docker CLI's standard plugin search paths, and exactly where
+# `docker compose ...` (the subcommand form this codebase actually
+# invokes, see internal/installer/manager.go's m.run calls) looks - so
+# the apk install was purely redundant, not filling a real gap. Removing
+# it entirely closes the reproducibility gap outright instead of merely
+# pinning a package version that was never needed.
+RUN mkdir -p /var/lib/rootguard/unbound
 
 COPY --from=builder /rootguard-core /usr/local/bin/rootguard-core
 COPY --from=cosign /ko-app/cosign /usr/local/bin/cosign

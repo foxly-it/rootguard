@@ -1696,3 +1696,24 @@ correctly and exposes the identical `IsPrivate`/`IsLinkLocalUnicast`/
 returns `nil` for `"fe80::1%en0"`) and added the regression case to both
 `TestRejectNonPrivateControlRejectsPublicAddresses` (via the dialer's
 bracketed `[fe80::1%en0]:80` shape) and `TestIsRouterReachable`.
+
+**Low, fixed: Core's and Updater's Dockerfiles `apk add`-installed
+packages unpinned, redundantly.** Both installed `docker-cli-compose`
+(Updater also `ca-certificates`) via a plain `apk add --no-cache` with
+no version pin - a real reproducible-builds gap, the exact package
+version fetched could drift between two builds of the same commit even
+though the base image digest itself is pinned. Checked whether pinning
+was even the right fix first: fetched the upstream
+`docker-library/docker` source for the exact `docker:29-cli` digest both
+Dockerfiles already pin, and confirmed it already bundles `docker
+compose` (currently v5.5.0) as a CLI plugin at
+`/usr/local/libexec/docker/cli-plugins/docker-compose` - one of Docker
+CLI's standard plugin search paths, and exactly the subcommand form this
+codebase actually invokes (`docker compose ...`, not the legacy
+hyphenated standalone binary) - and `ca-certificates` from that same
+base image's own upstream Dockerfile. Both installs were purely
+redundant, not filling a real gap.
+
+Removed both `apk add` lines entirely rather than pinning packages that
+were never needed - closes the reproducibility gap outright (nothing
+left to fetch at build time at all) instead of just narrowing it.
