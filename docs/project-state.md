@@ -2924,3 +2924,19 @@ classification, same bucket as an unrelated Docker error) and fixed four
 existing tests that now correctly hit the real `stack.RequireAttestation`
 default and need the same noop-verifier injection round 1's updater
 tests already use.
+
+**Follow-up to the fix above:** this PR's own CI caught what it broke -
+`backup-restore.yml`'s "Verify backup export and restore" builds
+`rootguard-core` locally from the checkout under test and deploys it via
+the real installer path, so the new attestation gate correctly (if
+inconveniently, for that test) rejected the unattested local build.
+`cmd/rootguard/main.go` gained `ROOTGUARD_SKIP_ATTESTATION`, the same
+shape and purpose as `rootguard-updater`'s own `ROOTGUARD_UPDATER_SKIP_ATTESTATION`
+- disables every attestation gate this binary enforces (installation
+deploy, service updates, updater self-update) uniformly, wired through
+`compose.release.yaml` and set only in that one E2E job.
+`clean-install.yml` (the other workflow deploying via `compose.release.yaml`)
+needed no change - it deploys the real, published, genuinely-attested
+images, not a local build, so it's an actual live check of the
+attestation chain working end-to-end rather than something that needs
+to bypass it.

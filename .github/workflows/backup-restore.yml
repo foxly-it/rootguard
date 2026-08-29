@@ -67,6 +67,13 @@ jobs:
           ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
           ROOTGUARD_CORE_IMAGE: rootguard-core:e2e
           ROOTGUARD_WEBAPP_IMAGE: rootguard-webapp:e2e
+          # This job builds rootguard-core (and, when BlockpageEnabled,
+          # would deploy Unbound/Blockpage) from this checkout - none of
+          # that carries a real cosign attestation, so the installer's
+          # attestation gate (see cmd/rootguard/main.go) would otherwise
+          # fail every deploy here. See ROOTGUARD_SKIP_ATTESTATION's own
+          # doc comment there for what it disables and why.
+          ROOTGUARD_SKIP_ATTESTATION: "true"
         run: ./scripts/verify-backup-restore.sh
 
       - name: Record platform evidence
