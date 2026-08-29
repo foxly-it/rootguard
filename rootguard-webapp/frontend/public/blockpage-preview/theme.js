@@ -38,6 +38,20 @@
     })()
   };
 
+  // Found in review: an invalid stored value (a leftover from an older
+  // schema, or simply hand-edited/corrupted localStorage - nothing
+  // requires it to be one of the three real modes) made icons[mode]
+  // undefined, and btn.appendChild(undefined) throws - crashing this
+  // whole IIFE partway through applyTheme's very first call at startup,
+  // before the click listener below is even registered. The theme
+  // toggle button stayed permanently dead until the stale value was
+  // manually cleared. Falls back to "system" for anything not one of
+  // the three real modes instead of trusting the stored value blindly.
+  function storedMode() {
+    var stored = localStorage.getItem("rootguard.blockpage.theme");
+    return modes.indexOf(stored) !== -1 ? stored : "system";
+  }
+
   function applyTheme(mode) {
     if (mode === "system") root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", mode);
@@ -46,9 +60,8 @@
     localStorage.setItem("rootguard.blockpage.theme", mode);
   }
 
-  applyTheme(localStorage.getItem("rootguard.blockpage.theme") || "system");
+  applyTheme(storedMode());
   btn.addEventListener("click", function () {
-    var current = localStorage.getItem("rootguard.blockpage.theme") || "system";
-    applyTheme(modes[(modes.indexOf(current) + 1) % modes.length]);
+    applyTheme(modes[(modes.indexOf(storedMode()) + 1) % modes.length]);
   });
 })();

@@ -1654,3 +1654,26 @@ the Stack page (`Stack.tsx`, for `UpdateStatus.persist_error`). Both
 show the error message and a localized timestamp, in both `en`/`de`
 locales. Frontend lint, all 26 tests, and the production build
 (`tsc -b && vite build`) all pass.
+
+**Low, fixed: an invalid stored `theme` value permanently broke the
+blockpage's theme toggle button.** `web/theme.js`'s `applyTheme` did
+`btn.appendChild(icons[mode])` - if `localStorage.getItem(...)` returned
+anything other than the three real modes (a leftover from an older
+schema, hand-edited/corrupted storage, nothing actually enforces the
+stored value's shape), `icons[mode]` was `undefined` and
+`appendChild(undefined)` throws, crashing the whole IIFE during its very
+first `applyTheme` call at page load - before the click listener was
+even registered, so the toggle button stayed permanently dead until the
+stale value was manually cleared from the browser.
+
+Fixed with a `storedMode()` helper that falls back to `"system"` for
+anything not one of the three real modes, used at both the initial load
+and the click handler. Verified live with Playwright against the real
+`web/index.html` (served locally, not simulated): with
+`localStorage.rootguard.blockpage.theme` deliberately set to a garbage
+value, the unfixed version reliably threw the exact `TypeError` and left
+the button completely unresponsive to clicks (`data-theme` never
+changed); the fixed version threw nothing, correctly fell back to system
+theme, and the button worked normally on the very first click. Applied
+identically to `rootguard-webapp/frontend/public/blockpage-preview/theme.js`,
+kept byte-for-byte in sync with the real one per existing convention.
