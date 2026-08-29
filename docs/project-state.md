@@ -2940,3 +2940,12 @@ needed no change - it deploys the real, published, genuinely-attested
 images, not a local build, so it's an actual live check of the
 attestation chain working end-to-end rather than something that needs
 to bypass it.
+
+**Unrelated cleanup, needed to unblock this PR's own CI:** `trivy`
+flagged CVE-2026-56854 in `golang.org/x/crypto` (v0.52.0, an indirect
+dependency, fixed in 0.55.0) - present in `main` already, not something
+this PR introduced, but it fails `main`'s own security-scan gate for any
+PR touching `rootguard-core` right now. Bumped via `go get
+golang.org/x/crypto@v0.55.0 && go mod tidy` (pulled `golang.org/x/sys`
+along with it); `rootguard-updater`/`rootguard-webapp/backend` don't
+depend on it at all, so this is scoped to `rootguard-core` alone.
