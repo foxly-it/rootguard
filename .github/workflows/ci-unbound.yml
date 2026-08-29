@@ -154,10 +154,17 @@ jobs:
         working-directory: rootguard-unbound
         run: docker build -t rootguard-unbound:test .
 
+      # Found in review: this was still on setup-go v5 (GitHub already
+      # warns about its Node.js 20 runtime, soon to be enforced as
+      # Node.js 24) and missing cache-dependency-path (a cache-miss
+      # warning on every run) - every other workflow in this repo
+      # already uses this exact pinned v7 + cache-dependency-path
+      # combination; this was simply never updated to match.
       - name: Setup Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: rootguard-core/go.mod
+          cache-dependency-path: rootguard-core/go.sum
 
       - name: Run scenario tests
         working-directory: rootguard-core

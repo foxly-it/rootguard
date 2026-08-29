@@ -2084,3 +2084,9 @@ markdown links generally. Repointed all eight at the canonical root
 resolves to a real file, wired into `ci.yml`'s existing always-runs
 `validate` job - and verified it live both ways: reports exactly these
 eight breakages against the pre-fix files, reports clean once fixed.
+
+**Small items, fixed:** `ci-unbound.yml` was still on `actions/setup-go`
+v5 (GitHub already warns about its Node.js 20 runtime) and missing
+`cache-dependency-path` (a cache-miss warning every run) - every other
+workflow in this repo already used the same pinned v7 + cache path
+combination; this one was simply never updated to match.
