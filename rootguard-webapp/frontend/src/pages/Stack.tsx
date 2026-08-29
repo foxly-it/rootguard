@@ -204,6 +204,16 @@ export default function Stack() {
           <span>{updates.message}</span>
         </div>
       )}
+      {updates?.persist_error && (
+        <div className="stack-feedback warning" role="alert">
+          <span>
+            {t("stack.persistError", {
+              message: updates.persist_error,
+              time: updates.persist_error_at ? formatDate(updates.persist_error_at) : "–",
+            })}
+          </span>
+        </div>
+      )}
 
       <section className="stack-summary">
         <Summary icon={<ServerCog />} label={t("stack.managed")} value={t("stack.runningCount", { count: services.filter((s) => s.status === "running").length })} />

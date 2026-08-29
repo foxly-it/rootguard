@@ -110,6 +110,17 @@
   background: var(--danger-soft);
 }
 
+/* Found in review: UpdateStatus.persist_error/persist_error_at (mirrors
+   InstallationStatus - see the dashboard's own overview-persist-warning)
+   reached the API types but was never rendered anywhere. Warning, not
+   error: the live update state is still accurate, only its durability is
+   in question. */
+.stack-feedback.warning {
+  color: var(--warning);
+  border-color: var(--warning-soft);
+  background: var(--warning-soft);
+}
+
 .stack-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

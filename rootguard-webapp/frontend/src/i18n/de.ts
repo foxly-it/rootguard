@@ -276,6 +276,7 @@ export const de: LocaleDefinition = {
     "backups.importConf": "Vorhandene unbound.conf",
     "backups.importConfHelp": "Eine klassische Unbound-Konfiguration geführt übernehmen.",
     "stack.intro": "Container prüfen, gezielt aktualisieren und kontrollieren – ohne Docker-Zugriff im Browser und ohne blinden Neustart des gesamten DNS-Stacks.",
+    "stack.persistError": "Der oben angezeigte Update-Status ist live korrekt, konnte aber nicht auf der Festplatte gespeichert werden ({time}): {message}. Er könnte einen Neustart von RootGuard Core nicht überstehen, bis dies behoben ist.",
     "stack.check": "Auf Updates prüfen",
     "stack.checking": "Prüfung läuft…",
     "stack.managed": "Verwaltete Dienste",
@@ -491,6 +492,7 @@ export const de: LocaleDefinition = {
     "overview.dnsServices": "DNS-Dienste",
     "overview.lastChecked": "Zuletzt geprüft {time}",
     "overview.manageStack": "Stack verwalten",
+    "overview.persistError": "Der oben angezeigte Installationsstatus ist live korrekt, konnte aber nicht auf der Festplatte gespeichert werden ({time}): {message}. Er könnte einen Neustart von RootGuard Core nicht überstehen, bis dies behoben ist.",
 
     "adguard.intro": "RootGuard ersetzt den nativen AdGuard-Einrichtungsassistenten durch einen kontrollierten Ablauf. Dadurch bleiben Administration und Zugangsdaten vollständig im privaten Control Plane.",
     "adguard.setup": "RootGuard einrichten",
