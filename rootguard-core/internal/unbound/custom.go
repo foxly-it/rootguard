@@ -209,9 +209,16 @@ func normalizeCustom(content string) (string, error) {
 		// (a trailing comment - directiveKey already strips these for the
 		// key, the old value check never did), and
 		// "harden-dnssec-stripped:no" (no space after the colon) - all
-		// three are ordinary, spec-legal Unbound config shapes.
-		if key == "harden-dnssec-stripped" && strings.EqualFold(directiveValue(line), "no") {
-			return "", fmt.Errorf("%w: line %d: harden-dnssec-stripped: no (DNSSEC validation must not be weakened)", ErrInvalidCustomConfig, lineNumber+1)
+		// three are ordinary, spec-legal Unbound config shapes, and so is
+		// wrapping the value in either quote style (directiveValue strips
+		// those). Whitelisting the single normalized-safe spelling ("yes"),
+		// rather than blacklisting "no", is deliberate for this specific
+		// directive: it's the one place a bypass silently disables DNSSEC
+		// tamper detection, so any value this parsing doesn't recognize as
+		// unambiguously "yes" is refused rather than risking a future
+		// Unbound-accepted spelling of "no" slipping past a blacklist again.
+		if key == "harden-dnssec-stripped" && !strings.EqualFold(directiveValue(line), "yes") {
+			return "", fmt.Errorf("%w: line %d: harden-dnssec-stripped must be set to yes (DNSSEC validation must not be weakened)", ErrInvalidCustomConfig, lineNumber+1)
 		}
 	}
 	return content, nil
@@ -233,6 +240,14 @@ func directiveKey(line string) string {
 // trimmed - so a value comparison (like harden-dnssec-stripped's above)
 // is robust to the same whitespace/comment/no-space-after-colon
 // variance directiveKey already handles for the key side.
+//
+// Also strips one layer of matching single or double quotes, the same
+// way Unbound's own config lexer does before handing the value to the
+// parser - found in review: harden-dnssec-stripped: "no" and
+// harden-dnssec-stripped: 'no' are both ordinary, spec-legal ways to
+// write the value and Unbound treats them identically to the unquoted
+// form, but the raw, still-quoted string never equal-folds to "no" -
+// letting either quoted spelling silently bypass the check below.
 func directiveValue(line string) string {
 	line = strings.TrimSpace(strings.SplitN(line, "#", 2)[0])
 	if line == "" {
@@ -242,7 +257,14 @@ func directiveValue(line string) string {
 	if !found {
 		return ""
 	}
-	return strings.TrimSpace(value)
+	value = strings.TrimSpace(value)
+	if len(value) >= 2 {
+		first, last := value[0], value[len(value)-1]
+		if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+			value = value[1 : len(value)-1]
+		}
+	}
+	return value
 }
 
 var blockedDirectives = map[string]string{
