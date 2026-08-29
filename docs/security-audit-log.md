@@ -1834,3 +1834,67 @@ build matrix always produces (`linux/amd64`, `linux/arm64`) and every
 one of them carrying the correct label - verified live with `jq` against
 the real published `1.0.0-rc.1` Core image, both for the passing case
 and a deliberately wrong expected revision.
+
+A fourth independent review of round 3's own fixes - some turned out to
+be incomplete rather than wrong outright. Same discipline as every round
+before: verify directly in code, scope the fix, test with real teeth,
+document, PR, merge.
+
+**Medium, fixed: `updater.Manager`'s multi-file persistence still had a
+residual split-brain window after round 3's own fix.** Round 3 made
+`persistLocked` stage `status.json`/`images.json`/`updates.yaml` through
+a single `atomicfile.WriteFiles` call rather than three separate
+`WriteFile`/`WriteJSON` calls, closing the dominant failure mode (a
+staging failure now leaves every file untouched) - but correctly flagged
+by this review as still incomplete: renaming multiple files can never be
+one atomic operation on POSIX, so a rename failing (or the process dying)
+between two renames still left `status.json` and `images.json` in two
+different generations, exactly the scenario the fix was supposed to
+close. `atomicfile_test.go`'s own
+`TestWriteFilesCleansUpRemainingTempFilesOnRenameFailure` demonstrates
+that residual window deliberately, as its own doc comment already said.
+
+Closed for real this time, not narrowed further: `m.status` and
+`m.selected` were only ever two separate files because nobody had asked
+whether they needed to be - both are plain internal JSON with no
+external reader forcing them apart, unlike `updates.yaml` (a different
+format, read by `docker compose -f`). Consolidated them into one
+canonical file, `state.json`, written with a single
+`atomicfile.WriteJSON`/`WriteFiles` call - a single file's
+write-temp-then-rename is unconditionally atomic, so there is no longer
+a multi-file window for the canonical state at all, residual or
+otherwise. `updates.yaml` stays a separate file (still batched together
+with `state.json` via `WriteFiles` for the common case), but is now
+understood explicitly as a pure function of `m.selected` - a derived
+artifact for `docker compose` to read, not a second source of truth this
+process itself depends on, so a failure isolated to its own write no
+longer blocks the canonical state from advancing, and self-heals on the
+very next successful persist.
+
+Added a migration path in `load()` for the many real installations
+(every one up to and including `1.0.0-rc.1`) whose data directories are
+still in the old split-file shape on disk: read the legacy
+`status.json`/`images.json` once if `state.json` doesn't exist yet, then
+immediately re-persist into the new combined format - a silent,
+one-time, automatic migration on first boot with the fix, not a manual
+step or a loss of update history. The old files are left in place as
+harmless, never-read-again leftovers rather than deleted.
+
+New/replaced tests: `TestPersistLockedStateJSONIsSingleFileAtomic`
+(sabotages `updates.yaml` specifically and confirms `state.json` still
+advances correctly - a derived-artifact failure must never block the
+canonical state), `TestUpdatesYAMLSelfHealsAfterAFailedPersist` (proves
+the self-healing claim: `updates.yaml` catches back up to the canonical
+state on the next successful persist once whatever blocked it clears),
+and `TestLoadMigratesLegacyStatusAndImagesJSON` (writes old-format
+fixtures, constructs a real `Manager`, and confirms both the in-memory
+state and the newly-migrated `state.json` on disk are correct, then
+confirms a second `Manager` against the same now-migrated directory
+reads `state.json` directly). Also corrected `atomicfile.go`'s own
+`WriteFiles` doc comment, which had claimed combining files "existing
+on-disk formats and external readers... make impractical here" - true
+for `updates.yaml`, not true for the `status.json`/`images.json` pair
+this fix just combined; the comment now says so and recommends
+combining over `WriteFiles` whenever every file in question really is
+this process's own internal format with no external reader forcing them
+apart.

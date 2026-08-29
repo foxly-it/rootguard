@@ -590,20 +590,26 @@ func TestStatusSurfacesPersistFailureAndSelfHeals(t *testing.T) {
 	}
 }
 
-// TestPersistLockedKeepsMultiFileStateConsistentOnFailure is the
-// regression test for the exact scenario a follow-up review found:
-// persistLocked used to call atomicfile.WriteJSON/WriteFile once each for
-// status.json, images.json, and updates.yaml - all three derived from the
-// same in-memory state - so a failure partway through the sequence (the
-// review's own example: images.json failing after status.json had
-// already been committed) left them silently inconsistent with each
-// other on the very next load(). persistLocked now stages all three
-// through a single atomicfile.WriteFiles call, which commits (renames)
-// them in the fixed order status.json, images.json, updates.yaml -
-// sabotaging status.json itself (the *first* file in that order) so its
-// rename fails proves the strongest available claim: none of the three
-// files change at all, not just that the two after it were spared.
-func TestPersistLockedKeepsMultiFileStateConsistentOnFailure(t *testing.T) {
+// TestPersistLockedStateJSONIsSingleFileAtomic is the regression test for
+// a follow-up review finding: even after persistLocked started staging
+// status.json/images.json/updates.yaml through one atomicfile.WriteFiles
+// call (round 3's own fix), renaming several files can never be one
+// atomic operation on POSIX - a rename failing (or the process dying)
+// between two renames still left status.json and images.json in two
+// different generations, the exact scenario the fix was supposed to
+// close. This test's own predecessor (of the same name pattern)
+// demonstrated that residual window deliberately.
+//
+// Closed for real now: m.status and m.selected are one canonical file,
+// state.json, written with a single atomicfile.WriteJSON call - and a
+// single file's write-temp-then-rename is unconditionally atomic, no
+// residual window at all. Proven here by sabotaging updates.yaml (now a
+// separate, purely derived, self-healing artifact - see
+// TestUpdatesYAMLSelfHealsAfterAFailedPersist below) so its own rename
+// fails, and confirming state.json still updates correctly regardless -
+// a failure in the derived artifact must never block the canonical state
+// from advancing.
+func TestPersistLockedStateJSONIsSingleFileAtomic(t *testing.T) {
 	dataDir := t.TempDir()
 	manager := NewManager(Options{
 		DataDir: dataDir,
@@ -615,48 +621,124 @@ func TestPersistLockedKeepsMultiFileStateConsistentOnFailure(t *testing.T) {
 	if err := manager.selectImage("core", "rootguard-core:gen1"); err != nil {
 		t.Fatal(err)
 	}
-	statusPath := filepath.Join(dataDir, "status.json")
-	imagesPath := filepath.Join(dataDir, "images.json")
+	statePath := filepath.Join(dataDir, "state.json")
 	overridePath := filepath.Join(dataDir, "updates.yaml")
-	gen1Images, err := os.ReadFile(imagesPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(gen1Images), "rootguard-core:gen1") {
-		t.Fatalf("expected images.json to contain the gen1 image, got %s", gen1Images)
-	}
-	gen1Override, err := os.ReadFile(overridePath)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	// Replace status.json (the first file WriteFiles renames) with a
-	// directory - os.Rename(tempFile, statusPath) reliably fails against
-	// this on every OS, simulating a failure at the very first commit
-	// step, before images.json or updates.yaml are ever touched.
-	if err := os.Remove(statusPath); err != nil {
+	// Replace updates.yaml with a directory - os.Rename(tempFile,
+	// overridePath) reliably fails against this on every OS. state.json
+	// is first in persistLocked's WriteFiles call, so this leaves its own
+	// rename already committed regardless of what happens to updates.yaml
+	// next.
+	if err := os.Remove(overridePath); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(statusPath, 0700); err != nil {
+	if err := os.Mkdir(overridePath, 0700); err != nil {
 		t.Fatal(err)
 	}
 
 	if err := manager.selectImage("core", "rootguard-core:gen2"); err == nil {
-		t.Fatal("expected the second persist to fail")
+		t.Fatal("expected the persist to fail (updates.yaml's rename can't succeed against a directory)")
 	}
 
-	imagesAfter, err := os.ReadFile(imagesPath)
+	stateAfter, err := os.ReadFile(statePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(imagesAfter) != string(gen1Images) {
-		t.Fatalf("images.json changed despite the batch failing on status.json:\nbefore: %s\nafter:  %s", gen1Images, imagesAfter)
+	if !strings.Contains(string(stateAfter), "rootguard-core:gen2") {
+		t.Fatalf("expected state.json to still advance to gen2 despite updates.yaml's own failure, got:\n%s", stateAfter)
 	}
-	overrideAfter, err := os.ReadFile(overridePath)
+}
+
+// TestUpdatesYAMLSelfHealsAfterAFailedPersist is
+// TestPersistLockedStateJSONIsSingleFileAtomic's other half: updates.yaml
+// is a pure function of m.selected (part of state.json's own canonical
+// content), not a second source of truth - so once whatever blocked its
+// own write is gone, the very next successful persist must bring it back
+// in sync with the canonical state, not leave it permanently stuck at
+// whatever it last managed to write.
+func TestUpdatesYAMLSelfHealsAfterAFailedPersist(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir: dataDir,
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "Core", TargetImage: "rootguard-core:latest",
+		}},
+	})
+	overridePath := filepath.Join(dataDir, "updates.yaml")
+
+	if err := manager.selectImage("core", "rootguard-core:gen1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(overridePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(overridePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.selectImage("core", "rootguard-core:gen2"); err == nil {
+		t.Fatal("expected this persist to fail while updates.yaml is blocked")
+	}
+
+	// Whatever blocked updates.yaml is gone now - the very next persist
+	// must self-heal it to match the current (gen2) canonical state.
+	if err := os.Remove(overridePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.persist(); err != nil {
+		t.Fatal(err)
+	}
+	healed, err := os.ReadFile(overridePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(overrideAfter) != string(gen1Override) {
-		t.Fatalf("updates.yaml changed despite the batch failing on status.json:\nbefore: %s\nafter:  %s", gen1Override, overrideAfter)
+	if !strings.Contains(string(healed), "rootguard-core:gen2") {
+		t.Fatalf("expected updates.yaml to self-heal to the gen2 image, got:\n%s", healed)
+	}
+}
+
+// TestLoadMigratesLegacyStatusAndImagesJSON is the regression test for
+// the migration path load() needs now that status.json/images.json were
+// consolidated into state.json: every real installation up to and
+// including 1.0.0-rc.1 has data directories in the old split-file shape
+// on disk, and must not lose their update history/selected-image state
+// the first time they run a Core build with this change.
+func TestLoadMigratesLegacyStatusAndImagesJSON(t *testing.T) {
+	dataDir := t.TempDir()
+	legacyStatus := `{"state":"idle","message":"legacy state","services":[],"updated_at":"2026-08-29T00:00:00Z"}`
+	legacyImages := `{"core":"rootguard-core:legacy-pin"}`
+	if err := os.WriteFile(filepath.Join(dataDir, "status.json"), []byte(legacyStatus), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "images.json"), []byte(legacyImages), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := NewManager(Options{DataDir: dataDir})
+
+	status := manager.Status()
+	if status.Message != "legacy state" {
+		t.Fatalf("expected the legacy status.json content to be loaded, got %+v", status)
+	}
+	if manager.selected["core"] != "rootguard-core:legacy-pin" {
+		t.Fatalf("expected the legacy images.json content to be loaded, got %+v", manager.selected)
+	}
+
+	// Migrated to state.json immediately (load() re-persists once after a
+	// successful legacy read), not deferred until the next unrelated
+	// status change.
+	stateData, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
+	if err != nil {
+		t.Fatalf("expected state.json to exist after migration, got: %v", err)
+	}
+	if !strings.Contains(string(stateData), "legacy state") || !strings.Contains(string(stateData), "rootguard-core:legacy-pin") {
+		t.Fatalf("expected state.json to contain the migrated legacy content, got:\n%s", stateData)
+	}
+
+	// A second Manager pointed at the same, now-migrated directory must
+	// load from state.json directly - the legacy files are stale
+	// leftovers from here on, never read again.
+	reloaded := NewManager(Options{DataDir: dataDir})
+	if reloaded.Status().Message != "legacy state" {
+		t.Fatalf("expected the reloaded manager to read the migrated state.json, got %+v", reloaded.Status())
 	}
 }

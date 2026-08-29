@@ -96,16 +96,13 @@ type File struct {
 
 // WriteFiles atomically replaces the contents of multiple, independent
 // files as a single unit. Found in review: a caller with related state
-// split across more than one file (e.g. updater.Manager's
-// status.json/images.json/updates.yaml, all derived from the same
-// in-memory state) used to call WriteFile once per file - each
-// individually atomic, but a failure partway through (e.g. the second
-// file's write failing for any of the usual reasons: disk full,
+// split across more than one file used to call WriteFile once per file -
+// each individually atomic, but a failure partway through (e.g. the
+// second file's write failing for any of the usual reasons: disk full,
 // permissions, an I/O error) left the first file's already-committed new
 // content and the remaining files' untouched old content in two
 // different "generations" of the same logical state, silently
-// inconsistent with each other on the very next read - exactly the
-// status.json/images.json split-brain scenario described.
+// inconsistent with each other on the very next read.
 //
 // Every file is staged first - written to its own fresh temp file in its
 // target's directory and fsynced - before any of them is renamed into
@@ -115,15 +112,24 @@ type File struct {
 //
 // Renaming several files can never be one atomic operation on POSIX -
 // each rename(2) is its own syscall - so this cannot close the window
-// entirely. What it does is narrow it from "an arbitrarily slow write
+// entirely: what it does is narrow it from "an arbitrarily slow write
 // and fsync of a later file, which can fail for many mundane reasons"
 // down to "the brief moment between two rename syscalls, both of which
 // only run after every write in the batch has already durably
-// succeeded" - the best available guarantee for multiple independent
-// files without a write-ahead log or combining them into one file, which
-// existing on-disk formats and external readers (docker compose's own
-// -f-loaded updates.yaml, an operator's status.json) make impractical
-// here.
+// succeeded". A follow-up review correctly called that residual window
+// out as still a real gap for updater.Manager's own original motivating
+// case - status.json and images.json, both plain internal JSON with no
+// external reader, had no real reason to be two files at all. They're
+// one file now (state.json), which closes the window for that pair
+// completely: a single file's write-temp-then-rename is unconditionally
+// atomic. WriteFiles stays the right tool where combining genuinely
+// isn't practical - updater.Manager still uses it for state.json
+// alongside updates.yaml, a different format entirely and read by an
+// external tool (docker compose's own -f flag) that can't consume JSON -
+// so pick WriteFiles for that shape of problem, and prefer actually
+// combining the files instead whenever every one of them is this
+// process's own internal format with no external reader forcing them
+// apart.
 func WriteFiles(files []File) error {
 	type staged struct {
 		tempPath string
