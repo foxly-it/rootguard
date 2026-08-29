@@ -272,13 +272,13 @@ func TestDiscoverHostsRejectsRedirects(t *testing.T) {
 // called directly here with nil, without any real or faked network I/O.
 func TestRejectNonPrivateControlRejectsPublicAddresses(t *testing.T) {
 	tests := map[string]bool{
-		"192.168.1.1:80":   true,
-		"10.0.0.1:80":      true,
-		"172.16.0.5:80":    true,
-		"127.0.0.1:80":     true,
-		"169.254.1.1:80":   true,
-		"[fe80::1]:80":     true,
-		"[fd00::1]:80":     true,
+		"192.168.1.1:80": true,
+		"10.0.0.1:80":    true,
+		"172.16.0.5:80":  true,
+		"127.0.0.1:80":   true,
+		"169.254.1.1:80": true,
+		"[fe80::1]:80":   true,
+		"[fd00::1]:80":   true,
 		// Regression case found in a follow-up review: a link-local IPv6
 		// address dialed with its required zone identifier ("%en0" -
 		// link-local addresses are ambiguous without one) resolves to

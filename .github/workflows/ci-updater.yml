@@ -32,6 +32,15 @@ jobs:
         run: go test ./...
       - working-directory: rootguard-updater
         run: go vet ./...
+      # See ci-core.yml's identical step for why - same gap, same fix.
+      - working-directory: rootguard-updater
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::Not gofmt-formatted (run 'gofmt -w' on these):"
+            echo "$unformatted"
+            exit 1
+          fi
 
   build:
     needs: test

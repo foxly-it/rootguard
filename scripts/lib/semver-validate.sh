@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Shared by release-alpha.yml and release-version-bump.yml (both run
 # entirely within this repo's own checkout, so sourcing a real file here
 # is simpler than the composite-action route this used to be dismissed
