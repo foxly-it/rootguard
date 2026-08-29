@@ -328,6 +328,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Same cosign version rootguard-core's own Dockerfile pins (see its
+      # `FROM ghcr.io/sigstore/cosign/cosign:v3.0.6@sha256:...` stage) -
+      # needed below to validate a candidate's attestation before
+      # promoting it, the same check stack.RequireAttestation performs at
+      # deploy time (internal/stack/attestation.go).
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.0.6"
 
       # This is the actual promotion moment for releasekritisch #1/#2: the
       # publish job never touched the final version tag at all, only a
@@ -350,6 +358,7 @@ jobs:
         env:
           VERSION: ${{ needs.version.outputs.value }}
           OWNER: ${{ github.repository_owner }}
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
         run: |
           set -euo pipefail
           for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage; do
@@ -357,6 +366,57 @@ jobs:
             test -n "$digest"
             source_ref="ghcr.io/${OWNER}/${image}@${digest}"
             final_ref="ghcr.io/${OWNER}/${image}:${VERSION}"
+
+            # Found in review: the digest above came from an artifact
+            # written by the publish job's matrix leg for this image,
+            # trusted as-is - including on its "candidate already existed"
+            # retry path, which never re-runs the build or the attest
+            # step at all (see publish's own "Record published digest"
+            # comment) and just looks the digest up from the registry.
+            # Re-verify both properties this step actually depends on,
+            # here, every time, regardless of which path produced the
+            # digest:
+            #
+            # 1. The candidate was genuinely built from the exact commit
+            #    this release run tested/security-scanned - not just a tag
+            #    collision or a stale artifact. candidate_tag only encodes
+            #    a 12-char commit prefix, so compare against the full
+            #    org.opencontainers.image.revision label instead.
+            revision="$(docker buildx imagetools inspect "$source_ref" --format '{{json .Image}}' \
+              | jq -r '[.[].config.Labels["org.opencontainers.image.revision"]] | map(select(. != null)) | first // empty')"
+            if [ "$revision" != "$SOURCE_REF" ]; then
+              echo "::error::${image}: candidate ${source_ref} has org.opencontainers.image.revision=${revision:-<missing>}, expected ${SOURCE_REF} - refusing to promote a candidate that wasn't built from the commit this release run actually tested." >&2
+              exit 1
+            fi
+            # 2. A valid release attestation actually exists for it - the
+            #    same policy stack.RequireAttestation enforces at deploy
+            #    time (internal/stack/attestation.go), checked here too so
+            #    a candidate whose attest step silently failed (or never
+            #    ran, on the retry path above) can never be promoted.
+            cosign verify-attestation --type https://slsa.dev/provenance/v1 \
+              --certificate-identity-regexp '^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$' \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-github-workflow-repository foxly-it/rootguard \
+              "$source_ref" >/dev/null
+
+            # Final tag: create if missing, no-op if it already points at
+            # this exact digest (an idempotent retry of this very step),
+            # hard-abort if it points at a *different* one. Found in
+            # review: this used to call imagetools create unconditionally
+            # - a published version tag must never silently start
+            # resolving to different content; if ${VERSION} was already
+            # published pointing elsewhere, the fix is a new version
+            # number, not overwriting this one.
+            existing_digest="$(docker buildx imagetools inspect "$final_ref" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+            if [ -n "$existing_digest" ]; then
+              if [ "$existing_digest" = "$digest" ]; then
+                echo "${final_ref} already points at ${digest}, nothing to promote"
+                continue
+              fi
+              echo "::error::${image}: ${final_ref} already exists and points at ${existing_digest}, not the candidate's ${digest} - a published version tag must never be moved. Cut a new version instead of reusing ${VERSION}." >&2
+              exit 1
+            fi
+
             docker buildx imagetools create -t "$final_ref" "$source_ref"
             promoted_digest="$(docker buildx imagetools inspect "$final_ref" --format '{{.Manifest.Digest}}')"
             if [ "$promoted_digest" != "$digest" ]; then
@@ -470,27 +530,55 @@ jobs:
         env:
           # Set only when "Commit updated pins" actually pushed a new
           # commit - the exact one to point the tag at, no re-fetch
-          # needed. Empty on its idempotent "nothing to commit" path
-          # (pins already matched), where re-fetching origin/main's
-          # current tip below is the correct, pre-existing fallback:
-          # nothing this release itself needs to add is missing from it.
+          # needed. Empty on its idempotent "nothing to commit" path (pins
+          # already matched in the checkout at needs.version.outputs.source_ref
+          # itself). Found in review: this used to fall back to
+          # origin/main's *current* tip in that case, on the reasoning
+          # that "nothing this release itself needs to add is missing from
+          # it" - true only if main hasn't moved since this release's
+          # source_ref was fixed. A retried/re-run workflow (this job can
+          # legitimately re-run after e.g. a later job failed) checks that
+          # reasoning again with whatever *now* happens to be on main,
+          # which may by then include unrelated commits this specific
+          # release run never built, tested, or security-scanned -
+          # confirmed live: a real RC's tag and its own Core image's
+          # OCI revision label pointed at two different commits because of
+          # exactly this. SOURCE_REF is the one thing every job in this
+          # run actually agrees on (see the "version" job's own comment on
+          # why it exists) - use it instead, and verify it's still part of
+          # main's history rather than trusting it blindly.
           PIN_COMMIT: ${{ steps.commit-pins.outputs.pin_commit }}
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
         run: |
           set -euo pipefail
           tag="v${{ needs.version.outputs.value }}"
+          git fetch origin main
           if [ -n "$PIN_COMMIT" ]; then
             target="$PIN_COMMIT"
           else
-            git fetch origin main
-            target="$(git rev-parse origin/main)"
+            target="$(git rev-parse "${SOURCE_REF}")"
+            if ! git merge-base --is-ancestor "${target}" origin/main; then
+              echo "::error::Release ${{ needs.version.outputs.value }} was built and tested from ${target}, which is no longer part of origin/main - main has moved on since this release run started. Refusing to tag a commit this release never actually built/tested/security-scanned. Abort this release and start a fresh one instead." >&2
+              exit 1
+            fi
           fi
           # Recorded as a step output either way (before the idempotent
           # early-exit below) - the release notes' "Build provenance"
           # section needs it regardless of whether this run actually moved
           # the tag or found it already correct.
           echo "pin_commit=${target}" >> "$GITHUB_OUTPUT"
-          if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1 && \
-             [ "$(git rev-parse "refs/tags/${tag}")" = "${target}" ]; then
+          # "refs/tags/${tag}" alone resolves an *annotated* tag (which
+          # `git tag -a` below always creates) to the tag object's own
+          # hash, not the commit it points at - found in review: that made
+          # this comparison fail on every single run, so this step force-
+          # moved the tag every time regardless of whether it actually
+          # needed to, and any accidental extra run (a retry, a re-dispatch
+          # for the same version) could silently force-push it onto a
+          # different commit. "^{}" dereferences through the tag object to
+          # the commit it points at, same as `git rev-parse` does for every
+          # other object type already.
+          if git rev-parse "refs/tags/${tag}^{}" >/dev/null 2>&1 && \
+             [ "$(git rev-parse "refs/tags/${tag}^{}")" = "${target}" ]; then
             echo "Tag ${tag} already points at the correctly pinned commit"
             exit 0
           fi
