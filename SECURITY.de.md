@@ -20,9 +20,9 @@ oder vertrauliche Daten aus Anhängen und Logs.
 
 ## Unterstützte Versionen
 
-RootGuard befindet sich in einer öffentlichen Alpha. Sicherheitskorrekturen
-werden für den jeweils neuesten veröffentlichten Alpha-Stand bereitgestellt.
-Ältere Alpha-Versionen erhalten keine eigenen Backports.
+RootGuard befindet sich in der öffentlichen Release-Candidate-Phase vor 1.0.
+Sicherheitskorrekturen werden für den jeweils neuesten veröffentlichten Stand
+bereitgestellt. Ältere Versionen erhalten keine eigenen Backports.
 
 Nach Eingang bestätigen wir die Meldung, prüfen Auswirkung und Reproduzierbarkeit
 und koordinieren eine Korrektur sowie die anschließende Veröffentlichung. Bitte
