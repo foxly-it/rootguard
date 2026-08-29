@@ -3299,3 +3299,53 @@ the unknown attribute originally sat.
 test: a cookie carrying a `FutureAttr=xyz` pair must still carry it after
 the rewrite. Revert-verified: removing the `Unparsed` re-append makes the
 rewritten cookie silently lose it, exactly reproducing the finding.
+
+**Small, fixed: the WebApp's audit log and session inventory trusted a
+freely-settable `X-Forwarded-For` header.** Rate limiting already used
+the real TCP peer address (`rateLimitKey`, fixed in an earlier round) -
+but `clientAddress`, used for the audit log and session inventory shown
+to an operator, still trusted `X-Forwarded-For` unconditionally. Not just
+a display quirk: an operator reviewing "who logged in from where" for
+incident response would see attacker-controlled garbage instead of the
+real peer address, since anyone who can reach this container at all could
+set an arbitrary value and have it recorded as their own session's
+address. RootGuard's own documented reverse-proxy setups
+(`docs/https-reverse-proxy.md`) never ask an operator to forward
+`X-Forwarded-For` either - only `X-Forwarded-Proto` - so there's no
+legitimate deployment this header could be trustworthy in.
+
+Fixed by making `clientAddress` delegate to `rateLimitKey` directly -
+kept as its own named function (rather than every caller switching to
+`rateLimitKey`) purely to preserve the distinct display-vs-access-control
+intent already documented at each call site.
+
+`TestAuditLogIgnoresSpoofedForwardedForHeader` is the regression test: a
+login with a spoofed `X-Forwarded-For` must still record the real peer
+address in every resulting audit event. Revert-verified: reverting
+`clientAddress` to trust the header again makes the audit log record the
+spoofed value instead.
+
+**Small, fixed: `theme.js` still had an `innerHTML` sink.** The blockpage
+theme toggle set `btn.innerHTML = icons[mode]`, where `icons` is a
+hardcoded, developer-written object of three fixed SVG strings - not
+exploitable today, since nothing attacker-influenced ever reaches it, but
+the audit's point stands: a sink that happens to be safe today is still a
+sink, and removing it is cheap here.
+
+Fixed by building each icon as real DOM nodes
+(`document.createElementNS`/`setAttribute`) instead of an HTML string, and
+swapping the button's child via `removeChild`/`appendChild` instead of
+`innerHTML`. Applied identically to both copies of this file -
+`rootguard-blockpage/web/theme.js` (the real blockpage) and
+`rootguard-webapp/frontend/public/blockpage-preview/theme.js` (the
+WebApp's live preview of it, a manually-kept-in-sync copy, confirmed
+byte-identical to the original before and after this change).
+
+No existing test harness for this file (no Playwright/DOM test
+infrastructure in this repo yet) - verified instead with a real `jsdom`
+instance (already a frontend devDependency): loaded the actual file,
+confirmed initialization produces exactly one `<svg>` child, and that
+cycling through all three modes (three simulated clicks) toggles
+`data-theme` correctly and never leaves more than one child node behind.
+`grep` confirms no `.innerHTML =` assignment remains in either file;
+`npm run lint` stays clean.
