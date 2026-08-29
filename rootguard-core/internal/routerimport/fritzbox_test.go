@@ -261,52 +261,45 @@ func TestDiscoverHostsRejectsRedirects(t *testing.T) {
 	}
 }
 
-// fakeAddr is a minimal net.Addr with a fixed, test-chosen IP - net.Pipe's
-// own addresses can't be customized, so a real net.Conn wrapper is used
-// instead to make dialPrivateOnlyWith see an arbitrary RemoteAddr without
-// any real network I/O.
-type fakeAddr struct{ ip string }
-
-func (a fakeAddr) Network() string { return "tcp" }
-func (a fakeAddr) String() string  { return net.JoinHostPort(a.ip, "80") }
-
-type fakeConn struct {
-	net.Conn
-	remote net.Addr
-}
-
-func (c fakeConn) RemoteAddr() net.Addr { return c.remote }
-
-// TestDialPrivateOnlyWithRejectsPublicAddresses is the regression test for
-// the other half of the same finding: even without a redirect, nothing
-// stopped this client from being pointed at a public IP directly. Uses a
-// fake connection instead of a real dial to a public address, both so the
-// test doesn't depend on outbound network access in CI and so it can't be
-// flaky about what a real public server happens to do.
-func TestDialPrivateOnlyWithRejectsPublicAddresses(t *testing.T) {
-	client, server := net.Pipe()
-	t.Cleanup(func() { client.Close(); server.Close() })
-
+// TestRejectNonPrivateControlRejectsPublicAddresses is the regression test
+// for a follow-up review finding: the previous version of this guard
+// (dialPrivateOnlyWith) dialed first and inspected conn.RemoteAddr()
+// afterwards - a real connect(2) to a disallowed address happened either
+// way, letting a caller distinguish an open port from a closed one on a
+// host this client should never touch. rejectNonPrivateControl runs as a
+// net.Dialer.Control hook instead - after DNS resolution, before
+// connect(2) - so it never touches the syscall.RawConn argument and can be
+// called directly here with nil, without any real or faked network I/O.
+func TestRejectNonPrivateControlRejectsPublicAddresses(t *testing.T) {
 	tests := map[string]bool{
-		"192.168.1.1":   true,
-		"10.0.0.1":      true,
-		"172.16.0.5":    true,
-		"127.0.0.1":     true,
-		"169.254.1.1":   true,
-		"fe80::1":       true,
-		"fd00::1":       true,
-		"8.8.8.8":       false,
-		"1.1.1.1":       false,
-		"93.184.216.34": false,
+		"192.168.1.1:80":   true,
+		"10.0.0.1:80":      true,
+		"172.16.0.5:80":    true,
+		"127.0.0.1:80":     true,
+		"169.254.1.1:80":   true,
+		"[fe80::1]:80":     true,
+		"[fd00::1]:80":     true,
+		"8.8.8.8:80":       false,
+		"1.1.1.1:80":       false,
+		"93.184.216.34:80": false,
 	}
-	for ip, wantAllowed := range tests {
-		fake := func(context.Context, string, string) (net.Conn, error) {
-			return fakeConn{Conn: client, remote: fakeAddr{ip: ip}}, nil
-		}
-		_, err := dialPrivateOnlyWith(context.Background(), "tcp", "ignored:80", fake)
+	for address, wantAllowed := range tests {
+		err := rejectNonPrivateControl("tcp4", address, nil)
 		allowed := err == nil
 		if allowed != wantAllowed {
-			t.Errorf("ip %s: allowed = %v, want %v (err: %v)", ip, allowed, wantAllowed, err)
+			t.Errorf("address %s: allowed = %v, want %v (err: %v)", address, allowed, wantAllowed, err)
+		}
+	}
+}
+
+// TestRejectNonPrivateControlRejectsUnparsableAddress covers the
+// SplitHostPort/ParseIP failure paths directly - dialPrivateOnly's
+// production dialer only ever hands this function an already-resolved
+// ip:port, but the check must still fail closed on malformed input.
+func TestRejectNonPrivateControlRejectsUnparsableAddress(t *testing.T) {
+	for _, address := range []string{"not-an-address", "example.com:80"} {
+		if err := rejectNonPrivateControl("tcp4", address, nil); !errors.Is(err, ErrRouterDiscovery) {
+			t.Errorf("address %q: expected ErrRouterDiscovery, got %v", address, err)
 		}
 	}
 }
