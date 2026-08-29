@@ -3202,3 +3202,33 @@ admin token) reaches past `requireBearerToken`, revert-verified: removing
 the route's own `root.HandleFunc` registration and re-running that exact
 test flips it to a 401, confirming the route precedence is what the test
 depends on, not something it would pass by accident either way.
+
+**Small, fixed: `atomicfile.WriteFile` wrote to a fixed, predictable temp
+name (`path+".tmp"`) via a plain `os.WriteFile`.** Three compounding
+gaps in that: not concurrency-safe (two overlapping callers for the same
+`path` shared that one temp name, racing each other's writes); `os.WriteFile`
+opens-and-truncates an *existing* file rather than refusing one, so a
+pre-existing `path+".tmp"` - a stale leftover from an earlier failed run,
+or a symlink someone else in the same directory could plant - would be
+written through rather than replaced; and since `os.OpenFile` only applies
+the requested permission bits when it actually *creates* a file, an
+existing leftover at that name silently donated its own (possibly wrong)
+mode to every future write, ignoring whatever mode the caller asked for.
+
+Fixed by switching to `os.CreateTemp(dir, ...)` in the target directory:
+it always creates a brand-new, uniquely-named file, so there's never an
+existing name (symlink or otherwise) to collide with, and this code now
+explicitly `Chmod`s it to the requested mode regardless of what any
+earlier leftover had. Also added `Sync()` on both the file (before the
+rename that makes it visible) and the parent directory (after the rename
+- a rename is itself a directory-entry change that needs its own fsync to
+survive a crash, which the previous version never did either).
+
+`TestWriteFileIgnoresStaleLegacyTempFile` is the regression test:
+pre-plants a stale `path+".tmp"` at world-writable mode `0777`, then
+asserts a fresh `WriteFile(path, ..., 0600)` call is completely unaffected
+by it - both in the final file's content and in its mode actually being
+`0600`, not the leaked `0777`. Revert-verified: reverting to the old
+fixed-name implementation makes exactly the mode assertion fail (got
+`0777`, wanted `0600`), confirming the test targets the real bug, not
+just the file-content half of it.
