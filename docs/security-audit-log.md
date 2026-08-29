@@ -1677,3 +1677,22 @@ changed); the fixed version threw nothing, correctly fell back to system
 theme, and the button worked normally on the very first click. Applied
 identically to `rootguard-webapp/frontend/public/blockpage-preview/theme.js`,
 kept byte-for-byte in sync with the real one per existing convention.
+
+**Low, fixed: the FritzBox router-discovery dial guard rejected
+zone-qualified IPv6 link-local addresses outright.**
+`rejectNonPrivateControl` used `net.ParseIP` on the dialer's resolved
+`ip:port`, but link-local IPv6 addresses are ambiguous without a zone
+identifier (the same address can exist on multiple interfaces) - a real
+dial to one resolves to exactly the `fe80::1%en0` shape, and
+`net.ParseIP` has never supported the `%zone` suffix at all, returning
+`nil` unconditionally for it. Every zone-qualified link-local address
+was refused regardless of actually being private, even though
+`isRouterReachable` explicitly accepts link-local addresses.
+
+Fixed by switching to `net/netip.ParseAddr`, which parses the zone
+correctly and exposes the identical `IsPrivate`/`IsLinkLocalUnicast`/
+`IsLoopback` methods `net.IP` has - `isRouterReachable` now takes a
+`netip.Addr`. Verified the old failure mode directly (`net.ParseIP`
+returns `nil` for `"fe80::1%en0"`) and added the regression case to both
+`TestRejectNonPrivateControlRejectsPublicAddresses` (via the dialer's
+bracketed `[fe80::1%en0]:80` shape) and `TestIsRouterReachable`.
