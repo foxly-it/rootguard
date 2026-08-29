@@ -92,24 +92,56 @@ func TestExtractRejectsUnsafeAndManifestMismatchedArchives(t *testing.T) {
 	}
 }
 
-// TestExtractRejectsEntryCountAtTheLimitWithAnAccurateMessage is the
-// regression test for a review finding: the entry-count guard rejects at
-// count == MaxFiles (exactly MaxFiles entries already read - see its own
-// comment in archive.go for why >= is correct there), without ever
-// checking whether a real MaxFiles+1th entry exists. The old message
-// ("backup contains more than %d entries") claimed something this code
-// path doesn't actually know to be true; this test builds an archive
-// with exactly MaxFiles entries (no more) and checks it's still rejected,
-// but with wording that doesn't overclaim.
-func TestExtractRejectsEntryCountAtTheLimitWithAnAccurateMessage(t *testing.T) {
+// TestExtractAcceptsExactlyTheEntryLimit is the regression test for a
+// follow-up review finding: the entry-count guard used to check count
+// (starting at 0, incremented per loop iteration before archive.Next() was
+// even called) against MaxFiles *before* reading each entry - so once
+// exactly MaxFiles entries had already been read successfully, the guard
+// fired on the next iteration without ever looking far enough to confirm a
+// genuine MaxFiles+1th entry actually exists. An archive with precisely
+// MaxFiles entries - at the limit, not over it - was rejected as "too
+// many" even though it never had more than the limit allows. Fixed by
+// counting (and checking) only after a real entry has actually been read;
+// this test builds an archive with exactly MaxFiles entries and confirms
+// it's now accepted.
+func TestExtractAcceptsExactlyTheEntryLimit(t *testing.T) {
+	// Deliberately no manifest.json among these - building a manifest
+	// whose file list/hashes match 100000 real extracted entries is a lot
+	// of unrelated overhead for what this test actually targets: whether
+	// the entry-count guard itself rejects an at-the-limit archive. So the
+	// assertion below is narrower than "the whole restore succeeds" - it's
+	// "count == MaxFiles never produces the 'too many entries' error" -
+	// whatever Extract fails on afterward (here, the always-expected
+	// missing manifest) is a separate, already-covered code path.
 	entries := make(map[string]string, MaxFiles)
 	for i := range MaxFiles {
 		entries[fmt.Sprintf("rootguard/installation/%d", i)] = ""
 	}
 	archive := encryptedTar(t, entries)
+	stage, _, err := Extract(t.TempDir(), testPassphrase, bytes.NewReader(archive))
+	if stage != "" {
+		defer os.RemoveAll(stage)
+	}
+	if err != nil && strings.Contains(err.Error(), "too many entries") {
+		t.Fatalf("expected an archive at exactly the entry limit to pass the count guard, got: %v", err)
+	}
+}
+
+// TestExtractRejectsEntryCountOverTheLimit is the counterpart to the
+// acceptance test above: an archive with one entry more than MaxFiles must
+// still be rejected, and only once that genuine extra entry has actually
+// been read - with a message that doesn't overclaim ("more than %d
+// entries" was the old, inaccurate wording a prior round already
+// corrected once).
+func TestExtractRejectsEntryCountOverTheLimit(t *testing.T) {
+	entries := make(map[string]string, MaxFiles+1)
+	for i := range MaxFiles + 1 {
+		entries[fmt.Sprintf("rootguard/installation/%d", i)] = ""
+	}
+	archive := encryptedTar(t, entries)
 	_, _, err := Extract(t.TempDir(), testPassphrase, bytes.NewReader(archive))
 	if err == nil {
-		t.Fatal("expected an archive at exactly the entry limit to be rejected")
+		t.Fatal("expected an archive one entry over the limit to be rejected")
 	}
 	if strings.Contains(err.Error(), "more than") {
 		t.Fatalf("error message overclaims what was actually found: %v", err)
