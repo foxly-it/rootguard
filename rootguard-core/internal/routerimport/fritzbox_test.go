@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"testing"
 )
@@ -279,6 +279,13 @@ func TestRejectNonPrivateControlRejectsPublicAddresses(t *testing.T) {
 		"169.254.1.1:80":   true,
 		"[fe80::1]:80":     true,
 		"[fd00::1]:80":     true,
+		// Regression case found in a follow-up review: a link-local IPv6
+		// address dialed with its required zone identifier ("%en0" -
+		// link-local addresses are ambiguous without one) resolves to
+		// exactly this shape. net.ParseIP has never supported "%zone" at
+		// all and returned nil for it unconditionally, refusing every
+		// zone-qualified link-local address regardless of privacy.
+		"[fe80::1%en0]:80": true,
 		"8.8.8.8:80":       false,
 		"1.1.1.1:80":       false,
 		"93.184.216.34:80": false,
@@ -312,6 +319,7 @@ func TestIsRouterReachable(t *testing.T) {
 		"127.0.0.1":    true,
 		"169.254.1.1":  true,
 		"fe80::1":      true,
+		"fe80::1%en0":  true, // zone-qualified link-local - see the fritzbox_test.go dial-guard test's own comment
 		"fd00::1":      true,
 		"::1":          true,
 		"8.8.8.8":      false,
@@ -320,9 +328,9 @@ func TestIsRouterReachable(t *testing.T) {
 		"0.0.0.0":      false,
 	}
 	for raw, want := range tests {
-		ip := net.ParseIP(raw)
-		if ip == nil {
-			t.Fatalf("test bug: %q does not parse as an IP", raw)
+		ip, err := netip.ParseAddr(raw)
+		if err != nil {
+			t.Fatalf("test bug: %q does not parse as an IP: %v", raw, err)
 		}
 		if got := isRouterReachable(ip); got != want {
 			t.Errorf("isRouterReachable(%s) = %v, want %v", raw, got, want)

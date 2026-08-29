@@ -13,6 +13,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"syscall"
@@ -129,8 +130,18 @@ func rejectNonPrivateControl(_ string, address string, _ syscall.RawConn) error 
 	if err != nil {
 		return fmt.Errorf("%w: could not determine the resolved address", ErrRouterDiscovery)
 	}
-	ip := net.ParseIP(host)
-	if ip == nil || !isRouterReachable(ip) {
+	// netip.ParseAddr, not net.ParseIP: found in review that a link-local
+	// IPv6 address dialed with a required zone identifier (e.g.
+	// "fe80::1%en0" - link-local addresses are ambiguous without one,
+	// since the same address can exist on multiple interfaces) resolves
+	// to exactly that shape here, and net.ParseIP has never supported the
+	// "%zone" suffix at all - it returns nil for any address containing
+	// one, unconditionally refusing every zone-qualified link-local
+	// address regardless of whether it was actually private. netip.Addr
+	// parses the zone correctly and exposes the identical
+	// IsPrivate/IsLinkLocalUnicast/IsLoopback methods net.IP has.
+	ip, err := netip.ParseAddr(host)
+	if err != nil || !isRouterReachable(ip) {
 		return fmt.Errorf("%w: refusing to contact %s - not a private network address", ErrRouterDiscovery, host)
 	}
 	return nil
@@ -143,7 +154,7 @@ func rejectNonPrivateControl(_ string, address string, _ syscall.RawConn) error 
 // exercise the client against httptest servers, which bind there); it's
 // also not meaningfully riskier than the private ranges above it for
 // this client's actual blast radius.
-func isRouterReachable(ip net.IP) bool {
+func isRouterReachable(ip netip.Addr) bool {
 	return ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLoopback()
 }
 
