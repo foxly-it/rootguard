@@ -4,6 +4,21 @@ on:
   push:
     branches: [main]
   pull_request:
+  # workflow_call lets release-alpha.yml run these exact three jobs as
+  # part of the release gate itself - found in review: a release cut
+  # published images even though nothing in the release pipeline ever
+  # actually waited on this workflow's result, only on it having run
+  # *at some point* against main via the push trigger above (a separate,
+  # untimed, unenforced signal). ref lets the caller pin the exact commit
+  # to scan - release-alpha.yml's own source_ref, not the ambient
+  # github.sha a workflow_dispatch run would otherwise resolve to.
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit SHA to scan (defaults to the calling run's own github.sha)
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -14,6 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.ref || github.sha }}
           # Full history, not just the checked-out commit - gitleaks scans
           # every commit for secrets that were later removed but still
           # live in history.
@@ -32,6 +48,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - name: Install trivy
         run: |
           set -euo pipefail
@@ -55,6 +73,8 @@ jobs:
         module: [rootguard-core, rootguard-updater, rootguard-webapp/backend]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: ${{ matrix.module }}/go.mod
