@@ -371,17 +371,29 @@ main() {
   if [ "${#admin_password}" -lt 12 ]; then
     die "Das WebGUI-Passwort muss mindestens 12 Zeichen lang sein. Setze ROOTGUARD_ADMIN_PASSWORD auf ein längeres Passwort oder lasse das Feld leer, um eines automatisch generieren zu lassen."
   fi
-  # A typed value can never contain one (read -r stops at the first
-  # newline) - only reachable via ROOTGUARD_ADMIN_USER/
+  # A typed value can never contain a newline or carriage return (read -r
+  # stops at the first newline, and a real terminal doesn't deliver a bare
+  # \r either) - only reachable via ROOTGUARD_ADMIN_USER/
   # ROOTGUARD_ADMIN_PASSWORD supplied directly in the environment for a
   # non-interactive install. Rejected outright rather than relying on the
-  # .env quoting below to contain it: a value spanning multiple physical
-  # lines in .env is a real ambiguity across dotenv-style parsers (some
-  # treat a quoted value as continuing past the newline, some don't), not
-  # something worth trusting for something that's supposed to also become
-  # this account's actual password.
+  # .env quoting below to contain either: a value spanning multiple
+  # physical lines in .env is a real ambiguity across dotenv-style parsers
+  # (some treat a quoted value as continuing past the newline, some
+  # don't), not something worth trusting for something that's supposed to
+  # also become this account's actual password.
+  #
+  # A literal single quote is rejected too, found in review: the .env
+  # writer below single-quotes every value specifically so Docker Compose
+  # never expands a literal $ in it (see the awk block's own comment) -
+  # dotenv single-quoted values are fully literal with no escape
+  # mechanism at all, so there's no way to represent an embedded ' inside
+  # one. Simpler and more certain to reject it here than to attempt a
+  # quoting trick (ending the quote, escaping one ', resuming it) whose
+  # correctness would depend on parser behavior this script has no way to
+  # verify against every dotenv-style implementation Compose might use.
   case "$admin_user$admin_password" in
-    *$'\n'*) die "Benutzername und Passwort dürfen keinen Zeilenumbruch enthalten." ;;
+    *$'\n'*|*$'\r'*) die "Benutzername und Passwort dürfen keinen Zeilenumbruch enthalten." ;;
+    *"'"*) die "Benutzername und Passwort dürfen kein Apostroph (') enthalten." ;;
   esac
 
   log "Ermittle die aktuelle RootGuard-Version…"
@@ -412,21 +424,33 @@ main() {
   # backslash would otherwise corrupt the substitution (or worse) with any
   # editor-style in-place replacement.
   #
-  # Each value is also double-quoted in the .env output itself (q(),
+  # Each value is also single-quoted in the .env output itself (q(),
   # below) - found in review: an unquoted value is re-read by Docker
   # Compose later, which treats '#' as starting a comment and a literal
-  # newline as a new KEY=VALUE line outside of quotes. A password or
-  # token containing either would otherwise get silently truncated at
-  # the '#', or inject an extra variable into .env entirely. q() escapes
-  # any backslash or double-quote already in the value first, so the
-  # quoting itself can't be broken out of.
+  # newline as a new KEY=VALUE line outside of quotes; a password or
+  # token containing either would otherwise get silently truncated at the
+  # '#', or inject an extra variable into .env entirely.
+  #
+  # Single quotes, not double: found in review - Compose's own dotenv
+  # parser still expands $VAR/${VAR} references *inside* a double-quoted
+  # value (reproduced live with `docker compose config`: a password of
+  # abc$HOME${MISSING} came back out with $HOME expanded to the
+  # invoking user's real home directory), so double-quoting alone doesn't
+  # actually stop an admin-supplied password from being silently
+  # rewritten. Single-quoted dotenv values are fully literal - no
+  # expansion, no escape processing at all - which is also exactly why a
+  # literal ' can't appear in one; admin_user/admin_password are already
+  # rejected above if they contain one, so q() itself never needs to
+  # handle that case. The three internally-generated values below
+  # (tokens, port) can't contain a ' either - random_secret() only ever
+  # produces hex/base64url output, and WEB_PORT is numeric.
   ROOTGUARD_API_TOKEN="$api_token" \
   ROOTGUARD_RECOVERY_TOKEN="$recovery_token" \
   ROOTGUARD_ADMIN_USER="$admin_user" \
   ROOTGUARD_ADMIN_PASSWORD="$admin_password" \
   ROOTGUARD_WEB_PORT="$WEB_PORT" \
   awk '
-    function q(v) { gsub(/\\/, "\\\\", v); gsub(/"/, "\\\"", v); return "\"" v "\"" }
+    function q(v) { return "\047" v "\047" }
     /^ROOTGUARD_API_TOKEN=/      { print "ROOTGUARD_API_TOKEN=" q(ENVIRON["ROOTGUARD_API_TOKEN"]); next }
     /^ROOTGUARD_RECOVERY_TOKEN=/ { print "ROOTGUARD_RECOVERY_TOKEN=" q(ENVIRON["ROOTGUARD_RECOVERY_TOKEN"]); next }
     /^ROOTGUARD_ADMIN_USER=/     { print "ROOTGUARD_ADMIN_USER=" q(ENVIRON["ROOTGUARD_ADMIN_USER"]); next }
