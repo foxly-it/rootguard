@@ -1898,3 +1898,49 @@ this fix just combined; the comment now says so and recommends
 combining over `WriteFiles` whenever every file in question really is
 this process's own internal format with no external reader forcing them
 apart.
+
+**Small items, fixed:**
+
+- `internal/routerimport/fritzbox_test.go` wasn't `gofmt`-formatted
+  (drifted after a hand-aligned map literal picked up a new entry in an
+  earlier round) - `gofmt -w`'d, and added a `gofmt -l` gate to
+  `ci-core.yml`/`ci-updater.yml`/`ci-webapp.yml` (none of `go test`/
+  `go vet` check formatting at all) so this specific class of drift
+  fails CI instead of waiting for a human to notice.
+- `scripts/lib/semver-validate.sh` had no shebang, so `shellcheck`
+  couldn't determine its dialect (`SC2148`) and skipped real analysis of
+  a file using bash-specific syntax (`[[ ... =~ ... ]]`, `local`).
+  Added `#!/usr/bin/env bash`, matching the sibling `version-pattern.sh`
+  file's own existing convention for a sourced-only script. Swept the
+  rest of `scripts/*.sh` with `shellcheck` too - every remaining
+  finding is a genuine false positive (`SC2154` for a variable set by
+  whatever sources the file, `SC2329` for a test-harness function
+  invoked indirectly), confirmed one by one, not just assumed.
+- `rootguard-core/Dockerfile`'s comment claimed the pinned `docker:29-cli`
+  digest bundles Docker Compose v5.5.0 - correct for
+  `docker-library/docker`'s current upstream source, but that source
+  had moved on since this exact digest was built. Correlated the
+  digest's own build timestamp (`docker buildx imagetools inspect`,
+  2026-08-10) against upstream's commit history for that date instead of
+  trusting its current `HEAD` - the digest actually bundles v5.4.0.
+  Comment corrected; the underlying fix (removing the redundant `apk
+  add`) was already correct regardless of the exact version claimed.
+- The release smoke test's blockpage check only ever proved the static
+  HTML page loads - `/api/reason` (the live-data endpoint, proxying
+  through Core with the shared service token) was deployed but never
+  exercised, so a broken token hand-off or a broken Core-side route
+  could have shipped undetected. Added a real check: queries `/api/reason`
+  for a plain, unblocked domain and asserts a real, non-empty `"reason"`
+  came back - nginx's own upstream-failure fallback returns
+  `{"available":false}` with no `"reason"` key, so this fails if any
+  link in the chain (nginx auth, the proxy, Core's own route, AdGuard)
+  is broken.
+- `rootguard-blockpage/web/theme.js` and its webapp in-app preview copy
+  (`rootguard-webapp/frontend/public/blockpage-preview/theme.js`) are
+  deliberately duplicated byte-for-byte rather than built from one
+  shared source - flagged as a low-priority drift risk, not a bug (both
+  copies were, and still are, correct). Rather than restructure either
+  component's build right before the RC, added a plain `diff` check to
+  both `ci-blockpage.yml` and `ci-webapp.yml` - a future edit to one
+  side without the other now fails CI immediately instead of silently
+  drifting unnoticed.

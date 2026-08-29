@@ -27,6 +27,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # See ci-blockpage.yml's identical check for the full rationale -
+      # added on both sides so a drift introduced from either component's
+      # own PR fails loudly here instead of silently going unnoticed.
+      - name: Check theme.js stays in sync with the real blockpage's copy
+        run: diff rootguard-blockpage/web/theme.js rootguard-webapp/frontend/public/blockpage-preview/theme.js
+
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
@@ -40,6 +46,17 @@ jobs:
       - name: Vet backend
         working-directory: rootguard-webapp/backend
         run: go vet ./...
+
+      # See ci-core.yml's identical step for why - same gap, same fix.
+      - name: Check backend formatting
+        working-directory: rootguard-webapp/backend
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::Not gofmt-formatted (run 'gofmt -w' on these):"
+            echo "$unformatted"
+            exit 1
+          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7

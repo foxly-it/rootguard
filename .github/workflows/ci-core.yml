@@ -27,6 +27,20 @@ jobs:
         run: go test ./...
       - working-directory: rootguard-core
         run: go vet ./...
+      # Found in review: nothing ever caught a non-gofmt-formatted file
+      # (go test/go vet don't check formatting at all) - one landed and
+      # stayed unnoticed until a later, unrelated review happened to spot
+      # it. gofmt -l lists any file whose formatting would change; a
+      # non-empty list fails the build instead of relying on a human to
+      # notice.
+      - working-directory: rootguard-core
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::Not gofmt-formatted (run 'gofmt -w' on these):"
+            echo "$unformatted"
+            exit 1
+          fi
       - working-directory: rootguard-core
         run: docker build -t rootguard-core:test .
 

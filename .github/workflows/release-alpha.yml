@@ -867,6 +867,20 @@ jobs:
           # image actually starts and serves its real page, not just that
           # it built.
           test "$(curl --fail --silent http://127.0.0.1:80/ | grep -c 'RootGuard')" -gt 0
+          # Found in review: the check above only ever proved the static
+          # HTML page loads - /api/reason (the actual live-data endpoint,
+          # proxying through Core with the shared BLOCKPAGE_SERVICE_TOKEN
+          # - see blockpage.conf.template's own comment) was published and
+          # deployed but never exercised by this smoke test. A broken
+          # token hand-off, a broken proxy_pass, or a broken Core-side
+          # /api/blockpage/reason route could all have shipped undetected.
+          # nginx's @reason_unavailable fallback (any upstream failure)
+          # returns {"available":false} with no "reason" key - asserting a
+          # real, non-empty "reason" for a plain, unblocked domain proves
+          # the whole chain (nginx auth -> Core auth -> AdGuard query)
+          # actually works end to end, not just that each piece deployed.
+          reason_response="$(curl --fail --silent -H 'Host: example.com' http://127.0.0.1:80/api/reason)"
+          test -n "$(jq -r '.reason // empty' <<<"$reason_response")"
       - name: Show logs after failure
         if: failure()
         run: docker compose -f compose.release.yaml logs --no-color
