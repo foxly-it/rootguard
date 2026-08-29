@@ -1,14 +1,33 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Routes, Route, useLocation } from "react-router";
 import SidebarLayout from "./layout/SidebarLayout";
-import Overview from "./pages/Overview";
-import Unbound from "./pages/Unbound";
-import AdGuard from "./pages/AdGuard";
-import Setup from "./pages/Setup";
-import Stack from "./pages/Stack";
-import Backups from "./pages/Backups";
-import Logs from "./pages/Logs";
 import Login from "./pages/Login";
 import { useAuth } from "./auth";
+
+// Lazy-loaded, unlike Login above: found in review, the production bundle
+// was a single 578kB chunk (162kB gzipped) - every authenticated page's
+// code shipped on first load regardless of which one (if any) a session
+// actually visits. Login stays eager since it's the one page every
+// unauthenticated visit needs immediately; splitting it too would just
+// trade one round-trip for another on the most universal path. The
+// Suspense boundary below only wraps the authenticated <Routes> for the
+// same reason - the unauthenticated branch never touches these imports at
+// all.
+const Overview = lazy(() => import("./pages/Overview"));
+const Unbound = lazy(() => import("./pages/Unbound"));
+const AdGuard = lazy(() => import("./pages/AdGuard"));
+const Setup = lazy(() => import("./pages/Setup"));
+const Stack = lazy(() => import("./pages/Stack"));
+const Backups = lazy(() => import("./pages/Backups"));
+const Logs = lazy(() => import("./pages/Logs"));
+
+function RouteLoading() {
+  return (
+    <div className="route-loading" aria-label="Loading">
+      <span />
+    </div>
+  );
+}
 
 function App() {
   const auth = useAuth();
@@ -38,17 +57,19 @@ function App() {
 
   return (
     <SidebarLayout>
-      <Routes>
-        <Route path="/" element={<Navigate replace to="/dashboard" />} />
-        <Route path="/dashboard" element={<Overview />} />
-        <Route path="/unbound" element={<Unbound />} />
-        <Route path="/unbound/:section" element={<Unbound />} />
-        <Route path="/adguard" element={<AdGuard />} />
-        <Route path="/setup" element={<Setup />} />
-        <Route path="/stack" element={<Stack />} />
-        <Route path="/backups" element={<Backups />} />
-        <Route path="/logs" element={<Logs />} />
-      </Routes>
+      <Suspense fallback={<RouteLoading />}>
+        <Routes>
+          <Route path="/" element={<Navigate replace to="/dashboard" />} />
+          <Route path="/dashboard" element={<Overview />} />
+          <Route path="/unbound" element={<Unbound />} />
+          <Route path="/unbound/:section" element={<Unbound />} />
+          <Route path="/adguard" element={<AdGuard />} />
+          <Route path="/setup" element={<Setup />} />
+          <Route path="/stack" element={<Stack />} />
+          <Route path="/backups" element={<Backups />} />
+          <Route path="/logs" element={<Logs />} />
+        </Routes>
+      </Suspense>
     </SidebarLayout>
   );
 }

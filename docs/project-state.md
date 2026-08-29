@@ -3349,3 +3349,29 @@ cycling through all three modes (three simulated clicks) toggles
 `data-theme` correctly and never leaves more than one child node behind.
 `grep` confirms no `.innerHTML =` assignment remains in either file;
 `npm run lint` stays clean.
+
+**Small, fixed: the frontend production bundle was a single 578kB chunk
+(163kB gzipped), triggering Vite's own &gt;500kB warning.** `App.tsx`
+imported all seven authenticated pages (`Overview`, `Unbound`, `AdGuard`,
+`Setup`, `Stack`, `Backups`, `Logs`) eagerly at the top - every page's
+code shipped on first load regardless of which one, if any, a given
+session actually visits.
+
+Fixed by switching those seven to `React.lazy(() => import(...))`,
+wrapped in a single `<Suspense>` boundary around the authenticated
+`<Routes>` (a small, non-full-viewport spinner as the fallback, styled to
+render inside the already-mounted sidebar layout rather than covering
+it - full-viewport would flash over the sidebar on every navigation, not
+just the first load). `Login` deliberately stays eager: it's the one page
+every unauthenticated visit needs immediately, so splitting it would just
+trade one round-trip for another on the most universal path; its own
+`<Routes>` branch never touches the lazy imports at all, so it needed no
+`Suspense` boundary of its own.
+
+Verified with a real production build: the &gt;500kB warning is gone, the
+main chunk dropped from 578kB to 426kB (163kB → 129kB gzipped), and each
+page now ships as its own separate chunk (5-90kB each) fetched on
+navigation instead of upfront. `tsc -b`, `npm run lint`, and the existing
+26-test suite all stay clean - none of them render pages through `App.tsx`'s
+routing (the one component test, `AdGuard.test.tsx`, imports the page
+module directly), so none needed a `Suspense`-aware update.
