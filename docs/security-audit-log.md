@@ -1,0 +1,1295 @@
+# RootGuard security audit log
+
+The chronological record of every independent security audit run against
+this codebase: what each one found, how Claude verified the finding
+independently, what was fixed, and how the fix was proven to actually
+work (revert-and-confirm-fails, where achievable). Split out of
+`docs/project-state.md` on 2026-08-29 - a follow-up review's own
+code-compression suggestion, since the combined file had grown past
+~3,500 lines and become a hard-to-review event journal mixed in with the
+architecture/feature-state summary a session actually needs first. See
+`docs/project-state.md` for that, and `docs/release-history.md` for
+version-by-version release notes.
+
+## Full security audit against 60dc447 (2026-08-28)
+
+User ran a complete independent audit of the codebase at commit `60dc447`
+(the RC.1 tree plus the site-polish work above). Found 3 release-blocking
+issues, 7 medium findings, and several minor ones - Claude verified each
+high-severity finding directly against the code before agreeing, all
+confirmed accurate. User chose to work the full list in priority order,
+one issue/PR each, same discipline as always.
+
+**Blocker 1, fixed: attestation was never enforced on activation, only
+displayed.** `stack.CheckStackAttestations` was wired into the stack
+status API only (`routes.go`'s `stackStatusHandler`/`servicesHandler`),
+never into either updater's actual `update()` path - a pulled,
+digest-resolved image was activated (`selectImage`/`writeOverride` +
+`compose up`) the moment its post-swap health check passed, with no
+attestation check anywhere in between. Directly contradicted
+`docs/threat-model.md`'s explicit claim that releases are "checked via
+Cosign against the signed SLSA provenance before activation" - a real gap
+between documented and actual behavior, not just a missing feature.
+
+Fixed in both updaters:
+- `rootguard-core/internal/stack/attestation.go`: new exported
+  `RequireAttestation(ctx, service, image) error`, wrapping the existing
+  `verifyReleaseAttestation` - no-ops for a service with no RootGuard
+  signing policy (AdGuard, a third-party image), demands literally
+  `"verified"` and nothing else (not `"missing"`, `"failed"`,
+  `"unavailable"`, or an unexpected `"not_applicable"`) for every other
+  service.
+- `rootguard-core/internal/updater/manager.go`: new injectable
+  `Options.AttestationVerifier` (defaults to `stack.RequireAttestation`),
+  called right before `selectImage`/`composeUp` - the actual point of no
+  return, not just logged for display.
+- `rootguard-updater/main.go` + new `attestation.go`: a separate Go
+  module, can't import Core's internal package, so it carries its own
+  minimal standalone cosign-verify-attestation call (core/webapp are the
+  only two services it ever manages, both always requiring verification -
+  no AdGuard-style exemption needed here). Injectable
+  `manager.attestationVerifier`, defaults to the real `verifyAttestation`.
+- `rootguard-updater/Dockerfile`: didn't carry the `cosign` binary at all
+  before this - added the same digest-pinned
+  `ghcr.io/sigstore/cosign/cosign:v3.0.6@sha256:de9c65...` COPY step Core's
+  Dockerfile already uses. Built for real on the `.7` test host (no local
+  Docker daemon) to confirm the multi-stage COPY actually works and
+  `cosign version` runs inside the image - it does.
+
+Regression tests in both modules prove the gate has teeth: a failing
+verifier must stop the update before any `compose`/activation command
+runs at all, not just fail afterward - verified by temporarily reverting
+each fix and confirming the new test fails without it, then restoring.
+Existing tests that exercise a full successful `update()` needed an
+explicit no-op `AttestationVerifier` injected (they use fixture image
+names that don't match a real `ghcr.io/foxly-it/...` prefix, which the
+real, now-default verifier correctly refuses as `"not_applicable"` -
+fail-closed, working as intended, just not what those particular tests
+were testing).
+
+**Found by PR #365's own CI, not by local testing**: `ci-updater.yml`'s
+real Docker E2E integration test (`integration/run.sh`, a genuinely
+separate thing from the Go unit tests above - builds real local fixture
+images and runs the real compiled binary through a real paired
+core/webapp update+rollback) failed the same way, for the same reason -
+its fixture images (`rootguard-e2e-core:new`, no `ghcr.io/foxly-it/...`
+prefix, and with `ROOTGUARD_UPDATER_SKIP_PULL=true` already set, never
+even digest-qualified) correctly fail the new attestation gate every
+time, so the update can never reach `idle`. Fixed with the same kind of
+test-only escape hatch `ROOTGUARD_UPDATER_SKIP_PULL` already is -
+`ROOTGUARD_UPDATER_SKIP_ATTESTATION`, read once in `main()`, set only in
+`integration/compose.e2e.yaml`. Documented plainly in the code that this
+one is a real security control, not just a convenience skip like
+`SKIP_PULL` - anything setting it in production loses the whole point of
+this fix. Verified the exact env-var-driven override logic in isolation
+(a standalone Go snippet mirroring `main.go`'s wiring, run with and
+without the variable set) since the shared `.7` test host's own
+long-running containers made a real `integration/run.sh` pass there
+unsafe - fixed `container_name:` values in `compose.e2e.yaml` would have
+collided with (and risked disrupting) an unrelated 3-day-old deployment
+already running there.
+
+**Blocker 2, fixed: releases became publicly visible before smoke-test/
+upgrade-test passed.** `update-alpha-pins` (pin commit + moved release tag)
+ran with `needs: [version, publish]` - a sibling of, not gated behind,
+`smoke-test`/`upgrade-test`. The GitHub Release itself was created even
+earlier, by `release-version-bump.yml`, before `release-alpha.yml` had even
+started. A failing `upgrade-test` (which has happened live, for exactly
+this reason, during the `1.0.0-rc.1` cut) still left the final image tags,
+a real GitHub Release, committed pins on `main`, and a moved release tag
+all publicly visible - and since Core's/`install.sh`'s live release
+discovery both query the Releases API (not raw git tags), a
+published-but-broken Release was immediately eligible for auto-discovery
+by any existing installation checking for updates.
+
+Fixed: `release-version-bump.yml` no longer creates the GitHub Release (it
+still tags + pushes the version-bump commit itself, a low-risk internal
+history marker, not a publicly promoted artifact). `update-alpha-pins` now
+`needs: [version, publish, smoke-test, upgrade-test]` and creates the
+GitHub Release itself as its last step, after the tag has already been
+moved to the correctly-pinned commit - notes are regenerated with
+git-cliff right there (deterministic from commit history, so identical to
+what the other workflow would have produced) rather than passed across the
+two separate workflow runs. Both the tag-move and the new Release-creation
+step stay idempotent, matching the rest of this job, since a re-run against
+an already-published version (exactly what happened live for `1.0.0-rc.1`)
+must not fail just because an earlier run already did the work.
+
+Also closed the two smaller gaps the same review flagged in this job:
+`docker compose -f compose.release.yaml config` (plus the same
+digest-pinned/no-`:latest` assertions `ci.yml`'s own PR check already
+runs) now validates the pin-sed's output before it's committed - the
+`[skip ci]` pin commit's own comment already documented a *real* past
+incident where a broken sed match silently shipped invalid YAML because
+nothing re-checked it. And the release pipeline's own `test` job gained
+`go vet` (all three Go modules) and `npm test` (the frontend unit suite,
+previously not run there at all, only by `ci-webapp.yml`'s own PR checks -
+a release cut has no PR).
+
+Deliberately deferred, not folded into this fix: making the release
+pipeline depend on `ci-security.yml`'s scans (trivy/gitleaks/govulncheck/
+staticcheck) passing. They already run on every push to main via that
+separate workflow, but - found while investigating this - `main` isn't
+actually a GitHub-protected branch (`gh api .../branches/main/protection`
+returns 404), so that's convention, not an enforced gate. Wiring a
+security-scan dependency into the release pipeline for real means turning
+`ci-security.yml` into a reusable `workflow_call` workflow, a larger,
+separate change; flagged to the user rather than rushed into this PR.
+
+**Follow-up (2026-08-29):** done - see the "release gate" entry further
+down under "Follow-up review, round 2" for the actual `workflow_call`
+conversion and the new `security` job in `release-alpha.yml` that
+depends on it.
+
+**Blocker 3, fixed: the one-line installer ran an unpinned, unverified
+script as root.** `install.sh`'s `install_docker()` downloaded
+`dockerinstall.sh` from `foxly-it/dockerinstall`'s moving `main` branch
+and immediately ran it via `sudo`, with no digest, signature, or checksum
+check at all - a compromised commit to that separate repository would
+have been live on every fresh RootGuard install within minutes. That repo
+has no tags or releases to pin to instead (confirmed via the GitHub API),
+so there's no "latest stable version" to point at.
+
+Fixed with the two-part guarantee the review itself recommended: pinned
+`DOCKERINSTALL_URL` to a specific commit SHA (fixes *which* content is
+expected - a real git commit's content is immutable, unlike a branch tip)
+plus a hardcoded `DOCKERINSTALL_SHA256`, checked against the actual
+download before it's ever `chmod +x`'d or executed (the part that
+actually verifies what was *received* still matches that commit - a
+commit-pinned URL alone doesn't protect against a compromised CDN edge,
+DNS spoofing, or a tampered mirror serving something else at the same
+URL). Verified both directions live against the real pinned URL: the
+real download's checksum matches, and a deliberately wrong expected value
+is correctly rejected. Documented directly in the script how to
+intentionally update the pin later (bump the commit SHA, recompute the
+checksum from that exact URL).
+
+## Medium findings from the same audit
+
+**Medium 1, fixed (the digest-pinning half): blockpage wasn't
+reproducibly bound to a release.** `release-alpha.yml`'s publish job
+explicitly excluded blockpage from digest capture
+(`if: matrix.component != 'blockpage'`), and neither
+`compose.release.yaml` nor `.env.release.example` referenced
+`ROOTGUARD_BLOCKPAGE_IMAGE` at all - Core's own Go default
+(`ghcr.io/foxly-it/rootguard-blockpage:latest`) was always what actually
+ran. A fresh install could get a blockpage image from an entirely
+different commit than the rest of the release, with no digest pin and no
+attestation ever checked for it (unlike core/webapp/unbound/updater,
+which already all have real signing policies in
+`attestationPolicies["blockpage"]` - that policy existed already, it was
+just never reachable because nothing pinned a digest-qualified reference
+to check it against).
+
+Fixed: `release-alpha.yml` now captures blockpage's digest like every
+other component, `rootguard-blockpage` was added to the pin-rewrite loop,
+and both `compose.release.yaml` and `.env.release.example` now pin
+`ROOTGUARD_BLOCKPAGE_IMAGE` explicitly (with today's real digest,
+verified live via `docker buildx imagetools inspect`). The `docker
+compose config` digest-pinned assertion (both the copy in `ci.yml` and
+the one added to `release-alpha.yml` for the earlier release-gate fix)
+now checks it too, so the two can't drift apart.
+
+**Deliberately deferred, not folded into this fix** (two related but
+separable pieces the same finding raised):
+- Full dashboard/attestation-status visibility for blockpage
+  (`StackStatus` has no `Blockpage` field at all yet - adding one means
+  wiring container inspection, health, and attestation status through
+  the API and frontend end-to-end, a materially bigger change than
+  closing the actual "unpinned mutable image" security gap above).
+- The architectural fix for blockpage holding a reversible (base64,
+  trivially decodable) copy of the real AdGuard admin credentials
+  (`publishBlockpageAuthToken` in `rootguard-core/internal/adguard/
+  manager.go`) - the review's own recommendation frames this as a
+  longer-term redesign (a narrow Core-side endpoint the blockpage
+  queries instead of ever holding real credentials at all), not a
+  same-size fix as the others in this list.
+  **Follow-up (2026-08-29): done** - see the "blockpage no longer holds
+  any AdGuard credential" entry further down under "Follow-up review,
+  round 2" for the actual Core-side endpoint and service-token redesign.
+**Medium 2, fixed: expert config could disable DNSSEC entirely.**
+`blockedDirectives` in `rootguard-core/internal/unbound/custom.go`
+blocked `val-permissive-mode` and the trust-anchor directives, but not
+`domain-insecure` at all - a bare `domain-insecure: "."` disables DNSSEC
+validation for the whole namespace, not just one zone. Separately,
+`harden-dnssec-stripped: no` (accepting a stripped-DNSSEC-data attack
+instead of treating it as an error) only produced a soft "warning"
+advisory, lumped in with cosmetic settings like `hide-identity` - a user
+could activate it anyway. Both directly contradicted `docs.html`'s own
+claim (written earlier this same session) that the expert editor
+"blocks... DNSSEC bypasses".
+
+Fixed: `domain-insecure` added to `blockedDirectives` (doesn't affect the
+guided private-domain/reverse-DNS feature, which renders this directive
+itself from validated Go code - a separate path from this free-text
+editor entirely); `harden-dnssec-stripped: no` specifically (not the key
+unconditionally - `: yes`, the recommended default, must stay accepted)
+is now a hard `normalizeCustom` rejection instead of an `adviseCustom`
+warning, removed from that warning's case since it's now unreachable
+there. New regression test proves both refusals have teeth (reverted
+each, confirmed the test fails, restored) and that `harden-dnssec-
+stripped: yes` still passes.
+
+**Medium 3, fixed: logout could be silently undone by a restart.**
+`handleLogout` only cleared the browser's session cookie *after*
+`persistLocked` succeeded - a persist failure returned a 500 with the
+cookie still live, even though the comment right there claimed it was
+"already gone" (false: the delete-cookie call was below the early
+return, unreached). If a stale `sessions.json` then revived that exact
+session on the next restart, the browser would still hold a valid
+cookie for it, undoing a logout the user had already been told
+succeeded. `handleRevokeSession` had the same durability gap for an
+*admin*-revoked foreign session (no cookie involved there, but the same
+"in-memory revoked, not-yet-persisted, restart brings it back" window).
+
+Fixed: the cookie-clearing call in `handleLogout` now runs
+unconditionally, before the persist attempt - the browser-side effect of
+logout is durable regardless of what happens to the server-side record.
+`handleRevokeSession` gained a bounded retry (3 attempts, 50ms apart)
+around its persist call, closing the common transient-I/O-hiccup case;
+a permanently broken write still can't be made durable by retrying, so
+it still surfaces as an error rather than a silent success, and the
+revoked session still stays removed from memory immediately either way.
+Two new regression tests (a real broken-path filesystem trick: point
+`persistencePath` through a file that was just written, so `MkdirAll`
+reliably fails on any OS) prove: logout's cookie is cleared even when
+persistence fails (reverted, confirmed the test fails, restored), and a
+broken-persist revoke still returns a clear error while the session
+stays gone from memory.
+
+**Medium 4, fixed: a corrupted credentials.json silently reactivated the
+old env password.** `loadCredentials` treated every failure identically
+- a genuinely missing file, an unreadable one, corrupt JSON, an
+unexpected algorithm, a malformed salt/hash - as a silent no-op that
+left the env-configured initial username/password active. Correct for a
+fresh install that never changed its password (file genuinely absent),
+wrong for real corruption: an admin who'd deliberately changed the
+password in the UI would have that change silently, invisibly reverted
+to the original env password on the next restart - a real risk if that
+original password was ever exposed (an old `.env` backup, a log,
+whoever was present during initial setup).
+
+Fixed: `loadCredentials` now returns an error, distinguishing
+`os.ErrNotExist` (the one legitimate silent case) from every other
+failure (returns a real error). `NewSessionAuth` panics on that error
+the same way it already does for a password-hashing init failure -
+consistent with this constructor's own existing "fail loudly at
+startup" convention, not a new one. Two of this package's existing
+tests deliberately made `credentials.json` a directory *before*
+constructing `SessionAuth` (to force a later *persist* failure) - moved
+that setup to *after* construction in both, since it would otherwise now
+correctly panic during construction itself (a directory where a file
+should be is exactly the kind of corruption this fix is meant to catch).
+New regression test proves the panic has teeth (reverted, confirmed the
+test fails, restored) alongside a companion positive test confirming a
+genuinely missing file still doesn't panic.
+
+**Medium 5, fixed: the destructive-action rate limit was bypassable under
+concurrency and shared across an account's sessions.** `guardDestructive`
+had the same `blocked()`-then-`recordFailure()` TOCTOU gap already fixed
+for login/recovery this session - many truly concurrent requests could
+all observe zero recorded uses and all be admitted before any got
+counted. Separately, it keyed the limiter by *username*, so every session
+the same admin account happens to have open (session inventory
+explicitly allows more than one) shared a single combined budget -
+directly contradicting the limiter's own documented purpose ("bound how
+much a single... session can do", right there in its own construction in
+`NewSessionAuth`).
+
+Fixed: `guardDestructive` now uses `beginAttempt`/`endAttempt` (every
+attempt counts, matching its pre-existing "bound request volume, not
+repeated wrong guesses" semantics), keyed by a new `authenticatedSessionID`
+helper (the session's own opaque `.ID`, already designed to be safe to
+hand out, not the bearer token itself) instead of username, falling back
+to the IP-based key only when there's genuinely no session. New
+per-session regression test proves the keying fix has teeth (reverted,
+confirmed the test fails with a 429 that should have succeeded,
+restored). The concurrency test is honest about its own limits: unlike
+login/recovery's PBKDF2-widened window, there's no expensive work between
+the old two calls here, so Go's scheduler rarely interleaves into that
+gap in a synchronous test even at high goroutine counts - confirmed the
+race is real a different way instead (a throwaway direct probe against
+the raw rate limiter, bypassing the HTTP layer, showed extra accepted
+attempts in roughly 1 of 3 runs).
+
+**Medium 6, fixed: Setup preflight didn't check the blockpage's port 80.**
+`Preflight` only ever checked the DNS port; a host with something already
+bound to :80 (a common case - many hosts run a web server) was reported
+"ready", then failed only later, during deployment, when the blockpage
+container's own port publish (`composeDNSFile`, gated on
+`config.BlockpageEnabled`) collided with it.
+
+Fixed: `Preflight` now runs the same `occupiedDockerPort`/
+`probeHostPortBusy` pair it already uses for the DNS port against port 80
+too, gated on `config.BlockpageEnabled` (the same flag that decides
+whether the blockpage - and therefore that port publish - exists at
+all), with its own `blockpage_port_occupied`/`blockpage_port_available`
+check codes and a blockpage-specific action message. Two new regression
+tests: one proves the occupied-port case fails preflight (reverted,
+confirmed the test fails, restored), the other proves a disabled
+blockpage doesn't fail preflight just because something else happens to
+hold port 80.
+
+**Medium 7, fixed: the WebApp sent no browser security headers.** Every
+response - the SPA, the API, the proxied AdGuard UI - carried no
+`Content-Security-Policy`, `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, or `Permissions-Policy`. None of this is the primary
+defense against anything (that's `RequireSameOriginWrites` and
+`SessionAuth`), but its absence meant a same-origin script-injection bug
+anywhere else in the app would have had no browser-side backstop, and the
+admin UI could be framed by another site.
+
+Fixed: a new `SecurityHeaders` middleware, wrapped outermost around the
+whole router in `main.go`, sets all five. The CSP's `script-src` is
+same-origin plus a hash for the one inline script the SPA actually has
+(`frontend/index.html`'s theme-flash-prevention script, which can't be
+externalized without reintroducing the flash it exists to avoid) -
+locked down, since script execution is the directive that actually
+matters for XSS. `style-src` keeps `'unsafe-inline'` deliberately: a
+handful of components apply the React `style` prop, which CSS-in-JS
+research shows browsers don't reliably attribute to CSP's HTML-attribute
+style-src restriction the same way across versions - not worth risking a
+silent rendering break in the field to tighten a directive that isn't
+the injection-relevant one. The CSP is withheld specifically for
+`/adguard-ui/` (AdGuard Home's own reverse-proxied admin UI, a separate
+frontend whose asset layout this app doesn't control); the other four
+headers still apply there.
+
+Three new tests: the headers are actually set (and withheld for
+`/adguard-ui/`, both revert-verified - reverted to a no-op middleware,
+confirmed both tests fail, restored), plus a drift guard that hashes the
+real `frontend/index.html` inline script at test time and fails if it no
+longer matches the hardcoded CSP hash, so a future edit to that script
+can't silently start breaking under the new CSP.
+
+Not verified in a live browser (no local Docker daemon, same constraint
+as the rest of this session) - worth a manual DevTools-console check for
+CSP violations on the actual built SPA before the next release.
+
+**Medium 8, fixed (audit rated it "gering"/low): router-import allowed
+SSRF via redirects and arbitrary addresses.** `FritzBoxClient` only ever
+gave `address` a syntax check (`normalizeRouterAddress`); it was never
+restricted to plausible router locations, and its `http.Client` followed
+redirects with its default behavior. An admin (or anything able to drive
+this endpoint through them) could point host discovery at any reachable
+address, public or otherwise, or have a redirect steer the request - with
+its Digest `Authorization` header intact on a same-host redirect -
+somewhere else entirely.
+
+Fixed with the two changes the audit itself suggested: `CheckRedirect`
+now refuses every redirect outright, and a custom `DialContext` checks
+the *actually-dialed* remote IP - not the pre-resolution hostname, which
+closes a DNS-rebinding gap a string-only check would leave open - against
+private/link-local/loopback ranges only, rejecting anything globally
+routable. Five new tests: the happy path still works through both new
+guards (a real `httptest.Server` on loopback), redirect rejection is
+revert-verified against a real HTTP redirect, and the address-range logic
+is covered directly (a table test on the pure range-check function, and a
+dial-level test using a fake `net.Conn` with an arbitrary `RemoteAddr` so
+rejecting a public IP doesn't depend on outbound network access in CI) -
+both of those also revert-verified.
+
+**Medium 9, fixed: GitHub Actions supply-chain and permission hygiene.**
+Every third-party action was pinned by a mutable major-version tag
+(`@v7`, `@v4`, ...) rather than a commit SHA; two scanner installs
+(gitleaks, trivy) downloaded a binary over HTTPS with no checksum
+verification, and trivy's installer additionally came from the `main`
+branch of a script - a genuinely moving target, re-fetched fresh (and
+potentially different) on every run; `govulncheck`/`staticcheck` ran via
+`@latest`, so a new upstream release could change CI behavior with zero
+review; and several workflows granted `packages: write`/`id-token: write`/
+`attestations: write` at the workflow level, so their test-only jobs
+inherited registry-write and OIDC-attestation capabilities they never use.
+
+Fixed: every `uses:` across all 15 workflow files now pins a full commit
+SHA with the original tag kept as a trailing comment. `govulncheck` and
+`staticcheck` are pinned to specific versions (`v1.7.0`/`v0.8.1`, the
+versions already in use) instead of `@latest` - `go run pkg@version` also
+gets Go's own module checksum verification (GOSUMDB) for free, unlike a
+raw download. gitleaks and trivy are now installed by downloading the
+exact release asset directly (bypassing trivy's third-party install
+script entirely) and verifying its sha256 against a hardcoded hash before
+extracting; git-cliff's existing download (both release workflows) gained
+the same checksum check. Elevated permissions moved from workflow-level
+to job-level in `ci-unbound.yml`, `ci-updater.yml`, `ci-webapp.yml`, and
+`release-alpha.yml`'s `publish` job (the only jobs that actually push
+images or attest), with `smoke-test`/`upgrade-test` getting `packages:
+read` (they pull published images but never push). `ci-blockpage.yml` and
+`pages.yml` are single-job workflows where the one job both builds and
+(conditionally) publishes - permission scoping doesn't help there without
+splitting into a build/publish pair with an image handoff between them, a
+larger restructure left for later since the practical exposure is low
+(fork-PR runs already get a read-only token from GitHub regardless of
+what a workflow declares, and same-repo runs push in that same job
+anyway).
+
+**Minor 1, fixed: backup-restore's entry-limit error message overclaimed
+what was found.** The guard rejects at `count >= MaxFiles`, i.e. as soon
+as `MaxFiles` entries have already been read successfully - without ever
+checking whether a real `MaxFiles+1`th entry exists (that's correct: see
+the surrounding comment for why `>=` and not `>`, from an earlier fix
+this session). But its message said "backup contains more than %d
+entries", which isn't always true at that point - an archive with
+*exactly* `MaxFiles` entries and no more triggers the same rejection with
+the same overclaiming message. Reworded to "backup contains too many
+entries (limit: %d)" - accurate regardless of which case triggered it.
+New regression test builds an archive with exactly `MaxFiles` (100000)
+entries and checks both that it's still rejected and that the message no
+longer says "more than" (revert-verified).
+
+**Minor 2, fixed: the AdGuard UI proxy's Set-Cookie rewrite was a fragile
+string match.** `rewriteAdGuardUIResponse` repoints AdGuard's root-scoped
+session cookie (`Path=/`) to this proxy's own mount point
+(`/adguard-ui/`), so the browser keeps sending it back on later requests.
+It did that with `strings.Replace(cookie, "Path=/;", ...)`, which missed
+every one of: `Path=/` as the *last* attribute (no trailing semicolon - a
+completely ordinary, spec-legal shape), different attribute-name casing
+(`path=/`), and extra whitespace around the attribute.
+
+Fixed: `rewriteAdGuardSetCookie` now parses the cookie properly via
+`http.ParseSetCookie` (net/http already implements RFC 6265 for this)
+and only touches the `Path` field, instead of substring-matching the raw
+header text - which also means every other attribute (`Secure`,
+`HttpOnly`, `SameSite`, `Expires`, ...) survives untouched regardless of
+where `Path=/` appears in the string. A cookie whose path isn't exactly
+`/`, or that fails to parse at all, is passed through unchanged - the
+same scope the old code had, just reliably. Two new tests cover the
+realistic variance the audit named (all revert-verified against the old
+implementation) and confirm the "leave it alone" cases still work.
+
+**Minor 3, fixed: the blockpage used innerHTML with location.hostname
+unnecessarily.** The block-reason renderer built its "lead" paragraph via
+`element.innerHTML = "...<strong>" + location.hostname + "</strong>..."`.
+`location.hostname` can't practically carry HTML-special characters (DNS
+hostname syntax and browser URL parsing both rule that out), so the
+audit rated this low practical exploitability - but it's still needless:
+nothing about this line needs raw HTML construction.
+
+Fixed: rebuilt via `textContent`/`createElement`/`appendChild`, the same
+pattern this file already uses two lines above for the headline's
+reason span - no `innerHTML` anywhere in the reason-rendering path
+anymore. (The one other `innerHTML` use in this component, `theme.js`'s
+icon swap, stays as-is: it only ever assigns one of three hardcoded SVG
+strings keyed by an internal `mode` value, never anything
+request-derived.) No automated test covers this specific rendering path
+- this component has no JS test harness at all (a static
+Node.js-syntax-checked, curl-smoke-tested-only script), and building one
+for a single low-severity hygiene fix wasn't judged worth the new CI
+surface; verified by inspection and by `node --check` for syntax only.
+
+**Minor 4, fixed: install.sh wrote the WebGUI username/password into
+.env unquoted.** The awk rewrite that injects the generated tokens and
+typed credentials into the downloaded `.env` file printed each value
+raw. Docker Compose re-reads that file later and treats an unquoted `#`
+as starting a comment - a password containing one would get silently
+truncated, corrupting it without any visible error - and a literal
+newline as starting a new `KEY=VALUE` line, which a value supplied via
+`ROOTGUARD_ADMIN_PASSWORD` in a non-interactive install could exploit to
+inject an extra variable into `.env` entirely.
+
+Fixed two ways: every value the awk script writes is now double-quoted,
+with any backslash or embedded double-quote in the value itself escaped
+first so the quoting can't be broken out of (verified locally against
+values containing `#`, embedded quotes, and backslashes - all come out
+correctly preserved inside the quotes). Separately, `admin_user`/
+`admin_password` are now rejected outright if either contains a literal
+newline - not relied on the quoting alone to contain one, since whether
+a dotenv-style parser treats a quoted value as continuing past a
+newline varies enough across implementations that it wasn't worth
+trusting for something that becomes an actual account password. A typed
+value can never contain a newline in the first place (`read -r` stops
+at the first one); this only matters for the non-interactive,
+environment-supplied path.
+
+No CI coverage exists for install.sh's own logic at all (the existing
+`clean-install.yml` workflow exercises `compose.release.yaml`/
+`.env.release.example` directly, never invokes `install.sh` itself) -
+this is a pre-existing gap, not introduced or widened here, and out of
+scope for this fix. Verified locally: `bash -n` syntax check, and the
+awk pipeline and newline-rejection logic run standalone against a set
+of adversarial values (`#`, embedded `"` and `\`, an injected newline).
+
+**Minor 5, fixed: persistence errors were swallowed via `_ = persist...`
+in many places.** ~20 call sites across `rootguard-core`'s installer and
+updater managers (`_ = m.persistLocked()`) and `rootguard-webapp`'s
+session/audit stores (`_ = a.persistLocked()`, `_ = a.persistAuditLocked()`)
+discarded the write error entirely. On a full disk or a permissions
+problem, an install step, update, cleanup, rollback, session change, or
+audit entry could report success while its outcome was never actually
+written down - invisible anywhere, not even in the container's own logs.
+
+Fixed at the single choke point each package already had rather than at
+every call site: `persistLocked` (both `installer` and `updater` in
+`rootguard-core`) now takes an injectable `OnPersistError` hook -
+defaults to a no-op, matching this codebase's existing
+`CommandRunner`/`BootstrapFunc`-style option pattern - and calls it on
+every failure before returning, so all ~15 existing `_ =` call sites get
+visibility for free without themselves changing. `cmd/rootguard/main.go`
+wires all three manager instances to log it. `rootguard-webapp`'s
+`SessionAuth` doesn't have that same options-struct constructor (its
+`NewSessionAuth` has a fixed positional signature used at 29+ existing
+call sites, mostly in tests - not worth restructuring for this), so
+`persistLocked`/`persistAuditLocked` log directly instead, at the one
+place each already knows a write failed.
+
+None of this changes what any caller does with the returned error or
+what the UI reports on success/failure - it only makes an already-silent
+failure mode observable in logs, closing the "invisible even to someone
+troubleshooting a full disk" gap the audit described. A full fail-closed
+redesign (surfacing every one of these to the UI, refusing to report
+success at all) would be a much larger change or a longer-term goal,
+matching how the same call was made for logout/session persistence
+earlier this session.
+
+Four new regression tests (two per repo, all revert-verified: reverted
+each hook wire-up/log call, confirmed the corresponding test fails,
+restored) using the same broken-path-through-a-file trick already
+established this session (point a path through a file that was just
+written, so `MkdirAll` reliably fails on any OS).
+
+**Minor 6, fixed: the release tag's move to a pin-update commit
+complicated forensic traceability.** An earlier RC-blocker fix this
+session moved the release tag to point at the pin-update commit (the one
+that records this release's own image digests in
+`compose.release.yaml`/`.env.release.example`), so the documented quick
+start resolves to the right files. But the published images are built
+*before* that pin commit exists (the pin needs the digests the build
+produces - chicken-and-egg), so each image's own
+`org.opencontainers.image.revision` label and provenance attestation
+reference the earlier build commit, not the tag. Someone tracing a
+published image back to source without already knowing this would land
+on the wrong commit.
+
+Not fixable by skipping the tag move (that's the RC-blocker this would
+revert to) or by building from the pin commit (still impossible for the
+same chicken-and-egg reason) - recorded explicitly instead. The release
+notes now get a "Build provenance" section naming both commits: the one
+the images were actually built from (`github.sha`, matching their labels
+and attestations) and the one the tag now points at (the pin-update
+commit, one commit ahead). A one-line lookup instead of something to
+reverse-engineer from git history.
+
+Workflow-only change with no way to exercise a real release run in CI -
+verified locally instead: the YAML parses, the appended-section shell
+logic was run standalone against a fixture notes file and produces the
+expected output.
+
+**Code compression 1, done: a shared atomic-file writer.** The
+audit's own lower-priority code-compression suggestions, worked through
+after the full findings list: the write-temp-then-rename pattern was
+hand-rolled separately in `installer`, `updater` (twice - one copy in
+`manager.go`, another in `backups.go`), `unbound` (twice), and `adguard`
+- six call sites within `rootguard-core` alone, and they'd genuinely
+drifted: some cleaned up their temp file on a failed rename, some
+didn't (a stray `.tmp` left behind on error); one used `json.Marshal`,
+another `json.MarshalIndent`.
+
+New `internal/atomicfile` package (`WriteFile`, `WriteJSON`) replaces
+all six - only `adguard/manager.go`'s credentials write is left as-is,
+since it deliberately delays its rename past an unrelated HTTP call
+(a real two-phase-commit shape, not the same pattern). Behavior-
+preserving: every existing test in the module passes unchanged, plus
+three new tests for the new package itself (one a genuine regression
+test - proves the failed-rename cleanup the consolidation fixed for
+free, revert-verified).
+
+`rootguard-updater` and `rootguard-webapp` keep their own small,
+independent copies - they're separate Go modules from `rootguard-core`
+(and from each other), and this codebase already established this
+session that sharing code across that boundary means a new shared
+module, real machinery for a handful of lines each already keeps
+correct on its own.
+
+**Code compression 2, done: split rootguard-updater/main.go (851 lines)
+into files by concern.** Everything - HTTP wiring, the manager's whole
+state machine, digest/version-resolution helpers, and raw docker-CLI
+primitives - lived in one file. Split into `main.go` (156 lines: entry
+point, env wiring, secret-strength check), `manager.go` (the `manager`
+type, its persisted `status`, and every method - the actual update/
+check/rollback state machine), `image.go` (`digestQualify`,
+`digestFromPullOutput`, `isOlderReleaseVersion` - the same grouping as
+the digest/SemVer logic this session's other compression item already
+touched in `rootguard-core`), `http.go` (request/response glue), and
+`docker.go` (the two raw `docker`/filesystem primitives) -
+`attestation.go` already existed as its own file.
+
+Scoped narrower than the audit's literal "separate packages" wording:
+kept everything in `package main` rather than introducing real
+sub-packages. This binary has no other consumer (a standalone
+control-plane updater, not a library), so sub-packages would mean
+export/visibility bookkeeping and import-cycle risk for zero reuse
+benefit - multiple files in one package gets the actual readability win
+this suggestion was about without that cost.
+
+Purely a reorganization: every function's body is unchanged, byte for
+byte, just relocated - confirmed by every existing test passing
+unchanged (gofmt/go vet/go build/go test -race/staticcheck all clean),
+which requires nothing about behavior or the public shape of any type
+to have shifted.
+
+**Code compression 3, done: shared SemVer validation between the two
+release workflows.** `release-alpha.yml` and `release-version-bump.yml`
+each kept a byte-for-byte identical SemVer 2.0 regex, deliberately - the
+existing comment on the second copy said sharing "needs a composite
+action" and wasn't worth it. That's not quite right: both jobs already
+check out the full repo, so a plain shared shell script works without a
+composite action. Worth fixing given the history the same comment
+recorded: this exact duplication had already drifted apart for real once
+- only `release-alpha.yml` validated a version at all until the second
+check was added by hand, so a typo'd override had already produced a
+real commit, tag, and GitHub Release before anything caught it.
+
+New `scripts/lib/semver-validate.sh` (`require_semver "$value"`, exits
+non-zero with a message on an invalid version) replaces both inline
+copies; `release-alpha.yml`'s `version` job gained a checkout step it
+didn't need before, purely to read this one file (a small, deliberate
+trade - cheap CI overhead for one source of truth on a check with a real
+past-incident history). `install.sh`'s own, much larger SemVer
+comparator (real precedence comparison, not just format validation) is
+untouched - it runs standalone via `curl | bash` with no repo access at
+that point, so it can't source this file the same way; already
+established this session as a case where duplication is the correct
+trade, not an oversight.
+
+Verified locally (no way to exercise a real release run in CI): the
+regex's behavior is unchanged (same pattern, byte for byte) - checked
+against every case the removed comments themselves named
+(`1.0.0-rc.01`, `1foo.2bar.3baz`, `1.0.0+build`, `01.2.3`, plus valid
+alpha/beta/rc/bare versions), all matching the prior inline behavior
+exactly.
+
+**Code compression 4, done: the last item on the audit's list -
+cross-referenced (not merged) the digest-resolution duplication between
+Core's updater and the control-plane updater.** `digestQualify` and
+`digestFromPullOutput` are near-identical between
+`rootguard-core/internal/updater/github_release.go` and
+`rootguard-updater/image.go` - the audit's own suggestion was to share
+this logic. Deliberately not done: the two are separate Go modules (this
+session already established that pattern for the attestation verifier
+and, again, for the atomic-file-write consolidation two items back), and
+standing up a third shared module for ~30 lines of stable logic that
+hasn't meaningfully drifted in practice wasn't judged worth the ongoing
+versioning/import overhead.
+
+What actually closes the audit's real concern (silent drift between the
+two copies) without that cost: each function's doc comment on both sides
+now names the other file explicitly and says to check it too on any
+change - previously only loose, non-actionable prose ("a different Go
+module, so its own copy") pointed at the duplication's existence at all,
+with no precise pointer either way.
+
+With this, all four of the audit's code-compression suggestions are
+addressed - three with real consolidation (atomic-file writer, the
+updater's file split, shared SemVer validation) and this one with an
+explicit, deliberate "not worth a new module" call plus the
+cross-referencing that keeps the trade-off honest going forward. Every
+finding in the original audit, from the three RC-blockers down to this
+lowest-priority suggestion, has now been worked through.
+
+## Follow-up review, round 2 (2026-08-29)
+
+A second, independent review of the round-1 fixes found genuine gaps in
+several of them plus a few new issues - worked through the same way as
+round 1: verify directly in code, scope the fix, test with real teeth,
+document, PR, merge.
+
+**Medium, fixed: the guided setup's first-ever DNS stack deploy skipped
+attestation entirely.** `RequireAttestation` was wired into both updater
+packages (round 1's first RC-blocker), but never into `installer.Manager`
+- so a fresh install's very first Unbound/Blockpage activation, often the
+only deployment event most installations ever have, pulled and started
+those images with zero attestation check, contradicting
+`docs/threat-model.md`'s claim exactly the way the original finding did
+for updates.
+
+Fixed with the identical pattern already used for both updater packages:
+`installer.Manager` gained an injectable `AttestationVerifier` (defaults
+to `stack.RequireAttestation`), called right before `compose up` in both
+`deploy()` (fresh install) and `restoreDeploy()` (backup restore) - after
+`pull`, at the actual point of no return. AdGuard stays unchecked
+(no RootGuard signing policy, same as everywhere else); Blockpage is
+checked only when `config.BlockpageEnabled`. `unbound`/`blockpage`
+already had real signing policies registered in `stack.attestationPolicies`
+from round 1's blockpage-pinning work - this was purely a missing call
+site, not a missing policy.
+
+Two new regression tests (`TestDeployRefusesActivationWhenAttestationFails`,
+`TestRestoreRefusesActivationWhenAttestationFails`), both revert-verified
+- reverting the call in either `deploy()` or `restoreDeploy()` made the
+corresponding test hang until Go's test timeout rather than failing
+cleanly, itself proof the gate is what unblocks the flow. Also added a
+dedicated `attestation_failed` diagnostic code/message (previously an
+attestation failure fell into the generic "could not be deployed"
+classification, same bucket as an unrelated Docker error) and fixed four
+existing tests that now correctly hit the real `stack.RequireAttestation`
+default and need the same noop-verifier injection round 1's updater
+tests already use.
+
+**Follow-up to the fix above:** this PR's own CI caught what it broke -
+`backup-restore.yml`'s "Verify backup export and restore" builds
+`rootguard-core` locally from the checkout under test and deploys it via
+the real installer path, so the new attestation gate correctly (if
+inconveniently, for that test) rejected the unattested local build.
+`cmd/rootguard/main.go` gained `ROOTGUARD_SKIP_ATTESTATION`, the same
+shape and purpose as `rootguard-updater`'s own `ROOTGUARD_UPDATER_SKIP_ATTESTATION`
+- disables every attestation gate this binary enforces (installation
+deploy, service updates, updater self-update) uniformly, wired through
+`compose.release.yaml` and set only in that one E2E job.
+`clean-install.yml` (the other workflow deploying via `compose.release.yaml`)
+needed no change - it deploys the real, published, genuinely-attested
+images, not a local build, so it's an actual live check of the
+attestation chain working end-to-end rather than something that needs
+to bypass it.
+
+**Unrelated cleanup, needed to unblock this PR's own CI:** `trivy`
+flagged CVE-2026-56854 in `golang.org/x/crypto` (v0.52.0, an indirect
+dependency, fixed in 0.55.0) - present in `main` already, not something
+this PR introduced, but it fails `main`'s own security-scan gate for any
+PR touching `rootguard-core` right now. Bumped via `go get
+golang.org/x/crypto@v0.55.0 && go mod tidy` (pulled `golang.org/x/sys`
+along with it); `rootguard-updater`/`rootguard-webapp/backend` don't
+depend on it at all, so this is scoped to `rootguard-core` alone.
+
+**Medium, fixed: build-time base images weren't digest-pinned.**
+`golang:1.26-alpine`/`docker:29-cli` (`rootguard-core`, `rootguard-updater`)
+and `node:22-bookworm`/`golang:1.26-bookworm` (`rootguard-webapp`'s two
+builder stages) were still tag-only - `rootguard-unbound`,
+`rootguard-blockpage`, cosign, and the webapp runtime's own
+`gcr.io/distroless` base were already digest-pinned, this closes the
+remaining gap. Matters even for a builder stage that never ships in the
+final image: it's what compiled the shipped binary, so a repointed tag
+(a compromised or re-pushed upstream image) could tamper with the build
+toolchain itself without any change to this repo.
+
+Digests resolved live against the real registry (`docker buildx
+imagetools inspect <image> --format '{{.Manifest.Digest}}'`) and
+independently re-verified a second time before committing, after an
+early copy-paste slip in this same change corrupted one digest and was
+caught by a `diff` between the two Dockerfiles' identical cosign pins
+before it ever reached a commit.
+
+**Medium, fixed: the release pipeline could build from, tag, or attribute
+provenance to the wrong commit under a race.** Two distinct races, both
+from trusting a mutable git ref re-resolved at a *later* moment than
+when the intent to release was actually captured:
+
+1. `release-version-bump.yml` dispatched `release-alpha.yml` with
+   `--ref main` and no pinned commit. `github.sha` for that dispatched
+   run resolves from whatever `main` is *when its own checkout actually
+   runs* - not necessarily the commit `release-version-bump.yml` just
+   committed and tagged, if anything else landed on `main` in the
+   window between the two. Every job's checkout, the published images'
+   `org.opencontainers.image.revision` label and `COMMIT` build-arg, and
+   the release notes' own provenance section all inherited this
+   ambiguity.
+2. `update-alpha-pins`'s "Point the release tag" step re-fetched
+   `origin/main`'s tip at that later point, independent of what its own
+   preceding "Commit updated pins" step had just pushed - a second,
+   narrower race window with the same shape.
+
+Fixed by threading an explicit commit through instead of re-resolving a
+ref: `release-version-bump.yml` now pushes commit+tag atomically
+(`git push --atomic`, closing the window between the two ref updates
+too) and passes the exact resulting SHA as a new `source_sha`
+`workflow_dispatch` input; `release-alpha.yml`'s `version` job resolves
+`source_ref` once (`inputs.source_sha || github.sha` - a manual dispatch
+with no `source_sha` keeps today's behavior) and every other job's
+checkout, the image labels, and the release notes all reference that
+same value. The tag-move step now uses the exact commit
+"Commit updated pins" just pushed (captured as that step's own output)
+instead of re-fetching `origin/main`, falling back to the fetch only on
+its pre-existing idempotent "nothing to commit" path, where there's no
+"just pushed" commit to reference. Both workflows also gained a shared
+`concurrency: group: release-pipeline` lock (the audit's own
+recommendation) - previously absent entirely, so two overlapping release
+attempts could have raced each other's pushes directly, a strictly worse
+version of the same problem.
+
+Workflow-only change with no way to exercise a real release run in CI -
+verified locally: YAML parses on both files, `git push --atomic` tested
+against a real local bare repo (both refs land in one transaction), and
+the new conditional shell logic (prefer the captured commit, fall back
+to a fresh fetch only when nothing was pushed) checked standalone.
+
+**Medium, fixed: install.sh's double-quoted .env values still let
+Compose expand `$` references in them.** Round 1 double-quoted every
+value the awk block writes to `.env`, closing the `#`-comment-truncation
+and newline-injection gaps - but double-quoted dotenv values still get
+`$VAR`/`${VAR}` expansion from Docker Compose's own parser. Reproduced
+live with `docker compose config`: a password of
+`abc$HOME${MISSING}` came back out with `$HOME` expanded to the invoking
+user's real home directory - the actually-running admin password could
+silently differ from the one typed in.
+
+Fixed by switching to single quotes (`q()` now just wraps the value in
+`'...'`, no escaping needed) - single-quoted dotenv values are fully
+literal, no expansion or escape processing at all, confirmed the same
+way: `docker compose config` against a single-quoted
+`abc$HOME${MISSING}` now returns it completely unchanged. The one
+consequence of true literalness: a value can't contain an embedded `'`
+at all (no escape mechanism exists in single-quoted dotenv syntax) - so
+`admin_user`/`admin_password` are now rejected outright if they contain
+one, alongside the existing newline rejection (which also now covers a
+bare `\r`, the audit's own additional recommendation). Deliberately not
+attempting a quote-concatenation escape trick for `'` (`'\''`-style) -
+its correctness would depend on parser behavior across dotenv
+implementations this script has no way to verify, unlike the
+single-vs-double-quote literalness question, which was checked directly
+against the real `docker compose config`.
+
+No regression test added (this script has no test harness - the
+existing gap noted in round 1's install.sh fix) - verified instead the
+same way round 1's install.sh fix was: the awk pipeline run standalone
+against adversarial values, and this time also against a *real*
+`docker compose config` invocation (works daemonless, since it's pure
+config resolution) proving both the single-quote fix and the
+previously-double-quoted bug it fixes are real.
+
+**Medium, fixed: the FritzBox SSRF guard checked the dialed address after
+connecting, not before.** `dialPrivateOnlyWith` dialed first and inspected
+`conn.RemoteAddr()` afterwards - real protection against the client
+speaking TR-064 to a public address, but a genuine `connect(2)` to the
+disallowed address still happened before the connection was torn down,
+letting a caller distinguish an open port from a closed one on a host
+this client should never have touched at all (a classic SSRF port-scan
+oracle, even though the actual TR-064 request itself never got sent).
+
+Fixed by moving the check into a `net.Dialer.Control` hook
+(`rejectNonPrivateControl`), which the standard library calls after DNS
+resolution but before the `connect(2)` syscall - a disallowed address is
+now never actually contacted. DNS rebinding is still closed the same way
+as before: `Control` receives the concrete, already-resolved `ip:port`
+about to be dialed, never the pre-resolution hostname. The old
+`dialPrivateOnlyWith` test faked a `net.Conn`'s `RemoteAddr()` to exercise
+the post-dial check without real network I/O; the new test calls
+`rejectNonPrivateControl` directly with a `nil syscall.RawConn` instead,
+since the function never touches it - simpler and no longer needs a fake
+connection at all. Revert-verified: reverted the range check to
+always-allow, confirmed the public-address test cases fail, restored.
+
+Loopback stays allowed in the production path (the audit's own secondary
+recommendation was to restrict it there too, "not only for testability")
+- left as-is deliberately: this package's own tests bind to loopback via
+`httptest.Server`, and a fully clean test/production split would need
+materially more test scaffolding for a client whose blast radius (an
+unauthenticated TR-064 host-discovery call) loopback doesn't meaningfully
+worsen beyond what the private ranges above it already allow.
+
+**Releasekritisch, fixed: final image tags were published before the
+release's own E2E tests ran, and a re-run could silently reuse an image
+built from the wrong commit.** Two compounding gaps in
+`release-alpha.yml`'s `publish` job:
+
+1. It pushed straight to the FINAL version tag
+   (`ghcr.io/.../IMAGE:VERSION`), before `smoke-test`/`upgrade-test` had
+   run - so a release whose E2E tests then failed still left a real,
+   publicly pullable image behind under that tag.
+2. The "does this need building" check keyed on that same final tag's
+   mere *existence* - so a re-run after fixing whatever broke the tests
+   could not correct it: the tag already "existed", build+attestation
+   were silently skipped, and the stale (or, on a re-dispatch against a
+   newer commit, actually-wrong-commit) image was reused - while the
+   release notes' provenance section still claimed it was built from the
+   current `source_ref`. Not theoretical - this happened on a real
+   release re-run.
+
+Fixed by publishing to a commit-scoped CANDIDATE tag first
+(`VERSION-candidate-<12-char-sha>`, computed once in the `version` job so
+every job agrees on it) instead of the final tag - nothing under the
+final version tag is ever touched by `publish` itself. `smoke-test` and
+`upgrade-test` now run against these candidate images. Only after both
+have actually passed does `update-alpha-pins` (already gated on
+`needs: [..., smoke-test, upgrade-test]` from an earlier round) run a new
+"Promote candidate images to the final release tag" step:
+`docker buildx imagetools create` republishes the exact already-tested
+manifest under the final tag - not a fresh build, so the promoted image
+is byte-for-byte what was actually tested (same digest, same
+attestation, same `org.opencontainers.image.revision`) - followed
+immediately by re-inspecting the promoted tag's digest and asserting it
+matches the recorded one exactly, as defense-in-depth against promoting
+from a stale digest file.
+
+This also closes finding #2 as a side effect, not just #1: because the
+candidate tag encodes the exact commit, "does this candidate already
+exist" and "was this the right commit" collapse into the same question -
+a genuinely new commit always gets its own, different candidate tag,
+so there's no tag-existence check left that a wrong-commit re-run could
+satisfy.
+
+Also wired `gitleaks`/`trivy`/`govulncheck`/`staticcheck` directly into
+the release gate (the audit's own additional recommendation) rather than
+continuing to trust that `ci-security.yml`'s separate `push: branches:
+[main]` trigger happened to run against the right commit at some
+earlier, untimed point: `ci-security.yml` gained a `workflow_call`
+trigger (with a `ref` input, since a workflow_dispatch release run's
+`source_ref` can differ from its ambient `github.sha` - see the earlier
+fix for that), and a new `security` job in `release-alpha.yml` calls it
+pinned to the release's own `source_ref`, with `publish` now requiring
+`needs: [version, test, security]`.
+
+Workflow-only change with no way to exercise a real release run in CI -
+verified locally: YAML parses on both files (`yaml.safe_load`), the
+`docker buildx imagetools create`/`inspect` command shapes match the
+pattern already verified live in an earlier round's base-image pinning
+work, and every image-reference expression that needed to move from
+`needs.version.outputs.value` to the new `needs.version.outputs.candidate_tag`
+was swept via `grep` before and after to confirm none were missed (the
+handful of remaining `value` references are all genuinely about the git
+tag/GitHub Release name, not a Docker image reference, and were left
+alone deliberately).
+
+**Fixed (not deferred - see the correction above): blockpage no longer
+holds any AdGuard credential.** Round 1 explicitly deferred this as a
+"longer-term redesign"; the user's own correction on this second review
+was direct: a mandate to fix a review's findings doesn't leave room for
+unilaterally downgrading one to "document only" because it looks bigger
+than the others, even when the review itself calls it a long-term
+recommendation. Implemented as originally scoped:
+
+`publishBlockpageAuthToken` (`base64(adguard_username+":"+adguard_password)`,
+written to the volume shared with the blockpage container) is gone.
+`Manager.publishBlockpageServiceToken` now writes a 32-byte random,
+AdGuard-unrelated token there instead, and a new `GET
+/api/blockpage/reason` endpoint in `rootguard-core/internal/api/routes.go`
+performs the actual AdGuard `check_host` call server-side - only Core
+ever holds the real AdGuard credentials now, and only returns the block
+`reason` string (the only field blockpage's own frontend, `meta.js`,
+actually reads). Registered on the root mux (not the bearer-token-gated
+`apiMux` subtree) with its own, much narrower auth check
+(`Manager.VerifyBlockpageServiceToken`, constant-time-compared) - putting
+it behind Core's own admin token (shared with the WebApp and the updater)
+would have been almost as bad as the problem being fixed. Host input is
+validated against an RFC-1123-style hostname pattern
+(`ErrInvalidBlockpageHost`) before ever reaching AdGuard's admin API.
+
+`rootguard-blockpage`'s nginx template and its `19-render-blockpage-conf.sh`
+entrypoint script both updated to match: `/api/reason` now proxies to
+`http://rootguard-core:8081/api/blockpage/reason?host=$host` with `Authorization:
+Bearer ${BLOCKPAGE_SERVICE_TOKEN}`, resolved the same Docker-embedded-DNS
+way the old direct-to-AdGuard proxy already was. Reachability confirmed by
+reading the actual network topology, not assumed: blockpage only joins the
+dynamically-rendered `rootguard-dns` network (see `renderCompose` in
+`installer/manager.go`), and Core is already `docker network connect`ed to
+that same network at deploy time (for its own DNSSEC-adjacent reasons,
+predating this fix) - so `rootguard-core:8081` was already reachable from
+there, no new network wiring needed.
+
+Regenerating the token on every `Bootstrap` call (rather than persisting
+and reusing one) is intentional, not an oversight: `installer.Manager`
+already re-renders blockpage's nginx config and reloads it
+(`docker exec rootguard-blockpage sh /docker-entrypoint.d/19-render-blockpage-conf.sh`
++ `nginx -s reload`) immediately after `Bootstrap` returns, in the same
+deploy step that existed before this fix - so there's no window where
+blockpage would be left holding a stale token.
+
+Tests: `adguard` package - the token is 32 random bytes (64 hex chars),
+provably unrelated to the AdGuard credentials, and round-trips through
+`VerifyBlockpageServiceToken` (accepts the real one, rejects a tampered
+one, rejects empty, fails closed before any `Bootstrap` has ever run);
+`ReasonForHost` proxies correctly and rejects malformed hosts. `api`
+package - the handler rejects a missing/wrong service token, rejects a
+malformed host with a valid token, and - the routing half of the fix,
+proven separately - a request bearing the service token (never Core's
+admin token) reaches past `requireBearerToken`, revert-verified: removing
+the route's own `root.HandleFunc` registration and re-running that exact
+test flips it to a 401, confirming the route precedence is what the test
+depends on, not something it would pass by accident either way.
+
+**Small, fixed: `atomicfile.WriteFile` wrote to a fixed, predictable temp
+name (`path+".tmp"`) via a plain `os.WriteFile`.** Three compounding
+gaps in that: not concurrency-safe (two overlapping callers for the same
+`path` shared that one temp name, racing each other's writes); `os.WriteFile`
+opens-and-truncates an *existing* file rather than refusing one, so a
+pre-existing `path+".tmp"` - a stale leftover from an earlier failed run,
+or a symlink someone else in the same directory could plant - would be
+written through rather than replaced; and since `os.OpenFile` only applies
+the requested permission bits when it actually *creates* a file, an
+existing leftover at that name silently donated its own (possibly wrong)
+mode to every future write, ignoring whatever mode the caller asked for.
+
+Fixed by switching to `os.CreateTemp(dir, ...)` in the target directory:
+it always creates a brand-new, uniquely-named file, so there's never an
+existing name (symlink or otherwise) to collide with, and this code now
+explicitly `Chmod`s it to the requested mode regardless of what any
+earlier leftover had. Also added `Sync()` on both the file (before the
+rename that makes it visible) and the parent directory (after the rename
+- a rename is itself a directory-entry change that needs its own fsync to
+survive a crash, which the previous version never did either).
+
+`TestWriteFileIgnoresStaleLegacyTempFile` is the regression test:
+pre-plants a stale `path+".tmp"` at world-writable mode `0777`, then
+asserts a fresh `WriteFile(path, ..., 0600)` call is completely unaffected
+by it - both in the final file's content and in its mode actually being
+`0600`, not the leaked `0777`. Revert-verified: reverting to the old
+fixed-name implementation makes exactly the mode assertion fail (got
+`0777`, wanted `0600`), confirming the test targets the real bug, not
+just the file-content half of it.
+
+**Medium, fixed: the DNSSEC-bypass check still had reachable bypasses.**
+Round 1's fix for `harden-dnssec-stripped: no` matched a literal `": no"`
+suffix against the raw config line - real, but still bypassable with any
+of `harden-dnssec-stripped:    no` (extra internal whitespace),
+`harden-dnssec-stripped: no # allow it` (a trailing comment - the *key*
+extraction already stripped comments, the value check never did), or
+`harden-dnssec-stripped:no` (no space after the colon) - all ordinary,
+spec-legal Unbound config shapes.
+
+Fixed by parsing the value the same principled way the key was already
+parsed: new `directiveValue` (comment-stripped, colon-split, trimmed -
+mirrors the existing `directiveKey`) replaces the raw-line suffix match,
+compared via `strings.EqualFold` instead of a pre-lowercased literal
+match. Four new cases added to the existing
+`TestCustomConfigRejectsDNSSECBypasses` (the three real bypasses plus a
+non-regression casing case, kept as a companion now that the value
+comparison is its own explicit step rather than inherited from a
+whole-line lowercase) - revert-verified: reverted to the old suffix
+match, confirmed the whitespace case fails, restored.
+
+**Small, fixed: an archive with exactly `MaxFiles` entries was still
+rejected.** Round 1 fixed this same off-by-one's *message* (it used to
+claim "more than %d entries", not always true at that point) but not the
+underlying semantics: the entry-count guard checked `count` - starting at
+0, incremented per loop iteration before `archive.Next()` was even called
+- against `MaxFiles` *before* reading each entry. Once exactly `MaxFiles`
+entries had already been read successfully, the guard fired on the next
+iteration without ever looking far enough to confirm a genuine
+`MaxFiles+1`th entry actually exists - rejecting an archive precisely at
+the limit, not over it.
+
+Fixed by restructuring the loop to count (and check) only after a real
+entry has actually been read: `count++` moved to immediately after a
+successful `archive.Next()`, with the guard now `count > MaxFiles` -
+`MaxFiles` entries read is no longer over the limit, only the
+genuine `MaxFiles+1`th read trips it.
+
+`TestExtractAcceptsExactlyTheEntryLimit` builds an archive with exactly
+`MaxFiles` entries and confirms the entry-count guard no longer rejects
+it (deliberately narrower than "the whole restore succeeds" - a
+100000-entry archive's manifest would need matching hashes for every one
+of them, unrelated overhead for what this specifically targets; whatever
+Extract fails on afterward, here the always-expected missing manifest, is
+a separately-covered path). `TestExtractRejectsEntryCountOverTheLimit`
+is the counterpart: one entry over the limit is still correctly rejected,
+with the message a prior round already corrected staying accurate.
+
+**Small, fixed: the AdGuard UI cookie rewrite silently dropped unknown
+`Set-Cookie` attributes.** `rewriteAdGuardSetCookie` parses each cookie
+with `http.ParseSetCookie`, rewrites `Path`, and re-serializes with
+`Cookie.String()`. Verified live: `Cookie.Unparsed` holds any
+attribute-value pair `ParseSetCookie` couldn't map to one of its own
+known fields (a vendor-specific or not-yet-standard attribute - a
+`FutureAttr=xyz` pair lands there in practice), but `Cookie.String()`
+never serializes it back - so the rewrite was silently dropping anything
+it didn't specifically recognize, not just leaving it untouched.
+
+Fixed by appending `cookie.Unparsed` back onto the serialized result
+after `Cookie.String()` runs - order doesn't matter for Set-Cookie
+attributes (RFC 6265), so this round-trips correctly regardless of where
+the unknown attribute originally sat.
+
+`TestRewriteAdGuardSetCookieKeepsUnknownAttributes` is the regression
+test: a cookie carrying a `FutureAttr=xyz` pair must still carry it after
+the rewrite. Revert-verified: removing the `Unparsed` re-append makes the
+rewritten cookie silently lose it, exactly reproducing the finding.
+
+**Small, fixed: the WebApp's audit log and session inventory trusted a
+freely-settable `X-Forwarded-For` header.** Rate limiting already used
+the real TCP peer address (`rateLimitKey`, fixed in an earlier round) -
+but `clientAddress`, used for the audit log and session inventory shown
+to an operator, still trusted `X-Forwarded-For` unconditionally. Not just
+a display quirk: an operator reviewing "who logged in from where" for
+incident response would see attacker-controlled garbage instead of the
+real peer address, since anyone who can reach this container at all could
+set an arbitrary value and have it recorded as their own session's
+address. RootGuard's own documented reverse-proxy setups
+(`docs/https-reverse-proxy.md`) never ask an operator to forward
+`X-Forwarded-For` either - only `X-Forwarded-Proto` - so there's no
+legitimate deployment this header could be trustworthy in.
+
+Fixed by making `clientAddress` delegate to `rateLimitKey` directly -
+kept as its own named function (rather than every caller switching to
+`rateLimitKey`) purely to preserve the distinct display-vs-access-control
+intent already documented at each call site.
+
+`TestAuditLogIgnoresSpoofedForwardedForHeader` is the regression test: a
+login with a spoofed `X-Forwarded-For` must still record the real peer
+address in every resulting audit event. Revert-verified: reverting
+`clientAddress` to trust the header again makes the audit log record the
+spoofed value instead.
+
+**Small, fixed: `theme.js` still had an `innerHTML` sink.** The blockpage
+theme toggle set `btn.innerHTML = icons[mode]`, where `icons` is a
+hardcoded, developer-written object of three fixed SVG strings - not
+exploitable today, since nothing attacker-influenced ever reaches it, but
+the audit's point stands: a sink that happens to be safe today is still a
+sink, and removing it is cheap here.
+
+Fixed by building each icon as real DOM nodes
+(`document.createElementNS`/`setAttribute`) instead of an HTML string, and
+swapping the button's child via `removeChild`/`appendChild` instead of
+`innerHTML`. Applied identically to both copies of this file -
+`rootguard-blockpage/web/theme.js` (the real blockpage) and
+`rootguard-webapp/frontend/public/blockpage-preview/theme.js` (the
+WebApp's live preview of it, a manually-kept-in-sync copy, confirmed
+byte-identical to the original before and after this change).
+
+No existing test harness for this file (no Playwright/DOM test
+infrastructure in this repo yet) - verified instead with a real `jsdom`
+instance (already a frontend devDependency): loaded the actual file,
+confirmed initialization produces exactly one `<svg>` child, and that
+cycling through all three modes (three simulated clicks) toggles
+`data-theme` correctly and never leaves more than one child node behind.
+`grep` confirms no `.innerHTML =` assignment remains in either file;
+`npm run lint` stays clean.
+
+**Small, fixed: the frontend production bundle was a single 578kB chunk
+(163kB gzipped), triggering Vite's own &gt;500kB warning.** `App.tsx`
+imported all seven authenticated pages (`Overview`, `Unbound`, `AdGuard`,
+`Setup`, `Stack`, `Backups`, `Logs`) eagerly at the top - every page's
+code shipped on first load regardless of which one, if any, a given
+session actually visits.
+
+Fixed by switching those seven to `React.lazy(() => import(...))`,
+wrapped in a single `<Suspense>` boundary around the authenticated
+`<Routes>` (a small, non-full-viewport spinner as the fallback, styled to
+render inside the already-mounted sidebar layout rather than covering
+it - full-viewport would flash over the sidebar on every navigation, not
+just the first load). `Login` deliberately stays eager: it's the one page
+every unauthenticated visit needs immediately, so splitting it would just
+trade one round-trip for another on the most universal path; its own
+`<Routes>` branch never touches the lazy imports at all, so it needed no
+`Suspense` boundary of its own.
+
+Verified with a real production build: the &gt;500kB warning is gone, the
+main chunk dropped from 578kB to 426kB (163kB → 129kB gzipped), and each
+page now ships as its own separate chunk (5-90kB each) fetched on
+navigation instead of upfront. `tsc -b`, `npm run lint`, and the existing
+26-test suite all stay clean - none of them render pages through `App.tsx`'s
+routing (the one component test, `AdGuard.test.tsx`, imports the page
+module directly), so none needed a `Suspense`-aware update.
+
+**Code-compression, revisited and partly implemented: the atomic-write
+pattern is now consistently fixed everywhere it's duplicated, not just in
+`rootguard-core`.** Round 1 explicitly judged a shared module "not worth
+it" for ~40 lines of stable atomic-write logic; the user re-raised this
+suggestion in this round's review. Re-examining it turned up something
+the compression framing alone wouldn't have: `rootguard-updater`
+(`writeAtomic` in `docker.go`) and `rootguard-webapp/backend`
+(`internal/httpapi`'s three separate call sites for credentials,
+sessions, and the audit log) still had the *exact* old, vulnerable
+`path+".tmp"` pattern this round's own `atomicfile.WriteFile` fix (see
+above) had just closed in `rootguard-core` alone - not concurrency-safe,
+follows an existing file/symlink at that name rather than refusing it,
+and silently inherits a stale leftover's permissions instead of applying
+the requested mode.
+
+Fixed by porting the same `os.CreateTemp`-based implementation into both
+other modules - a small local `writeAtomic`/`writeAtomicFile` function
+each, not a new shared Go module: separate Go modules in this repo can't
+share an `internal/` package directly (an existing architectural
+constraint, not new to this fix), and a real shared module would need
+its own versioning/dependency-management overhead for logic that rarely
+changes. Round 1's "not worth a new module" call stands - what changed is
+that leaving the *duplication* unfixed had also left the *bug* it
+inherited unfixed in two more places, which the original compression
+framing didn't surface. `rootguard-webapp/backend` additionally
+consolidated its own three previously-triplicated copies into one
+package-local helper (`atomicfile.go`), so this pass also delivers a
+literal reduction in duplicated code where a shared module wasn't
+warranted.
+
+Regression tests mirror `rootguard-core`'s own
+`TestWriteFileIgnoresStaleLegacyTempFile`: `rootguard-updater`'s
+`TestWriteAtomicIgnoresStaleLegacyTempFile` and
+`rootguard-webapp/backend`'s `TestWriteAtomicFileIgnoresStaleLegacyTempFile`
+both pre-plant a stale `path+".tmp"` at world-writable mode `0777` and
+confirm a fresh write is unaffected by it. Revert-verified in both
+modules: reverting to the old fixed-name implementation fails exactly
+the mode assertion (`0777` leaked through instead of the requested
+`0600`) in each.
+
+**Code-compression, done: `rootguard-webapp/Dockerfile` trimmed from 123
+to 60 lines.** Decorative box-drawn section headers, German inline
+comments, and doubled blank lines between stages made this file a clear
+outlier - `rootguard-core/Dockerfile` and `rootguard-updater/Dockerfile`
+never adopted that style, keeping comments only where they carry real
+information (a security rationale, a non-obvious decision). Trimmed to
+match: every substantive comment (the two digest-pinning rationales, the
+`ARG`-redeclaration note) is kept verbatim; everything else - headers,
+translated filler like "Nur Dependency Files kopieren" or "Sicherheit:
+kein root", and the extra blank lines - is gone.
+
+Verified mechanically, not just by eye: every non-comment, non-blank
+line (every `FROM`/`ARG`/`COPY`/`RUN`/`WORKDIR`/`LABEL`/`EXPOSE`/`USER`/
+`ENTRYPOINT` instruction) diffed byte-for-byte identical between the old
+and new file, sorted and compared with `diff` - confirming this is a
+pure comment/whitespace trim with zero functional change, not just an
+assumption. No local Docker daemon available to do a real build in this
+environment; the real build/push verification happens via this PR's own
+CI, which builds and pushes the actual multi-arch image from this exact
+file.
+
+**Code-compression, partly implemented: added `docs/release-process.md`,
+the architecture-level map `release-alpha.yml`'s own inline comments
+never tried to be.** The audit's suggestion had two halves: move some of
+the workflow's incident-driven explanations out to a doc, and extract its
+pin-update/compose-verification/release-notes logic into separate,
+independently-testable scripts (the pattern
+`scripts/lib/semver-validate.sh`/`scripts/bump-site-versions.sh` already
+use elsewhere in this same pipeline).
+
+Did the first half, deliberately scoped narrower than "move the
+comments": the workflow's own inline comments stay exactly where they
+are - they explain the specific, often incident-driven "why" behind
+individual steps, positioned right where a future maintainer would
+otherwise be tempted to "simplify" away a hard-won fix, which is the
+opposite of what moving them elsewhere would achieve. What was actually
+missing was the *overview* those comments don't individually provide -
+`docs/release-process.md` is new, additive documentation covering the
+trigger/identity flow, the build/test/security gate, the candidate-tag
+promotion model, the pin-update/tag-move/Release-creation sequence, and
+the upgrade-test rationale - written by reading the current workflow file
+directly and cross-checking every specific claim (job names, output
+names, the exact `docker buildx imagetools create` invocation, the
+`[skip ci]` commit message, the two referenced scripts' actual paths)
+against it via `grep`, not from memory.
+
+Deliberately did not attempt the second half (extracting pin-update/
+compose-verification/release-notes logic into standalone scripts) in this
+pass: a release pipeline is exactly the kind of file where a rushed
+refactor risks a real regression for a marginal readability gain,
+explicitly noted as a separate, future piece of work in the new doc's own
+closing section rather than folded in hastily here.
+
+**Small, fixed: a failed state persist was diagnosable but still
+invisible in Status().** Round 1 added `OnPersistError`/`PersistErrorHandler`
+so `persistLocked`'s many `_ = m.persistLocked()` call sites (found in
+that same review) would at least log a failed write instead of silently
+discarding it - explicitly scoped at the time as "not a fix for the
+underlying problem, just the difference between invisible and
+diagnosable". This round's audit re-flagged the remaining half directly:
+`Status()` itself still reported whatever the in-memory state was
+(`installed`, an update's `history`, ...) with no indication the on-disk
+record backing it might not survive a restart.
+
+Fixed by having `persistLocked` (in both `installer.Manager` and
+`updater.Manager` - the same pattern round 1 already used in both)
+record the outcome directly on `m.status` itself: `PersistError`/
+`PersistErrorAt` are cleared before every write attempt and set only in
+the deferred failure branch, so a success always reports (and durably
+records) a clean state, and a failure is visible in the very next
+`Status()` call - self-healing the moment a later persist succeeds,
+without any caller needing to notice or retry anything. Mirrored into
+the WebApp's TypeScript `InstallationStatus`/`UpdateStatus` types for
+contract completeness; no UI surfacing added yet (out of scope for this
+fix - a follow-up if the backend/frontend team wants a visible warning
+banner, not a correctness gap on its own).
+
+`TestStatusSurfacesPersistFailureAndSelfHeals` (one per package,
+mirroring each other) is the regression test: forces a persist to fail
+against a path blocked by a file, confirms `Status()` reports both new
+fields, repoints at a real writable directory (the same recovery an
+operator fixing a full disk would perform), and confirms the very next
+successful persist clears both again. Revert-verified in both packages:
+reverting `persistLocked` to the round-1-only logging behavior fails the
+test at "expected Status() to report a persist error" in both.
