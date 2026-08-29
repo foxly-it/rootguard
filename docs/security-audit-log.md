@@ -1569,3 +1569,40 @@ their previous generation with zero partial commits.
 `control-plane-images.yaml` were checked too: neither has this
 tightly-coupled, read-back-together shape (each is either independent or
 never re-read into memory at startup), so neither needed the same fix.
+
+**Medium, fixed: `README.md`, `SECURITY.md`/`SECURITY.de.md`, and
+`docs/release-history.md` still described RootGuard as an old-series
+alpha/beta - `README.md`'s Quick Start pointed new users at
+`v0.1.0-beta.1`'s `compose.alpha.yaml`/`.env.alpha.example` under the
+`compose.alpha.yaml` name that release ever used, while every other
+release artifact had long since moved to `v1.0.0-rc.1` and
+`compose.release.yaml`. `site/index.html`/`site/docs.html` already
+showed the correct `1.0.0-rc.1` version number in most places but still
+called RootGuard "the [public] beta" in three prose spots -
+`scripts/check-site-facts.sh`'s version check doesn't judge prose,
+only version-string currency, so a stale word next to a correct version
+number was invisible to it.
+
+Nothing checked `README.md` at all: `scripts/check-site-facts.sh`/
+`bump-site-versions.sh` only ever scoped themselves to `site/*.html`, so
+README could (and did) drift indefinitely with no CI signal. Verified
+directly: `source scripts/version-pattern.sh && rootguard_extract_versions
+< README.md` cleanly extracted exactly the one stale version string with
+no false positives (confirmed the AGPL-3.0-or-later license mention
+doesn't accidentally match - it's only two dot-separated groups, the
+extractor requires three).
+
+Fixed: manually corrected `README.md` (both `curl` URLs' tag and
+filenames, the `docker compose -f` command, and the "public beta"
+callout in both language sections), `SECURITY.md`/`SECURITY.de.md`
+("public alpha" -> "public release-candidate testing ahead of 1.0"),
+`docs/release-history.md`'s "current public release" line, and the
+three stale `site/*.html` prose spots. Then, rather than leave this to
+drift stale again next release, extended both scripts' `for file in
+site/*.html` loops to also cover `README.md` - the same version-string
+substitution/check logic already handles it cleanly (verified: reverting
+just `README.md`'s fix and re-running `check-site-facts.sh` correctly
+reports 4 stale matches; the real fixed version passes clean). Left the
+scripts' local link/asset check site/*.html-only - README's relative
+links resolve against a different base and it has none of the broken-
+local-asset kind that check exists for.

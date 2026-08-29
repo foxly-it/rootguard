@@ -20,9 +20,9 @@ confidential data from attachments and logs.
 
 ## Supported versions
 
-RootGuard is in public alpha. Security fixes are provided for the most
-recently published alpha release. Older alpha releases do not receive their
-own backports.
+RootGuard is in public release-candidate testing ahead of 1.0. Security fixes
+are provided for the most recently published release. Older releases do not
+receive their own backports.
 
 We acknowledge reports on receipt, assess impact and reproducibility, and
 coordinate a fix and its subsequent release. Please give the project

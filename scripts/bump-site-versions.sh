@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Mechanically refreshes site/*.html's version references to the latest
-# release tag - the exact thing scripts/check-site-facts.sh checks for,
-# and the thing that went stale unnoticed for two days after both
-# v0.1.0-beta.2 and v0.1.0-beta.3 shipped, because the release pipeline
+# Mechanically refreshes site/*.html's (and README.md's) version references
+# to the latest release tag - the exact thing scripts/check-site-facts.sh
+# checks for, and the thing that went stale unnoticed for two days after
+# both v0.1.0-beta.2 and v0.1.0-beta.3 shipped, because the release pipeline
 # updates compose.release.yaml/.env.release.example automatically but never
 # touched the site. Meant to run as an automated step right after a
 # release tag is cut (see release-alpha.yml's update-alpha-pins job),
 # committed alongside the compose/.env pin update.
+#
+# README.md joined the site/*.html set here after a follow-up review found
+# it silently stale for far longer than two days - see
+# check-site-facts.sh's own comment on why it joined that check too.
 #
 # Idempotent: running it again with nothing stale is a silent no-op.
 
@@ -37,7 +41,7 @@ historical_reference_pattern="([Aa]b |Starting with |required from |bis einschli
 update_image_line_pattern='ROOTGUARD_(CORE|WEBAPP)_UPDATE_IMAGE='
 
 changed_files=()
-for file in site/*.html; do
+for file in site/*.html README.md; do
   stale_versions="$(grep -vE "${historical_reference_pattern}" "${file}" \
     | grep -vE "${update_image_line_pattern}" \
     | rootguard_extract_versions | sort -u || true)"
@@ -77,7 +81,7 @@ if [[ -f "${docs_file}" ]]; then
 fi
 
 if [[ "${#changed_files[@]}" -eq 0 ]]; then
-  echo "site/*.html already reflects ${latest_version} - nothing to do"
+  echo "site/*.html and README.md already reflect ${latest_version} - nothing to do"
 else
   echo "Updated: $(printf '%s ' "${changed_files[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
 fi
