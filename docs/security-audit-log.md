@@ -1438,3 +1438,71 @@ digest, not the original mutable tag. Also updated the existing
 `(unboundImage, blockpageImage string)` parameters (previously read
 `m.unboundImage`/`m.blockpageImage` directly, which the digest-resolved
 rewrite now needs to override).
+
+**Critical, fixed: a re-run of `release-alpha.yml` could move an
+already-published release tag onto untested commits, and always
+force-pushed it regardless.** Two compounding bugs in the "Point the
+release tag at the pin-update commit" step:
+
+1. `git rev-parse "refs/tags/${tag}"` resolves an *annotated* tag (which
+   `git tag -a` always creates here) to the tag object's own hash, not
+   the commit it points at - so the step's own "already correct, nothing
+   to do" comparison against a target commit hash could never match,
+   on any run, ever. Every single run force-moved the tag, whether it
+   actually needed to or not. Fixed with `refs/tags/${tag}^{}`, which
+   dereferences through the tag object the same way `git rev-parse`
+   already does for every other object type.
+2. Whenever this run's "Commit updated pins" step found nothing to
+   commit (the pins in the checked-out `source_ref` already matched),
+   the tag target fell back to `origin/main`'s *current* tip - reasoning
+   that held only if main hadn't moved since `source_ref` was fixed. A
+   legitimately retried run (e.g. after a later job failed and the whole
+   workflow re-ran) re-checks that reasoning against whatever now
+   happens to be on main, which can by then include unrelated commits
+   this specific release run never built, tested, or security-scanned.
+   Confirmed live: a real RC's tag and its own Core image's OCI revision
+   label pointed at two different commits because of exactly this.
+   Fixed by using `needs.version.outputs.source_ref` (the one commit
+   every job in the run actually agrees on) instead, with an explicit
+   `git merge-base --is-ancestor` check that aborts the release loudly
+   if `source_ref` is no longer reachable from `origin/main`, rather than
+   silently tagging whatever main currently points at.
+
+Verified the YAML still parses and every embedded `run:` block in the
+whole workflow file still passes `bash -n` (no dedicated shellcheck job
+exists in this repo to run instead).
+
+**Critical, fixed: candidate-image promotion trusted the candidate
+blindly and could silently overwrite an already-published version
+tag.** `update-alpha-pins`'s "Promote candidate images to the final
+release tag" step called `docker buildx imagetools create` for every
+image unconditionally, using a digest that - on a retried run where
+`publish`'s build/attest steps were skipped because the candidate
+already existed - was never re-verified against anything: not that it
+was actually built from the commit this release run tested (the
+candidate tag only encodes a 12-char commit prefix), not that it
+actually carries a valid release attestation, and not whether the final
+tag it was about to (re)create already pointed at something else
+entirely.
+
+Fixed with three checks added before promotion, run unconditionally for
+every image on every run (so "even when the build was skipped" is
+automatically covered, not a separate code path to keep in sync):
+
+1. The candidate's `org.opencontainers.image.revision` label (read via
+   `docker buildx imagetools inspect --format '{{json .Image}}'`, which
+   this session verified live against a real published RootGuard image
+   on ghcr.io to confirm the exact field path) must equal the *full*
+   `source_ref` commit SHA, not just its 12-char prefix.
+2. `cosign verify-attestation` must succeed against the candidate,
+   using the identical policy `stack.RequireAttestation` enforces at
+   deploy time (`internal/stack/attestation.go`) - added a
+   `sigstore/cosign-installer` step (pinned to the same `v3.0.6` cosign
+   release `rootguard-core`'s own Dockerfile uses) to make the binary
+   available on the runner.
+3. The final tag's existing digest (if any) is inspected first: missing
+   → create; already the candidate's own digest → no-op (an idempotent
+   retry); anything else → hard abort. A published version tag must
+   never start silently resolving to different content - if `${VERSION}`
+   was already published pointing elsewhere, that needs a new version
+   number, not a forced overwrite of this one.
