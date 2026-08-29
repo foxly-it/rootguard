@@ -1526,3 +1526,46 @@ real reachability/content check after the existing DNS/DNSSEC checks:
 `config.DNSBindAddress:80` once enabled, per `installer.Manager`'s
 `blockpagePort`) and asserts the response actually contains the real
 page's content, not just that the container started.
+
+**Medium, fixed: `updater.Manager`'s multi-file persistence
+(`status.json`/`images.json`/`updates.yaml`) was only atomic per file,
+not as a group.** All three files derive from the same in-memory state
+(`m.status`/`m.selected`) and are read back together on startup
+(`load()`), but `persistLocked` called `atomicfile.WriteJSON`/`WriteFile`
+once per file in sequence - a failure partway through (the review's own
+example: `images.json` failing to write after `status.json` had already
+been committed) left them silently inconsistent with each other, visible
+on the very next `load()`.
+
+Fixed with a new `atomicfile.WriteFiles`/`atomicfile.JSONFile` pair: every
+file in a batch is staged (written to its own temp file, fsynced) before
+any of them is renamed into place, and none are renamed unless every
+single one staged successfully - a staging failure (the dominant real
+cause: disk full, permissions, an I/O error) now leaves every file in the
+batch completely untouched, not just the one that actually failed.
+Renaming several files still can't be one atomic operation on POSIX, so
+a residual window remains if a rename itself fails after every file
+already staged - narrowed from "an arbitrarily slow write of a later
+file" down to "the moment between two already-guaranteed-to-succeed
+renames", documented explicitly in `WriteFiles`' own doc comment as the
+best available guarantee without a write-ahead log or combining the
+files into one. `persistLocked` now builds all three as one batch and
+calls `WriteFiles` once.
+
+New tests at both layers: `atomicfile_test.go` gained
+`TestWriteFilesLeavesEveryFileUntouchedWhenAnyStagingFails` (a staging
+failure changes nothing) and
+`TestWriteFilesCleansUpRemainingTempFilesOnRenameFailure` (the documented
+residual window, with no leaked temp files); `updater`'s own
+`manager_test.go` gained
+`TestPersistLockedKeepsMultiFileStateConsistentOnFailure`, which
+reproduces the review's exact scenario end-to-end through the real
+`Manager` (not just the `atomicfile` primitive) and proves the strongest
+available claim - sabotaging the first file in commit order so its own
+rename fails leaves all three files, including the two after it, at
+their previous generation with zero partial commits.
+`rootguard-webapp/backend`'s own three atomic-write call sites
+(credentials/sessions/audit log) and `rootguard-updater`'s
+`control-plane-images.yaml` were checked too: neither has this
+tightly-coupled, read-back-together shape (each is either independent or
+never re-read into memory at startup), so neither needed the same fix.

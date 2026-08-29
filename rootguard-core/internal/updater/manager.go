@@ -803,16 +803,32 @@ func (m *Manager) persistLocked() (returnErr error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}
-	if err := atomicfile.WriteJSON(filepath.Join(m.dataDir, "status.json"), m.status); err != nil {
+	// All three files derive from the same in-memory state
+	// (m.status/m.selected) and must never be left in two different
+	// generations of it relative to each other - found in review: calling
+	// atomicfile.WriteFile/WriteJSON once per file here meant a failure
+	// partway through (e.g. images.json failing to write after
+	// status.json had already been committed) left them silently
+	// inconsistent on the very next load(). atomicfile.WriteFiles commits
+	// all three as a single unit: none of them move to their new content
+	// unless every one of them could be staged first.
+	statusFile, err := atomicfile.JSONFile(filepath.Join(m.dataDir, "status.json"), m.status)
+	if err != nil {
 		return err
 	}
-	if err := atomicfile.WriteJSON(filepath.Join(m.dataDir, "images.json"), m.selected); err != nil {
+	imagesFile, err := atomicfile.JSONFile(filepath.Join(m.dataDir, "images.json"), m.selected)
+	if err != nil {
 		return err
 	}
-	return m.writeOverrideLocked()
+	overrideFile := atomicfile.File{
+		Path: filepath.Join(m.dataDir, "updates.yaml"),
+		Data: []byte(m.overrideContentLocked()),
+		Mode: 0600,
+	}
+	return atomicfile.WriteFiles([]atomicfile.File{statusFile, imagesFile, overrideFile})
 }
 
-func (m *Manager) writeOverrideLocked() error {
+func (m *Manager) overrideContentLocked() string {
 	var content strings.Builder
 	content.WriteString("services:\n")
 	for _, service := range m.serviceNames() {
@@ -822,7 +838,7 @@ func (m *Manager) writeOverrideLocked() error {
 		}
 		content.WriteString("  " + service + ":\n    image: " + strconv.Quote(image) + "\n")
 	}
-	return atomicfile.WriteFile(filepath.Join(m.dataDir, "updates.yaml"), []byte(content.String()), 0600)
+	return content.String()
 }
 
 func cloneStatus(status Status) Status {
