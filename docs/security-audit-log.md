@@ -1944,3 +1944,39 @@ apart.
   both `ci-blockpage.yml` and `ci-webapp.yml` - a future edit to one
   side without the other now fails CI immediately instead of silently
   drifting unnoticed.
+
+**Medium, fixed: component-level documentation still described an old
+alpha/beta lifecycle phase, and five per-component `SECURITY.md` files
+were dead monorepo-migration leftovers.** `docs/platform-support.md`
+and `site/roadmap.html` still said "public beta" in their framing
+copy (their actual content - the `0.9`/release-candidate milestone
+status, the support-policy version pattern - was already accurate,
+just the surrounding lifecycle wording wasn't). `ROADMAP.md`'s own
+"Status and scope" section still said "pre-release beta development"
+with a "Last reviewed" date three weeks stale relative to its own
+later, accurate `0.9 RC` section.
+
+The five `rootguard-*/SECURITY.md` files turned out to be worse than
+stale wording: leftovers from before the monorepo migration, each
+pointing at its own now-archived, read-only per-component repo's
+vulnerability-reporting page (e.g.
+`github.com/foxly-it/rootguard-core/security/advisories/new`) - a dead
+reporting channel, not just an outdated one. GitHub's own repository
+Security tab only ever surfaces the *root* `SECURITY.md`
+(already corrected to "release-candidate testing" in round 3); these
+subdirectory copies have no special standing in a monorepo and nothing
+in the codebase links to them (`grep`-verified). Deleted all five rather
+than updating their wording - the root `SECURITY.md`/`SECURITY.de.md`
+is the single canonical policy for the whole monorepo.
+
+Fixed the genuinely current-state lifecycle claims in
+`docs/platform-support.md`, `site/roadmap.html` (the page's own `<meta
+description>`/`data-description-*` attributes; its milestone-history
+labels like "0.1 ALPHA" are correctly left alone - those name what a
+past milestone *was called*, not a claim about today), and
+`ROADMAP.md`'s top summary - left every genuinely historical reference
+(a specific past release's own state, a milestone's own name,
+`CHANGELOG.md`'s generated entries, this very audit log's own record of
+what used to say what) untouched throughout, the same
+historical-vs-current distinction `check-site-facts.sh`'s own exclusion
+pattern already draws.

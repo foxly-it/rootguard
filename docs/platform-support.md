@@ -2,8 +2,9 @@
 
 Tracked by [issue #39](https://github.com/foxly-it/rootguard/issues/39).
 
-RootGuard's public beta uses one immutable Compose model on every supported
-Docker platform. The clean-install verifier proves more than image
+RootGuard's public release-candidate phase uses one immutable Compose model
+on every supported Docker platform. The clean-install verifier proves more
+than image
 availability: it starts the control plane, signs in, runs the AIO preflight,
 deploys AdGuard Home and Unbound, resolves a public name, and verifies that an
 invalid DNSSEC chain is rejected.
@@ -104,9 +105,9 @@ profile's bigger caches.
 
 ## Support policy
 
-- Each `0.1.0-{alpha,beta}.N` / future `1.0.x` release is supported until
-  the next one ships - only the current release receives fixes; there's no
-  parallel maintenance of older lines pre-1.0.
+- Each `0.1.0-{alpha,beta}.N` / `1.0.0-rc.N` / future `1.0.x` release is
+  supported until the next one ships - only the current release receives
+  fixes; there's no parallel maintenance of older lines pre-1.0.
 - Security-relevant fixes land as a new release promptly rather than being
   backported; there is no separate security-only release channel before
   1.0.
