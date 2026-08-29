@@ -1606,3 +1606,32 @@ reports 4 stale matches; the real fixed version passes clean). Left the
 scripts' local link/asset check site/*.html-only - README's relative
 links resolve against a different base and it has none of the broken-
 local-asset kind that check exists for.
+
+**Medium, fixed: the blockpage's `/api/reason` comment claimed `$host`
+"is never a client-supplied parameter", which isn't accurate.** `$host`
+resolves from the request's `Host` header (no real `server_name` to fall
+back to - the block is `server_name _`), and the `Host` header is
+exactly as client-controlled as any other request header: nothing stops
+a client on the DNS bind network from sending an arbitrary `Host` to
+this endpoint directly, without ever going through a real
+AdGuard-triggered sinkhole for that domain. That makes it a real, if
+narrow, "is domain X currently blocked" oracle against the household's
+own AdGuard instance - not a made-up concern, but also not something a
+DNS-sinkhole architecture using a custom blocking IP (RootGuard's or any
+other's, e.g. Pi-hole's own equivalent) has a real channel to prevent
+entirely: there's no way to prove "this request came from a genuine DNS
+block" beyond the `Host` header itself.
+
+Fixed the comment to state this accurately - what's actually true
+($host reflects genuine client intent in the *legitimate* flow, simply
+because that's how HTTP virtual hosting works, but this endpoint can't
+distinguish that from a hand-crafted probe), what's scoped (whoever can
+already reach the container - the same audience every legitimately
+sinkholed client also reaches it from), and what's revealed (only a
+blocked/not-blocked verdict, no browsing history). Also tightened the
+real, cheap mitigation available: `limit_req_zone` from `5r/s` to `1r/s`
+and the endpoint's own `burst` from `10` to `3` - the single legitimate
+client (`web/meta.js`, one `fetch` per page load) never needs more than
+an occasional quick reload's worth of requests, so this comfortably
+covers real usage while cutting bulk domain-enumeration throughput
+roughly 15x.
