@@ -673,20 +673,90 @@ func (m *Manager) resolveDigest(ctx context.Context, image string) string {
 	if strings.Contains(image, "@sha256:") {
 		return image
 	}
-	repo, _, ok := strings.Cut(image, ":")
+	repo, ok := imageRepo(image)
 	if !ok {
 		return image
 	}
-	output, err := m.run(ctx, "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}|{{end}}", image)
+	// docker pull, not docker image inspect .RepoDigests - found in a
+	// follow-up review: the old implementation inspected the local image
+	// object's full .RepoDigests list and took the *first* entry matching
+	// this repo. That list belongs to the local image as a whole, not to
+	// this specific pull - if the same image ID has ever been associated
+	// with more than one digest for this repo (a real, previously-hit
+	// failure mode already documented on digestFromPullOutput below, the
+	// exact pattern this now mirrors), the first match can silently be a
+	// stale one instead of the digest actually pulled just now, letting a
+	// correctly-attested but outdated image get pinned into the stack
+	// definition. `docker pull` itself reports the digest of exactly what
+	// it just pulled ("Digest: sha256:...", once pulling finishes) -
+	// authoritative in a way a post-hoc inspect isn't. A second pull here
+	// (compose already pulled everything as part of the "pull" step) is
+	// deliberate, not redundant: it's the only way to get that
+	// authoritative per-image answer, and Docker's own pull is a fast,
+	// mostly no-op manifest check when the image is already present and
+	// unchanged - the same cost internal/updater's own update() already
+	// pays on every update via the identical pattern.
+	output, err := m.run(ctx, "pull", image)
+	if err == nil {
+		if digestRef, ok := digestFromPullOutput(repo, output); ok {
+			return digestRef
+		}
+	}
+	// Fallback for an unexpected pull-output format (or the pull call
+	// itself failing, e.g. a transient registry hiccup after compose's own
+	// pull already succeeded) - the same best-effort inspect this function
+	// used to always rely on, now demoted to a last resort rather than the
+	// primary path.
+	inspected, err := m.run(ctx, "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}|{{end}}", image)
 	if err != nil {
 		return image
 	}
-	for _, digestRef := range strings.Split(strings.TrimSpace(string(output)), "|") {
+	for _, digestRef := range strings.Split(strings.TrimSpace(string(inspected)), "|") {
 		if strings.HasPrefix(digestRef, repo+"@") {
 			return digestRef
 		}
 	}
 	return image
+}
+
+// imageRepo returns the repository portion of a "repo:tag" reference,
+// correctly handling a registry host:port prefix - e.g.
+// "registry.example:5000/rootguard-unbound:tag" - which the previous
+// strings.Cut(image, ":") (first colon) implementation mis-split into
+// "registry.example" and "5000/rootguard-unbound:tag", silently breaking
+// every digest lookup for any image reference naming a non-default
+// registry with an explicit port. A colon only separates the tag if it
+// appears after the last "/"; any colon before that (or without a
+// following "/" at all) is part of the registry host:port, not a tag
+// separator - the same rule Docker's own reference parser
+// (distribution/reference) uses. ok is false only when there's no colon
+// after the repository path at all (an already-bare, tagless reference),
+// matching the previous strings.Cut behavior's own "not found" case.
+func imageRepo(image string) (repo string, ok bool) {
+	lastSlash := strings.LastIndex(image, "/")
+	lastColon := strings.LastIndex(image, ":")
+	if lastColon <= lastSlash {
+		return "", false
+	}
+	return image[:lastColon], true
+}
+
+// digestFromPullOutput extracts the digest `docker pull` itself reports
+// for the image it just pulled - see resolveDigest's own comment on why
+// this is preferred over inspecting the local image object's
+// .RepoDigests. repo must already be split from any tag (imageRepo
+// above) - the registry:port mis-split this fixes here also affected the
+// identical repo-splitting logic in rootguard-updater's and
+// internal/updater's own copies of this function; fixed there too in
+// this same change (see those files' own updated comments).
+func digestFromPullOutput(repo string, output []byte) (string, bool) {
+	for _, line := range strings.Split(string(output), "\n") {
+		digest, ok := strings.CutPrefix(strings.TrimSpace(line), "Digest: ")
+		if ok && strings.HasPrefix(digest, "sha256:") {
+			return repo + "@" + digest, true
+		}
+	}
+	return "", false
 }
 
 // resolveAndPinDigests resolves unbound's (and, when enabled, blockpage's)

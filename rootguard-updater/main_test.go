@@ -60,6 +60,34 @@ func TestDigestFromPullOutputReturnsFalseForATaglessImage(t *testing.T) {
 	}
 }
 
+// TestImageRepoHandlesRegistryPort is the regression test for a follow-up
+// review finding: strings.Cut(image, ":") (first colon), previously used
+// by both digestQualify and digestFromPullOutput above, mis-split any
+// image reference naming a registry host:port, e.g.
+// "registry.example:5000/rootguard-unbound:tag" became repo=
+// "registry.example" - silently breaking the digest lookup for that
+// entire class of reference. imageRepo instead only treats a colon after
+// the last "/" as the tag separator.
+func TestImageRepoHandlesRegistryPort(t *testing.T) {
+	tests := map[string]struct {
+		wantRepo string
+		wantOK   bool
+	}{
+		"rootguard-unbound:test":                         {"rootguard-unbound", true},
+		"registry.example:5000/rootguard-unbound:tag":    {"registry.example:5000/rootguard-unbound", true},
+		"registry.example:5000/ns/rootguard-unbound:tag": {"registry.example:5000/ns/rootguard-unbound", true},
+		"ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.1":  {"ghcr.io/foxly-it/rootguard-unbound", true},
+		"registry.example:5000/rootguard-unbound":        {"", false}, // registry:port, no tag
+		"rootguard-unbound":                              {"", false}, // no tag at all
+	}
+	for image, want := range tests {
+		repo, ok := imageRepo(image)
+		if repo != want.wantRepo || ok != want.wantOK {
+			t.Errorf("imageRepo(%q) = (%q, %v), want (%q, %v)", image, repo, ok, want.wantRepo, want.wantOK)
+		}
+	}
+}
+
 // TestIsOlderReleaseVersion is the regression test for the exact incident
 // that motivated this check: beta.12's own release resolution had a bug
 // (see rootguard-core's pickLatestReleaseImage) that could resolve
