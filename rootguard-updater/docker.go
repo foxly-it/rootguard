@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -17,10 +18,49 @@ func runDocker(ctx context.Context, arguments ...string) ([]byte, error) {
 	return output, nil
 }
 
+// writeAtomic mirrors rootguard-core's internal/atomicfile.WriteFile -
+// found in review: this module (and rootguard-webapp/backend) each
+// hand-rolled their own copy of the exact fixed-temp-name pattern a
+// follow-up security review found and fixed in rootguard-core
+// (path+".tmp" via a plain os.WriteFile - not concurrency-safe, follows
+// an existing file/symlink at that name rather than refusing it, and
+// silently inherits a stale leftover's permissions instead of applying
+// the requested mode). Separate Go modules can't share an internal/
+// package directly (no shared module currently exists for this, and a
+// prior round already judged standing one up not worth it for ~40 lines
+// of stable logic) - so this is the same fix, duplicated deliberately
+// rather than left duplicated-and-vulnerable.
 func writeAtomic(path string, data []byte) error {
-	temp := path + ".tmp"
-	if err := os.WriteFile(temp, data, 0600); err != nil {
+	dir := filepath.Dir(path)
+	temp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(temp, path)
+	tempPath := temp.Name()
+	defer os.Remove(tempPath) // no-op once the rename below has succeeded
+
+	if err := temp.Chmod(0600); err != nil {
+		temp.Close()
+		return err
+	}
+	if _, err := temp.Write(data); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return err
+	}
+	handle, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer handle.Close()
+	return handle.Sync()
 }

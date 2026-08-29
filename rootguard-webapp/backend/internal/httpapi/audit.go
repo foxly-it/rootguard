@@ -126,9 +126,5 @@ func (a *SessionAuth) persistAuditLocked() (returnErr error) {
 	if err != nil {
 		return err
 	}
-	temp := a.auditPath + ".tmp"
-	if err := os.WriteFile(temp, data, 0600); err != nil {
-		return err
-	}
-	return os.Rename(temp, a.auditPath)
+	return writeAtomicFile(a.auditPath, data, 0600)
 }
