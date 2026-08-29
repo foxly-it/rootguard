@@ -3010,3 +3010,37 @@ verified locally: YAML parses on both files, `git push --atomic` tested
 against a real local bare repo (both refs land in one transaction), and
 the new conditional shell logic (prefer the captured commit, fall back
 to a fresh fetch only when nothing was pushed) checked standalone.
+
+**Medium, fixed: install.sh's double-quoted .env values still let
+Compose expand `$` references in them.** Round 1 double-quoted every
+value the awk block writes to `.env`, closing the `#`-comment-truncation
+and newline-injection gaps - but double-quoted dotenv values still get
+`$VAR`/`${VAR}` expansion from Docker Compose's own parser. Reproduced
+live with `docker compose config`: a password of
+`abc$HOME${MISSING}` came back out with `$HOME` expanded to the invoking
+user's real home directory - the actually-running admin password could
+silently differ from the one typed in.
+
+Fixed by switching to single quotes (`q()` now just wraps the value in
+`'...'`, no escaping needed) - single-quoted dotenv values are fully
+literal, no expansion or escape processing at all, confirmed the same
+way: `docker compose config` against a single-quoted
+`abc$HOME${MISSING}` now returns it completely unchanged. The one
+consequence of true literalness: a value can't contain an embedded `'`
+at all (no escape mechanism exists in single-quoted dotenv syntax) - so
+`admin_user`/`admin_password` are now rejected outright if they contain
+one, alongside the existing newline rejection (which also now covers a
+bare `\r`, the audit's own additional recommendation). Deliberately not
+attempting a quote-concatenation escape trick for `'` (`'\''`-style) -
+its correctness would depend on parser behavior across dotenv
+implementations this script has no way to verify, unlike the
+single-vs-double-quote literalness question, which was checked directly
+against the real `docker compose config`.
+
+No regression test added (this script has no test harness - the
+existing gap noted in round 1's install.sh fix) - verified instead the
+same way round 1's install.sh fix was: the awk pipeline run standalone
+against adversarial values, and this time also against a *real*
+`docker compose config` invocation (works daemonless, since it's pure
+config resolution) proving both the single-quote fix and the
+previously-double-quoted bug it fixes are real.
