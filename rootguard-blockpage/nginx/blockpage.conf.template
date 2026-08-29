@@ -1,4 +1,4 @@
-limit_req_zone $binary_remote_addr zone=reason_lookup:10m rate=5r/s;
+limit_req_zone $binary_remote_addr zone=reason_lookup:10m rate=1r/s;
 proxy_cache_path /var/cache/nginx/reason levels=1:2 keys_zone=reason_cache:1m max_size=1m inactive=30s;
 
 server {
@@ -30,9 +30,29 @@ server {
 
     # Reads AdGuard's actual filtering verdict for the domain that got this
     # request sinkholed here, so the page can show the real block reason
-    # instead of a decorative always-checked list. $host only - never a
-    # client-supplied parameter - so this can't become a free "is domain X
-    # blocked" oracle against the reader's own AdGuard instance.
+    # instead of a decorative always-checked list.
+    #
+    # Found in a follow-up review: an earlier version of this comment
+    # claimed "$host only - never a client-supplied parameter", which is
+    # not accurate. $host resolves from the request's Host header (there's
+    # no real server_name here to fall back to - see "server_name _"
+    # above), and the Host header is exactly as client-controlled as any
+    # other request header: nothing stops a client on the DNS bind
+    # network from sending an arbitrary Host to this endpoint directly,
+    # without ever going through a real AdGuard-triggered sinkhole for
+    # that domain. In the legitimate flow $host is trustworthy simply
+    # because that's how HTTP already works - a browser's Host header
+    # reflects whatever domain it was actually trying to reach - but this
+    # endpoint has no way to distinguish that from a hand-crafted probe,
+    # so it is a real, if narrow, "is domain X currently blocked" oracle:
+    # scoped to whoever can already reach this container (the same LAN/
+    # DNS-bind-address audience every legitimately sinkholed client also
+    # reaches it from - AdGuard's custom_ip blocking mode has no channel
+    # to prove "this request came from a genuine DNS block" beyond the
+    # Host header itself, the same trade-off every DNS-sinkhole-based
+    # blocker with a custom landing page makes), rate-limited below to
+    # slow bulk enumeration, and revealing only a blocked/not-blocked
+    # verdict - no browsing history, no other client's activity.
     #
     # Proxies to Core, not AdGuard directly - found in review: this used to
     # proxy straight to AdGuard's own admin API with a Basic-Auth token that
@@ -47,7 +67,13 @@ server {
     # narrow, unrelated service token that authenticates it to that one
     # endpoint, nothing else.
     location = /api/reason {
-        limit_req zone=reason_lookup burst=10 nodelay;
+        # rate/burst tightened in the same review that corrected the
+        # comment above: the single legitimate client (meta.js, one
+        # fetch per page load, see web/meta.js) never needs more than an
+        # occasional quick page reload's worth of requests - this still
+        # comfortably covers that while cutting bulk domain-enumeration
+        # throughput roughly 15x from the previous 5r/s+burst=10.
+        limit_req zone=reason_lookup burst=3 nodelay;
         limit_req_status 429;
 
         # Docker's embedded resolver, re-resolved per request via the
