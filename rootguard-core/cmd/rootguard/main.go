@@ -44,6 +44,26 @@ func main() {
 	}
 	requireSecretStrength("ROOTGUARD_API_TOKEN", token, minTokenLength)
 
+	// Test-only escape hatch, same shape and same reason as
+	// rootguard-updater's own ROOTGUARD_UPDATER_SKIP_ATTESTATION: E2E
+	// fixtures (backup-restore.yml's "Verify backup export and restore",
+	// which builds this binary and Unbound/Blockpage locally from the
+	// checkout under test) have no real cosign attestation to check -
+	// unlike the updater's own pull-skip flag, this one disables a real
+	// security control, so it's worth spelling out plainly: any
+	// deployment that sets this in production loses every attestation
+	// gate this binary enforces (installation deploy, service updates,
+	// updater self-update) entirely. Applies uniformly to every manager
+	// below rather than a separate flag per manager - "skip attestation"
+	// is a property of this whole binary's enforcement, not of any one
+	// call site.
+	var attestationVerifier installer.AttestationVerifierFunc
+	var updaterAttestationVerifier updater.AttestationVerifierFunc
+	if strings.EqualFold(os.Getenv("ROOTGUARD_SKIP_ATTESTATION"), "true") {
+		attestationVerifier = func(context.Context, string, string) error { return nil }
+		updaterAttestationVerifier = func(context.Context, string, string) error { return nil }
+	}
+
 	port := envOrDefault("PORT", "8081")
 	manager := unbound.NewManager(
 		envOrDefault("UNBOUND_CONFIG_DIR", "/var/lib/rootguard/unbound"),
@@ -58,14 +78,15 @@ func main() {
 		envOrDefault("ROOTGUARD_BLOCKPAGE_AUTH_DIR", "/var/lib/rootguard/adguard-auth"),
 	)
 	installationManager := installer.NewManager(installer.Options{
-		DataDir:          envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
-		CoreContainer:    envOrDefault("ROOTGUARD_CORE_CONTAINER", "rootguard-core"),
-		UnboundImage:     envOrDefault("ROOTGUARD_UNBOUND_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
-		AdGuardImage:     envOrDefault("ROOTGUARD_ADGUARD_IMAGE", "adguard/adguardhome:v0.107.78"),
-		AdGuardBetaImage: envOrDefault("ROOTGUARD_ADGUARD_BETA_IMAGE", "adguard/adguardhome:beta"),
-		BlockpageImage:   envOrDefault("ROOTGUARD_BLOCKPAGE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
-		DNSNetworkCIDR:   "172.29.53.0/24",
-		OnPersistError:   logPersistError("installation manager"),
+		DataDir:             envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
+		CoreContainer:       envOrDefault("ROOTGUARD_CORE_CONTAINER", "rootguard-core"),
+		UnboundImage:        envOrDefault("ROOTGUARD_UNBOUND_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
+		AdGuardImage:        envOrDefault("ROOTGUARD_ADGUARD_IMAGE", "adguard/adguardhome:v0.107.78"),
+		AdGuardBetaImage:    envOrDefault("ROOTGUARD_ADGUARD_BETA_IMAGE", "adguard/adguardhome:beta"),
+		BlockpageImage:      envOrDefault("ROOTGUARD_BLOCKPAGE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
+		DNSNetworkCIDR:      "172.29.53.0/24",
+		OnPersistError:      logPersistError("installation manager"),
+		AttestationVerifier: attestationVerifier,
 		Bootstrap: func(ctx context.Context, dnsBindAddress string) error {
 			status, err := adguardManager.Bootstrap(ctx, dnsBindAddress)
 			if err != nil {
@@ -79,9 +100,10 @@ func main() {
 	})
 	githubClient := &http.Client{Timeout: 8 * time.Second}
 	updateManager := updater.NewManager(updater.Options{
-		DataDir:        envOrDefault("ROOTGUARD_UPDATE_DIR", "/var/lib/rootguard/updates"),
-		ComposeDir:     envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
-		OnPersistError: logPersistError("update manager"),
+		DataDir:             envOrDefault("ROOTGUARD_UPDATE_DIR", "/var/lib/rootguard/updates"),
+		ComposeDir:          envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
+		OnPersistError:      logPersistError("update manager"),
+		AttestationVerifier: updaterAttestationVerifier,
 		Services: []updater.ServiceSpec{
 			{
 				Name: "adguard", DisplayName: "AdGuard Home",
@@ -143,10 +165,11 @@ func main() {
 	// Core's own generated data-plane one.
 	controlPlaneComposeFile := envOrDefault("ROOTGUARD_COMPOSE_FILE", "/opt/rootguard/compose.yaml")
 	updaterSelfUpdateManager := updater.NewManager(updater.Options{
-		DataDir:        envOrDefault("ROOTGUARD_SELF_UPDATE_DIR", "/var/lib/rootguard/updater-self-update"),
-		ComposeDir:     filepath.Dir(controlPlaneComposeFile),
-		ComposeProject: envOrDefault("ROOTGUARD_COMPOSE_PROJECT", "rootguard"),
-		OnPersistError: logPersistError("updater self-update manager"),
+		DataDir:             envOrDefault("ROOTGUARD_SELF_UPDATE_DIR", "/var/lib/rootguard/updater-self-update"),
+		ComposeDir:          filepath.Dir(controlPlaneComposeFile),
+		ComposeProject:      envOrDefault("ROOTGUARD_COMPOSE_PROJECT", "rootguard"),
+		OnPersistError:      logPersistError("updater self-update manager"),
+		AttestationVerifier: updaterAttestationVerifier,
 		Services: []updater.ServiceSpec{{
 			Name: "updater", DisplayName: "RootGuard Updater",
 			Container:   "rootguard-updater",

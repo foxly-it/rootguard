@@ -16,6 +16,10 @@ services:
       PORT: "8081"
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_CORE_CONTAINER: rootguard-core
+      # Test-only escape hatch - see cmd/rootguard/main.go's own doc
+      # comment on ROOTGUARD_SKIP_ATTESTATION for what it disables and
+      # why. Never set outside an E2E fixture; defaults to enforcing.
+      ROOTGUARD_SKIP_ATTESTATION: "${ROOTGUARD_SKIP_ATTESTATION:-false}"
       ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
       ROOTGUARD_UNBOUND_IMAGE: "${ROOTGUARD_UNBOUND_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.1@sha256:992bd11fc1e7a4039ff459f1758faf362be9e0a0e3b8f626a36d939561ef9a3e}"
       ROOTGUARD_ADGUARD_IMAGE: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0}"

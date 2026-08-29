@@ -65,7 +65,14 @@ func TestManagerRestoresVerifiedDataThroughCleanInstaller(t *testing.T) {
 		}
 		return nil, nil
 	}
-	installerManager := installer.NewManager(installer.Options{DataDir: t.TempDir(), CoreContainer: "rootguard-core", DNSNetworkCIDR: "172.29.53.0/24", Run: docker})
+	installerManager := installer.NewManager(installer.Options{
+		DataDir: t.TempDir(), CoreContainer: "rootguard-core", DNSNetworkCIDR: "172.29.53.0/24", Run: docker,
+		// Not about attestation itself - stack.RequireAttestation (the
+		// real default) fails closed on a non-matching image for any
+		// service with a real signing policy, "unbound" included, which
+		// this test's fixture image is.
+		AttestationVerifier: func(context.Context, string, string) error { return nil },
+	})
 	target := t.TempDir()
 	if err := os.WriteFile(filepath.Join(target, "old"), []byte("old"), 0600); err != nil {
 		t.Fatal(err)
