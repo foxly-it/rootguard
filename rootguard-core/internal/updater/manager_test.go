@@ -589,3 +589,74 @@ func TestStatusSurfacesPersistFailureAndSelfHeals(t *testing.T) {
 		t.Fatalf("expected PersistErrorAt to clear after a successful persist, got %v", status.PersistErrorAt)
 	}
 }
+
+// TestPersistLockedKeepsMultiFileStateConsistentOnFailure is the
+// regression test for the exact scenario a follow-up review found:
+// persistLocked used to call atomicfile.WriteJSON/WriteFile once each for
+// status.json, images.json, and updates.yaml - all three derived from the
+// same in-memory state - so a failure partway through the sequence (the
+// review's own example: images.json failing after status.json had
+// already been committed) left them silently inconsistent with each
+// other on the very next load(). persistLocked now stages all three
+// through a single atomicfile.WriteFiles call, which commits (renames)
+// them in the fixed order status.json, images.json, updates.yaml -
+// sabotaging status.json itself (the *first* file in that order) so its
+// rename fails proves the strongest available claim: none of the three
+// files change at all, not just that the two after it were spared.
+func TestPersistLockedKeepsMultiFileStateConsistentOnFailure(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir: dataDir,
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "Core", TargetImage: "rootguard-core:latest",
+		}},
+	})
+
+	if err := manager.selectImage("core", "rootguard-core:gen1"); err != nil {
+		t.Fatal(err)
+	}
+	statusPath := filepath.Join(dataDir, "status.json")
+	imagesPath := filepath.Join(dataDir, "images.json")
+	overridePath := filepath.Join(dataDir, "updates.yaml")
+	gen1Images, err := os.ReadFile(imagesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(gen1Images), "rootguard-core:gen1") {
+		t.Fatalf("expected images.json to contain the gen1 image, got %s", gen1Images)
+	}
+	gen1Override, err := os.ReadFile(overridePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Replace status.json (the first file WriteFiles renames) with a
+	// directory - os.Rename(tempFile, statusPath) reliably fails against
+	// this on every OS, simulating a failure at the very first commit
+	// step, before images.json or updates.yaml are ever touched.
+	if err := os.Remove(statusPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(statusPath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.selectImage("core", "rootguard-core:gen2"); err == nil {
+		t.Fatal("expected the second persist to fail")
+	}
+
+	imagesAfter, err := os.ReadFile(imagesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(imagesAfter) != string(gen1Images) {
+		t.Fatalf("images.json changed despite the batch failing on status.json:\nbefore: %s\nafter:  %s", gen1Images, imagesAfter)
+	}
+	overrideAfter, err := os.ReadFile(overridePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(overrideAfter) != string(gen1Override) {
+		t.Fatalf("updates.yaml changed despite the batch failing on status.json:\nbefore: %s\nafter:  %s", gen1Override, overrideAfter)
+	}
+}
