@@ -714,10 +714,11 @@ func TestDeployRefusesActivationWhenAttestationFails(t *testing.T) {
 // every real deploy, even of a correctly signed release, failed here
 // exactly the same way a forged one would have, just for a different
 // reason. This test leaves AttestationVerifier unset (defaults to the real
-// stack.RequireAttestation) and gives Run a "docker image inspect" stub
-// that reports a digest, the same shape `docker pull` leaves behind
-// locally - deploy() must resolve that digest and hand
-// stack.RequireAttestation a "@sha256:"-qualified reference, so the
+// stack.RequireAttestation) and gives Run a "docker pull" stub that
+// reports a digest the same way the real docker CLI does ("Digest:
+// sha256:...", once pulling finishes) - deploy() must resolve that
+// digest and hand stack.RequireAttestation a "@sha256:"-qualified
+// reference, so the
 // resulting failure comes from an actual (failing, since no real cosign
 // binary or signed image exists in this test) attestation attempt, not
 // from the short-circuit that made every deploy fail closed regardless of
@@ -734,8 +735,8 @@ func TestDeployResolvesDigestBeforeAttestation(t *testing.T) {
 		// AttestationVerifier intentionally left unset: NewManager defaults
 		// it to the real stack.RequireAttestation, not a fake.
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
-			if len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" {
-				return []byte("rootguard-unbound@" + digest + "|\n"), nil
+			if len(arguments) >= 2 && arguments[0] == "pull" && arguments[1] == "rootguard-unbound:test" {
+				return []byte("Status: Downloaded newer image\nDigest: " + digest + "\n"), nil
 			}
 			if arguments[0] == "inspect" {
 				return []byte("healthy\n"), nil
@@ -770,6 +771,97 @@ func TestDeployResolvesDigestBeforeAttestation(t *testing.T) {
 	}
 	if strings.Contains(string(written), "rootguard-unbound:test") {
 		t.Fatalf("expected the mutable tag reference to be replaced, got:\n%s", written)
+	}
+}
+
+// TestResolveDigestPrefersPullOutputOverStaleRepoDigests is the
+// regression test for a follow-up review finding: resolveDigest used to
+// inspect the local image object's full .RepoDigests list and take the
+// *first* entry matching this repo - a real, previously-hit failure mode
+// (see digestFromPullOutput's own doc comment) if that list ever
+// contains more than one digest for the same repo, since a local image
+// object isn't scoped to "what was just pulled". Gives the pull mock the
+// *correct*, freshly-pulled digest and the image-inspect fallback mock a
+// deliberately different, stale one - resolveDigest must return the
+// pull-reported digest, proving the primary path is actually used
+// instead of silently falling through to the stale fallback.
+func TestResolveDigestPrefersPullOutputOverStaleRepoDigests(t *testing.T) {
+	const freshDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	const staleDigest = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if len(arguments) >= 2 && arguments[0] == "pull" {
+				return []byte("Digest: " + freshDigest + "\n"), nil
+			}
+			if len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" {
+				// Simulates a local image object carrying more than one
+				// RepoDigest for this repo - the stale one deliberately
+				// listed first, matching the exact shape that used to
+				// fool the old first-match loop.
+				return []byte("rootguard-unbound@" + staleDigest + "|rootguard-unbound@" + freshDigest + "|\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	got := manager.resolveDigest(context.Background(), "rootguard-unbound:test")
+	want := "rootguard-unbound@" + freshDigest
+	if got != want {
+		t.Fatalf("resolveDigest() = %q, want %q (must prefer the freshly-pulled digest over a stale .RepoDigests entry)", got, want)
+	}
+}
+
+// TestResolveDigestFallsBackToRepoDigestsWhenPullOutputIsUnparsable
+// covers the deliberate fallback path: an unexpected pull-output shape
+// (or a failed pull) must not leave resolveDigest returning the original
+// mutable tag when the local image-inspect fallback can still answer.
+func TestResolveDigestFallsBackToRepoDigestsWhenPullOutputIsUnparsable(t *testing.T) {
+	const digest = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if len(arguments) >= 2 && arguments[0] == "pull" {
+				return []byte("Status: Image is up to date\n"), nil // no "Digest:" line
+			}
+			if len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" {
+				return []byte("rootguard-unbound@" + digest + "|\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	got := manager.resolveDigest(context.Background(), "rootguard-unbound:test")
+	want := "rootguard-unbound@" + digest
+	if got != want {
+		t.Fatalf("resolveDigest() = %q, want %q (must fall back to the RepoDigests lookup)", got, want)
+	}
+}
+
+// TestImageRepoHandlesRegistryPort is the regression test for a follow-up
+// review finding: the previous strings.Cut(image, ":") (first colon)
+// mis-split any image reference naming a registry host:port, e.g.
+// "registry.example:5000/rootguard-unbound:tag" became repo=
+// "registry.example" - silently breaking the digest lookup for that
+// entire class of reference. imageRepo instead only treats a colon after
+// the last "/" as the tag separator.
+func TestImageRepoHandlesRegistryPort(t *testing.T) {
+	tests := map[string]struct {
+		wantRepo string
+		wantOK   bool
+	}{
+		"rootguard-unbound:test":                         {"rootguard-unbound", true},
+		"registry.example:5000/rootguard-unbound:tag":    {"registry.example:5000/rootguard-unbound", true},
+		"registry.example:5000/ns/rootguard-unbound:tag": {"registry.example:5000/ns/rootguard-unbound", true},
+		"ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.1":  {"ghcr.io/foxly-it/rootguard-unbound", true},
+		"registry.example:5000/rootguard-unbound":        {"", false}, // registry:port, no tag
+		"rootguard-unbound":                              {"", false}, // no tag at all
+	}
+	for image, want := range tests {
+		repo, ok := imageRepo(image)
+		if repo != want.wantRepo || ok != want.wantOK {
+			t.Errorf("imageRepo(%q) = (%q, %v), want (%q, %v)", image, repo, ok, want.wantRepo, want.wantOK)
+		}
 	}
 }
 

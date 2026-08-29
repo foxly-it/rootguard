@@ -60,9 +60,13 @@ jobs:
       # duplicating that shell logic four times over).
       candidate_tag: ${{ steps.release.outputs.candidate_tag }}
     steps:
+      # fetch-depth: 0, not the default shallow clone - the ancestry guard
+      # below needs the full tag history to find the currently-published
+      # latest release and walk the commit graph from it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
       - id: release
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
@@ -86,6 +90,28 @@ jobs:
           # release-version-bump.yml's own check rather than duplicated.
           source scripts/lib/semver-validate.sh
           require_semver "$version"
+          # Found in review: nothing ever checked that this run's
+          # SOURCE_REF actually descends from the currently-published
+          # latest release - a stale re-dispatch (an old workflow re-run,
+          # a hand-typed version override against an old branch/commit)
+          # could silently regress the public compose.release.yaml/
+          # .env.release.example pins back to an older state. Reject
+          # outright unless SOURCE_REF has the latest release's own commit
+          # as an ancestor (or is that exact commit again - the legitimate
+          # same-version-retry case, and the only-release-so-far case where
+          # no prior tag exists yet, both fall through untouched). This is
+          # commit-ancestry, not a version-number comparison - a
+          # deliberately higher version string typed against an old commit
+          # is caught exactly the same way a lower one would be.
+          latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' | head -1 || true)"
+          if [ -n "$latest_tag" ] && [ "$latest_tag" != "v${version}" ]; then
+            latest_commit="$(git rev-parse "${latest_tag}^{}")"
+            if ! git merge-base --is-ancestor "$latest_commit" "$SOURCE_REF"; then
+              echo "::error::${SOURCE_REF} does not descend from ${latest_tag} (${latest_commit}), the currently-published latest release - refusing to cut ${version} from a commit that isn't ahead of what's already public. This is very likely a stale re-dispatch or a version override against the wrong commit; start a fresh release from the current main instead." >&2
+              exit 1
+            fi
+          fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
           # Commit-scoped, not just version-scoped - see the "Determine the
           # candidate tag" comment in the publish job for why that matters.
@@ -382,10 +408,24 @@ jobs:
             #    collision or a stale artifact. candidate_tag only encodes
             #    a 12-char commit prefix, so compare against the full
             #    org.opencontainers.image.revision label instead.
-            revision="$(docker buildx imagetools inspect "$source_ref" --format '{{json .Image}}' \
-              | jq -r '[.[].config.Labels["org.opencontainers.image.revision"]] | map(select(. != null)) | first // empty')"
-            if [ "$revision" != "$SOURCE_REF" ]; then
-              echo "::error::${image}: candidate ${source_ref} has org.opencontainers.image.revision=${revision:-<missing>}, expected ${SOURCE_REF} - refusing to promote a candidate that wasn't built from the commit this release run actually tested." >&2
+            #
+            #    Found in a follow-up review: this used to take only the
+            #    *first* non-null revision label across platforms
+            #    (`... | first`) - a multi-arch manifest with a correct
+            #    amd64 label and a wrong or entirely missing arm64 one
+            #    still passed. The publish job's own build matrix always
+            #    produces exactly linux/amd64 and linux/arm64 (see its
+            #    own `platforms:` line), so require exactly those two
+            #    platform entries to exist, each carrying the correct
+            #    label - not just "at least one of them does".
+            platform_check="$(docker buildx imagetools inspect "$source_ref" --format '{{json .Image}}' \
+              | jq -r --arg want "$SOURCE_REF" '
+                  (keys | length) as $n
+                  | (all(.[]; .config.Labels["org.opencontainers.image.revision"] == $want)) as $all_match
+                  | if $n == 2 and $all_match then "ok" else "\($n) platform(s), all matching \($want): \($all_match)" end
+                ')"
+            if [ "$platform_check" != "ok" ]; then
+              echo "::error::${image}: candidate ${source_ref} failed the per-platform revision check (${platform_check}) - every platform manifest must exist and carry org.opencontainers.image.revision=${SOURCE_REF}, not just one of them." >&2
               exit 1
             fi
             # 2. A valid release attestation actually exists for it - the
@@ -493,6 +533,8 @@ jobs:
 
       - name: Commit updated pins
         id: commit-pins
+        env:
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -501,10 +543,33 @@ jobs:
             echo "compose.release.yaml, .env.release.example, and site/*.html already reflect the published release, nothing to commit"
             exit 0
           fi
+          # Found in review: this used to commit locally and then
+          # `git fetch origin main && git rebase origin/main` before
+          # pushing - rebasing means whatever had landed on main in the
+          # meantime became an ancestor of this release's own pin commit,
+          # so a later re-verification could only ever check "is
+          # SOURCE_REF still an ancestor", which it always trivially is
+          # after a rebase onto it. The commits that landed in between were
+          # never built, tested, or security-scanned by this run, yet
+          # ended up folded into the tag it produces - confirmed live: a
+          # real RC's tag and its own Core image's OCI revision label
+          # pointed at two different commits because of exactly this.
+          #
+          # Refuse instead of rebasing: this release was tested against
+          # SOURCE_REF specifically, so the pin commit must land as a
+          # direct, single-parent child of exactly that commit or not at
+          # all. If main has moved on, a plain `git push` below (no
+          # rebase, no --force) is rejected as non-fast-forward by the
+          # remote on its own - checked explicitly first anyway, so the
+          # failure is a clear, actionable message instead of a raw git
+          # rejection.
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$SOURCE_REF" ]; then
+            echo "::error::origin/main has moved to $(git rev-parse origin/main) since this release was tested against ${SOURCE_REF} - refusing to rebase the pin commit onto commits this run never built, tested, or security-scanned. Abort this release and start a fresh one from the current main instead." >&2
+            exit 1
+          fi
           git add compose.release.yaml .env.release.example site/
           git commit -m "ci: pin compose.release.yaml, .env.release.example, and site/*.html to ${{ needs.version.outputs.value }} [skip ci]"
-          git fetch origin main
-          git rebase origin/main
           git push origin HEAD:main
           # Recorded so the next step can point the release tag at exactly
           # this commit, instead of re-fetching origin/main a second time
@@ -514,16 +579,22 @@ jobs:
           # actually built or tested.
           echo "pin_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # The release tag is created before this job ever runs (by
-      # release-version-bump.yml, or by hand for a workflow_dispatch run),
-      # so without this step it permanently points at a commit whose
-      # compose.release.yaml still pins the *previous* release's images -
-      # confirmed live: v0.1.0-alpha.7's and v0.1.0-alpha.8's own tags both
-      # resolve to a compose.release.yaml pinned one release behind their own
-      # name. Anyone following the documented quick start
-      # ("curl .../v0.1.0-alpha.N/compose.release.yaml") got the wrong images.
-      # Moving the tag here, once, right after the pin commit that
-      # completes *this* release, keeps it self-consistent going forward.
+      # This step is the only place the release tag is ever created -
+      # found in review: it used to be pre-created by release-version-bump.yml
+      # (or by hand for a manual workflow_dispatch) right at the start,
+      # before any test/security/smoke-test/upgrade-test gate had run,
+      # then *moved* here once the pin commit landed. Two real problems
+      # with that: a tag existing (even briefly, pointing at an untested
+      # commit) before this release had actually passed anything, and
+      # moving a tag at all being indistinguishable, from the outside,
+      # between "the legitimate first pin" and "something silently
+      # redirected a published reference" - confirmed live:
+      # v0.1.0-alpha.7's and v0.1.0-alpha.8's own tags both resolved to a
+      # compose.release.yaml pinned one release behind their own name, and
+      # a real RC's tag ended up pointing past commits this run never
+      # tested at all (see "Commit updated pins" above). Now the tag is
+      # created here, once, after every gate has passed, directly on the
+      # pin commit, and is never force-moved again afterward - see below.
       # Idempotent: a no-op if the tag already points at the pinned commit.
       - name: Point the release tag at the pin-update commit
         id: point-tag
@@ -577,13 +648,29 @@ jobs:
           # different commit. "^{}" dereferences through the tag object to
           # the commit it points at, same as `git rev-parse` does for every
           # other object type already.
-          if git rev-parse "refs/tags/${tag}^{}" >/dev/null 2>&1 && \
-             [ "$(git rev-parse "refs/tags/${tag}^{}")" = "${target}" ]; then
-            echo "Tag ${tag} already points at the correctly pinned commit"
-            exit 0
+          if git rev-parse "refs/tags/${tag}^{}" >/dev/null 2>&1; then
+            existing="$(git rev-parse "refs/tags/${tag}^{}")"
+            if [ "$existing" = "${target}" ]; then
+              echo "Tag ${tag} already points at the correctly pinned commit"
+              exit 0
+            fi
+            # Found in review: this used to force-move the tag onto
+            # ${target} unconditionally whenever it didn't already match -
+            # legitimate the very first time a release's tag gets pinned
+            # (release-version-bump.yml no longer pre-creates it, so this
+            # step is now the only place the tag is ever created at all),
+            # but indistinguishable from a genuinely published tag being
+            # silently redirected onto different content on any later,
+            # unexpected mismatch. A published tag must never move once
+            # created - never --force here, under any circumstance; if
+            # ${tag} is wrong, that needs a real fix (a new version, or a
+            # deliberate by-hand correction), not this workflow silently
+            # papering over it.
+            echo "::error::Tag ${tag} already exists and points at ${existing}, not the expected ${target} - refusing to move a published tag. If this is a genuine correction, fix it by hand and re-run; this workflow will never force-move a tag." >&2
+            exit 1
           fi
-          git tag -f -a "${tag}" -m "${{ needs.version.outputs.value }}" "${target}"
-          git push --force origin "refs/tags/${tag}"
+          git tag -a "${tag}" -m "${{ needs.version.outputs.value }}" "${target}"
+          git push origin "refs/tags/${tag}"
 
       # The GitHub Release is created here, not by release-version-bump.yml
       # (which used to create it immediately after tagging, before this

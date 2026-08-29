@@ -1717,3 +1717,120 @@ redundant, not filling a real gap.
 Removed both `apk add` lines entirely rather than pinning packages that
 were never needed - closes the reproducibility gap outright (nothing
 left to fetch at build time at all) instead of just narrowing it.
+
+## Follow-up review, round 4 (2026-08-29)
+
+A fourth independent review of round 3's own fixes - two of them turned
+out to be incomplete rather than wrong outright. Same discipline as every
+round before: verify directly in code (and, for the release pipeline,
+against the actual published `1.0.0-rc.1` artifacts on ghcr.io), scope
+the fix, test with real teeth, document, PR, merge.
+
+**Critical, fixed: a release re-run could still fold untested commits
+into the tag, and still force-moved it on any mismatch.** Round 3 fixed
+the annotated-tag dereference bug and added a `merge-base --is-ancestor`
+check to the tag-pointing step's fallback path, but two gaps remained,
+both confirmed live against the actual `1.0.0-rc.1` release: its Core
+image's `org.opencontainers.image.revision` label (`76c178a1...`) and its
+git tag's target commit (`a51602c8...`) differ by three commits, not the
+one documented pin commit.
+
+Root cause: `release-version-bump.yml` still pre-created the release tag
+right after the changelog commit, before `release-alpha.yml` (dispatched
+next) had run a single test against it. `release-alpha.yml`'s
+`update-alpha-pins` job then had to *move* that pre-existing tag onto its
+own, later pin commit once everything passed - and to build that pin
+commit, it `git fetch`ed and `git rebase`d onto `origin/main`'s current
+tip before pushing, so any commit that had landed on `main` in the
+window between the changelog push and the pin push became an ancestor of
+the pin commit, and therefore part of the tag, without this release ever
+having built, tested, or security-scanned it. Separately, whenever an
+existing tag didn't match the freshly computed target, the tag-pointing
+step still force-moved it unconditionally (`git tag -f -a` +
+`git push --force`) rather than treating any mismatch as suspicious.
+
+Fixed with a real redesign, not another patch on the same shape:
+
+- `release-version-bump.yml` no longer creates the tag at all - just the
+  changelog commit, pushed straight to `main`.
+- `release-alpha.yml`'s pin-commit step no longer rebases: it checks
+  `origin/main == SOURCE_REF` first and hard-aborts the whole release if
+  main has moved, with an explicit message to start a fresh release
+  instead - never silently folding in commits this run never tested.
+- The tag is now created in exactly one place, once, after every gate
+  (test, security, smoke-test, upgrade-test) has actually passed,
+  directly on the pin commit - and is *never* force-moved again
+  afterward: an existing tag that already matches is a no-op, one that
+  doesn't is a hard error demanding a by-hand fix, not a silent
+  overwrite.
+- New guard in the `version` job: `SOURCE_REF` must have the currently
+  published latest release's own commit as an ancestor (or be that exact
+  commit again, the legitimate same-version-retry case) before anything
+  else runs - a stale re-dispatch or a version override against the
+  wrong commit is rejected immediately, before wasting a full
+  test/publish/smoke-test/upgrade-test cycle on a release that can't
+  land cleanly anyway. This is commit-ancestry, not a version-number
+  comparison, so it also catches a deliberately-higher version string
+  typed against an old commit, not just a numerically-lower one.
+
+The existing, already-published `1.0.0-rc.1` was deliberately left
+untouched - the next real release (whichever version that turns out to
+be) will be the first cut under the corrected pipeline.
+
+**Critical, fixed: the installer could still pin a stale image digest,
+and mis-split any registry:port image reference.** Round 2's
+`resolveDigest` (`internal/installer/manager.go`) inspected the local
+image object's full `.RepoDigests` list and took the *first* entry
+matching the repo - already documented, on `digestFromPullOutput` in
+`internal/updater/github_release.go`, as unreliable: a local image
+object isn't scoped to "what was just pulled", so if it's ever
+associated with more than one digest for the same repo (a real,
+previously-hit failure mode in this exact codebase), the first match can
+silently be a stale one. `resolveDigest` reused exactly that unreliable
+shape instead of the more authoritative pattern already established
+right next to it. Separately, its `strings.Cut(image, ":")` repo/tag
+split mis-parses any reference naming a registry host:port (e.g.
+`registry.example:5000/rootguard-unbound:tag` split into
+`registry.example` and `5000/rootguard-unbound:tag`), silently breaking
+the digest lookup for that entire class of reference.
+
+Fixed by switching `resolveDigest`'s primary path to `docker pull`'s own
+reported digest (`digestFromPullOutput`'s pattern - authoritative for
+"what was just pulled" in a way a post-hoc inspect isn't), with the old
+`.RepoDigests` inspect kept only as a last-resort fallback for an
+unexpected pull-output shape; and a new `imageRepo` helper that only
+treats a colon after the last `/` as the tag separator, the same rule
+Docker's own reference parser uses.
+
+While fixing this, found the identical `strings.Cut(image, ":")` bug
+already live - not just as a pattern to copy, but in actual production
+code paths - in both `digestQualify`/`digestFromPullOutput` copies this
+installer function was modeled on:
+`rootguard-core/internal/updater/github_release.go` and
+`rootguard-updater/image.go`. Fixed all three with the same `imageRepo`
+helper (kept in sync by hand across all three files, matching this
+codebase's existing convention for this exact ~15-line lookup, and
+noted as such in each copy's own comment) rather than leaving two of
+them silently broken for the same reference shape.
+
+New regression tests: `TestResolveDigestPrefersPullOutputOverStaleRepoDigests`
+(a stale-first-match `.RepoDigests` fixture next to the correct
+pull-reported digest - must prefer the latter),
+`TestResolveDigestFallsBackToRepoDigestsWhenPullOutputIsUnparsable` (the
+deliberate fallback path still works), and `TestImageRepoHandlesRegistryPort`
+in all three affected files (installer, `internal/updater`,
+`rootguard-updater`), covering a registry:port reference, a nested
+namespace under one, a plain Docker Hub-style reference, and both
+tagless-input shapes.
+
+**Medium, fixed: candidate-image promotion only checked the first
+platform's revision label, not all of them.** `release-alpha.yml`'s
+promotion step read every platform's `org.opencontainers.image.revision`
+label but then took only the *first* non-null one
+(`... | map(select(. != null)) | first`) - a multi-arch manifest with a
+correct `amd64` label and a wrong or entirely missing `arm64` one still
+passed. Fixed to require exactly the two platforms the publish job's own
+build matrix always produces (`linux/amd64`, `linux/arm64`) and every
+one of them carrying the correct label - verified live with `jq` against
+the real published `1.0.0-rc.1` Core image, both for the passing case
+and a deliberately wrong expected revision.
