@@ -10,12 +10,18 @@ duplicate those, it gives the overall picture they each sit inside.
 
 ## Trigger and identity
 
-A release starts either as a `v*.*.*` tag push (the normal path -
-`release-version-bump.yml` computes the next version, commits a changelog
-entry, pushes the commit and tag atomically via `git push --atomic`, then
-dispatches this workflow with that exact commit as `source_sha`) or a
-manual `workflow_dispatch` with an explicit `version` and, for automation,
-`source_sha`.
+A release starts as a `workflow_dispatch` - normally from
+`release-version-bump.yml` (computes the next version, commits a changelog
+entry, pushes that single commit to `main`, then dispatches this workflow
+with that exact commit as `source_sha`), or by hand with an explicit
+`version` and, for automation, `source_sha`. This workflow used to also
+trigger directly on a pushed `v*.*.*` tag - removed (a follow-up review's
+finding) once the release tag itself stopped being created up front: this
+workflow now creates it exactly once, after every gate has passed, and
+never moves it again under any circumstance (see "Pin update, release
+tag, and GitHub Release" below) - a tag pushed by hand already exists
+before a single test has run, which that never-move guarantee then has no
+way to honor.
 
 Every job checks out `source_sha` (falling back to `github.sha` for a
 by-hand dispatch with nothing else supplied) rather than the ambient
@@ -58,20 +64,34 @@ gets a different candidate.
 
 ## Pin update, release tag, and GitHub Release
 
-Still inside `update-alpha-pins`, after promotion: `compose.release.yaml`
-and `.env.release.example` get their image references rewritten to the
-newly promoted digests, `site/*.html`'s version references are refreshed,
-the result is validated (compose config parses, every image pin carries
-`@sha256:`, nothing points at a mutable `:latest`), and the pin-only commit
-is pushed to `main` (`[skip ci]`, since a mechanical pin refresh shouldn't
-re-trigger the whole CI matrix). The release *tag* is then moved to point
-at that pin commit - not left at the earlier commit the images were built
-from - so the documented quick start (`curl .../vX.Y.Z/compose.release.yaml`)
-always resolves to a compose file pinned to that same release's own
-images. The GitHub Release itself is created last, after every check above
-has already passed - a failed E2E test used to still leave a real, publicly
-visible Release behind (auto-discoverable by any live installation's own
-update check) needing manual cleanup.
+Before any of this, `update-alpha-pins` re-verifies `origin/main` still
+equals `source_ref` - twice: once immediately, before promoting a single
+image, and once more right before the pin commit itself. If `main` has
+moved on since this release was tested, the run aborts outright rather
+than folding untested commits into the release (a follow-up review's
+finding, after this had actually happened live: a real RC's tag and its
+own Core image's OCI revision label ended up pointing at two different
+commits, because the only such check used to run *after* image promotion
+had already happened).
+
+After promotion: `compose.release.yaml` and `.env.release.example` get
+their image references rewritten to the newly promoted digests,
+`site/*.html`'s version references are refreshed, the result is validated
+(compose config parses, every image pin carries `@sha256:`, nothing
+points at a mutable `:latest`), and the pin-only commit is pushed straight
+to `main` - never rebased onto whatever `main` happens to be by then
+(`[skip ci]`, since a mechanical pin refresh shouldn't re-trigger the
+whole CI matrix). The release *tag* is then created, pointing at that pin
+commit rather than the earlier commit the images were built from, so the
+documented quick start (`curl .../vX.Y.Z/compose.release.yaml`) always
+resolves to a compose file pinned to that same release's own images -
+created exactly once, here, the *only* place this tag is ever written,
+and never force-moved again afterward: an existing tag that already
+matches is a no-op, one that doesn't is a hard error demanding a by-hand
+fix, never a silent overwrite. The GitHub Release itself is created last,
+after every check above has already passed - a failed E2E test used to
+still leave a real, publicly visible Release behind (auto-discoverable by
+any live installation's own update check) needing manual cleanup.
 
 ## Upgrade testing
 
@@ -90,9 +110,13 @@ operator running the previous release would actually take.
 The pin-update, compose-verification, and release-notes generation logic
 above all lives inline in `update-alpha-pins`'s own steps rather than as
 separate, independently-testable scripts (the pattern
-`scripts/lib/semver-validate.sh` and `scripts/bump-site-versions.sh`
-already use elsewhere in this pipeline). That's a reasonable next
-compression step, but a release pipeline is exactly the kind of file where
-a rushed refactor risks introducing a real regression for a marginal
-readability gain - deferred as a deliberate, separate piece of work rather
-than folded into a documentation pass.
+`scripts/lib/semver-validate.sh`, `scripts/lib/semver-compare.sh`, and
+`scripts/bump-site-versions.sh` already use elsewhere in this pipeline -
+`semver-compare.sh` joined that pattern only once a real gap needed real
+SemVer 2.0 precedence logic, not the other way around: extraction happens
+when a piece of logic earns its own file by being genuinely reusable and
+independently testable, not as a wholesale rewrite). That's a reasonable
+next compression step for the rest, but a release pipeline is exactly the
+kind of file where a rushed refactor risks introducing a real regression
+for a marginal readability gain - deferred as a deliberate, separate
+piece of work rather than folded into a documentation pass.
