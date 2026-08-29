@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-08-09
+Last reviewed: 2026-08-29
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -8,7 +8,8 @@ Items are completed only when their acceptance criteria are verified.
 
 ## Status and scope
 
-RootGuard is in **pre-release beta development**. The end-to-end DNS path,
+RootGuard is in **pre-release, release-candidate testing** (see the `0.9`
+section below for current status). The end-to-end DNS path,
 guided setup, authenticated WebGUI, Unbound configuration lifecycle, AdGuard
 bootstrap, and guarded update paths exist. Use in a production environment requires
 recovery, immutable releases, broader system tests, and operational hardening.
