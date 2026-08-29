@@ -2344,6 +2344,11 @@ security-scan dependency into the release pipeline for real means turning
 `ci-security.yml` into a reusable `workflow_call` workflow, a larger,
 separate change; flagged to the user rather than rushed into this PR.
 
+**Follow-up (2026-08-29):** done - see the "release gate" entry further
+down under "Follow-up review, round 2" for the actual `workflow_call`
+conversion and the new `security` job in `release-alpha.yml` that
+depends on it.
+
 **Blocker 3, fixed: the one-line installer ran an unpinned, unverified
 script as root.** `install.sh`'s `install_docker()` downloaded
 `dockerinstall.sh` from `foxly-it/dockerinstall`'s moving `main` branch
@@ -3074,3 +3079,66 @@ recommendation was to restrict it there too, "not only for testability")
 materially more test scaffolding for a client whose blast radius (an
 unauthenticated TR-064 host-discovery call) loopback doesn't meaningfully
 worsen beyond what the private ranges above it already allow.
+
+**Releasekritisch, fixed: final image tags were published before the
+release's own E2E tests ran, and a re-run could silently reuse an image
+built from the wrong commit.** Two compounding gaps in
+`release-alpha.yml`'s `publish` job:
+
+1. It pushed straight to the FINAL version tag
+   (`ghcr.io/.../IMAGE:VERSION`), before `smoke-test`/`upgrade-test` had
+   run - so a release whose E2E tests then failed still left a real,
+   publicly pullable image behind under that tag.
+2. The "does this need building" check keyed on that same final tag's
+   mere *existence* - so a re-run after fixing whatever broke the tests
+   could not correct it: the tag already "existed", build+attestation
+   were silently skipped, and the stale (or, on a re-dispatch against a
+   newer commit, actually-wrong-commit) image was reused - while the
+   release notes' provenance section still claimed it was built from the
+   current `source_ref`. Not theoretical - this happened on a real
+   release re-run.
+
+Fixed by publishing to a commit-scoped CANDIDATE tag first
+(`VERSION-candidate-<12-char-sha>`, computed once in the `version` job so
+every job agrees on it) instead of the final tag - nothing under the
+final version tag is ever touched by `publish` itself. `smoke-test` and
+`upgrade-test` now run against these candidate images. Only after both
+have actually passed does `update-alpha-pins` (already gated on
+`needs: [..., smoke-test, upgrade-test]` from an earlier round) run a new
+"Promote candidate images to the final release tag" step:
+`docker buildx imagetools create` republishes the exact already-tested
+manifest under the final tag - not a fresh build, so the promoted image
+is byte-for-byte what was actually tested (same digest, same
+attestation, same `org.opencontainers.image.revision`) - followed
+immediately by re-inspecting the promoted tag's digest and asserting it
+matches the recorded one exactly, as defense-in-depth against promoting
+from a stale digest file.
+
+This also closes finding #2 as a side effect, not just #1: because the
+candidate tag encodes the exact commit, "does this candidate already
+exist" and "was this the right commit" collapse into the same question -
+a genuinely new commit always gets its own, different candidate tag,
+so there's no tag-existence check left that a wrong-commit re-run could
+satisfy.
+
+Also wired `gitleaks`/`trivy`/`govulncheck`/`staticcheck` directly into
+the release gate (the audit's own additional recommendation) rather than
+continuing to trust that `ci-security.yml`'s separate `push: branches:
+[main]` trigger happened to run against the right commit at some
+earlier, untimed point: `ci-security.yml` gained a `workflow_call`
+trigger (with a `ref` input, since a workflow_dispatch release run's
+`source_ref` can differ from its ambient `github.sha` - see the earlier
+fix for that), and a new `security` job in `release-alpha.yml` calls it
+pinned to the release's own `source_ref`, with `publish` now requiring
+`needs: [version, test, security]`.
+
+Workflow-only change with no way to exercise a real release run in CI -
+verified locally: YAML parses on both files (`yaml.safe_load`), the
+`docker buildx imagetools create`/`inspect` command shapes match the
+pattern already verified live in an earlier round's base-image pinning
+work, and every image-reference expression that needed to move from
+`needs.version.outputs.value` to the new `needs.version.outputs.candidate_tag`
+was swept via `grep` before and after to confirm none were missed (the
+handful of remaining `value` references are all genuinely about the git
+tag/GitHub Release name, not a Docker image reference, and were left
+alone deliberately).
