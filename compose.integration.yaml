@@ -79,6 +79,15 @@ services:
     environment:
       PORT: "8081"
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
+      # This file's own unbound/adguard are pre-provisioned compose
+      # services (bootstrapped directly, never through
+      # installer.Manager.deploy()), so the attestation gate's code path
+      # isn't actually reached here today - added for consistency with
+      # compose.yaml/compose.release.yaml anyway, so a future test that
+      # does exercise POST /api/installation/deploy against this file
+      # doesn't hit the same live-testing surprise compose.yaml did
+      # (2026-08-29, see docs/security-audit-log.md).
+      ROOTGUARD_SKIP_ATTESTATION: "${ROOTGUARD_SKIP_ATTESTATION:-false}"
       ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"

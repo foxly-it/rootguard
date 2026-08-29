@@ -1293,3 +1293,71 @@ operator fixing a full disk would perform), and confirms the very next
 successful persist clears both again. Revert-verified in both packages:
 reverting `persistLocked` to the round-1-only logging behavior fails the
 test at "expected Status() to report a persist error" in both.
+
+## Live end-to-end verification (2026-08-29)
+
+With every round-2 fix merged, ran the actual RootGuard stack on the
+dedicated test LXC (`192.168.178.7`) - fresh images built from `main`
+(not CI artifacts), pushed to the host's own local registry, and driven
+through a real guided-setup deploy, not simulated. Confirmed live, not
+just via unit test:
+
+- **Finding 6 (attestation gate on first deploy)**: the guided-setup
+  deploy against unsigned local dev images failed exactly as designed -
+  `attestation_failed`, `"release attestation for unbound
+  (localhost:5000/rootguard-unbound:dev) is not_applicable, refusing to
+  activate"` - before it ever touched the DNS containers.
+- **Finding 3 (DNSSEC-bypass parsing)**: all three bypass variants
+  (extra whitespace, trailing comment, no space after the colon)
+  rejected with the exact "DNSSEC validation must not be weakened"
+  message; the legitimate `harden-dnssec-stripped: yes` accepted.
+- **Finding 4 (install.sh single-quoting)**: reproduced on this host's
+  own BusyBox `awk` (a different implementation than the one used
+  during development) - `docker compose config` against a
+  `$HOME${MISSING}`-containing value returned it completely literal.
+- **Finding 5 (SSRF pre-connect check)**: a FritzBox-discovery request
+  against a public IP was refused before any connection attempt; the
+  same request against an unreachable private IP got a real "no route
+  to host" from the OS network stack, confirming private addresses are
+  still allowed to actually attempt a connection (not blanket-blocked).
+- **Finding 7 (blockpage credentials)**: the shared token both Core and
+  the blockpage container hold is 64 hex characters that fail to
+  base64-decode into anything resembling credentials (not
+  `base64(user:pass)`); `/api/reason` round-trips correctly through
+  Core's new endpoint for both a blocked and an unblocked domain; the
+  blockpage container's own attempt to call AdGuard's admin API
+  directly with that same token got a real `401 Unauthorized` from
+  AdGuard.
+- **X-Forwarded-For audit-log fix**: a login with a spoofed
+  `X-Forwarded-For: 10.13.37.99` still recorded the real Docker-bridge
+  peer address in the audit log, not the spoofed value.
+- **theme.js**: the file actually shipped inside the running blockpage
+  container has no `.innerHTML =` assignment (`innerHTML` appears only
+  in the explanatory comment).
+- **Frontend bundle splitting**: the webapp image actually shipped 21
+  separate JS chunks; the main chunk was exactly 425,993 bytes (~426kB),
+  matching the local development measurement exactly.
+- **Persistence across a real restart**: killed and restarted the
+  `rootguard-core` container mid-session - installation state and the
+  WebApp session both survived, exercising the `atomicfile.WriteFile`
+  fix in an actual production code path, not just its unit test.
+
+**Found and fixed live, not from the audit**: the guided-setup deploy
+against local dev images failed at the `pull` step before even reaching
+attestation - `docker compose pull` refuses a purely local image tag
+with no registry to pull from, so testing this required pushing the dev
+images to a real registry first (the host's own `local-registry:5000`).
+Once past that, `compose.yaml` and `compose.integration.yaml` (the local
+development compose files) turned out to never forward
+`ROOTGUARD_SKIP_ATTESTATION` to Core at all - only `compose.release.yaml`
+did. Every unsigned local build would therefore always fail the
+attestation gate with no way to opt out for local development, and
+neither of CI's own integration jobs ever caught this: `ci.yml`'s
+"validate" job bootstraps AdGuard directly against pre-provisioned
+compose services, and `ci-unbound.yml`'s "Guided-settings scenario
+tests" job is a Go-level test (`go test -tags integration
+./internal/unbound/... -run TestScenario`) - neither ever drives a real
+`POST /api/installation/deploy` through `installer.Manager`, so the gate
+this fix touches was never actually exercised by CI at all. Fixed by
+adding the same `ROOTGUARD_SKIP_ATTESTATION: "${ROOTGUARD_SKIP_ATTESTATION:-false}"`
+passthrough compose.release.yaml already had, to both files.
