@@ -714,6 +714,13 @@ jobs:
       ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.candidate_tag }}
       ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.candidate_tag }}
       ROOTGUARD_UNBOUND_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ needs.version.outputs.candidate_tag }}
+      # Found in review: missing entirely, so this job's deploy below ran
+      # with BlockpageEnabled left off (see the deploy config right below)
+      # and the blockpage image - built and published by the very same
+      # publish job as everything else here - was never actually deployed,
+      # attested, or smoke-tested by any release. A broken blockpage image
+      # could ship undetected.
+      ROOTGUARD_BLOCKPAGE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-blockpage:${{ needs.version.outputs.candidate_tag }}
       ROOTGUARD_API_TOKEN: alpha-smoke-test-token-not-a-real-secret-32
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: alpha-smoke-test-password
@@ -743,7 +750,10 @@ jobs:
             sleep 2
           done
           test "$code" = 200
-          config='{"dns_bind_address":"127.0.0.1","dns_port":1053}'
+          # blockpage_enabled: true - see the env block's own comment on
+          # ROOTGUARD_BLOCKPAGE_IMAGE above for why this must actually be
+          # turned on here, not left at its default off.
+          config='{"dns_bind_address":"127.0.0.1","dns_port":1053,"blockpage_enabled":true}'
           test "$(curl --fail --silent --cookie /tmp/rootguard-alpha-cookies.txt \
             --header 'Content-Type: application/json' --data "$config" \
             http://127.0.0.1:18080/api/installation/preflight | jq -r .ready)" = true
@@ -764,6 +774,12 @@ jobs:
           test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 \
             dnssec-failed.org A | sed -n \
             's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
+          # Blockpage binds on config.DNSBindAddress:80 once
+          # blockpage_enabled deploys it (see installer.Manager's
+          # blockpagePort) - confirms the published blockpage candidate
+          # image actually starts and serves its real page, not just that
+          # it built.
+          test "$(curl --fail --silent http://127.0.0.1:80/ | grep -c 'RootGuard')" -gt 0
       - name: Show logs after failure
         if: failure()
         run: docker compose -f compose.release.yaml logs --no-color
