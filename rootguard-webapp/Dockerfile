@@ -17,7 +17,10 @@
 # =====================================================
 # Stage 1 – Frontend Builder
 # =====================================================
-FROM node:22-bookworm AS frontend-builder
+# Digest-pinned, not just tag-pinned - see the backend-builder stage
+# below for why this applies to a builder stage too, even though it
+# never ships in the final image.
+FROM node:22-bookworm@sha256:8a34c4ab3ea2c5cd194f07e317b2a8f09461d3c8b05c4e34c8ccd56d56024c4d AS frontend-builder
 
 # Arbeitsverzeichnis
 WORKDIR /frontend
@@ -39,7 +42,14 @@ RUN npm run build
 # =====================================================
 # Stage 2 – Backend Builder
 # =====================================================
-FROM golang:1.26-bookworm AS backend-builder
+# Digest-pinned, not just tag-pinned - found in review: two builds of the
+# same commit could otherwise compile against different toolchain
+# content if the tag moved between them (a supply-chain risk even for a
+# stage that never ships - it's what compiled the final binary), and a
+# compromised/re-pushed upstream tag would be pulled with no change to
+# this file. Same reasoning already applied to the runtime stage's own
+# gcr.io/distroless base a few lines down.
+FROM golang:1.26-bookworm@sha256:e8c859f5632dcfde7b32d2012b4351728f6437930887c2f6a91ea242459e5514 AS backend-builder
 
 # -----------------------------------------------------
 # Build Arguments (werden von docker build übergeben)
