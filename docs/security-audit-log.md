@@ -1506,3 +1506,23 @@ automatically covered, not a separate code path to keep in sync):
    never start silently resolving to different content - if `${VERSION}`
    was already published pointing elsewhere, that needs a new version
    number, not a forced overwrite of this one.
+
+**Medium, fixed: the release smoke test never actually deployed or
+verified the blockpage image it just published.** `smoke-test` never set
+`ROOTGUARD_BLOCKPAGE_IMAGE` (every other RootGuard-built image had its
+own env var pointing the deploy at this run's candidate), and its deploy
+config never set `blockpage_enabled: true` (default off) - so the
+blockpage image, built and published by the exact same `publish` job as
+everything else in the run, was never actually started, never
+attestation-checked, and never smoke-tested by any release run. A broken
+blockpage image (bad nginx config, a broken entrypoint script, anything
+short of the build itself failing) could have shipped fully undetected.
+
+Fixed by adding `ROOTGUARD_BLOCKPAGE_IMAGE` to the job's env (same
+`candidate_tag`-scoped reference every other image already uses),
+turning `blockpage_enabled: true` on in the deploy config, and adding a
+real reachability/content check after the existing DNS/DNSSEC checks:
+`curl`s the blockpage's own root page (it binds on
+`config.DNSBindAddress:80` once enabled, per `installer.Manager`'s
+`blockpagePort`) and asserts the response actually contains the real
+page's content, not just that the container started.
