@@ -3044,3 +3044,33 @@ against adversarial values, and this time also against a *real*
 `docker compose config` invocation (works daemonless, since it's pure
 config resolution) proving both the single-quote fix and the
 previously-double-quoted bug it fixes are real.
+
+**Medium, fixed: the FritzBox SSRF guard checked the dialed address after
+connecting, not before.** `dialPrivateOnlyWith` dialed first and inspected
+`conn.RemoteAddr()` afterwards - real protection against the client
+speaking TR-064 to a public address, but a genuine `connect(2)` to the
+disallowed address still happened before the connection was torn down,
+letting a caller distinguish an open port from a closed one on a host
+this client should never have touched at all (a classic SSRF port-scan
+oracle, even though the actual TR-064 request itself never got sent).
+
+Fixed by moving the check into a `net.Dialer.Control` hook
+(`rejectNonPrivateControl`), which the standard library calls after DNS
+resolution but before the `connect(2)` syscall - a disallowed address is
+now never actually contacted. DNS rebinding is still closed the same way
+as before: `Control` receives the concrete, already-resolved `ip:port`
+about to be dialed, never the pre-resolution hostname. The old
+`dialPrivateOnlyWith` test faked a `net.Conn`'s `RemoteAddr()` to exercise
+the post-dial check without real network I/O; the new test calls
+`rejectNonPrivateControl` directly with a `nil syscall.RawConn` instead,
+since the function never touches it - simpler and no longer needs a fake
+connection at all. Revert-verified: reverted the range check to
+always-allow, confirmed the public-address test cases fail, restored.
+
+Loopback stays allowed in the production path (the audit's own secondary
+recommendation was to restrict it there too, "not only for testability")
+- left as-is deliberately: this package's own tests bind to loopback via
+`httptest.Server`, and a fully clean test/production split would need
+materially more test scaffolding for a client whose blast radius (an
+unauthenticated TR-064 host-discovery call) loopback doesn't meaningfully
+worsen beyond what the private ranges above it already allow.

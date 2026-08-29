@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -97,36 +98,42 @@ func rejectRedirects(*http.Request, []*http.Request) error {
 // without redirects, address itself was never restricted to plausible
 // router locations, so this client would happily speak TR-064 to any
 // public IP an admin (or anything that can drive this endpoint through
-// them) supplied. Checking after the real dial, against the actually
-// -connected remote IP rather than the pre-resolution hostname, is what
-// closes DNS rebinding here too - a hostname that resolved to a private
-// address during an earlier check could otherwise repoint to a public
-// one by the time the real connection happens. Delegates the actual
-// connecting to rawDial, an indirection whose only purpose is letting
-// tests substitute a fake connection with an arbitrary RemoteAddr - real
-// callers always get the production dialer below.
+// them) supplied. DNS rebinding is closed by checking the address the
+// dialer actually resolved to, not the pre-resolution hostname - a
+// hostname that looked private during an earlier check could otherwise
+// repoint to a public one by the time the connection actually happens.
+//
+// rejectNonPrivateControl (below) is where that check happens, via
+// net.Dialer.Control: found in a follow-up review that the original
+// version of this check dialed first and inspected the resulting
+// conn.RemoteAddr() afterwards - real, but a genuine TCP connect(2) to
+// the disallowed address still happened before the connection was torn
+// down, letting a caller distinguish an open port from a closed one on a
+// host this client should never have touched at all. Control runs after
+// DNS resolution but before connect(2), so a disallowed address is never
+// actually contacted.
 func dialPrivateOnly(ctx context.Context, network, address string) (net.Conn, error) {
-	return dialPrivateOnlyWith(ctx, network, address, rawDial)
+	return rawDial(ctx, network, address)
 }
 
-var rawDial = (&net.Dialer{Timeout: fritzBoxRequestTimeout}).DialContext
+var rawDial = (&net.Dialer{Timeout: fritzBoxRequestTimeout, Control: rejectNonPrivateControl}).DialContext
 
-func dialPrivateOnlyWith(ctx context.Context, network, address string, dial func(context.Context, string, string) (net.Conn, error)) (net.Conn, error) {
-	conn, err := dial(ctx, network, address)
+// rejectNonPrivateControl is a net.Dialer.Control hook. address is the
+// concrete ip:port the dialer resolved and is about to connect(2) to -
+// never the original, pre-resolution hostname - so this still closes DNS
+// rebinding the same way the old post-dial check did. Never touches rawConn,
+// so tests can call it directly with a nil syscall.RawConn instead of
+// needing a real (or faked) network connection.
+func rejectNonPrivateControl(_ string, address string, _ syscall.RawConn) error {
+	host, _, err := net.SplitHostPort(address)
 	if err != nil {
-		return nil, err
-	}
-	host, _, splitErr := net.SplitHostPort(conn.RemoteAddr().String())
-	if splitErr != nil {
-		conn.Close()
-		return nil, fmt.Errorf("%w: could not determine the dialed address", ErrRouterDiscovery)
+		return fmt.Errorf("%w: could not determine the resolved address", ErrRouterDiscovery)
 	}
 	ip := net.ParseIP(host)
 	if ip == nil || !isRouterReachable(ip) {
-		conn.Close()
-		return nil, fmt.Errorf("%w: refusing to contact %s - not a private network address", ErrRouterDiscovery, host)
+		return fmt.Errorf("%w: refusing to contact %s - not a private network address", ErrRouterDiscovery, host)
 	}
-	return conn, nil
+	return nil
 }
 
 // isRouterReachable accepts private (RFC 1918 / ULA), link-local, and
