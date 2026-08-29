@@ -66,6 +66,7 @@ func mockedDeployOptions(dataDir string, touch func(name string), pauseAtCheckpo
 	return Options{
 		DataDir: dataDir, CoreContainer: "rootguard-core",
 		UnboundImage: "unbound:test", AdGuardImage: "adguard:test", DNSNetworkCIDR: "172.29.53.0/24",
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			command := strings.Join(arguments, " ")
 			switch {

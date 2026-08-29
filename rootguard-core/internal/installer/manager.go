@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/foxly-it/rootguard-core/internal/atomicfile"
+	"github.com/foxly-it/rootguard-core/internal/stack"
 )
 
 const (
@@ -87,6 +88,10 @@ type CommandRunner func(context.Context, ...string) ([]byte, error)
 type BootstrapFunc func(context.Context, string) error
 type RestoreFunc func(context.Context) error
 
+// AttestationVerifierFunc gates activation, not just display - see
+// AttestationVerifier's doc comment on Options.
+type AttestationVerifierFunc func(ctx context.Context, service, image string) error
+
 // PersistErrorHandler is called whenever persistLocked fails to write
 // state to disk - found in review: nearly every one of persistLocked's
 // many call sites discards its return value entirely (`_ =
@@ -118,6 +123,16 @@ type Options struct {
 	// OnPersistError is called whenever a state write fails - see
 	// PersistErrorHandler's doc comment. Defaults to a no-op.
 	OnPersistError PersistErrorHandler
+	// AttestationVerifier gates activation of the first-ever DNS stack
+	// deploy, the same way updater.Manager already gates every later
+	// update - found in review: RequireAttestation existed and was wired
+	// into both updater packages, but never into this one, so a fresh
+	// install's very first Unbound/Blockpage activation (often the only
+	// deployment event most installations ever have) skipped the check
+	// docs/threat-model.md claims happens "before activation" entirely.
+	// Defaults to stack.RequireAttestation; injectable purely so tests can
+	// simulate a failed/missing attestation without a real cosign binary.
+	AttestationVerifier AttestationVerifierFunc
 }
 
 type Manager struct {
@@ -135,6 +150,7 @@ type Manager struct {
 	composeUpRetryAttempts int
 	composeUpRetryDelay    time.Duration
 	onPersistError         PersistErrorHandler
+	attestationVerifier    AttestationVerifierFunc
 }
 
 func NewManager(options Options) *Manager {
@@ -153,6 +169,9 @@ func NewManager(options Options) *Manager {
 	if options.OnPersistError == nil {
 		options.OnPersistError = func(error) {}
 	}
+	if options.AttestationVerifier == nil {
+		options.AttestationVerifier = stack.RequireAttestation
+	}
 	manager := &Manager{
 		dataDir:                options.DataDir,
 		coreContainer:          options.CoreContainer,
@@ -166,6 +185,7 @@ func NewManager(options Options) *Manager {
 		composeUpRetryAttempts: options.ComposeUpRetryAttempts,
 		composeUpRetryDelay:    options.ComposeUpRetryDelay,
 		onPersistError:         options.OnPersistError,
+		attestationVerifier:    options.AttestationVerifier,
 		status: Status{
 			State:     StateNotInstalled,
 			Steps:     []Step{},
@@ -445,6 +465,9 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 		return fail("restore", err)
 	}
 	_ = m.setStep("restore", "done", "Verified backup data is restored")
+	if err := m.verifyStackAttestation(ctx, config); err != nil {
+		return fail("start", err)
+	}
 	_ = m.setStep("start", "running", "Starting restored Unbound and AdGuard Home")
 	if _, err = m.runComposeUp(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
 		return fail("start", err)
@@ -508,6 +531,10 @@ func (m *Manager) deploy(config Config) {
 	}
 	_ = m.setStep("pull", "done", "Service images are available")
 
+	if err := m.verifyStackAttestation(ctx, config); err != nil {
+		m.fail("start", err)
+		return
+	}
 	_ = m.setStep("start", "running", "Starting Unbound and AdGuard Home")
 	if _, err := m.runComposeUp(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "up", "-d"); err != nil {
 		m.fail("start", fmt.Errorf("start RootGuard DNS stack: %w", err))
@@ -811,6 +838,25 @@ func validateConfig(config Config) []Check {
 	return checks
 }
 
+// verifyStackAttestation gates the DNS stack's activation - see
+// AttestationVerifier's doc comment on Options for why this exists.
+// AdGuard has no RootGuard signing policy (a third-party image, see
+// stack.attestationPolicies) and is never checked here, matching
+// RequireAttestation's own no-op behavior for it; Blockpage is only
+// checked when config.BlockpageEnabled, since it isn't part of the
+// stack at all otherwise.
+func (m *Manager) verifyStackAttestation(ctx context.Context, config Config) error {
+	if err := m.attestationVerifier(ctx, "unbound", m.unboundImage); err != nil {
+		return fmt.Errorf("attestation: %w", err)
+	}
+	if config.BlockpageEnabled {
+		if err := m.attestationVerifier(ctx, "blockpage", m.blockpageImage); err != nil {
+			return fmt.Errorf("attestation: %w", err)
+		}
+	}
+	return nil
+}
+
 func (m *Manager) setStep(id, status, message string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -864,6 +910,10 @@ func classifyDeploymentError(phase string, err error) Diagnostic {
 		diagnostic.Code = "dns_port_occupied"
 		diagnostic.Message = "The selected DNS port is already in use."
 		diagnostic.Action = "Stop or reconfigure the conflicting DNS service, then retry the deployment."
+	case strings.HasPrefix(detail, "attestation:"):
+		diagnostic.Code = "attestation_failed"
+		diagnostic.Message = "The release attestation for a service image could not be verified."
+		diagnostic.Action = "Verify the image reference and registry access, then retry once a signed release image is available."
 	case phase == "prepare":
 		diagnostic.Code = "state_write_failed"
 		diagnostic.Message = "RootGuard could not persist the installation state."

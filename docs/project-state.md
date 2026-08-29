@@ -2885,3 +2885,42 @@ explicit, deliberate "not worth a new module" call plus the
 cross-referencing that keeps the trade-off honest going forward. Every
 finding in the original audit, from the three RC-blockers down to this
 lowest-priority suggestion, has now been worked through.
+
+## Follow-up review, round 2 (2026-08-29)
+
+A second, independent review of the round-1 fixes found genuine gaps in
+several of them plus a few new issues - worked through the same way as
+round 1: verify directly in code, scope the fix, test with real teeth,
+document, PR, merge.
+
+**Medium, fixed: the guided setup's first-ever DNS stack deploy skipped
+attestation entirely.** `RequireAttestation` was wired into both updater
+packages (round 1's first RC-blocker), but never into `installer.Manager`
+- so a fresh install's very first Unbound/Blockpage activation, often the
+only deployment event most installations ever have, pulled and started
+those images with zero attestation check, contradicting
+`docs/threat-model.md`'s claim exactly the way the original finding did
+for updates.
+
+Fixed with the identical pattern already used for both updater packages:
+`installer.Manager` gained an injectable `AttestationVerifier` (defaults
+to `stack.RequireAttestation`), called right before `compose up` in both
+`deploy()` (fresh install) and `restoreDeploy()` (backup restore) - after
+`pull`, at the actual point of no return. AdGuard stays unchecked
+(no RootGuard signing policy, same as everywhere else); Blockpage is
+checked only when `config.BlockpageEnabled`. `unbound`/`blockpage`
+already had real signing policies registered in `stack.attestationPolicies`
+from round 1's blockpage-pinning work - this was purely a missing call
+site, not a missing policy.
+
+Two new regression tests (`TestDeployRefusesActivationWhenAttestationFails`,
+`TestRestoreRefusesActivationWhenAttestationFails`), both revert-verified
+- reverting the call in either `deploy()` or `restoreDeploy()` made the
+corresponding test hang until Go's test timeout rather than failing
+cleanly, itself proof the gate is what unblocks the flow. Also added a
+dedicated `attestation_failed` diagnostic code/message (previously an
+attestation failure fell into the generic "could not be deployed"
+classification, same bucket as an unrelated Docker error) and fixed four
+existing tests that now correctly hit the real `stack.RequireAttestation`
+default and need the same noop-verifier injection round 1's updater
+tests already use.

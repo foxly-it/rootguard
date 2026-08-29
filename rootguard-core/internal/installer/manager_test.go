@@ -3,6 +3,7 @@ package installer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,6 +66,14 @@ func TestWriteComposeSelectsBetaImage(t *testing.T) {
 		t.Fatalf("expected beta image, got:\n%s", content)
 	}
 }
+
+// noopAttestationVerifier lets tests that aren't specifically about the
+// attestation gate itself exercise a real deploy()/restoreDeploy() flow
+// without needing actual cosign infrastructure - stack.RequireAttestation
+// (the real default) fails closed on a non-matching image for any
+// service with a real signing policy, "unbound"/"blockpage" included,
+// which every fixture image here is.
+func noopAttestationVerifier(context.Context, string, string) error { return nil }
 
 func successfulDockerRun(_ context.Context, arguments ...string) ([]byte, error) {
 	if arguments[0] == "ps" {
@@ -402,11 +411,12 @@ func TestDeploymentPersistsCompletedState(t *testing.T) {
 	var mu sync.Mutex
 	var commands []string
 	manager := NewManager(Options{
-		DataDir:        dataDir,
-		CoreContainer:  "rootguard-core",
-		UnboundImage:   "rootguard-unbound:test",
-		AdGuardImage:   "adguard:test",
-		DNSNetworkCIDR: "172.29.53.0/24",
+		DataDir:             dataDir,
+		CoreContainer:       "rootguard-core",
+		UnboundImage:        "rootguard-unbound:test",
+		AdGuardImage:        "adguard:test",
+		DNSNetworkCIDR:      "172.29.53.0/24",
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			mu.Lock()
 			commands = append(commands, strings.Join(arguments, " "))
@@ -464,11 +474,12 @@ func TestReconcilePinsControllerNetworkAddress(t *testing.T) {
 	var mu sync.Mutex
 	var commands []string
 	manager := NewManager(Options{
-		DataDir:        dataDir,
-		CoreContainer:  "rootguard-core",
-		UnboundImage:   "rootguard-unbound:test",
-		AdGuardImage:   "adguard:test",
-		DNSNetworkCIDR: "172.29.53.0/24",
+		DataDir:             dataDir,
+		CoreContainer:       "rootguard-core",
+		UnboundImage:        "rootguard-unbound:test",
+		AdGuardImage:        "adguard:test",
+		DNSNetworkCIDR:      "172.29.53.0/24",
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			mu.Lock()
 			commands = append(commands, strings.Join(arguments, " "))
@@ -509,12 +520,13 @@ func TestDeploymentRestartsBlockpageAfterBootstrapWhenEnabled(t *testing.T) {
 	var mu sync.Mutex
 	var commands []string
 	manager := NewManager(Options{
-		DataDir:        dataDir,
-		CoreContainer:  "rootguard-core",
-		UnboundImage:   "rootguard-unbound:test",
-		AdGuardImage:   "adguard:test",
-		BlockpageImage: "ghcr.io/foxly-it/rootguard-blockpage:latest",
-		DNSNetworkCIDR: "172.29.53.0/24",
+		DataDir:             dataDir,
+		CoreContainer:       "rootguard-core",
+		UnboundImage:        "rootguard-unbound:test",
+		AdGuardImage:        "adguard:test",
+		BlockpageImage:      "ghcr.io/foxly-it/rootguard-blockpage:latest",
+		DNSNetworkCIDR:      "172.29.53.0/24",
+		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			mu.Lock()
 			commands = append(commands, strings.Join(arguments, " "))
@@ -599,5 +611,83 @@ func TestPersistLockedReportsFailureViaOnPersistError(t *testing.T) {
 	}
 	if reported == nil {
 		t.Fatal("expected OnPersistError to be called with the failure")
+	}
+}
+
+// TestDeployRefusesActivationWhenAttestationFails is the regression test
+// for a review finding: RequireAttestation was wired into both updater
+// packages, but never into this one, so a fresh install's very first
+// Unbound activation - often the only deployment event most
+// installations ever have - skipped the check entirely. Uses a fake
+// verifier rather than a real cosign binary; DiscoverHosts-style unit
+// tests can't exercise the real cosign path anyway.
+func TestDeployRefusesActivationWhenAttestationFails(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir:        dataDir,
+		CoreContainer:  "rootguard-core",
+		UnboundImage:   "rootguard-unbound:test",
+		AdGuardImage:   "adguard:test",
+		DNSNetworkCIDR: "172.29.53.0/24",
+		AttestationVerifier: func(_ context.Context, service, _ string) error {
+			return fmt.Errorf("attestation for %s is missing", service)
+		},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "inspect" {
+				return []byte("healthy\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	if _, err := manager.Start(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	status := manager.Status()
+	if status.State != StateFailed {
+		t.Fatalf("expected the deployment to fail closed on a failed attestation, got %#v", status)
+	}
+	if !strings.Contains(status.Error, "attestation") {
+		t.Fatalf("expected the failure to mention attestation, got %q", status.Error)
+	}
+}
+
+// TestRestoreRefusesActivationWhenAttestationFails is
+// TestDeployRefusesActivationWhenAttestationFails's counterpart for the
+// separate restoreDeploy code path (Restore), which has its own point of
+// no return before compose up.
+func TestRestoreRefusesActivationWhenAttestationFails(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir:        dataDir,
+		CoreContainer:  "rootguard-core",
+		UnboundImage:   "rootguard-unbound:test",
+		AdGuardImage:   "adguard:test",
+		DNSNetworkCIDR: "172.29.53.0/24",
+		AttestationVerifier: func(_ context.Context, service, _ string) error {
+			return fmt.Errorf("attestation for %s is missing", service)
+		},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			// RestorePreflight's own per-resource existence check
+			// ("container inspect ...", "volume inspect ...", "network
+			// inspect ...") needs to report every managed resource as
+			// absent for Restore to even consider this a clean target -
+			// unrelated to the attestation gate this test is actually
+			// about, but a precondition Restore checks first.
+			if len(arguments) >= 2 && arguments[1] == "inspect" {
+				return []byte("no such resource"), errors.New("exit status 1")
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	_, err := manager.Restore(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53},
+		func(context.Context) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "attestation") {
+		t.Fatalf("expected Restore to fail closed on a failed attestation, got %v", err)
 	}
 }
