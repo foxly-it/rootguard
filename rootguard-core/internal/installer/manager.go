@@ -82,6 +82,19 @@ type Status struct {
 	Error      string      `json:"error,omitempty"`
 	Diagnostic *Diagnostic `json:"diagnostic,omitempty"`
 	UpdatedAt  time.Time   `json:"updated_at"`
+	// PersistError/PersistErrorAt surface what onPersistError previously
+	// only logged (see PersistErrorHandler's doc comment) - found in a
+	// follow-up review: logging made a failed write *diagnosable* from the
+	// container's own logs, but Status() itself still reported "installed"
+	// (or whatever the in-memory state was) with no indication that the
+	// on-disk record backing it might be stale - e.g. after a restart
+	// following a full-disk write failure, the reported state could
+	// silently regress with no visible cause. Set inside persistLocked on
+	// failure, cleared the moment a later persistLocked call succeeds - so
+	// it self-heals once the underlying disk/permissions problem does,
+	// without any caller needing to do anything.
+	PersistError   string    `json:"persist_error,omitempty"`
+	PersistErrorAt time.Time `json:"persist_error_at,omitempty"`
 }
 
 type CommandRunner func(context.Context, ...string) ([]byte, error)
@@ -1045,9 +1058,18 @@ func (m *Manager) persist() error {
 // persistLocked writes state to disk, reporting any failure via
 // onPersistError before returning it - see PersistErrorHandler's doc
 // comment for why: most callers discard the returned error outright.
+// Also records the outcome in m.status.PersistError/PersistErrorAt
+// itself (see Status's own doc comment) - cleared before the write
+// attempt so a success always reports (and persists) a clean state, set
+// in the deferred failure branch so a failure is visible immediately,
+// without needing a second call to notice it.
 func (m *Manager) persistLocked() (returnErr error) {
+	m.status.PersistError = ""
+	m.status.PersistErrorAt = time.Time{}
 	defer func() {
 		if returnErr != nil {
+			m.status.PersistError = returnErr.Error()
+			m.status.PersistErrorAt = time.Now().UTC()
 			m.onPersistError(returnErr)
 		}
 	}()
