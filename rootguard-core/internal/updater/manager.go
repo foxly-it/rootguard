@@ -748,17 +748,44 @@ func (m *Manager) serviceNames() []string {
 	return names
 }
 
+// persistedState is the canonical, single-file on-disk representation of
+// everything persistLocked writes - see its own doc comment for why this
+// replaced the previous status.json/images.json split.
+type persistedState struct {
+	Status   Status            `json:"status"`
+	Selected map[string]string `json:"selected"`
+}
+
 func (m *Manager) load() {
-	data, err := os.ReadFile(filepath.Join(m.dataDir, "status.json"))
-	if err == nil {
+	if data, err := os.ReadFile(filepath.Join(m.dataDir, "state.json")); err == nil {
+		var state persistedState
+		if json.Unmarshal(data, &state) == nil && state.Status.State != "" {
+			m.status = state.Status
+			m.selected = state.Selected
+			return
+		}
+	}
+	// Migration path for a data directory written by a version before
+	// state.json existed (every real installation up to and including
+	// 1.0.0-rc.1) - read the old split files once, then let the normal
+	// persistLocked path (triggered by the caller of NewManager, same as
+	// any other status change) fold them into state.json on the next
+	// write. The old files are deliberately left in place rather than
+	// deleted - harmless, inert leftovers once state.json exists, not
+	// worth the extra failure mode of trying to remove them.
+	loadedLegacyStatus := false
+	if data, err := os.ReadFile(filepath.Join(m.dataDir, "status.json")); err == nil {
 		var status Status
 		if json.Unmarshal(data, &status) == nil && status.State != "" {
 			m.status = status
+			loadedLegacyStatus = true
 		}
 	}
-	data, err = os.ReadFile(filepath.Join(m.dataDir, "images.json"))
-	if err == nil {
+	if data, err := os.ReadFile(filepath.Join(m.dataDir, "images.json")); err == nil {
 		_ = json.Unmarshal(data, &m.selected)
+	}
+	if loadedLegacyStatus {
+		_ = m.persistLocked()
 	}
 }
 
@@ -803,20 +830,36 @@ func (m *Manager) persistLocked() (returnErr error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}
-	// All three files derive from the same in-memory state
-	// (m.status/m.selected) and must never be left in two different
-	// generations of it relative to each other - found in review: calling
-	// atomicfile.WriteFile/WriteJSON once per file here meant a failure
-	// partway through (e.g. images.json failing to write after
-	// status.json had already been committed) left them silently
-	// inconsistent on the very next load(). atomicfile.WriteFiles commits
-	// all three as a single unit: none of them move to their new content
-	// unless every one of them could be staged first.
-	statusFile, err := atomicfile.JSONFile(filepath.Join(m.dataDir, "status.json"), m.status)
-	if err != nil {
-		return err
-	}
-	imagesFile, err := atomicfile.JSONFile(filepath.Join(m.dataDir, "images.json"), m.selected)
+	// Found in a follow-up review: the previous status.json/images.json
+	// split, even after atomicfile.WriteFiles started staging both before
+	// renaming either (see that function's own doc comment), still had a
+	// real residual gap - renaming N files can never be one atomic
+	// operation on POSIX, so a rename failing (or the process dying)
+	// between the two renames still left them in two different
+	// generations, exactly the scenario this whole fix exists to close.
+	// The atomicfile_test.go regression test for that residual window
+	// demonstrates it deliberately, as its own doc comment says.
+	//
+	// Closing it for real: m.status and m.selected are now one canonical
+	// file (state.json, persistedState below), written with a single
+	// atomicfile.WriteJSON call - one rename is *always* atomic on POSIX,
+	// so there is no longer a multi-file window here at all, residual or
+	// otherwise. updates.yaml is not part of that canonical state - it's
+	// a pure function of m.selected, regenerated fresh on every persist
+	// (and, via the migration path in load() plus the same regeneration
+	// here, self-healing on the very next persist if it's ever missing or
+	// stale relative to state.json) for docker compose to read, not a
+	// second source of truth this process itself depends on. Still
+	// written via WriteFiles alongside state.json (best-effort, narrows
+	// the window in the common case) rather than a separate call, purely
+	// so a normal successful persist keeps them in lockstep without an
+	// extra fsync round-trip - not because updates.yaml being briefly
+	// behind is a split-brain risk the way the old two-JSON-file split
+	// was.
+	stateFile, err := atomicfile.JSONFile(filepath.Join(m.dataDir, "state.json"), persistedState{
+		Status:   m.status,
+		Selected: m.selected,
+	})
 	if err != nil {
 		return err
 	}
@@ -825,7 +868,7 @@ func (m *Manager) persistLocked() (returnErr error) {
 		Data: []byte(m.overrideContentLocked()),
 		Mode: 0600,
 	}
-	return atomicfile.WriteFiles([]atomicfile.File{statusFile, imagesFile, overrideFile})
+	return atomicfile.WriteFiles([]atomicfile.File{stateFile, overrideFile})
 }
 
 func (m *Manager) overrideContentLocked() string {
