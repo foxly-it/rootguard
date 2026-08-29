@@ -106,6 +106,12 @@ type Status struct {
 	Services      []ServiceStatus `json:"services"`
 	History       []HistoryEntry  `json:"history,omitempty"`
 	UpdatedAt     time.Time       `json:"updated_at"`
+	// PersistError/PersistErrorAt mirror the same fields on
+	// installer.Status - see that type's doc comment for the full
+	// rationale. Set inside persistLocked on failure, cleared the moment
+	// a later persistLocked call succeeds.
+	PersistError   string    `json:"persist_error,omitempty"`
+	PersistErrorAt time.Time `json:"persist_error_at,omitempty"`
 }
 
 // DefaultComposeProject is the Docker Compose project name every production
@@ -780,9 +786,17 @@ func (m *Manager) persist() error {
 // persistLocked writes state to disk, reporting any failure via
 // onPersistError before returning it - see PersistErrorHandler's doc
 // comment for why: most callers discard the returned error outright.
+// Also records the outcome in m.status.PersistError/PersistErrorAt
+// itself - see Status's own doc comment - cleared before the write
+// attempt so a success always reports a clean state, set in the deferred
+// failure branch so a failure is visible immediately.
 func (m *Manager) persistLocked() (returnErr error) {
+	m.status.PersistError = ""
+	m.status.PersistErrorAt = time.Time{}
 	defer func() {
 		if returnErr != nil {
+			m.status.PersistError = returnErr.Error()
+			m.status.PersistErrorAt = time.Now().UTC()
 			m.onPersistError(returnErr)
 		}
 	}()

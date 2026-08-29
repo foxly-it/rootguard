@@ -638,6 +638,12 @@ export interface InstallationStatus {
   error?: string;
   diagnostic?: InstallationDiagnostic;
   updated_at: string;
+  // Present only while the most recent attempt to persist this status to
+  // disk failed - the state above is still accurate live, but wasn't
+  // durably recorded and could regress on a restart. Clears itself once a
+  // later persist succeeds; see docs/project-state.md for the backend fix.
+  persist_error?: string;
+  persist_error_at?: string;
 }
 
 export interface InstallationDiagnostic {
@@ -712,6 +718,10 @@ export interface UpdateStatus {
   services: UpdateServiceStatus[];
   history?: UpdateHistoryEntry[];
   updated_at: string;
+  // See InstallationStatus.persist_error - same meaning, same self-healing
+  // behavior, mirrored on updater.Status.
+  persist_error?: string;
+  persist_error_at?: string;
 }
 
 export interface BackupServiceUsage {

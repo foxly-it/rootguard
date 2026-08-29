@@ -614,6 +614,51 @@ func TestPersistLockedReportsFailureViaOnPersistError(t *testing.T) {
 	}
 }
 
+// TestStatusSurfacesPersistFailureAndSelfHeals is the regression test for a
+// follow-up review finding: OnPersistError above made a failed write
+// diagnosable from the container's own logs, but Status() itself still
+// reported whatever the in-memory state was with no indication the on-disk
+// record backing it might be stale. PersistError/PersistErrorAt must
+// appear in Status() the moment a persist fails, and disappear again the
+// moment a later persist succeeds - self-healing once the underlying
+// disk/permissions problem does, without any caller needing to notice or
+// retry anything itself.
+func TestStatusSurfacesPersistFailureAndSelfHeals(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Join(blocker, "installation")
+
+	manager := NewManager(Options{DataDir: dataDir})
+
+	if err := manager.persist(); err == nil {
+		t.Fatal("expected persist to fail against a path blocked by a file")
+	}
+	status := manager.Status()
+	if status.PersistError == "" {
+		t.Fatal("expected Status() to report a persist error")
+	}
+	if status.PersistErrorAt.IsZero() {
+		t.Fatal("expected Status() to report when the persist error occurred")
+	}
+
+	// Repoint at a real, writable directory - the same recovery an
+	// operator fixing a full disk or a permissions problem would perform -
+	// and confirm the very next successful persist clears both fields.
+	manager.dataDir = t.TempDir()
+	if err := manager.persist(); err != nil {
+		t.Fatal(err)
+	}
+	status = manager.Status()
+	if status.PersistError != "" {
+		t.Fatalf("expected PersistError to clear after a successful persist, got %q", status.PersistError)
+	}
+	if !status.PersistErrorAt.IsZero() {
+		t.Fatalf("expected PersistErrorAt to clear after a successful persist, got %v", status.PersistErrorAt)
+	}
+}
+
 // TestDeployRefusesActivationWhenAttestationFails is the regression test
 // for a review finding: RequireAttestation was wired into both updater
 // packages, but never into this one, so a fresh install's very first

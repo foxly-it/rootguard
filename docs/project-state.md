@@ -3468,3 +3468,36 @@ pass: a release pipeline is exactly the kind of file where a rushed
 refactor risks a real regression for a marginal readability gain,
 explicitly noted as a separate, future piece of work in the new doc's own
 closing section rather than folded in hastily here.
+
+**Small, fixed: a failed state persist was diagnosable but still
+invisible in Status().** Round 1 added `OnPersistError`/`PersistErrorHandler`
+so `persistLocked`'s many `_ = m.persistLocked()` call sites (found in
+that same review) would at least log a failed write instead of silently
+discarding it - explicitly scoped at the time as "not a fix for the
+underlying problem, just the difference between invisible and
+diagnosable". This round's audit re-flagged the remaining half directly:
+`Status()` itself still reported whatever the in-memory state was
+(`installed`, an update's `history`, ...) with no indication the on-disk
+record backing it might not survive a restart.
+
+Fixed by having `persistLocked` (in both `installer.Manager` and
+`updater.Manager` - the same pattern round 1 already used in both)
+record the outcome directly on `m.status` itself: `PersistError`/
+`PersistErrorAt` are cleared before every write attempt and set only in
+the deferred failure branch, so a success always reports (and durably
+records) a clean state, and a failure is visible in the very next
+`Status()` call - self-healing the moment a later persist succeeds,
+without any caller needing to notice or retry anything. Mirrored into
+the WebApp's TypeScript `InstallationStatus`/`UpdateStatus` types for
+contract completeness; no UI surfacing added yet (out of scope for this
+fix - a follow-up if the backend/frontend team wants a visible warning
+banner, not a correctness gap on its own).
+
+`TestStatusSurfacesPersistFailureAndSelfHeals` (one per package,
+mirroring each other) is the regression test: forces a persist to fail
+against a path blocked by a file, confirms `Status()` reports both new
+fields, repoints at a real writable directory (the same recovery an
+operator fixing a full disk would perform), and confirms the very next
+successful persist clears both again. Revert-verified in both packages:
+reverting `persistLocked` to the round-1-only logging behavior fails the
+test at "expected Status() to report a persist error" in both.

@@ -553,3 +553,39 @@ func TestPersistLockedReportsFailureViaOnPersistError(t *testing.T) {
 		t.Fatal("expected OnPersistError to be called with the failure")
 	}
 }
+
+// TestStatusSurfacesPersistFailureAndSelfHeals mirrors the installer
+// package's own test of the same name - see its doc comment for the full
+// rationale.
+func TestStatusSurfacesPersistFailureAndSelfHeals(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "blocked")
+	if err := os.WriteFile(blocker, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dataDir := filepath.Join(blocker, "updates")
+
+	manager := NewManager(Options{DataDir: dataDir})
+
+	if err := manager.persist(); err == nil {
+		t.Fatal("expected persist to fail against a path blocked by a file")
+	}
+	status := manager.Status()
+	if status.PersistError == "" {
+		t.Fatal("expected Status() to report a persist error")
+	}
+	if status.PersistErrorAt.IsZero() {
+		t.Fatal("expected Status() to report when the persist error occurred")
+	}
+
+	manager.dataDir = t.TempDir()
+	if err := manager.persist(); err != nil {
+		t.Fatal(err)
+	}
+	status = manager.Status()
+	if status.PersistError != "" {
+		t.Fatalf("expected PersistError to clear after a successful persist, got %q", status.PersistError)
+	}
+	if !status.PersistErrorAt.IsZero() {
+		t.Fatalf("expected PersistErrorAt to clear after a successful persist, got %v", status.PersistErrorAt)
+	}
+}
