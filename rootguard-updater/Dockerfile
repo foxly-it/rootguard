@@ -22,7 +22,17 @@ LABEL org.opencontainers.image.title="RootGuard Updater" \
       org.opencontainers.image.created="${CREATED}" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later"
 
-RUN apk add --no-cache docker-cli-compose ca-certificates
+# Found in review: both packages used to be apk-installed here unpinned
+# (a real reproducible-builds gap) but are already present in this exact
+# pinned docker:29-cli digest - ca-certificates from its own base
+# Dockerfile's `apk add ca-certificates ...`, docker-cli-compose (the
+# CLI-plugin form, matching how this codebase actually invokes it -
+# `docker compose ...`, see manager.go's m.run calls) bundled as
+# /usr/local/libexec/docker/cli-plugins/docker-compose. Removing the
+# install entirely closes the reproducibility gap outright rather than
+# merely pinning packages that were never needed - see
+# rootguard-core/Dockerfile's identical finding/fix for the full
+# verification.
 COPY --from=builder /rootguard-updater /usr/local/bin/rootguard-updater
 COPY --from=cosign /ko-app/cosign /usr/local/bin/cosign
 
