@@ -643,11 +643,39 @@ func (m *Manager) composeUp(ctx context.Context, service string) error {
 	return err
 }
 
+// selectImage records image as service's selected image and persists it.
+// Found in review: a failed persist here used to leave the new image
+// selected in memory (and, whenever state.json's own write inside that
+// persist attempt happened to succeed while a later file in the same
+// batch - updates.yaml - failed, on disk too) even though every caller
+// treats a selectImage failure as the whole operation failing and rolls
+// back everything else it already did (volume ownership migration, the
+// container swap that never happens). A later, unrelated successful
+// persist would then self-heal updates.yaml to an image this process
+// itself just finished rolling back away from - state.json's canonical
+// "selected" would have quietly advanced past a change that was never
+// actually applied. Reverting the selection (and re-persisting that
+// reversion) before returning the error keeps the canonical state
+// honest: a failed selectImage means nothing changed, full stop, not
+// just "the container swap didn't happen but the record of it selecting
+// this image did".
 func (m *Manager) selectImage(service, image string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	previous := m.selected[service]
 	m.selected[service] = image
-	return m.persistLocked()
+	if err := m.persistLocked(); err != nil {
+		m.selected[service] = previous
+		// Best-effort: WriteFiles renames state.json before updates.yaml
+		// (see persistLocked's own comment), so this still corrects
+		// state.json back to the previous selection even if whatever
+		// blocked updates.yaml the first time blocks it again here - and
+		// persistLocked already records any failure via
+		// Status().PersistError regardless of what this call returns.
+		_ = m.persistLocked()
+		return err
+	}
+	return nil
 }
 
 func (m *Manager) verifyWithRetry(ctx context.Context, service string) error {
