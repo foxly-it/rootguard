@@ -10,7 +10,7 @@ Discuss larger changes to authentication, API contracts, navigation, or setup
 workflows in an issue first.
 
 Security vulnerabilities must be reported privately through
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## Development
 

@@ -97,7 +97,7 @@ starting points are issues labeled
 [`good first issue`](https://github.com/foxly-it/rootguard-core/labels/good%20first%20issue)
 or [`help wanted`](https://github.com/foxly-it/rootguard-core/labels/help%20wanted).
 Report security vulnerabilities privately as described in
-[SECURITY.md](SECURITY.md).
+[SECURITY.md](../SECURITY.md).
 
 ## License
 

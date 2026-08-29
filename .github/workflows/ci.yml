@@ -25,6 +25,15 @@ jobs:
       - name: Test verification-common.sh's resource-ownership state machine
         run: ./scripts/verification-common.test.sh
 
+      # Found in review: check-site-facts.sh already checks this for
+      # site/*.html, but nothing checked it repo-wide - PR #423 deleted
+      # the per-component SECURITY.md files on the reasoning that nothing
+      # linked to them, verified with a narrow grep for those specific
+      # paths only; at least eight README.md/CONTRIBUTING.md files turned
+      # out to link to their own now-deleted copy and nothing caught it.
+      - name: Check local markdown links repo-wide
+        run: ./scripts/check-markdown-links.sh
+
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet
 
