@@ -28,6 +28,15 @@ on:
         required: false
         default: ""
 
+# Shares its group name with release-alpha.yml deliberately - see that
+# workflow's own concurrency block for why. Both workflows push to main;
+# without a shared lock, this workflow's own commit+tag push here could
+# race with release-alpha.yml's update-alpha-pins job pushing a pin
+# commit for an *earlier* dispatch that's still in flight.
+concurrency:
+  group: release-pipeline
+  cancel-in-progress: false
+
 permissions:
   contents: write
   actions: write
@@ -118,6 +127,7 @@ jobs:
             "${{ steps.next.outputs.latest_tag }}..HEAD" --prepend CHANGELOG.md
 
       - name: Commit changelog and tag the release
+        id: commit
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -125,8 +135,18 @@ jobs:
           git add CHANGELOG.md
           git commit -m "chore(release): ${{ steps.next.outputs.version }}"
           git tag -a "${{ steps.next.outputs.tag }}" -m "${{ steps.next.outputs.version }}"
-          git push origin HEAD:main
-          git push origin "${{ steps.next.outputs.tag }}"
+          # --atomic: both refs land together or neither does - found in
+          # review, pushing them as two separate calls left a window where
+          # main had advanced but the tag hadn't (or vice versa) if
+          # anything else pushed to main in between.
+          git push --atomic origin HEAD:main "${{ steps.next.outputs.tag }}"
+          # Recorded so the dispatched release-alpha.yml run below builds
+          # from exactly this commit - found in review: dispatching with
+          # only --ref main lets release-alpha.yml resolve its own
+          # github.sha from whatever main happens to be *when that run's
+          # checkout actually starts*, not necessarily this commit, if
+          # anything else lands on main in between.
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       # The GitHub Release itself is *not* created here anymore - found in
       # review that this workflow used to create it right after tagging,
@@ -147,4 +167,5 @@ jobs:
           gh workflow run release-alpha.yml \
             --repo "${{ github.repository }}" \
             --ref main \
-            -f version="${{ steps.next.outputs.version }}"
+            -f version="${{ steps.next.outputs.version }}" \
+            -f source_sha="${{ steps.commit.outputs.source_sha }}"
