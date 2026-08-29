@@ -92,5 +92,17 @@ func rewriteAdGuardSetCookie(raw string) string {
 		return raw
 	}
 	cookie.Path = publicUIProxyPrefix + "/"
-	return cookie.String()
+	rewritten := cookie.String()
+	// Cookie.Unparsed holds any attribute-value pair ParseSetCookie
+	// couldn't map to one of its own known fields (a vendor-specific or
+	// not-yet-standard attribute, verified live: an unrecognized
+	// "FutureAttr=xyz" lands here) - found in a follow-up review:
+	// Cookie.String() only ever serializes the fields it recognizes, so
+	// this rewrite was silently dropping anything in Unparsed instead of
+	// round-tripping it. Order doesn't matter for Set-Cookie attributes
+	// (RFC 6265), so appending them back on is sufficient.
+	for _, pair := range cookie.Unparsed {
+		rewritten += "; " + pair
+	}
+	return rewritten
 }
