@@ -1,9 +1,20 @@
 name: Publish RootGuard release images
 
+# workflow_dispatch only - found in review: this used to also trigger on
+# a pushed "v*.*.*" tag, structurally incompatible with the tag-lifecycle
+# rework a few PRs earlier in this same round: that rework requires the
+# release tag to not exist yet when this workflow starts, created here
+# exactly once, only after every gate has passed, directly on the final
+# pin commit - and never moved again afterward under any circumstance.
+# A manually pushed tag violates that up front (the tag already exists,
+# pointing at the pre-pin source commit, before a single test has run)
+# and the later "never move a published tag" guard would then correctly,
+# but unhelpfully, refuse to finish the release at all. The one
+# supported way to cut a release is release-version-bump.yml's own
+# workflow_dispatch of this workflow (see docs/release-process.md); a
+# fully separate tag-push procedure was judged not worth maintaining
+# alongside it for what would only ever be a manual escape hatch.
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
@@ -72,11 +83,14 @@ jobs:
           DISPATCH_VERSION: ${{ inputs.version }}
           SOURCE_REF: ${{ inputs.source_sha || github.sha }}
         run: |
-          if [ -n "$DISPATCH_VERSION" ]; then
-            version="$DISPATCH_VERSION"
-          else
-            version="${GITHUB_REF_NAME#v}"
-          fi
+          # workflow_dispatch's own "version" input is required (schema
+          # default: 0.1.0-alpha.4), so DISPATCH_VERSION is always
+          # non-empty now that this workflow no longer also triggers on
+          # a pushed tag (see the "on:" block's own comment on why that
+          # trigger was removed) - the GITHUB_REF_NAME-derived fallback
+          # that branch needed is gone with it, not left behind as dead
+          # code nothing can ever reach.
+          version="$DISPATCH_VERSION"
           # A shell glob like [0-9]*.[0-9]*.[0-9]* only checks "digit,
           # anything, digit, anything, digit, anything" - it happily
           # accepts "1foo.2bar.3baz", a leading-zero core like "01.2.3",
@@ -111,6 +125,19 @@ jobs:
               echo "::error::${SOURCE_REF} does not descend from ${latest_tag} (${latest_commit}), the currently-published latest release - refusing to cut ${version} from a commit that isn't ahead of what's already public. This is very likely a stale re-dispatch or a version override against the wrong commit; start a fresh release from the current main instead." >&2
               exit 1
             fi
+            # Found in review: commit ancestry alone says nothing about
+            # whether the *version number* itself is actually newer -
+            # confirmed live that "0.9.9" against a HEAD descending from
+            # the real published "1.0.0-rc.1" passed the ancestry check
+            # above cleanly. require_new_version enforces real SemVer 2.0
+            # precedence (see semver-compare.sh's own comment on why not
+            # sort -V) so a manual override can't publish an unused but
+            # semantically older version and reset public pins back to
+            # it. Inside this same "not the identical version again"
+            # branch deliberately - the legitimate same-version-retry
+            # case must keep skipping both checks the same way.
+            source scripts/lib/semver-compare.sh
+            require_new_version "$version" "${latest_tag#v}"
           fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
           # Commit-scoped, not just version-scoped - see the "Determine the
@@ -342,6 +369,34 @@ jobs:
           ref: ${{ needs.version.outputs.source_ref }}
           fetch-depth: 0
 
+      # Found in review: the only place this job checked "has main moved
+      # on since this release was tested" used to be the "Commit updated
+      # pins" step, far below - by which point candidate images had
+      # already been irreversibly promoted to the *final* VERSION image
+      # tags a few steps above. A PR merging during the long
+      # test/publish/smoke-test/upgrade-test window ahead of this job
+      # could reach that later check, get correctly rejected there, and
+      # still leave this release's version number permanently unusable -
+      # its final image tags already public under a version whose git
+      # tag/GitHub Release/pinned compose file could now never be
+      # created. Checking here too, before anything in this job writes
+      # anything irreversible, closes that off: this run aborts before
+      # promoting a single image if main has already moved, rather than
+      # discovering that only after burning the version number. The
+      # later check right before the actual push stays too, as
+      # defense-in-depth against the now much narrower remaining window
+      # (a handful of setup steps, not the entire E2E test phase).
+      - name: Verify main hasn't moved since this release was tested
+        env:
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if [ "$(git rev-parse origin/main)" != "$SOURCE_REF" ]; then
+            echo "::error::origin/main has moved to $(git rev-parse origin/main) since this release was tested against ${SOURCE_REF} - refusing to promote any image under this version number. Abort this release and start a fresh one from the current main instead." >&2
+            exit 1
+          fi
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: digest-*
@@ -413,19 +468,24 @@ jobs:
             #    *first* non-null revision label across platforms
             #    (`... | first`) - a multi-arch manifest with a correct
             #    amd64 label and a wrong or entirely missing arm64 one
-            #    still passed. The publish job's own build matrix always
-            #    produces exactly linux/amd64 and linux/arm64 (see its
-            #    own `platforms:` line), so require exactly those two
-            #    platform entries to exist, each carrying the correct
-            #    label - not just "at least one of them does".
+            #    still passed. A later round narrowed that to "exactly
+            #    two platforms, all matching" - still not enough,
+            #    confirmed live with the same jq expression: a manifest
+            #    naming linux/amd64 and linux/s390x (two platforms,
+            #    correct label on both) passed cleanly, since nothing
+            #    checked *which* two. The publish job's own build matrix
+            #    always produces exactly linux/amd64 and linux/arm64 (see
+            #    its own `platforms:` line) - compare the sorted platform
+            #    key set against that exact pair, not just its length.
             platform_check="$(docker buildx imagetools inspect "$source_ref" --format '{{json .Image}}' \
               | jq -r --arg want "$SOURCE_REF" '
-                  (keys | length) as $n
+                  (keys | sort) as $platforms
+                  | (["linux/amd64","linux/arm64"] == $platforms) as $platforms_ok
                   | (all(.[]; .config.Labels["org.opencontainers.image.revision"] == $want)) as $all_match
-                  | if $n == 2 and $all_match then "ok" else "\($n) platform(s), all matching \($want): \($all_match)" end
+                  | if $platforms_ok and $all_match then "ok" else "platforms=\($platforms), expected exactly [\"linux/amd64\",\"linux/arm64\"]; all matching \($want): \($all_match)" end
                 ')"
             if [ "$platform_check" != "ok" ]; then
-              echo "::error::${image}: candidate ${source_ref} failed the per-platform revision check (${platform_check}) - every platform manifest must exist and carry org.opencontainers.image.revision=${SOURCE_REF}, not just one of them." >&2
+              echo "::error::${image}: candidate ${source_ref} failed the per-platform revision check (${platform_check})." >&2
               exit 1
             fi
             # 2. A valid release attestation actually exists for it - the

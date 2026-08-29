@@ -107,6 +107,23 @@ jobs:
             echo "Tag v${next_version} already exists" >&2
             exit 1
           fi
+          # Found in review: grammar validity (require_semver above)
+          # says nothing about *ordering* - the auto-increment path above
+          # always produces a genuinely higher version by construction,
+          # but a hand-typed VERSION_OVERRIDE could name any valid,
+          # unused SemVer string, including one with lower precedence
+          # than what's already published (confirmed live: an override
+          # of "0.9.9" against a real "1.0.0-rc.1" passed every other
+          # check here). require_new_version enforces real SemVer 2.0
+          # precedence (not sort -V, confirmed live to get this project's
+          # own upcoming rc->stable transition backwards - see
+          # semver-compare.sh's own comment), not just tag-string
+          # inequality. The exact-same-version case can't reach this
+          # point at all - already rejected above as "tag already
+          # exists", since that's the same tag by construction whenever
+          # next_version equals latest_tag's own version.
+          source scripts/lib/semver-compare.sh
+          require_new_version "$next_version" "${latest_tag#v}"
           echo "latest_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
           echo "version=${next_version}" >> "$GITHUB_OUTPUT"
           echo "tag=v${next_version}" >> "$GITHUB_OUTPUT"

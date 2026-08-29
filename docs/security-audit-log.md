@@ -1980,3 +1980,75 @@ past milestone *was called*, not a claim about today), and
 what used to say what) untouched throughout, the same
 historical-vs-current distinction `check-site-facts.sh`'s own exclusion
 pattern already draws.
+
+## Follow-up review, round 5 (2026-08-29)
+
+A fifth independent review of round 4's own fixes - three of them turned
+out to be genuinely incomplete rather than wrong outright, confirmed live
+against the actual repository and, where relevant, the real published
+`1.0.0-rc.1` artifacts. Same discipline as every round before.
+
+**Critical, fixed: the tag-push trigger was now structurally
+incompatible with the never-move-a-tag design round 4 built.**
+`release-alpha.yml` still also triggered on a pushed `v*.*.*` tag - but
+that design now requires the tag to not exist yet when the workflow
+starts, created exactly once at the very end, on the pin commit, and
+never moved again under any circumstance. A manually pushed tag violates
+that from the first step (it already exists, on the pre-pin source
+commit, before a single test has run) and round 4's own "never move a
+published tag" guard would then correctly, but unhelpfully, refuse to
+ever finish that release. Removed the trigger entirely -
+`release-version-bump.yml`'s own `workflow_dispatch` is the one
+supported way to cut a release (see `docs/release-process.md`, also
+corrected in this round - it still described the old atomic
+commit-and-tag push and a tag that gets "moved" rather than created
+once). The now-dead `GITHUB_REF_NAME`-derived version fallback that
+trigger needed went with it, not left behind as unreachable code.
+
+**Critical, fixed: final image tags were promoted before the
+main-hasn't-moved check that could still reject the whole release.**
+Round 4 added a check that `origin/main` still equals the tested
+`SOURCE_REF`, but only inside the "Commit updated pins" step - by which
+point `update-alpha-pins` had already promoted every component to its
+*final* `VERSION` image tag, irreversibly, several steps earlier. A PR
+merging during the long test/publish/smoke-test/upgrade-test window
+ahead of this job could reach that later check, get correctly rejected,
+and still leave the version number permanently unusable: its final
+image tags already public, with no way to ever create a matching git
+tag, GitHub Release, or pinned compose file for them. Added the
+identical check right after checkout, before anything in the job writes
+anything irreversible - the original check right before the actual pin
+commit stays too, as defense-in-depth against the now much narrower
+remaining window (a handful of setup steps, not the entire E2E phase).
+
+**Critical, fixed: nothing prevented publishing a semantically older,
+merely-unused version number.** Round 4's ancestry guard
+(`git merge-base --is-ancestor`) only verified that the source commit
+descends from the latest published release - never that the *version
+number itself* has higher SemVer precedence. Confirmed live: a manual
+override requesting `0.9.9` against a `HEAD` genuinely descending from
+the real published `1.0.0-rc.1` passed that check cleanly, and could
+have gone on to reset `README.md`/site/compose pins back to it. New
+`scripts/lib/semver-compare.sh` implements real SemVer 2.0 precedence
+(deliberately not `sort -V` - confirmed live it gets this project's own
+imminent rc→stable transition backwards: `1.0.0` sorts *below*
+`1.0.0-rc.1`, when a version with no prerelease suffix must always
+outrank a prerelease of the same core version) and is exercised in both
+`release-version-bump.yml` (guards a hand-typed version override) and
+`release-alpha.yml`'s own `version` job (defense-in-depth, and the only
+gate for a fully manual dispatch). Hand-verified against the full
+canonical SemVer.org precedence chain
+(`1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta <
+1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0`) plus every case from
+`rootguard-updater`'s own `TestIsOlderReleaseVersion` table, and live
+against the real repository reproducing the exact `0.9.9` scenario.
+
+**Medium, fixed: the multi-platform revision check verified platform
+*count*, not platform *names*.** Round 4 fixed "only the first
+platform's label was checked" by requiring exactly two platforms, all
+matching - still not enough, confirmed live with the same `jq`
+expression: a manifest naming `linux/amd64` and `linux/s390x` (two
+platforms, correct label on both) passed cleanly, since nothing checked
+*which* two. Now compares the sorted platform key set against the exact
+pair the publish job's build matrix always produces
+(`["linux/amd64","linux/arm64"]`), not just its length.
