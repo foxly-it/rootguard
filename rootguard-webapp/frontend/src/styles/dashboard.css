@@ -168,6 +168,21 @@
   background: var(--danger-soft);
 }
 
+/* Found in review: PersistError/PersistErrorAt reached the API types
+   (see api/client.ts's InstallationStatus/UpdateStatus) but nothing in
+   the UI ever rendered them - a user had no way to see that the state
+   shown was live-accurate but not durably saved, and could regress on a
+   restart. Warning, not danger/error: the live state itself is still
+   correct, only its durability is in question. */
+.overview-persist-warning {
+  margin-top: 18px;
+  padding: 13px 16px;
+  border: 1px solid var(--warning-soft);
+  border-radius: 10px;
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
 .hero-stats {
   position: relative;
   z-index: 1;

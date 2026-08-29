@@ -1635,3 +1635,22 @@ client (`web/meta.js`, one `fetch` per page load) never needs more than
 an occasional quick reload's worth of requests, so this comfortably
 covers real usage while cutting bulk domain-enumeration throughput
 roughly 15x.
+
+**Medium, fixed: `PersistError`/`PersistErrorAt` reached the frontend's
+API types but were never actually rendered anywhere.** Round 2 made
+`installer.Manager`/`updater.Manager` clear and re-set these fields
+truthfully around every persist attempt, and the corresponding TS types
+in `api/client.ts` gained the matching optional fields - but nothing in
+the React UI ever read them. A user had no way to see that the state
+shown was live-accurate but not durably saved, and could silently
+regress on the next restart of RootGuard Core.
+
+Fixed with a warning banner (amber `--warning`/`--warning-soft` tokens,
+distinct from the existing red error banners - the live state itself is
+still correct, only its durability is in question) in the two places
+that already render the status objects carrying these fields: the
+dashboard (`Overview.tsx`, for `InstallationStatus.persist_error`) and
+the Stack page (`Stack.tsx`, for `UpdateStatus.persist_error`). Both
+show the error message and a localized timestamp, in both `en`/`de`
+locales. Frontend lint, all 26 tests, and the production build
+(`tsc -b && vite build`) all pass.

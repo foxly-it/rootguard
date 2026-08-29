@@ -309,6 +309,16 @@ export default function Overview() {
       </section>
 
       {error && <div className="overview-error" role="alert">{error}</div>}
+      {installation?.persist_error && (
+        <div className="overview-persist-warning" role="alert">
+          {t("overview.persistError", {
+            message: installation.persist_error,
+            time: installation.persist_error_at
+              ? new Date(installation.persist_error_at).toLocaleString(locale)
+              : "–",
+          })}
+        </div>
+      )}
 
       <section className="overview-resources" aria-label={t("overview.resources")}>
         <SparkMetric

@@ -276,6 +276,7 @@ export const en: LocaleDefinition = {
     "backups.importConf": "Existing unbound.conf",
     "backups.importConfHelp": "Import a traditional Unbound configuration through the guided workflow.",
     "stack.intro": "Check, update and control containers individually—without Docker access in the browser or blindly restarting the entire DNS stack.",
+    "stack.persistError": "The update state shown above is live and accurate, but could not be saved to disk ({time}): {message}. It may not survive a restart of RootGuard Core until this is resolved.",
     "stack.check": "Check for updates",
     "stack.checking": "Checking…",
     "stack.managed": "Managed services",
@@ -491,6 +492,7 @@ export const en: LocaleDefinition = {
     "overview.dnsServices": "DNS services",
     "overview.lastChecked": "Last checked {time}",
     "overview.manageStack": "Manage stack",
+    "overview.persistError": "The installation state shown above is live and accurate, but could not be saved to disk ({time}): {message}. It may not survive a restart of RootGuard Core until this is resolved.",
 
     "adguard.intro": "RootGuard replaces the native AdGuard setup wizard with a controlled workflow. Administration and credentials remain entirely within the private control plane.",
     "adguard.setup": "Set up RootGuard",
