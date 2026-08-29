@@ -43,6 +43,20 @@ func TestRewriteAdGuardSetCookieHandlesRealisticVariance(t *testing.T) {
 	}
 }
 
+// TestRewriteAdGuardSetCookieKeepsUnknownAttributes is the regression test
+// for a follow-up review finding: Cookie.Unparsed holds any attribute-value
+// pair ParseSetCookie couldn't map to one of its own known fields (a
+// vendor-specific or not-yet-standard attribute), but Cookie.String() never
+// serializes it back - so the rewrite was silently dropping anything it
+// didn't specifically recognize, not just leaving it untouched.
+func TestRewriteAdGuardSetCookieKeepsUnknownAttributes(t *testing.T) {
+	raw := "agh_session=value; Path=/; HttpOnly; FutureAttr=xyz; AnotherOne"
+	want := "agh_session=value; Path=/adguard-ui/; HttpOnly; FutureAttr=xyz; AnotherOne"
+	if got := rewriteAdGuardSetCookie(raw); got != want {
+		t.Fatalf("rewriteAdGuardSetCookie(%q) = %q, want %q", raw, got, want)
+	}
+}
+
 // TestRewriteAdGuardSetCookieLeavesOthersAlone ensures the rewrite stays
 // scoped to exactly what the old code touched: a cookie with no Path
 // attribute, or a Path that isn't the bare root, is passed through

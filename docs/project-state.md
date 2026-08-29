@@ -3279,3 +3279,23 @@ Extract fails on afterward, here the always-expected missing manifest, is
 a separately-covered path). `TestExtractRejectsEntryCountOverTheLimit`
 is the counterpart: one entry over the limit is still correctly rejected,
 with the message a prior round already corrected staying accurate.
+
+**Small, fixed: the AdGuard UI cookie rewrite silently dropped unknown
+`Set-Cookie` attributes.** `rewriteAdGuardSetCookie` parses each cookie
+with `http.ParseSetCookie`, rewrites `Path`, and re-serializes with
+`Cookie.String()`. Verified live: `Cookie.Unparsed` holds any
+attribute-value pair `ParseSetCookie` couldn't map to one of its own
+known fields (a vendor-specific or not-yet-standard attribute - a
+`FutureAttr=xyz` pair lands there in practice), but `Cookie.String()`
+never serializes it back - so the rewrite was silently dropping anything
+it didn't specifically recognize, not just leaving it untouched.
+
+Fixed by appending `cookie.Unparsed` back onto the serialized result
+after `Cookie.String()` runs - order doesn't matter for Set-Cookie
+attributes (RFC 6265), so this round-trips correctly regardless of where
+the unknown attribute originally sat.
+
+`TestRewriteAdGuardSetCookieKeepsUnknownAttributes` is the regression
+test: a cookie carrying a `FutureAttr=xyz` pair must still carry it after
+the rewrite. Revert-verified: removing the `Unparsed` re-append makes the
+rewritten cookie silently lose it, exactly reproducing the finding.
