@@ -93,6 +93,18 @@ func TestCustomConfigRejectsDNSSECBypasses(t *testing.T) {
 		// comparison is its own explicit EqualFold rather than inherited
 		// from a whole-line lowercase.
 		"server:\n    HARDEN-DNSSEC-STRIPPED: NO\n",
+		// Regression cases found in a follow-up review: Unbound's own
+		// lexer strips a single matching layer of double or single quotes
+		// from a directive value before the parser ever sees it, so both
+		// of these are ordinary, spec-legal ways to write "no" too - the
+		// EqualFold comparison above never unquoted the value, so neither
+		// was recognized as the bypass it actually is.
+		"server:\n    harden-dnssec-stripped: \"no\"\n",
+		"server:\n    harden-dnssec-stripped: 'no'\n",
+		// Anything that isn't unambiguously "yes" once unquoted must also
+		// be refused for this directive specifically (see the whitelist
+		// comment in normalizeCustom) - not just the known "no" spelling.
+		"server:\n    harden-dnssec-stripped: maybe\n",
 	} {
 		if _, err := normalizeCustom(content); !errors.Is(err, ErrInvalidCustomConfig) {
 			t.Fatalf("expected policy rejection for %q, got %v", content, err)
@@ -100,9 +112,16 @@ func TestCustomConfigRejectsDNSSECBypasses(t *testing.T) {
 	}
 	// The recommended, secure value must still be accepted - only "no"
 	// weakens DNSSEC, "yes" (the default DirectiveReferences itself
-	// recommends) must not be blocked outright.
-	if _, err := normalizeCustom("server:\n    harden-dnssec-stripped: yes\n"); err != nil {
-		t.Fatalf("harden-dnssec-stripped: yes must remain accepted, got %v", err)
+	// recommends) must not be blocked outright. Quoted spellings of "yes"
+	// must be accepted too, for the same unquoting reason as above.
+	for _, content := range []string{
+		"server:\n    harden-dnssec-stripped: yes\n",
+		"server:\n    harden-dnssec-stripped: \"yes\"\n",
+		"server:\n    harden-dnssec-stripped: 'yes'\n",
+	} {
+		if _, err := normalizeCustom(content); err != nil {
+			t.Fatalf("harden-dnssec-stripped: yes (quoted or not) must remain accepted, got %v for %q", err, content)
+		}
 	}
 }
 

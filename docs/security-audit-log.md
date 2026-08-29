@@ -1361,3 +1361,33 @@ tests" job is a Go-level test (`go test -tags integration
 this fix touches was never actually exercised by CI at all. Fixed by
 adding the same `ROOTGUARD_SKIP_ATTESTATION: "${ROOTGUARD_SKIP_ATTESTATION:-false}"`
 passthrough compose.release.yaml already had, to both files.
+
+## Follow-up review, round 3 (2026-08-29)
+
+A third independent review, focused specifically on the release pipeline
+and DNSSEC enforcement ahead of the RC. Same discipline as rounds 1 and
+2: verify directly in code, scope the fix, test with real teeth,
+document, PR, merge - one item at a time.
+
+**Critical, fixed: `harden-dnssec-stripped` bypass via a quoted `"no"` or
+`'no'`.** Round 2 fixed the literal-suffix-match gap for
+`harden-dnssec-stripped: no` (extra whitespace, trailing comments, no
+space after the colon) by comparing a properly parsed, comment-stripped,
+trimmed value instead of matching the raw line. It still compared that
+value's raw text, though - Unbound's own config lexer strips one layer of
+matching double or single quotes from a directive value before its
+parser ever sees it, so `harden-dnssec-stripped: "no"` and
+`harden-dnssec-stripped: 'no'` are both ordinary, spec-legal ways to
+write exactly the same disabling value that never equal-folded to the
+bare `no` the round-2 check looked for.
+
+Fixed in `rootguard-core/internal/unbound/custom.go`: `directiveValue`
+now strips one matching layer of quotes, mirroring Unbound's lexer, before
+any comparison happens. The `harden-dnssec-stripped` check itself was
+also flipped from a blacklist (`value != "no"`) to a whitelist
+(`value == "yes"`) - for this one directive specifically, refusing
+anything that isn't unambiguously the safe value is judged safer than
+continuing to enumerate every spelling of the unsafe one a future
+Unbound-accepted quoting or aliasing might produce. `custom_test.go`
+gained regression cases for both quoted-`no` spellings, an ambiguous
+non-yes/no value, and quoted-`yes` acceptance (must still be allowed).
