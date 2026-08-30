@@ -2300,6 +2300,90 @@ file's own directory rather than the invoking shell's cwd. Documented in
 the file's own header comment - there is no shellcheck job in CI to fix
 a wiring for.
 
+## Follow-up review, round 8 (2026-08-30)
+
+An eighth independent review of round 7's own fix - found a real
+release-critical edge case round 7 didn't cover: identity is not the
+same as currency. Same discipline as every round before.
+
+**Releasekritisch, fixed: a reverted pin commit still resolved as a
+safe retry.** Round 7's `resolve_release_pin_commit` proved a candidate
+commit *was* genuinely this release's own pin commit - unique message,
+direct single-parent child of `SOURCE_REF`, only the three expected
+paths touched - but never checked whether `main`'s current tip still
+*reflected* it. Git history is immutable: reverting a commit doesn't
+rewrite it, it adds a new one on top, so every one of round 7's checks
+still passed against the original, now-superseded commit. Concrete
+scenario, confirmed live: pin commit P lands, promotion fails, a
+maintainer runs `git revert P` to take the public pins back, a retry of
+the same release run still resolves to P, and the workflow skips
+straight past every content and main-race check on the strength of
+that - publishing images, a git tag, a GitHub Release, and a Pages
+deploy of the reverted site, all under pins `main` had explicitly taken
+back.
+
+Two related gaps closed alongside it, both confirmed live against the
+pre-fix resolver the same way:
+- A same-message `git commit --allow-empty` passed every round-7 check
+  (there's nothing to be "out of scope" in an empty commit) while never
+  actually pinning anything.
+- A valid pin commit whose paths were changed again by any later,
+  normal commit (not necessarily a revert) had the exact same
+  resolve-to-the-superseded-commit problem.
+
+Fixed inside `resolve_release_pin_commit` itself, so every caller gets
+it automatically: after the existing identity checks, the candidate's
+own tree for the three pin paths must still match `main_ref`'s *current*
+tip - a pure git-ref comparison (no working-tree regeneration needed,
+so it's safe to run from the early guard too, before pin files even
+exist yet). Also now rejects a candidate whose diff against `SOURCE_REF`
+touches neither `compose.release.yaml` nor `.env.release.example` at
+all (the empty-commit case) - a genuine pin commit always changes both,
+since `VERSION` (part of every image reference they pin) always differs
+from whatever the previously published release used.
+
+`release-alpha.yml` no longer passes "Resolve main state"'s answer
+downstream - the window between it and "Commit updated pins" (buildx/
+cosign setup, attestation checks, digest-pin edits, compose validation,
+site refresh) is exactly the kind of gap a revert could land in, so
+"Commit updated pins" now resolves fresh instead of trusting a stale
+answer. "Resolve main state" itself is now purely a fail-fast: it still
+aborts a doomed run early, but nothing downstream reads its result
+anymore. "Commit updated pins" also gained one more, narrower check
+`resolve_release_pin_commit` structurally can't make on its own: it has
+no way to know what the *correct* pin content actually is (that depends
+on this run's own digests, invisible to git-only logic) - so once a
+candidate resolves, this step compares it against what "Update digest
+pins" just regenerated, defense in depth against a hand-crafted commit
+that happens to pass every structural check.
+
+Exercised against synthetic git histories for every scenario named in
+review - a real pin commit later `git revert`-ed, an empty
+`--allow-empty` commit with the right message, a valid pin commit whose
+paths were changed again afterward, and (confirming this was already
+safe, not just adding coverage) a pin commit that exists in the repo
+but was force-pushed out of `main`'s history entirely - in
+`scripts/lib/resolve-release-pin-commit.test.sh`. Verified the first
+three fail against the pre-fix resolver and pass against the fix.
+
+**Small, fixed: the exact pin-commit message was defined three
+times by hand** (the resolver, `release-alpha.yml`'s own commit, and
+this file's own test), with a comment saying to keep them in sync by
+hand. Extracted `release_pin_commit_message()` into
+`resolve-release-pin-commit.sh` - one function, called from all three,
+so a future text change can't silently break retry detection instead of
+failing loudly.
+
+**Small, fixed: the test file used fixed paths under `/tmp`**
+(`/tmp/resolve-stderr`, `/tmp/resolve-stdout`) that a parallel test run
+could collide on. Moved under the test's own `mktemp -d` work
+directory, unique per run.
+
+**Open, unchanged: `main` still has no branch protection or ruleset.**
+Confirmed still true; the Actions PR-creation permission fixed in round
+6 is now correctly enabled. See round 6's writeup for the recommended
+ruleset configuration - still the repo owner's decision to make.
+
 ## Live CI investigation during round 8 (2026-08-30)
 
 Not from a review pass - `ci.yml`'s "Verify Unbound configuration
@@ -2331,3 +2415,18 @@ same automatic config rollback a `docker restart` failure or a bad
 socket failing for a few polls then succeeding (must retry through it)
 and never succeeding at all (must roll back, same as the existing
 restart-failure test).
+
+**Separately observed, not fixed: real external DNS resolution was
+unreliable in the CI environment at the time of this investigation.**
+After the fix above, the same `ci.yml` step still failed intermittently
+- but past the point this fix covers, on an unguarded
+`test "$(jq -r .healthy <<<"$diagnostics")" = "true"` whose input comes
+from live `dig` queries to real internet domains (`example.com`,
+`dnssec-failed.org`). Confirmed as external, not a code defect:
+`main`'s own independent, unrelated scheduled `Unbound CI` run failed
+the identical way (`dig ... dnssec-failed.org ...: communications error
+... timed out`) at the same time, on three separate occasions,
+including after a retry. Merged both this fix and round 8's PR with
+this one check still red rather than block correct, independently
+unit-and-race-tested code on a transient external condition also
+affecting `main` itself.

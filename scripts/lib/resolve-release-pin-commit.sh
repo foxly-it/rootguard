@@ -18,13 +18,22 @@
 # Both bugs found live: reproducible by pushing a same-message pin
 # commit, then a second, unrelated commit, to a scratch main.
 #
-# Fixed by identifying the release's own commit precisely instead of by
-# content: its commit message is unique to this exact version (nothing
-# else in the system ever produces it), and its shape is independently
-# verified - direct single-parent child of SOURCE_REF, touching only the
-# three paths the real pin-commit step ever writes - rather than trusting
-# either the message or the content alone. Exercised against synthetic
-# git histories in resolve-release-pin-commit.test.sh, run by ci.yml.
+# Found in review, round 7's own fix (round 8's review): identifying the
+# commit by its unique message, direct single-parent-of-SOURCE_REF
+# shape, and path scope proves *that commit* is genuinely this release's
+# own pin commit - it does not prove main's current tip still reflects
+# it. Git history is immutable: a `git revert` of that exact commit, or
+# any later commit touching these paths again, leaves the original
+# commit's message/parentage/scope untouched while silently invalidating
+# it as a safe retry point. Confirmed live: reverting a real pin commit
+# still let it resolve here and get promoted/tagged/released - main had
+# explicitly taken the release pins back, and this function said "safe
+# to reuse" anyway. Fixed with one more check below, purely against git
+# refs (no working-tree regeneration needed, so this still runs safely
+# from the early guard, before the caller has generated anything).
+#
+# Exercised against synthetic git histories in
+# resolve-release-pin-commit.test.sh, run by ci.yml.
 #
 # Usage: source this file, then call
 #   resolve_release_pin_commit "$source_ref" "$version" "$main_ref"
@@ -33,8 +42,19 @@
 # $source_ref exactly (the ordinary first-attempt case, nothing to
 # resolve). Exits non-zero with a message on stderr if $main_ref has
 # moved away from $source_ref without a uniquely identifiable, validly
-# shaped pin commit for $version in between - the caller should treat
-# that as "abort this release", the same as it always has.
+# shaped, still-current pin commit for $version in between - the caller
+# should treat that as "abort this release", the same as it always has.
+
+# release_pin_commit_message version -> echoes the exact commit message
+# "Commit updated pins" always uses, and this resolver searches for -
+# found in review, round 7: this string used to be duplicated by hand
+# across this file, release-alpha.yml, and this file's own test, with a
+# comment saying "keep in sync by hand" - a later text change to any one
+# of them would have silently broken retry detection instead of failing
+# loudly. One function now, called from all three.
+release_pin_commit_message() {
+  echo "ci: pin compose.release.yaml, .env.release.example, and site/*.html to $1 [skip ci]"
+}
 
 resolve_release_pin_commit() {
   local source_ref="$1" version="$2" main_ref="$3"
@@ -46,9 +66,8 @@ resolve_release_pin_commit() {
     return 0
   fi
 
-  # This exact string is also what "Commit updated pins" itself commits
-  # with - keep the two in sync by hand if that message ever changes.
-  local message="ci: pin compose.release.yaml, .env.release.example, and site/*.html to ${version} [skip ci]"
+  local message
+  message="$(release_pin_commit_message "$version")"
 
   # --grep is a fast pre-filter (it matches a commit whose message merely
   # *contains* $message, e.g. a `git revert`'s auto-generated message
@@ -91,6 +110,32 @@ resolve_release_pin_commit() {
   out_of_scope="$(git diff --name-only "${source_ref}" "${candidate}" | grep -Ev '^(compose\.release\.yaml|\.env\.release\.example|site/)' || true)"
   if [[ -n "$out_of_scope" ]]; then
     echo "${candidate} touches paths outside compose.release.yaml/.env.release.example/site/ - refusing to treat it as this release's own pin commit: ${out_of_scope}" >&2
+    return 1
+  fi
+
+  # Must actually pin something - a genuine pin commit always changes
+  # compose.release.yaml and .env.release.example, since VERSION (part
+  # of every image reference they pin) differs from whatever the
+  # previously published release used. Rejects e.g. a same-message
+  # `git commit --allow-empty` that would otherwise sail through every
+  # check above with nothing to show for it.
+  local pinned_paths
+  pinned_paths="$(git diff --name-only "${source_ref}" "${candidate}" -- compose.release.yaml .env.release.example)"
+  if [[ -z "$pinned_paths" ]]; then
+    echo "${candidate} matches this release's own pin-commit message and shape, but changes neither compose.release.yaml nor .env.release.example relative to ${source_ref} - refusing to treat an empty commit as a real pin commit" >&2
+    return 1
+  fi
+
+  # Must still be current: message, parentage, and scope all describe
+  # the commit *as it was made* - none of them notice a later commit
+  # that changed these same paths again (a `git revert` included, since
+  # reverting doesn't rewrite the original commit, it adds a new one on
+  # top of it). Compare the candidate's own tree for these paths against
+  # main_ref's *current* tip - a pure git-ref comparison, no working-tree
+  # regeneration needed, so this is safe to call before "Update digest
+  # pins" has even run.
+  if ! git diff --quiet "${candidate}" "${main_ref}" -- compose.release.yaml .env.release.example site/; then
+    echo "${candidate} matches this release's own pin-commit message, shape, and scope, but ${main_ref}'s current tip (${main_sha}) no longer matches its content for compose.release.yaml/.env.release.example/site/ - something (a revert, a manual edit, or another process) changed these paths again since. Refusing to reuse a superseded pin commit" >&2
     return 1
   fi
 

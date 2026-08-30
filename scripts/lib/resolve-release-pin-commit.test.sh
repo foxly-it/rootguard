@@ -1,11 +1,21 @@
 #!/usr/bin/env bash
 # Regression tests for resolve-release-pin-commit.sh, exercised against
-# synthetic git histories built in a scratch repo - found in review,
-# round 7: the retry-detection logic this replaced was never actually
-# reachable (an earlier, still-strict guard rejected every retry before
-# it got a chance to run) and, on its own terms, could mistake an
-# unrelated commit for the release's own pin commit. Every scenario
-# named in that review is covered below.
+# synthetic git histories built in a scratch repo.
+#
+# Found in review, round 7: the retry-detection logic this replaced was
+# never actually reachable (an earlier, still-strict guard rejected
+# every retry before it got a chance to run) and, on its own terms,
+# could mistake an unrelated commit for the release's own pin commit.
+#
+# Found in review, round 8: round 7's own identity-based fix (message,
+# parentage, path scope) proved a candidate commit *was* genuinely this
+# release's pin commit, but never checked whether main's current tip
+# still reflected it - a `git revert` of that exact commit, or any
+# later commit touching the same paths again, left the original
+# commit's identity untouched while silently invalidating it as a safe
+# retry point.
+#
+# Every scenario named in both reviews is covered below.
 
 set -Eeuo pipefail
 
@@ -44,8 +54,8 @@ commit() {
 assert_resolves() {
   local source_ref="$1" version="$2" main_ref="$3" expected="$4" description="$5"
   local actual
-  if ! actual="$(resolve_release_pin_commit "$source_ref" "$version" "$main_ref" 2>/tmp/resolve-stderr)"; then
-    echo "FAIL (${description}): expected success resolving to ${expected}, got failure: $(cat /tmp/resolve-stderr)" >&2
+  if ! actual="$(resolve_release_pin_commit "$source_ref" "$version" "$main_ref" 2>"${work_dir}/resolve-stderr")"; then
+    echo "FAIL (${description}): expected success resolving to ${expected}, got failure: $(cat "${work_dir}/resolve-stderr")" >&2
     failures=$((failures + 1))
     return
   fi
@@ -58,14 +68,14 @@ assert_resolves() {
 # assert_rejects source_ref version main_ref description
 assert_rejects() {
   local source_ref="$1" version="$2" main_ref="$3" description="$4"
-  if resolve_release_pin_commit "$source_ref" "$version" "$main_ref" >/tmp/resolve-stdout 2>/dev/null; then
-    echo "FAIL (${description}): expected failure, got success resolving to $(cat /tmp/resolve-stdout)" >&2
+  if resolve_release_pin_commit "$source_ref" "$version" "$main_ref" >"${work_dir}/resolve-stdout" 2>/dev/null; then
+    echo "FAIL (${description}): expected failure, got success resolving to $(cat "${work_dir}/resolve-stdout")" >&2
     failures=$((failures + 1))
   fi
 }
 
 version="1.2.3"
-pin_message="ci: pin compose.release.yaml, .env.release.example, and site/*.html to ${version} [skip ci]"
+pin_message="$(release_pin_commit_message "$version")"
 
 # --- Scenario 1: first release attempt - main is exactly SOURCE_REF ---
 source_ref="$(commit "feat: something releasable" src/main.go)"
@@ -131,6 +141,50 @@ git branch -f main out-of-scope
 git checkout -q main
 git branch -D out-of-scope >/dev/null
 assert_rejects "$source_ref" "$version" main "right message and parentage, but touches an out-of-scope path"
+
+# --- Scenario 8 (round 8): a real pin commit, then `git revert`ed - the
+# exact scenario found live: a maintainer reverting a pin commit after a
+# failed promotion, then retrying, must not resurrect the reverted pins ---
+git checkout -q -b revert-real-pin "$source_ref"
+real_pin="$(commit "$pin_message" compose.release.yaml .env.release.example site/index.html)"
+git revert --no-edit "$real_pin" >/dev/null
+git branch -f main revert-real-pin
+git checkout -q main
+git branch -D revert-real-pin >/dev/null
+assert_rejects "$source_ref" "$version" main "a real pin commit that was later git revert-ed"
+
+# --- Scenario 9 (round 8): a same-message --allow-empty commit - passes
+# message, parentage, and scope (there's nothing to be "out of scope"),
+# but never actually pins anything ---
+git checkout -q -b empty-pin "$source_ref"
+git commit -q --allow-empty -m "$pin_message"
+git branch -f main empty-pin
+git checkout -q main
+git branch -D empty-pin >/dev/null
+assert_rejects "$source_ref" "$version" main "an empty --allow-empty commit with the right message"
+
+# --- Scenario 10 (round 8): a valid pin commit, then a *later*, normally
+# authored commit changes the pin files again (not a revert, just drift)
+# - same underlying risk as scenario 8, different cause ---
+git checkout -q -b pin-then-drift "$source_ref"
+commit "$pin_message" compose.release.yaml .env.release.example site/index.html >/dev/null
+commit "chore: hand-edit the release pins" compose.release.yaml >/dev/null
+git branch -f main pin-then-drift
+git checkout -q main
+git branch -D pin-then-drift >/dev/null
+assert_rejects "$source_ref" "$version" main "a valid pin commit whose paths were changed again afterward"
+
+# --- Scenario 11 (round 8): the pin commit exists, but isn't reachable
+# from main at all (main was force-pushed to a history that never
+# included it) - must be rejected the same as "not found", not crash ---
+git checkout -q -b force-pushed-away "$source_ref"
+commit "$pin_message" compose.release.yaml .env.release.example site/index.html >/dev/null
+git checkout -q -b force-push-replacement "$source_ref"
+commit "chore: a completely different history" other.txt >/dev/null
+git branch -f main force-push-replacement
+git checkout -q main
+git branch -D force-pushed-away force-push-replacement >/dev/null
+assert_rejects "$source_ref" "$version" main "the pin commit exists in the repo but was force-pushed out of main's history"
 
 if [[ "${failures}" -gt 0 ]]; then
   echo "${failures} resolve-release-pin-commit.sh test failure(s)" >&2

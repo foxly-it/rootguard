@@ -399,10 +399,20 @@ jobs:
       # "is this a fresh run, a safe retry of our own pin commit, or a
       # genuine race", precisely (by this release's own unique commit
       # message and shape, not by comparing file content) rather than by
-      # strict equality alone. "Commit updated pins" reuses this exact
-      # same result instead of re-deciding it a second, looser way.
+      # strict equality alone.
+      #
+      # Just a cheap fail-fast here, not the real gate - found in review,
+      # round 8: this step's own result used to be handed straight to
+      # "Commit updated pins" as its answer too, but the buildx/cosign
+      # setup, attestation checks, digest-pin edits, compose validation,
+      # and site refresh in between are exactly the kind of window this
+      # job already treats as unsafe to trust a stale answer across (see
+      # "Commit updated pins" itself, and "Verify main hasn't moved" two
+      # rounds ago). This step exists purely so a run that's already
+      # doomed - main moved and no valid retry point exists - fails
+      # before wasting all of that, not to hand its answer downstream;
+      # "Commit updated pins" resolves fresh, right before it matters.
       - name: Resolve main state (fresh run, or a retry of our own earlier pin commit)
-        id: resolve-main
         env:
           SOURCE_REF: ${{ needs.version.outputs.source_ref }}
           VERSION: ${{ needs.version.outputs.value }}
@@ -417,7 +427,6 @@ jobs:
           pin_commit="$(resolve_release_pin_commit "$SOURCE_REF" "$VERSION" origin/main)"
           if [ -n "$pin_commit" ]; then
             echo "origin/main has moved past ${SOURCE_REF}, but ${pin_commit} is verified as this exact release's own earlier pin commit - resuming from it"
-            echo "pin_commit=${pin_commit}" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -571,35 +580,56 @@ jobs:
       # above - comparing file *content* at origin/main's tip against
       # what this run had just regenerated, true for this release's own
       # earlier pin commit but equally true for any later, unrelated
-      # commit that simply never touched these paths. "Resolve main
-      # state" above is now the one place that decides this, precisely;
-      # this step just acts on its result.
+      # commit that simply never touched these paths.
+      #
+      # Found in review, round 8: rather than trust "Resolve main
+      # state"'s earlier answer, this step now resolves fresh - the
+      # window between that step and this one (buildx/cosign setup,
+      # attestation checks, digest-pin edits, compose validation, site
+      # refresh) is exactly the kind of gap a revert could land in.
+      # resolve_release_pin_commit itself is what actually closes the
+      # revert case: identity (message/parentage/scope) alone doesn't
+      # prove main's current tip still reflects a commit - a `git
+      # revert` of it leaves all of that untouched while silently
+      # invalidating it. Confirmed live: reverting a real pin commit
+      # used to still let it resolve and get promoted/tagged/released.
       - name: Commit updated pins
         id: commit-pins
         env:
           SOURCE_REF: ${{ needs.version.outputs.source_ref }}
           VERSION: ${{ needs.version.outputs.value }}
-          RESOLVED_PIN_COMMIT: ${{ steps.resolve-main.outputs.pin_commit }}
         run: |
           set -euo pipefail
-          if [ -n "$RESOLVED_PIN_COMMIT" ]; then
-            echo "'Resolve main state' already found and verified this release's own earlier pin commit (${RESOLVED_PIN_COMMIT}) - nothing to commit"
-            echo "pin_commit=${RESOLVED_PIN_COMMIT}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          source scripts/lib/resolve-release-pin-commit.sh
           if git diff --quiet -- compose.release.yaml .env.release.example site/; then
             echo "compose.release.yaml, .env.release.example, and site/*.html already reflect the published release, nothing to commit"
             exit 0
           fi
 
-          # RESOLVED_PIN_COMMIT being empty means "Resolve main state"
-          # already confirmed origin/main was still exactly SOURCE_REF -
-          # refetch and recheck anyway, directly before the push, as
-          # defense-in-depth against a race in the handful of steps in
-          # between (buildx/cosign setup, attestation checks, digest-pin
-          # edits, compose validation, site refresh).
+          git fetch origin main
+          pin_commit="$(resolve_release_pin_commit "$SOURCE_REF" "$VERSION" origin/main)"
+          if [ -n "$pin_commit" ]; then
+            # resolve_release_pin_commit only verifies structure (message,
+            # parentage, scope, and that main's tip still matches it) - it
+            # has no way to know what the *correct* pin content actually
+            # is, since that depends on this run's own digests, which
+            # aren't git-visible. This is the one place that can check it:
+            # compare against what "Update digest pins" just regenerated.
+            # Defense in depth against a forged or hand-crafted commit
+            # that happens to pass every structural check above.
+            if ! git diff --quiet "$pin_commit" -- compose.release.yaml .env.release.example site/; then
+              echo "::error::${pin_commit} is verified as this exact release's own pin commit by message, parentage, and scope, but its content doesn't match what this run just regenerated for compose.release.yaml/.env.release.example/site/ - refusing to reuse it. Abort this release and start a fresh one instead." >&2
+              exit 1
+            fi
+            echo "${pin_commit} is verified as this exact release's own earlier pin commit, still current on origin/main, with matching content - nothing to commit"
+            echo "pin_commit=${pin_commit}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # An empty result means origin/main is still exactly SOURCE_REF
+          # (resolve_release_pin_commit's own first check) - re-derive
+          # that here too rather than assume it, since this run's git
+          # state may have moved on between the fetch above and now.
           #
           # Found in review: this used to commit locally and then
           # `git fetch origin main && git rebase origin/main` before
@@ -621,14 +651,15 @@ jobs:
           # remote on its own - checked explicitly first anyway, so the
           # failure is a clear, actionable message instead of a raw git
           # rejection.
-          git fetch origin main
           current_main="$(git rev-parse origin/main)"
           if [ "$current_main" != "$SOURCE_REF" ]; then
             echo "::error::origin/main has moved to ${current_main} since this release was tested against ${SOURCE_REF} - refusing to commit the pin update onto commits this run never built, tested, or security-scanned. Abort this release and start a fresh one from the current main instead." >&2
             exit 1
           fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add compose.release.yaml .env.release.example site/
-          git commit -m "ci: pin compose.release.yaml, .env.release.example, and site/*.html to ${VERSION} [skip ci]"
+          git commit -m "$(release_pin_commit_message "$VERSION")"
           git push origin HEAD:main
           # Recorded so the next steps can act on exactly this commit,
           # instead of re-fetching origin/main again later and risking a
