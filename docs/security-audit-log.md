@@ -2536,7 +2536,13 @@ address guaranteed to round-trip, since it's the address the host
 actually uses to reach that specific container. Verified the same way:
 reproduced the hang against the old wiring, then confirmed a cold-cache
 query resolves in well under a second against the fix, on the exact
-same host, same image, same sequence.
+same host, same image, same sequence. Once `ci.yml` got past both of
+the above, a *third*, unrelated real-domain dependency this round's
+original sweep had missed surfaced in the same job for the first time:
+"Verify DNS through AdGuard and Unbound" still dug `example.com`/
+`dnssec-failed.org` directly through the full published-port pipeline
+(AdGuard -> Unbound). Same fix as everywhere else - the local test
+zone domains.
 
 **Small, fixed: a valid SemVer version with a hyphen inside its
 prerelease identifier could bypass the upgrade test.** Three sites in
