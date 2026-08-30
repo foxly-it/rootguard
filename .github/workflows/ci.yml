@@ -36,8 +36,35 @@ jobs:
       # linked to them, verified with a narrow grep for those specific
       # paths only; at least eight README.md/CONTRIBUTING.md files turned
       # out to link to their own now-deleted copy and nothing caught it.
+      #
+      # Found in review, round 6: the hand-rolled regex checker this used
+      # to run (scripts/check-markdown-links.sh) only ever matched a single
+      # inline-link shape (`](target)`) - it missed reference-style links
+      # (`[text][id]`), link reference definitions (`[id]: target`), `<...>`
+      # targets, optional link titles, and non-standard code-fence markers
+      # (`~~~`, indented or longer backtick fences) that a real CommonMark
+      # parser handles correctly. lychee is one. No broken link of any of
+      # those shapes exists in this repo today, but the check itself was
+      # incomplete. --offline: local file links only, no network requests
+      # - a CI check shouldn't depend on third-party sites being reachable.
+      # Same version-pinned-and-checksummed install pattern release-alpha.yml
+      # already uses for git-cliff.
+      - name: Install lychee
+        env:
+          LYCHEE_VERSION: "0.24.2"
+          LYCHEE_SHA256: 1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+        run: |
+          set -euo pipefail
+          curl -fsSL -o lychee.tar.gz \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${LYCHEE_SHA256}  lychee.tar.gz" | sha256sum -c -
+          tar -xzf lychee.tar.gz "lychee-x86_64-unknown-linux-gnu/lychee"
+          install "lychee-x86_64-unknown-linux-gnu/lychee" /usr/local/bin/lychee
+
       - name: Check local markdown links repo-wide
-        run: ./scripts/check-markdown-links.sh
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.md' | xargs -0 lychee --offline --no-progress
 
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet

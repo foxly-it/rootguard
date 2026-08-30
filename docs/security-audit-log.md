@@ -2172,3 +2172,17 @@ before selecting and either restores the previous value or `delete`s the
 key. New `TestSelectImageRevertsToNoSelectionOnFirstPersistFailure`
 covers the previously-untested first-selection case; verified it fails
 against the old unconditional-write code and passes against the fix.
+
+**Small, fixed: the repo-wide markdown-link check
+(`scripts/check-markdown-links.sh`, added round 5) only ever matched one
+inline-link shape.** A hand-rolled regex over `](target)` missed
+reference-style links (`[text][id]`), link reference definitions
+(`[id]: target`), `<...>` autolink-style targets, optional link titles,
+and non-standard code-fence markers (`~~~`, indented or longer backtick
+fences) - all things a real CommonMark parser handles correctly. No
+broken link of any of those shapes exists in the repo today, but the
+check itself was incomplete. Retired the regex script; `ci.yml`'s
+`validate` job now installs `lychee` (version-pinned and
+checksum-verified, same install pattern `release-alpha.yml` already uses
+for `git-cliff`) and runs it `--offline` against every tracked `*.md`
+file - local file links only, no network requests.
