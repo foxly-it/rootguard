@@ -25,9 +25,15 @@
 # toolchain set up, and standing one up purely for this comparison was
 # judged heavier than a careful, well-tested bash implementation of a
 # well-defined, stable algorithm. Both copies are exercised against the
-# same known-tricky cases (see semver-compare.test-cases below and
-# main_test.go's TestIsOlderReleaseVersion) - keep them in sync by hand
-# if either ever changes.
+# same known-tricky cases (see this file's own semver-compare.test.sh,
+# run by ci.yml, and rootguard-core's main_test.go's
+# TestIsOlderReleaseVersion) - keep them in sync by hand if either ever
+# changes.
+#
+# Found in review, round 6: this comment used to point at a
+# "semver-compare.test-cases" that was never actually created - the new
+# guard shipped with no automated regression coverage at all beyond
+# manual review. semver-compare.test.sh now holds it.
 #
 # Usage: source this file, then call require_new_version "$requested"
 # "$latest_published" - exits non-zero (message on stderr) unless
@@ -37,6 +43,39 @@
 
 _semver_is_numeric_identifier() {
   [[ "$1" =~ ^(0|[1-9][0-9]*)$ ]]
+}
+
+# _semver_compare_numeric_string a b -> echoes -1, 0, or 1 for a<b, a==b,
+# a>b, treating both as arbitrary-precision non-negative decimal integers
+# (no leading zeros - semver-validate.sh's own SEMVER_PATTERN enforces
+# that grammar for major/minor/patch and for numeric prerelease
+# identifiers alike). SemVer doesn't cap numeric identifiers at 64 bits;
+# bash integer arithmetic does - found in review: comparing via $(( ))
+# silently overflowed and wrapped negative past 9223372036854775807, so
+# "9223372036854775808.0.0" compared as *older* than
+# "9223372036854775807.0.0", the opposite of the true order. Without
+# leading zeros, a longer digit string is always numerically larger, and
+# two equal-length ones compare correctly byte-for-byte (ASCII digit
+# order matches numeric order) - no arithmetic, no width limit.
+_semver_compare_numeric_string() {
+  local a="$1" b="$2"
+  if [[ ${#a} -lt ${#b} ]]; then
+    echo -1
+    return
+  fi
+  if [[ ${#a} -gt ${#b} ]]; then
+    echo 1
+    return
+  fi
+  if [[ "$a" < "$b" ]]; then
+    echo -1
+    return
+  fi
+  if [[ "$a" > "$b" ]]; then
+    echo 1
+    return
+  fi
+  echo 0
 }
 
 # _semver_compare_prerelease a b -> echoes -1, 0, or 1 for a<b, a==b,
@@ -57,12 +96,10 @@ _semver_compare_prerelease() {
       _semver_is_numeric_identifier "$ai" && a_num=1
       _semver_is_numeric_identifier "$bi" && b_num=1
       if [[ $a_num -eq 1 && $b_num -eq 1 ]]; then
-        if [[ $((10#$ai)) -lt $((10#$bi)) ]]; then
-          echo -1
-          return
-        fi
-        if [[ $((10#$ai)) -gt $((10#$bi)) ]]; then
-          echo 1
+        local numcmp
+        numcmp="$(_semver_compare_numeric_string "$ai" "$bi")"
+        if [[ "$numcmp" -ne 0 ]]; then
+          echo "$numcmp"
           return
         fi
       elif [[ $a_num -eq 1 && $b_num -eq 0 ]]; then
@@ -109,16 +146,13 @@ semver_compare() {
   local a_major a_minor a_patch b_major b_minor b_patch
   IFS='.' read -r a_major a_minor a_patch <<<"$a_core"
   IFS='.' read -r b_major b_minor b_patch <<<"$b_core"
-  local x y
+  local x y cmp
   for pair in "$a_major:$b_major" "$a_minor:$b_minor" "$a_patch:$b_patch"; do
     x="${pair%%:*}"
     y="${pair#*:}"
-    if [[ $((10#$x)) -lt $((10#$y)) ]]; then
-      echo -1
-      return
-    fi
-    if [[ $((10#$x)) -gt $((10#$y)) ]]; then
-      echo 1
+    cmp="$(_semver_compare_numeric_string "$x" "$y")"
+    if [[ "$cmp" -ne 0 ]]; then
+      echo "$cmp"
       return
     fi
   done
