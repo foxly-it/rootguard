@@ -81,11 +81,18 @@ pin_message="$(release_pin_commit_message "$version")"
 source_ref="$(commit "feat: something releasable" src/main.go)"
 assert_resolves "$source_ref" "$version" main "" "first attempt"
 
+# --- Scenario 1b (round 9): SOURCE_REF passed as an abbreviated SHA
+# (the one documented manual-dispatch escape hatch can produce) pointing
+# at the exact same commit - must resolve identically to the full SHA,
+# not be rejected by a raw string-inequality comparison. ---
+assert_resolves "${source_ref:0:10}" "$version" main "" "first attempt, SOURCE_REF given as an abbreviated SHA"
+
 # --- Scenario 2/3: retry directly after the pin commit (git-state
 # identical whether promotion partially succeeded before the retry or
 # not - promotion never touches git history) ---
 pin_commit="$(commit "$pin_message" compose.release.yaml .env.release.example site/index.html)"
 assert_resolves "$source_ref" "$version" main "$pin_commit" "retry right after the pin commit / after partial promotion"
+assert_resolves "${source_ref:0:10}" "$version" main "$pin_commit" "retry, SOURCE_REF given as an abbreviated SHA (parent comparison must still match)"
 
 # --- Scenario 4: retry after main has moved further still (an unrelated
 # commit landed after the pin commit) - must find the pin commit, not

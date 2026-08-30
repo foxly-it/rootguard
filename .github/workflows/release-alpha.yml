@@ -117,8 +117,16 @@ jobs:
           # commit-ancestry, not a version-number comparison - a
           # deliberately higher version string typed against an old commit
           # is caught exactly the same way a lower one would be.
+          #
+          # Found in review: the two other places in this file that filter
+          # tags down to "real SemVer ones" each hand-wrote their own copy
+          # of this same regex - one of them silently drifted (missing the
+          # hyphen SemVer allows inside a prerelease identifier, so a real
+          # tag like v1.2.3-rc-hotfix.1 was invisible to it). Reusing
+          # $SEMVER_PATTERN (sourced above) at all three sites means a
+          # future grammar change can't silently re-diverge the same way.
           latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' | head -1 || true)"
+            | grep -E "^v${SEMVER_PATTERN#^}" | head -1 || true)"
           if [ -n "$latest_tag" ] && [ "$latest_tag" != "v${version}" ]; then
             latest_commit="$(git rev-parse "${latest_tag}^{}")"
             if ! git merge-base --is-ancestor "$latest_commit" "$SOURCE_REF"; then
@@ -833,8 +841,9 @@ jobs:
         id: previous-tag
         run: |
           set -euo pipefail
+          source scripts/lib/semver-validate.sh
           previous="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' \
+            | grep -E "^v${SEMVER_PATTERN#^}" \
             | grep -v "^v${{ needs.version.outputs.value }}\$" \
             | head -1 || true)"
           echo "value=${previous}" >> "$GITHUB_OUTPUT"
@@ -1081,6 +1090,7 @@ jobs:
         id: previous
         run: |
           set -euo pipefail
+          source scripts/lib/semver-validate.sh
           # Sort by actual tag creation date across every release tag
           # (any scheme, not just today's v0.1.0-(alpha|beta).N) rather
           # than a trailing-number sort - the latter always resolved to
@@ -1088,9 +1098,19 @@ jobs:
           # silently testing an upgrade from a much older release than the
           # one directly before this one, and wouldn't survive a future
           # base-version change at all.
+          #
+          # Found in review: this filter used to hand-write its own copy
+          # of the SemVer-tag regex, missing the hyphen SemVer allows
+          # inside a prerelease identifier - a real tag like
+          # v1.2.3-rc-hotfix.1 was invisible to it, silently testing an
+          # upgrade from (or skipping the upgrade test entirely in favor
+          # of) an older release than the one actually directly before
+          # this one. Reusing $SEMVER_PATTERN (sourced above, the same
+          # grammar require_semver enforces on every version this
+          # pipeline ever creates) instead of a second hand-written copy.
           previous_version="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate \
             --format='%(refname:short)' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
+            | grep -E "^v${SEMVER_PATTERN#^}" \
             | grep -v "^v${{ needs.version.outputs.value }}\$" \
             | head -1 | sed 's/^v//' || true)"
           if [ -z "${previous_version}" ]; then
