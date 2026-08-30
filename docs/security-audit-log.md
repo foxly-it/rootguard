@@ -2156,3 +2156,19 @@ updated pins" now checks first whether `origin/main`'s current tip
 already carries identical content for the three paths it writes - if so,
 resumes from that existing commit instead of re-committing or
 misreporting a race.
+
+**Small, fixed: a reverted `selectImage` left behind an explicit
+empty-string map entry instead of no entry at all.** `selectImage`'s
+persist-failure revert unconditionally wrote
+`m.selected[service] = previous` - for a service that had never been
+selected before, `previous` is Go's zero value `""` for a missing map
+key, so the revert left `service: ""` in `m.selected` rather than
+restoring "no entry at all".
+`overrideContentLocked`'s own `TargetImage` fallback treats a missing key
+and an explicit empty string identically, so this never actually
+surfaced in practice - but a reverted operation should leave the exact
+state it found, not a lookalike. Now tracks whether the key existed
+before selecting and either restores the previous value or `delete`s the
+key. New `TestSelectImageRevertsToNoSelectionOnFirstPersistFailure`
+covers the previously-untested first-selection case; verified it fails
+against the old unconditional-write code and passes against the fix.

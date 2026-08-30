@@ -662,10 +662,22 @@ func (m *Manager) composeUp(ctx context.Context, service string) error {
 func (m *Manager) selectImage(service, image string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	previous := m.selected[service]
+	previous, existed := m.selected[service]
 	m.selected[service] = image
 	if err := m.persistLocked(); err != nil {
-		m.selected[service] = previous
+		// Found in review, round 6: this used to unconditionally write
+		// m.selected[service] = previous, which left behind an explicit
+		// service: "" entry for a service that had never been selected
+		// before (previous is Go's zero value for a missing key) instead
+		// of restoring "no entry at all" - overrideContentLocked's own
+		// TargetImage fallback treats both the same today, so this never
+		// actually surfaced, but a reverted selectImage should leave the
+		// exact state it found, not a lookalike.
+		if existed {
+			m.selected[service] = previous
+		} else {
+			delete(m.selected, service)
+		}
 		// Best-effort: WriteFiles renames state.json before updates.yaml
 		// (see persistLocked's own comment), so this still corrects
 		// state.json back to the previous selection even if whatever
