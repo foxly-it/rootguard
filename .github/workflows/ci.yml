@@ -170,7 +170,9 @@ jobs:
 
       - name: Verify Unbound configuration lifecycle
         run: |
+          echo "checkpoint: step start"
           presets="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/presets)"
+          echo "checkpoint: after presets"
           preset_count="$(jq 'length' <<<"$presets")"
           test "$preset_count" = "4" || { echo "Expected 4 presets, received $preset_count"; exit 1; }
           active="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings)"
@@ -202,20 +204,29 @@ jobs:
           test "$dnssec_cache_rendered" = "true" || { echo "Expected DNSSEC cache directives in preview, received $dnssec_cache_rendered"; exit 1; }
           test "$edns_buffer_rendered" = "true" || { echo "Expected EDNS buffer size directive in preview, received $edns_buffer_rendered"; exit 1; }
           test "$safe_logging_rendered" = "true" || { echo "Expected privacy-safe logging directives in preview, received $safe_logging_rendered"; exit 1; }
+          echo "checkpoint: before PUT settings"
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request PUT --header 'Content-Type: application/json' --data "$proposal" http://127.0.0.1:18080/api/unbound/settings >/dev/null
+          echo "checkpoint: after PUT settings, before start diagnostic logging"
           diagnostic_logging="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST http://127.0.0.1:18080/api/unbound/diagnostic-logging)"
           test "$(jq -r '.active' <<<"$diagnostic_logging")" = "true" || { echo "Expected temporary diagnostic logging to be active"; exit 1; }
           test "$(jq -r '.level' <<<"$diagnostic_logging")" = "2" || { echo "Expected temporary diagnostic logging level 2"; exit 1; }
+          echo "checkpoint: after start diagnostic logging, before stop"
           restored_logging="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request DELETE http://127.0.0.1:18080/api/unbound/diagnostic-logging)"
           test "$(jq -r '.active' <<<"$restored_logging")" = "false" || { echo "Expected temporary diagnostic logging to stop"; exit 1; }
           test "$(jq -r '.level' <<<"$restored_logging")" = "0" || { echo "Expected privacy-safe logging level 0 after stopping diagnostics"; exit 1; }
+          echo "checkpoint: after stop diagnostic logging, before history"
           versions="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/history)"
           test "$(jq 'length' <<<"$versions")" -ge 2
           baseline_id="$(jq -r '.[] | select(.settings.threads == 2) | .id' <<<"$versions")"
+          echo "checkpoint: after history, before diagnostics (baseline_id=$baseline_id)"
           diagnostics="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/diagnostics)"
+          echo "checkpoint: after diagnostics call, response: $diagnostics"
           test "$(jq -r .healthy <<<"$diagnostics")" = "true"
+          echo "checkpoint: after diagnostics healthy check, before restore"
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
+          echo "checkpoint: after restore, before final settings check"
           test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings | jq -r .threads)" = "2"
+          echo "checkpoint: all done"
 
       - name: Verify DNS through AdGuard and Unbound
         run: |
