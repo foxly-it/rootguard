@@ -2299,3 +2299,35 @@ The directive itself was correct; `shellcheck -x` needs its own
 file's own directory rather than the invoking shell's cwd. Documented in
 the file's own header comment - there is no shellcheck job in CI to fix
 a wiring for.
+
+## Live CI investigation during round 8 (2026-08-30)
+
+Not from a review pass - `ci.yml`'s "Verify Unbound configuration
+lifecycle" step started failing three times in a row while verifying
+round 8's PR, on a branch that touches nothing near the webapp/core/
+Unbound runtime. Investigated per an explicit "find and fix the root
+cause, don't just retry" instruction rather than dismissed as flake.
+
+**Medium, fixed: applying Unbound settings could return success before
+Unbound was actually ready to be used.** `applyStateLocked` (the shared
+implementation behind `Apply`, `ApplyBundle`, `ApplyCustom`, and
+`Restore`) wrote the new config and ran `docker restart` on the Unbound
+container, then returned as soon as that command exited - `docker
+restart` returning success only means the container *process* started
+again, not that Unbound itself has finished starting (reading the trust
+anchor, opening its `remote-control` socket). Any caller that
+immediately did anything else against the running daemon could lose
+that race. Confirmed exactly this live: `StartDiagnosticLogging`'s own
+`unbound-control verbosity 2` call, issued by the CI test right after a
+settings-apply restart, intermittently failed with a bare, unguarded
+`curl --fail` exit (no error message reached the log at all) because
+the control socket wasn't listening yet - reproducible three times
+running under CI's own load, not a one-off. Fixed by polling
+`unbound-control status` (the same interface every other live check in
+this package already uses) for up to 10 seconds after the restart
+before returning success; a restart that never becomes ready gets the
+same automatic config rollback a `docker restart` failure or a bad
+`unbound-checkconf` already got. Regression tests simulate the control
+socket failing for a few polls then succeeding (must retry through it)
+and never succeeding at all (must roll back, same as the existing
+restart-failure test).
