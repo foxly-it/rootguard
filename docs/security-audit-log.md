@@ -2090,3 +2090,31 @@ v5 (GitHub already warns about its Node.js 20 runtime) and missing
 `cache-dependency-path` (a cache-miss warning every run) - every other
 workflow in this repo already used the same pinned v7 + cache path
 combination; this one was simply never updated to match.
+
+## Follow-up review, round 6 (2026-08-30)
+
+A sixth independent review, covering round 5's own fixes plus live repo
+state (workflow run history, GitHub API settings) rather than only the
+diff. Same discipline as every round before.
+
+**Weitere Fehler, fixed: `semver-compare.sh`'s numeric-identifier
+comparison overflowed bash's signed 64-bit integer range.** Both
+major/minor/patch and numeric prerelease identifiers were compared via
+`$(( ))` bash arithmetic - SemVer 2.0 doesn't cap numeric identifiers at
+64 bits, bash does. Confirmed live:
+`semver_compare 9223372036854775807.0.0 9223372036854775808.0.0`
+returned `1` (the second value ranked *lower*), because
+`10#9223372036854775808` overflows and wraps negative past
+`9223372036854775807`. Replaced with `_semver_compare_numeric_string`, a
+pure string comparison (SemVer's numeric-identifier grammar already
+forbids leading zeros, so a longer decimal digit string is always
+numerically larger, and two equal-length ones compare correctly
+byte-for-byte) - no arithmetic, no width limit. Also fixed: the
+comparator's own header comment referenced a `semver-compare.test-cases`
+file that was never actually created, so the guard shipped with zero
+automated regression coverage. Added `scripts/lib/semver-compare.test.sh`
+- the canonical SemVer.org precedence chain, build-metadata stripping,
+the live-reproduced `0.9.9`-vs-`1.0.0-rc.1` case, and the overflow case
+above - wired into `ci.yml`. Verified both ways: reverting the fix
+reproduces exactly the three overflow-case failures above; the fixed
+version passes all of them.

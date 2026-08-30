@@ -25,6 +25,11 @@ jobs:
       - name: Test verification-common.sh's resource-ownership state machine
         run: ./scripts/verification-common.test.sh
 
+      # Found in review, round 6: the release-version SemVer guard shipped
+      # with no automated regression coverage - this is that coverage.
+      - name: Test semver-compare.sh's SemVer 2.0 precedence rules
+        run: ./scripts/lib/semver-compare.test.sh
+
       # Found in review: check-site-facts.sh already checks this for
       # site/*.html, but nothing checked it repo-wide - PR #423 deleted
       # the per-component SECURITY.md files on the reasoning that nothing
