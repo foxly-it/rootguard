@@ -766,6 +766,38 @@ func TestSelectImageRevertsSelectionOnPersistFailure(t *testing.T) {
 	}
 }
 
+// TestSelectImageRevertsToNoSelectionOnFirstPersistFailure is the sibling
+// of TestSelectImageRevertsSelectionOnPersistFailure above for a service
+// that had never been selected before - found in review, round 6: the
+// revert used to unconditionally write m.selected[service] = previous,
+// which for a never-selected service (previous is Go's zero value "" for
+// a missing key) left behind an explicit service: "" map entry instead of
+// no entry at all. overrideContentLocked's own TargetImage fallback
+// treats both the same, so this never actually surfaced - but a reverted
+// selectImage should leave the exact state it found, not a lookalike.
+func TestSelectImageRevertsToNoSelectionOnFirstPersistFailure(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir: dataDir,
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "Core", TargetImage: "rootguard-core:latest",
+		}},
+	})
+	overridePath := filepath.Join(dataDir, "updates.yaml")
+
+	if err := os.Mkdir(overridePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.selectImage("core", "rootguard-core:gen1"); err == nil {
+		t.Fatal("expected selectImage to fail while updates.yaml is blocked")
+	}
+
+	if _, existed := manager.selected["core"]; existed {
+		t.Fatalf("expected no map entry for a never-selected service after the failed selectImage, got %q", manager.selected["core"])
+	}
+}
+
 // TestLoadMigratesLegacyStatusAndImagesJSON is the regression test for
 // the migration path load() needs now that status.json/images.json were
 // consolidated into state.json: every real installation up to and
