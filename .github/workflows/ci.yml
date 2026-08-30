@@ -50,6 +50,15 @@ jobs:
       - name: Test semver-compare.sh's SemVer 2.0 precedence rules
         run: ./scripts/lib/semver-compare.test.sh
 
+      # Found in review: one of three release-alpha.yml sites filtering
+      # tags down to "real SemVer ones" hand-wrote its own copy of this
+      # grammar and silently drifted from the other two (missing the
+      # hyphen SemVer allows inside a prerelease identifier). All three
+      # now share $SEMVER_PATTERN instead of a third hand-written copy -
+      # this is that shared pattern's own coverage.
+      - name: Test semver-validate.sh's grammar and tag-filter construction
+        run: ./scripts/lib/semver-validate.test.sh
+
       # Found in review, round 7: release-alpha.yml's release-retry
       # detection had two real bugs (an unreachable retry branch, and a
       # content-diff check that could resolve to an unrelated commit) -

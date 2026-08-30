@@ -57,7 +57,19 @@ release_pin_commit_message() {
 }
 
 resolve_release_pin_commit() {
-  local source_ref="$1" version="$2" main_ref="$3"
+  local source_ref version main_ref
+  # Found in review: source_ref used to be compared as a raw string
+  # throughout this function - fine for the normal case (release-alpha.yml
+  # always passes the full 40-character SHA via needs.version.outputs -
+  # see the "version" job's own source_ref output), but a manual
+  # workflow_dispatch typing an abbreviated SHA into its source_sha input
+  # (the one documented by-hand escape hatch) would still point at the
+  # exact same commit while failing every string-equality check here.
+  # Normalizing once, up front, means the rest of this function never has
+  # to think about it again.
+  source_ref="$(git rev-parse "${1}^{commit}")"
+  version="$2"
+  main_ref="$3"
   local main_sha
   main_sha="$(git rev-parse "$main_ref")"
 

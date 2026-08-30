@@ -2435,7 +2435,9 @@ affecting `main` itself.
 
 A ninth independent review - no critical security issue and no RC
 blocker in the product code found this round; round 8's pin-commit fix
-holds up completely. Same discipline as every round before.
+holds up completely. Three real, narrower issues remained, plus two
+more found live during this round's own CI verification. Same
+discipline as every round before.
 
 **Medium, fixed: CI and release gates depended on real internet DNS,
 independent of round 8's own investigation of the same class of
@@ -2535,3 +2537,38 @@ actually uses to reach that specific container. Verified the same way:
 reproduced the hang against the old wiring, then confirmed a cold-cache
 query resolves in well under a second against the fix, on the exact
 same host, same image, same sequence.
+
+**Small, fixed: a valid SemVer version with a hyphen inside its
+prerelease identifier could bypass the upgrade test.** Three sites in
+`release-alpha.yml` each filter `git for-each-ref`'s tag list down to
+"real SemVer tags", and two of them correctly hand-wrote SemVer's own
+grammar (`[0-9A-Za-z-]+`, including the hyphen it allows *inside* a
+prerelease identifier like `rc-hotfix`) - `upgrade-test`'s own
+"Determine the previous published release" step hand-wrote the same
+regex without that hyphen (`[0-9A-Za-z]+`), so a real, valid tag like
+`v1.2.3-rc-hotfix.1` was invisible to it. That step then either picked
+an older release than the one actually directly before this one, or (if
+no other tag happened to match) skipped the upgrade test outright -
+either way, silently, with no error. Fixed all three sites to share
+`$SEMVER_PATTERN` (from `scripts/lib/semver-validate.sh`, already
+sourced for `require_semver`) instead of a third hand-written copy, so
+a future grammar change can't silently re-diverge the same way again.
+New `scripts/lib/semver-validate.test.sh` covers `require_semver` and
+the exact `grep -E "^v${SEMVER_PATTERN#^}"` construction all three
+sites use, including the live regression case; wired into `ci.yml`.
+Verified the old hand-written pattern rejects `v1.2.3-rc-hotfix.1` and
+the shared pattern accepts it.
+
+**Small, fixed: `resolve_release_pin_commit` compared `SOURCE_REF` as a
+raw string, rejecting an abbreviated SHA that points at the exact same
+commit.** `release-alpha.yml` always passes the full 40-character SHA,
+but the one documented manual-dispatch escape hatch
+(`workflow_dispatch`'s `source_sha` input) lets a human type a short one
+instead - still the same commit, but a string-equality comparison
+against `origin/main`'s (always full) tip or a candidate's (always
+full) parent would never match it. Normalized once, up front, via
+`git rev-parse "${source_ref}^{commit}"`, so the rest of the function
+never has to think about it again. Two new synthetic-history scenarios
+(first attempt and retry, both with an abbreviated `SOURCE_REF`) added
+to `resolve-release-pin-commit.test.sh`; verified both fail against the
+pre-fix resolver and pass against the fix.
