@@ -217,11 +217,14 @@ jobs:
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
           test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings | jq -r .threads)" = "2"
 
+      # Found in review, round 9: this used to dig example.com/
+      # dnssec-failed.org directly, same real-internet dependency as
+      # everything else this round moved onto the local test zone.
       - name: Verify DNS through AdGuard and Unbound
         run: |
-          answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
+          answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 good.rgtest-ci.internal A)"
           test -n "$answer"
-          status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 dnssec-failed.org A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
+          status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 bad.rgtest-ci.internal A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
           test "$status" = "SERVFAIL"
 
       - name: Verify Unbound expert configuration lifecycle
