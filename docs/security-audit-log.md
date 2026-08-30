@@ -2228,3 +2228,66 @@ pull request before merging" plus "Require status checks to pass" with
 workflow's own direct pin-commit push keeps working. Left open for the
 repo owner to configure via the GitHub UI (Settings → Rules → Rulesets →
 New branch ruleset).
+
+## Follow-up review, round 7 (2026-08-30)
+
+A seventh independent review of round 6's own retry-detection fix -
+found it shipped two real bugs of its own, one of which made the retry
+path it was meant to add practically unreachable. Same discipline as
+every round before.
+
+**Releasekritisch, fixed: the round-6 retry fix was unreachable, and
+its own fallback logic could resolve to the wrong commit.** Two
+compounding bugs in `update-alpha-pins`:
+
+1. The early "Verify main hasn't moved" guard (added round 5, kept
+   round 6) still required `origin/main` to equal `SOURCE_REF`
+   *exactly*. The moment "Commit updated pins" ever successfully
+   pushed a pin commit, `origin/main` became that commit - a child of
+   `SOURCE_REF`, never `SOURCE_REF` itself again. Every subsequent
+   retry hit this early guard and aborted *before* "Commit updated
+   pins" ever got a chance to run its own, round-6 retry-recognition
+   logic - the documented retry path was dead code from the moment it
+   shipped. Confirmed live: reproducible by pushing a same-message pin
+   commit to a scratch `main`, then re-running the same check.
+2. Had the early guard been removed on its own, that round-6
+   retry-recognition logic itself had a separate flaw: it compared the
+   *file content* of `compose.release.yaml`/`.env.release.example`/
+   `site/` at `origin/main`'s current tip against what the run had just
+   regenerated - true for this release's own earlier pin commit, but
+   equally true for any later, unrelated commit that simply never
+   touched those three paths. An unrelated commit landing after a
+   genuine pin commit would have been silently accepted as
+   `pin_commit`, and the release tag would then point at an untested,
+   unrelated commit - exactly the tag/image provenance mismatch bug
+   fixed (repeatedly) in earlier rounds, reintroduced through a new
+   door.
+
+Replaced both checks with one shared, precise resolver:
+`scripts/lib/resolve-release-pin-commit.sh`. Identifies the release's
+own pin commit by its unique commit message (nothing else in the
+system ever produces that exact string) rather than by content, then
+independently verifies its shape - a direct, single-parent child of
+`SOURCE_REF` (rejects merge commits and commits built on other,
+untested content), touching only the three paths the real pin-commit
+step ever writes (rejects a commit that happens to carry the right
+message but touches something else too). A revert's auto-generated
+message, which quotes the original as a substring, is also rejected -
+the check is an exact-subject match, not a substring one.
+
+The early guard now delegates to this resolver (empty result: ordinary
+first attempt, unchanged strict behavior; non-empty: a verified retry,
+proceed) and "Commit updated pins" consumes its result directly instead
+of re-deciding the question a second, looser way. Exercised against
+synthetic git histories covering every scenario the review named -
+first attempt, retry right after the pin commit, retry after main moved
+further still, a foreign commit touching the same paths under a
+different message, a revert's substring-matching message, a merge
+commit with the right message, a right-message commit built on the
+wrong parent, and a right-message-and-parentage commit that also
+touches an out-of-scope path - in
+`scripts/lib/resolve-release-pin-commit.test.sh`, wired into `ci.yml`.
+
+**Open, unchanged: `main` still has no branch protection or ruleset.**
+Confirmed still true; see round 6's writeup above for the recommended
+configuration. Still the repo owner's decision to make.
