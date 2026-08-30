@@ -968,6 +968,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Found in review: the dig checks below used to query real internet
+      # domains (example.com, dnssec-failed.org) directly - a transient
+      # DNS/network hiccup on the runner's own connection then fails a
+      # release for reasons that have nothing to do with the code under
+      # test. Confirmed live: main's own independent, scheduled CI failed
+      # this way. setup.sh signs a small throwaway zone fresh every run
+      # and serves it locally; inject.sh (below, after Unbound is deployed
+      # and running) is what wires it up.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
       - name: Start published control plane
         run: docker compose -f compose.release.yaml up -d
       - name: Install and verify the DNS stack
@@ -1002,9 +1012,17 @@ jobs:
             sleep 2
           done
           test "$state" = installed
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
+          ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 good.rgtest-ci.internal A)"
           test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 \
-            dnssec-failed.org A | sed -n \
+            bad.rgtest-ci.internal A | sed -n \
             's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
           # Blockpage binds on config.DNSBindAddress:80 once
           # blockpage_enabled deploys it (see installer.Manager's
@@ -1052,6 +1070,12 @@ jobs:
         with:
           ref: ${{ needs.version.outputs.source_ref }}
           fetch-depth: 0
+
+      # See smoke-test's own comment on this exact step - the dig checks
+      # below have the same real-internet-dependency problem, confirmed
+      # live the same way.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
 
       - name: Determine the previous published release
         id: previous
@@ -1187,7 +1211,15 @@ jobs:
             sleep 2
           done
           test "$state" = installed
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 example.com A)"
+          ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 good.rgtest-ci.internal A)"
 
       - name: Upgrade in place through the real control-plane updater
         if: steps.previous.outputs.skip != 'true'
@@ -1308,9 +1340,9 @@ jobs:
         if: steps.previous.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 example.com A)"
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 good.rgtest-ci.internal A)"
           test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1055 \
-            dnssec-failed.org A | sed -n \
+            bad.rgtest-ci.internal A | sed -n \
             's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
 
       - name: Show logs after failure
