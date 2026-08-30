@@ -70,6 +70,21 @@ func main() {
 		envOrDefault("UNBOUND_CONTAINER_CONFIG_DIR", "/etc/unbound/unbound.d"),
 		envOrDefault("UNBOUND_CONTAINER_NAME", "rootguard-unbound"),
 	)
+	// Test-only escape hatch, same shape and same reason as
+	// ROOTGUARD_SKIP_ATTESTATION above: /api/unbound/diagnostics queries
+	// real internet domains by design (a real deployment genuinely wants
+	// to know "can my resolver reach and validate the real internet"),
+	// but ci.yml's own integration test of this exact endpoint doesn't
+	// want its result depending on the CI runner's own network
+	// conditions - found in review, confirmed live: main's own
+	// independent, scheduled run of that check failed on a transient
+	// DNS hiccup unrelated to any code change. Unset in every real
+	// deployment; Diagnose keeps its real-domain defaults unless both
+	// are explicitly set.
+	manager.SetDiagnosticDomains(
+		os.Getenv("ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN"),
+		os.Getenv("ROOTGUARD_UNBOUND_DIAGNOSTIC_DNSSEC_DOMAIN"),
+	)
 	adguardManager := adguard.NewManager(
 		envOrDefault("ADGUARD_INSTALLER_URL", "http://rootguard-adguard:3000"),
 		envOrDefault("ADGUARD_API_URL", "http://rootguard-adguard:80"),

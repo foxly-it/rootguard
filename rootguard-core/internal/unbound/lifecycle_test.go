@@ -3,6 +3,7 @@ package unbound
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,6 +188,34 @@ func TestApplyWaitsForUnboundToBecomeReadyAfterRestart(t *testing.T) {
 	}
 }
 
+// TestApplyWaitsForTheDNSPortToBecomeReadyAfterRestart is
+// TestApplyWaitsForUnboundToBecomeReadyAfterRestart's sibling for the
+// other half of waitReady: found in review, live, that unbound-control
+// status succeeding doesn't guarantee the actual DNS listener has
+// finished binding yet - a caller that queried it immediately afterward
+// got a full "communications error ... timed out", not a slow response.
+// Simulates unbound-control succeeding immediately but the DNS query
+// itself failing for the first few polls.
+func TestApplyWaitsForTheDNSPortToBecomeReadyAfterRestart(t *testing.T) {
+	manager := newTestManager(t)
+	digCalls := 0
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) >= 3 && args[0] == "exec" && args[2] == "dig" {
+			digCalls++
+			if digCalls < 3 {
+				return []byte(";; communications error to 127.0.0.1#5335: timed out"), errors.New("exit 9")
+			}
+		}
+		return []byte("OK"), nil
+	}
+	if err := manager.Apply(context.Background(), DefaultSettings()); err != nil {
+		t.Fatalf("expected Apply to retry through a slow-starting DNS listener, got %v", err)
+	}
+	if digCalls != 3 {
+		t.Fatalf("expected exactly 3 DNS-readiness query attempts (2 failures then success), got %d", digCalls)
+	}
+}
+
 // TestApplyRollsBackWhenUnboundNeverBecomesReady is
 // TestApplyRestoresPreviousFilesWhenRestartFails' sibling for the new
 // readiness wait: unbound-control status never succeeding is as real a
@@ -239,6 +268,43 @@ func TestDiagnosticsChecksConfigurationResolutionAndDNSSEC(t *testing.T) {
 	report := manager.Diagnose(context.Background())
 	if !report.Healthy || len(report.Checks) != 3 {
 		t.Fatalf("unexpected diagnostic report: %+v", report)
+	}
+}
+
+// TestSetDiagnosticDomainsOverridesTheQueriedDomains is the regression
+// test for the CI-only escape hatch main.go's own
+// ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN/_DNSSEC_DOMAIN wire up -
+// Diagnose must query whatever SetDiagnosticDomains was last given, not
+// the hardcoded example.com/dnssec-failed.org defaults, and an empty
+// argument must leave the corresponding domain untouched rather than
+// clearing it.
+func TestSetDiagnosticDomainsOverridesTheQueriedDomains(t *testing.T) {
+	manager := newTestManager(t)
+	manager.SetDiagnosticDomains("good.rgtest-ci.internal", "bad.rgtest-ci.internal")
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		joined := strings.Join(args, " ")
+		switch {
+		case strings.Contains(joined, "unbound-checkconf"):
+			return []byte("unbound-checkconf: no errors"), nil
+		case strings.Contains(joined, "good.rgtest-ci.internal"):
+			return []byte("203.0.113.10\n"), nil
+		case strings.Contains(joined, "bad.rgtest-ci.internal"):
+			return []byte(";; ->>HEADER<<- opcode: QUERY, status: SERVFAIL, id: 1"), nil
+		default:
+			return nil, fmt.Errorf("unexpected command querying the default domain instead of the overridden one: %s", joined)
+		}
+	}
+	report := manager.Diagnose(context.Background())
+	if !report.Healthy || len(report.Checks) != 3 {
+		t.Fatalf("unexpected diagnostic report: %+v", report)
+	}
+
+	// An empty argument must not clear the domain SetDiagnosticDomains
+	// was already given.
+	manager.SetDiagnosticDomains("", "")
+	report = manager.Diagnose(context.Background())
+	if !report.Healthy {
+		t.Fatalf("empty SetDiagnosticDomains arguments cleared a previously set domain: %+v", report)
 	}
 }
 

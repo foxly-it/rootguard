@@ -2430,3 +2430,75 @@ including after a retry. Merged both this fix and round 8's PR with
 this one check still red rather than block correct, independently
 unit-and-race-tested code on a transient external condition also
 affecting `main` itself.
+
+## Follow-up review, round 9 (2026-08-30)
+
+A ninth independent review - no critical security issue and no RC
+blocker in the product code found this round; round 8's pin-commit fix
+holds up completely. Same discipline as every round before.
+
+**Medium, fixed: CI and release gates depended on real internet DNS,
+independent of round 8's own investigation of the same class of
+problem.** `ci.yml`, `ci-unbound.yml`, `ci-adguard-compat.yml`, and
+`release-alpha.yml`'s smoke-test/upgrade-test jobs all queried real
+internet domains (`example.com`, `dnssec-failed.org`, and
+`ci-unbound.yml`'s own Docker `HEALTHCHECK` - `cloudflare.com`) directly
+- a transient DNS/network hiccup on the runner's own connection then
+fails a PR or a release for reasons that have nothing to do with the
+code under test, exactly what round 8 already hit independently.
+`/api/unbound/diagnostics` (the product's own diagnostics feature) is
+correct to query the real internet by design - a real deployment
+genuinely wants to know "can my resolver reach and validate the real
+internet" - so the fix has to live in the test infrastructure, not in
+that feature's real-world behavior.
+
+Built a small, throwaway, signed DNS zone
+(`scripts/ci/dnssec-test-zone/setup.sh`) instead: generates a fresh
+DNSSEC keypair and signs `good.rgtest-ci.internal.`/
+`bad.rgtest-ci.internal.` on every CI run (never committed - a checked-in
+signed zone would eventually expire and break CI on its own, and
+committing key material is bad practice regardless of how throwaway),
+deliberately corrupts `bad.`'s own RRSIG afterward, and serves both from
+a local `nsd` authority on the runner itself.
+`scripts/ci/dnssec-test-zone/inject.sh` wires a given Unbound container
+up to it - a forward-zone plus an inline trust-anchor for the zone,
+reaching the runner's own authority via `host.docker.internal` where the
+caller controls container creation (`docker run --add-host=...` /
+compose `extra_hosts:`), falling back to the container's own network
+gateway IP directly where it doesn't (`release-alpha.yml`'s
+dynamically-`installer.Manager`-deployed Unbound). Verified end to end
+against the real `rootguard-unbound` image on a scratch host before
+touching any workflow: `good.` validates (the `ad` flag), `bad.`
+SERVFAILs, through both the direct and the fallback wiring path.
+
+For the one caller that goes through `/api/unbound/diagnostics` itself
+(`ci.yml`, via Core, not a raw `dig`) rather than around it: added
+`Manager.SetDiagnosticDomains` and the
+`ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN`/`_DNSSEC_DOMAIN` test-
+only escape hatches in `main.go` (same shape as the existing
+`ROOTGUARD_SKIP_ATTESTATION`) - empty by default (real domains, a real
+deployment's correct behavior unchanged), set only by `ci.yml`'s own job
+env. `release-alpha.yml`'s smoke-test/upgrade-test never call that
+endpoint at all (bare `dig` against the published DNS port throughout),
+so they needed the local zone but not this override.
+
+Real internet resolution is still exercised, just not as a blocking PR/
+release gate - `ci-real-dns-upstream.yml` (new) runs the same checks
+against the real internet on its own weekly schedule.
+
+**Medium, fixed live during this round's own CI verification:
+`waitReady` (round 8's own fix) checked the control socket, not the
+actual DNS listener - the two don't necessarily finish binding at the
+same moment.** While verifying the local-zone infrastructure above in
+real CI, `ci.yml`'s own diagnostics check failed with the local zone
+correctly wired up - `docker exec ... dig ...` against Unbound's own
+port 5335 got a full "communications error ... timed out", not a slow
+response, immediately after `unbound-control status` had already
+reported the daemon up. `unbound-control status` succeeding is real, but
+it's a weaker guarantee than "the DNS service itself is ready" -
+`waitReady` now also polls a root NS lookup against the DNS port itself
+(answerable straight from Unbound's own built-in root hints, no real
+network round-trip needed, so this check isn't itself hostage to network
+conditions) and only returns once both succeed. New test mirrors the
+existing control-socket-retry test for this second dimension; verified
+it fails against the round-8-only version and passes against the fix.

@@ -1,0 +1,58 @@
+name: Real DNS Upstream Check
+
+# Found in review, round 9: every other workflow that used to dig
+# example.com/dnssec-failed.org directly now uses a local, throwaway,
+# signed DNS zone instead (scripts/ci/dnssec-test-zone) - correct for a
+# PR/release gate, since a transient DNS/network hiccup on the runner's
+# own connection shouldn't fail a build for reasons that have nothing to
+# do with the code under test. That local zone proves Unbound's own
+# resolution and DNSSEC-validation logic is intact; it can never prove
+# Unbound still actually reaches and correctly validates the *real*
+# internet - root hints going stale, a real upstream's DNSSEC chain
+# changing shape, IPv6/IPv4 connectivity regressions on the runner
+# network, and similar are exactly the class of thing a synthetic local
+# zone can't catch by construction. This workflow is where that real-
+# internet check still lives: on its own schedule, never blocking a PR
+# or a release on conditions outside this repository's control.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 5 * * 1"   # Weekly, independent of RootGuard commits
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Build validation image
+        working-directory: rootguard-unbound
+        run: docker build -t rootguard-unbound:test .
+
+      - name: Start resolver
+        run: docker run --rm --detach --name rootguard-unbound-real-dns rootguard-unbound:test
+
+      - name: Verify real-internet resolution and DNSSEC validation
+        run: |
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound-real-dns)" = "healthy"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-real-dns)" = "healthy"
+          valid="$(docker exec rootguard-unbound-real-dns dig @127.0.0.1 -p 5335 example.com A +dnssec +time=5 +tries=2)"
+          grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
+          broken="$(docker exec rootguard-unbound-real-dns dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=5 +tries=2)"
+          grep -q 'status: SERVFAIL' <<<"$broken"
+
+      - name: Show logs after failure
+        if: failure()
+        run: docker logs rootguard-unbound-real-dns
+
+      - name: Stop resolver
+        if: always()
+        run: docker stop rootguard-unbound-real-dns || true

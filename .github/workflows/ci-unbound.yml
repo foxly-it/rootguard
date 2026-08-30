@@ -91,8 +91,23 @@ jobs:
             rootguard-unbound:test \
             -c 'test -w /var/lib/unbound/root.key && touch /var/lib/unbound/root.key.compat'
 
+      # Found in review: the DNSSEC checks below used to query real
+      # internet domains (example.com, dnssec-failed.org) directly - a
+      # transient DNS/network hiccup on the runner's own connection then
+      # fails this job for reasons that have nothing to do with the code
+      # under test. Confirmed live: main's own independent, scheduled run
+      # of this exact job failed this way multiple times in a row.
+      # setup.sh signs a small throwaway zone fresh every run and serves
+      # it locally; --add-host below is what makes it reachable from
+      # inside the container that's about to query it.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Start resolver smoke-test container
-        run: docker run --rm --detach --name rootguard-unbound-ci rootguard-unbound:test
+        run: docker run --rm --detach --name rootguard-unbound-ci --add-host=host.docker.internal:host-gateway rootguard-unbound:test
+
+      - name: Wire the resolver up to the local DNSSEC test zone
+        run: ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound-ci
 
       - name: Verify recursive DNS and DNSSEC
         run: |
@@ -103,9 +118,9 @@ jobs:
             sleep 1
           done
           test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-ci)" = "healthy"
-          valid="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 example.com A +dnssec +time=3 +tries=1)"
+          valid="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 good.rgtest-ci.internal A +dnssec +time=3 +tries=1)"
           grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
-          broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=3 +tries=1)"
+          broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 bad.rgtest-ci.internal A +time=3 +tries=1)"
           grep -q 'status: SERVFAIL' <<<"$broken"
           # hide-identity/hide-version: these CHAOS-class probes are how a
           # scanner fingerprints the resolver software/version to target
@@ -165,6 +180,12 @@ jobs:
         with:
           go-version-file: rootguard-core/go.mod
           cache-dependency-path: rootguard-core/go.sum
+
+      # See the `test` job's own "Start local DNSSEC test authority"
+      # comment above - TestScenarioDNSSECFailures used to dig real
+      # internet domains directly and lost the same external-network race.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
 
       - name: Run scenario tests
         working-directory: rootguard-core
