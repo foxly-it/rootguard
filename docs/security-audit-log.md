@@ -2291,3 +2291,11 @@ touches an out-of-scope path - in
 **Open, unchanged: `main` still has no branch protection or ruleset.**
 Confirmed still true; see round 6's writeup above for the recommended
 configuration. Still the repo owner's decision to make.
+
+**Small, fixed: `semver-compare.test.sh`'s `source=` shellcheck
+directive resolved to "does not exist" when linted from the repo root.**
+The directive itself was correct; `shellcheck -x` needs its own
+`-P SCRIPTDIR` flag to resolve a `source=` path relative to the linted
+file's own directory rather than the invoking shell's cwd. Documented in
+the file's own header comment - there is no shellcheck job in CI to fix
+a wiring for.

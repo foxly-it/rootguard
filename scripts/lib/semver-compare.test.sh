@@ -11,6 +11,13 @@ set -Eeuo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./semver-compare.sh
+#
+# Found in review, round 7: running the linter from the repo root (as
+# opposed to from scripts/lib/ itself) can't resolve the source=
+# directive above through $script_dir and reports SC1091 - the directive
+# is correct, the linter just needs its "-P SCRIPTDIR" flag (resolves
+# source= paths relative to *this* file's own directory, regardless of
+# the invoking shell's cwd) added to its own command line to follow it.
 source "${script_dir}/semver-compare.sh"
 
 failures=0
