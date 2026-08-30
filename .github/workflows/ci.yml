@@ -30,6 +30,14 @@ jobs:
       - name: Test semver-compare.sh's SemVer 2.0 precedence rules
         run: ./scripts/lib/semver-compare.test.sh
 
+      # Found in review, round 7: release-alpha.yml's release-retry
+      # detection had two real bugs (an unreachable retry branch, and a
+      # content-diff check that could resolve to an unrelated commit) -
+      # this exercises the fix against synthetic git histories for every
+      # scenario the review named, not just the two it happened to spot.
+      - name: Test resolve-release-pin-commit.sh's retry detection
+        run: ./scripts/lib/resolve-release-pin-commit.test.sh
+
       # Found in review: check-site-facts.sh already checks this for
       # site/*.html, but nothing checked it repo-wide - PR #423 deleted
       # the per-component SECURITY.md files on the reasoning that nothing

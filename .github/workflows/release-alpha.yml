@@ -387,15 +387,37 @@ jobs:
       # images to the final release tag" further below for where it moved
       # to, and "Commit updated pins" for the one check that actually gates
       # it now.
-      - name: Verify main hasn't moved since this release was tested
+      #
+      # Found in review, round 7: that round-6 reorder made this guard's
+      # own strict SOURCE_REF-equality check unreachable for the exact
+      # retry case it was meant to allow - once "Commit updated pins" has
+      # ever successfully pushed, origin/main is that pin commit (a child
+      # of SOURCE_REF), not SOURCE_REF itself, so this step aborted every
+      # retry before "Commit updated pins" ever got a chance to recognize
+      # its own earlier commit. Delegates to
+      # resolve-release-pin-commit.sh now - the one place that decides
+      # "is this a fresh run, a safe retry of our own pin commit, or a
+      # genuine race", precisely (by this release's own unique commit
+      # message and shape, not by comparing file content) rather than by
+      # strict equality alone. "Commit updated pins" reuses this exact
+      # same result instead of re-deciding it a second, looser way.
+      - name: Resolve main state (fresh run, or a retry of our own earlier pin commit)
+        id: resolve-main
         env:
           SOURCE_REF: ${{ needs.version.outputs.source_ref }}
+          VERSION: ${{ needs.version.outputs.value }}
         run: |
           set -euo pipefail
+          source scripts/lib/resolve-release-pin-commit.sh
           git fetch origin main
-          if [ "$(git rev-parse origin/main)" != "$SOURCE_REF" ]; then
-            echo "::error::origin/main has moved to $(git rev-parse origin/main) since this release was tested against ${SOURCE_REF} - refusing to promote any image under this version number. Abort this release and start a fresh one from the current main instead." >&2
-            exit 1
+          # resolve_release_pin_commit prints its own descriptive message
+          # to stderr and returns non-zero on anything it won't vouch for
+          # - under set -e, that fails this step outright (its message is
+          # already in the log by then, no need to re-wrap it here).
+          pin_commit="$(resolve_release_pin_commit "$SOURCE_REF" "$VERSION" origin/main)"
+          if [ -n "$pin_commit" ]; then
+            echo "origin/main has moved past ${SOURCE_REF}, but ${pin_commit} is verified as this exact release's own earlier pin commit - resuming from it"
+            echo "pin_commit=${pin_commit}" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -544,13 +566,27 @@ jobs:
       - name: Verify site facts are current
         run: ./scripts/check-site-facts.sh
 
+      # Found in review, round 7: this step used to re-decide "is this a
+      # safe retry" itself, a second and looser way than the early guard
+      # above - comparing file *content* at origin/main's tip against
+      # what this run had just regenerated, true for this release's own
+      # earlier pin commit but equally true for any later, unrelated
+      # commit that simply never touched these paths. "Resolve main
+      # state" above is now the one place that decides this, precisely;
+      # this step just acts on its result.
       - name: Commit updated pins
         id: commit-pins
         env:
           SOURCE_REF: ${{ needs.version.outputs.source_ref }}
           VERSION: ${{ needs.version.outputs.value }}
+          RESOLVED_PIN_COMMIT: ${{ steps.resolve-main.outputs.pin_commit }}
         run: |
           set -euo pipefail
+          if [ -n "$RESOLVED_PIN_COMMIT" ]; then
+            echo "'Resolve main state' already found and verified this release's own earlier pin commit (${RESOLVED_PIN_COMMIT}) - nothing to commit"
+            echo "pin_commit=${RESOLVED_PIN_COMMIT}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           if git diff --quiet -- compose.release.yaml .env.release.example site/; then
@@ -558,26 +594,13 @@ jobs:
             exit 0
           fi
 
-          git fetch origin main
-          current_main="$(git rev-parse origin/main)"
-
-          # Found in review, round 6: promotion moved to *after* this
-          # commit (see "Promote candidate images to the final release
-          # tag" below), so a run that fails between here and promotion
-          # needs a retry to be able to resume - including a retry whose
-          # earlier attempt already pushed this very pin commit. Recognize
-          # that case first: if origin/main's tip already carries identical
-          # content for these exact paths, this is that retry, not a race
-          # - hand the already-published commit to the steps below instead
-          # of falling into the strict SOURCE_REF-equality check just below,
-          # which a legitimate retry can no longer pass (origin/main is now
-          # this release's own earlier pin commit, not SOURCE_REF itself).
-          if git diff --quiet "$current_main" -- compose.release.yaml .env.release.example site/; then
-            echo "origin/main already carries this exact pin commit (${current_main}), resuming from it"
-            echo "pin_commit=${current_main}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
+          # RESOLVED_PIN_COMMIT being empty means "Resolve main state"
+          # already confirmed origin/main was still exactly SOURCE_REF -
+          # refetch and recheck anyway, directly before the push, as
+          # defense-in-depth against a race in the handful of steps in
+          # between (buildx/cosign setup, attestation checks, digest-pin
+          # edits, compose validation, site refresh).
+          #
           # Found in review: this used to commit locally and then
           # `git fetch origin main && git rebase origin/main` before
           # pushing - rebasing means whatever had landed on main in the
@@ -598,8 +621,10 @@ jobs:
           # remote on its own - checked explicitly first anyway, so the
           # failure is a clear, actionable message instead of a raw git
           # rejection.
+          git fetch origin main
+          current_main="$(git rev-parse origin/main)"
           if [ "$current_main" != "$SOURCE_REF" ]; then
-            echo "::error::origin/main has moved to ${current_main} since this release was tested against ${SOURCE_REF} - refusing to rebase the pin commit onto commits this run never built, tested, or security-scanned. Abort this release and start a fresh one from the current main instead." >&2
+            echo "::error::origin/main has moved to ${current_main} since this release was tested against ${SOURCE_REF} - refusing to commit the pin update onto commits this run never built, tested, or security-scanned. Abort this release and start a fresh one from the current main instead." >&2
             exit 1
           fi
           git add compose.release.yaml .env.release.example site/
