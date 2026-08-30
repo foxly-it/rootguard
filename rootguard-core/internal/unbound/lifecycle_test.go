@@ -229,8 +229,17 @@ func TestApplyRollsBackWhenUnboundNeverBecomesReady(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	restartCount := 0
 	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
-		if len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
+		if len(args) > 0 && args[0] == "restart" {
+			restartCount++
+		}
+		// Only the first restart's own readiness never arrives - the
+		// rollback restart (restartCount == 2) must still succeed, so
+		// this proves the rollback itself completing cleanly, not
+		// compounding into a second readiness failure too (that's
+		// TestApplyReportsWhenTheRollbackRestartItselfNeverBecomesReady).
+		if restartCount <= 1 && len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
 			return []byte("error: connect() failed"), errors.New("exit 1")
 		}
 		return []byte("OK"), nil
@@ -247,6 +256,92 @@ func TestApplyRollsBackWhenUnboundNeverBecomesReady(t *testing.T) {
 	}
 	if !settingsEqual(loaded, initial) {
 		t.Fatalf("a never-ready restart left changed settings active: %+v", loaded)
+	}
+}
+
+// TestApplyReportsWhenTheRollbackRestartItselfNeverBecomesReady is the
+// never-succeeds counterpart of the test above: if unbound-control status
+// never comes back even for the *rollback* restart, rollbackFailedApply
+// must say so honestly - not claim "previous configuration restored" when
+// it never actually confirmed the restored config came up healthy.
+func TestApplyReportsWhenTheRollbackRestartItselfNeverBecomesReady(t *testing.T) {
+	manager := newTestManager(t)
+	initial := DefaultSettings()
+	initial.Threads = 3
+	if err := manager.Apply(context.Background(), initial); err != nil {
+		t.Fatal(err)
+	}
+
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
+			return []byte("error: connect() failed"), errors.New("exit 1")
+		}
+		return []byte("OK"), nil
+	}
+	changed := initial
+	changed.Threads = 8
+	err := manager.Apply(context.Background(), changed)
+	if err == nil || strings.Contains(err.Error(), "previous configuration restored") || !strings.Contains(err.Error(), "rollback restart") {
+		t.Fatalf("expected an honest report that the rollback restart's own readiness never arrived, got %v", err)
+	}
+}
+
+// TestApplyRollbackUsesAFreshContextWhenTheOriginalWasCanceled is the
+// regression test for a real gap found in review: rollbackFailedApply used
+// to run the rollback restart (and, once waitReady existed, wait for it)
+// with the *same* ctx Apply itself was called with. If that ctx is what's
+// canceled - the realistic case waitReady's own ctx.Done() case exists for,
+// e.g. the HTTP request that triggered Apply was aborted mid-flight - the
+// rollback restart could be killed or refused to even start, leaving the
+// just-restored *files* out of sync with whatever Unbound is actually still
+// running. The rollback must detach from that cancellation instead.
+func TestApplyRollbackUsesAFreshContextWhenTheOriginalWasCanceled(t *testing.T) {
+	manager := newTestManager(t)
+	initial := DefaultSettings()
+	initial.Threads = 3
+	if err := manager.Apply(context.Background(), initial); err != nil {
+		t.Fatal(err)
+	}
+
+	restartCount := 0
+	manager.run = func(ctx context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) == 0 || args[0] != "restart" {
+			return []byte("OK"), nil
+		}
+		restartCount++
+		if restartCount == 1 {
+			// The real first restart runs under the already-canceled ctx
+			// Apply itself was called with - exec.CommandContext would
+			// refuse to run a canceled context's command for real; here,
+			// simulate that by failing exactly as a killed/refused
+			// process would.
+			if ctx.Err() == nil {
+				t.Fatal("expected the first restart to observe the already-canceled input context")
+			}
+			return nil, ctx.Err()
+		}
+		// The rollback restart must not inherit that same cancellation.
+		if ctx.Err() != nil {
+			t.Fatal("rollback restart used a context that was still canceled - it must detach from the original request's cancellation")
+		}
+		return []byte("OK"), nil
+	}
+
+	canceledCtx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	changed := initial
+	changed.Threads = 8
+	err := manager.Apply(canceledCtx, changed)
+	if err == nil || !strings.Contains(err.Error(), "previous configuration restored") {
+		t.Fatalf("expected a successful rollback despite the canceled input context, got %v", err)
+	}
+	loaded, loadErr := manager.Load()
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if !settingsEqual(loaded, initial) {
+		t.Fatalf("rollback under a canceled context left changed settings active: %+v", loaded)
 	}
 }
 
