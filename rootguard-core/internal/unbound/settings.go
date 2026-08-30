@@ -886,7 +886,26 @@ func (m *Manager) rollbackFailedApply(ctx context.Context, action string, cause 
 	configPath, settingsPath, customPath string, oldConfig, oldSettings, oldCustom []byte,
 	configExisted, settingsExisted, customExisted bool) error {
 	rollbackErr := restoreState(configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
-	rollbackOutput, restartErr := m.run(ctx, "docker", "restart", m.containerName)
+
+	// Found in review: this used to restart (and, once waitReady existed,
+	// wait) using the same ctx that got this function called in the first
+	// place - if that ctx is itself what's canceled (e.g. the HTTP
+	// request that triggered Apply was aborted by the client mid-flight,
+	// which cause can legitimately be if waitReady's own ctx.Done() case
+	// is what fired), the rollback `docker restart` below could be killed
+	// or refused to even start, leaving the just-restored *files* out of
+	// sync with whatever Unbound is actually still running. A rollback
+	// must not be at the mercy of whatever canceled the operation it's
+	// cleaning up after - detach from ctx's cancellation (WithoutCancel
+	// keeps any deadline-independent values, drops only the
+	// cancellation/deadline) and give it its own bounded timeout instead,
+	// so it still can't hang forever if something is genuinely stuck.
+	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	rollbackOutput, restartErr := m.run(rollbackCtx, "docker", "restart", m.containerName)
+	if restartErr == nil {
+		restartErr = m.waitReady(rollbackCtx)
+	}
 	if rollbackErr != nil || restartErr != nil {
 		return fmt.Errorf("%s: %w; rollback failed: %v; rollback restart: %v: %s", action, cause, rollbackErr, restartErr, rollbackOutput)
 	}

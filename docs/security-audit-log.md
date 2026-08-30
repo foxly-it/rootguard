@@ -2578,3 +2578,24 @@ never has to think about it again. Two new synthetic-history scenarios
 (first attempt and retry, both with an abbreviated `SOURCE_REF`) added
 to `resolve-release-pin-commit.test.sh`; verified both fail against the
 pre-fix resolver and pass against the fix.
+
+**Medium, fixed: the Unbound settings rollback could fail silently
+under an already-canceled request context.** `rollbackFailedApply`
+restarted the container (and, since round 8's readiness fix, waited for
+it) using the *same* `ctx` `Apply` itself was called with. If that ctx
+is what's canceled - the realistic case, e.g. the HTTP request that
+triggered `Apply` was aborted by the client mid-flight - the rollback's
+own `docker restart` could be killed or refused to even start entirely,
+leaving the already-restored *files* out of sync with whatever Unbound
+is actually still running. A rollback must not be at the mercy of
+whatever canceled the operation it's cleaning up after. Fixed by
+detaching the rollback's own restart-and-wait from the original
+context's cancellation (`context.WithoutCancel`, plus its own bounded
+30-second timeout so it still can't hang forever if something is
+genuinely stuck) rather than inheriting it. New regression test
+confirms: given an already-canceled input context, the rollback restart
+still runs to completion and the previous settings end up active.
+Also added a sibling test proving `rollbackFailedApply` reports honestly
+- not "previous configuration restored" - when the rollback restart's
+own readiness never arrives either, a case the existing test suite
+hadn't separately covered.
