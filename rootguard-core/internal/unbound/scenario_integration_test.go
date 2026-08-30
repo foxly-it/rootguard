@@ -38,16 +38,15 @@ func startScenarioContainer(t *testing.T) {
 	// and "docker run --name" fails outright against a stale survivor
 	// rather than just reusing or replacing it.
 	_, _ = exec.Command("docker", "rm", "-f", scenarioContainer).CombinedOutput()
-	// --add-host: found in review - TestScenarioDNSSECFailures used to
-	// dig real internet domains (dnssec-failed.org, example.com)
-	// directly, so a transient DNS/network hiccup on the runner's own
-	// connection failed this test for reasons that had nothing to do
-	// with the code under test - confirmed live: main's own independent,
-	// scheduled run of this exact test failed this way repeatedly. This
-	// is what makes ci.yml's own scripts/ci/dnssec-test-zone/setup.sh
-	// authority (already started earlier in the same job) reachable from
-	// inside this container at all.
-	run(t, "docker", "run", "--rm", "--detach", "--name", scenarioContainer, "--add-host=host.docker.internal:host-gateway", scenarioImage)
+	// Found in review: TestScenarioDNSSECFailures used to dig real
+	// internet domains (dnssec-failed.org, example.com) directly, so a
+	// transient DNS/network hiccup on the runner's own connection failed
+	// this test for reasons that had nothing to do with the code under
+	// test - confirmed live: main's own independent, scheduled run of
+	// this exact test failed this way repeatedly. wireUpLocalDNSSECTestZone
+	// below points it at ci.yml's own scripts/ci/dnssec-test-zone/setup.sh
+	// authority instead, via the container's own network gateway.
+	run(t, "docker", "run", "--rm", "--detach", "--name", scenarioContainer, scenarioImage)
 	t.Cleanup(func() {
 		_, _ = exec.Command("docker", "stop", scenarioContainer).CombinedOutput()
 	})
@@ -58,11 +57,12 @@ func startScenarioContainer(t *testing.T) {
 // wireUpLocalDNSSECTestZone reuses the exact same inject.sh
 // scripts/ci/dnssec-test-zone/setup.sh's own caller (ci-unbound.yml's
 // "Test amd64"/"Test arm64" jobs) already uses and has verified live -
-// one implementation of "resolve host.docker.internal from inside this
-// specific container, then wire up forward-zone/trust-anchor", not a
-// second Go reimplementation of it. Runs once, right after the
-// container's initial startup, before any scenario's own config exists
-// yet, so the restart inject.sh performs costs nothing extra here.
+// one implementation of "find the local DNSSEC test authority from
+// inside this specific container, then wire up forward-zone/
+// trust-anchor", not a second Go reimplementation of it. Runs once,
+// right after the container's initial startup, before any scenario's
+// own config exists yet, so the restart inject.sh performs costs
+// nothing extra here.
 func wireUpLocalDNSSECTestZone(t *testing.T) {
 	t.Helper()
 	// go test's own working directory is always this package's directory

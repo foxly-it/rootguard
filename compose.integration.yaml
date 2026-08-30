@@ -15,12 +15,6 @@ services:
     volumes:
       - unbound-config:/etc/unbound/unbound.d
       - unbound-state:/var/lib/unbound
-    # Resolves to the docker bridge gateway on Linux (every CI runner) -
-    # a no-op for a real deployment, since nothing here ever points at
-    # host.docker.internal unless CI's own scripts/ci/dnssec-test-zone
-    # wires it up (see ci.yml's own comment on why).
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     networks:
       dns:
         ipv4_address: 172.29.53.2

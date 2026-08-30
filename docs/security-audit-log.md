@@ -2462,14 +2462,12 @@ deliberately corrupts `bad.`'s own RRSIG afterward, and serves both from
 a local `nsd` authority on the runner itself.
 `scripts/ci/dnssec-test-zone/inject.sh` wires a given Unbound container
 up to it - a forward-zone plus an inline trust-anchor for the zone,
-reaching the runner's own authority via `host.docker.internal` where the
-caller controls container creation (`docker run --add-host=...` /
-compose `extra_hosts:`), falling back to the container's own network
-gateway IP directly where it doesn't (`release-alpha.yml`'s
-dynamically-`installer.Manager`-deployed Unbound). Verified end to end
-against the real `rootguard-unbound` image on a scratch host before
-touching any workflow: `good.` validates (the `ad` flag), `bad.`
-SERVFAILs, through both the direct and the fallback wiring path.
+reaching the runner's own authority via the container's own network
+gateway IP (`docker inspect ... .Networks`, sorted for determinism -
+Go template map iteration is otherwise random order, and every caller
+here has more than one network). Verified end to end against the real
+`rootguard-unbound` image on a scratch host before touching any
+workflow: `good.` validates (the `ad` flag), `bad.` SERVFAILs.
 
 For the one caller that goes through `/api/unbound/diagnostics` itself
 (`ci.yml`, via Core, not a raw `dig`) rather than around it: added
@@ -2502,3 +2500,38 @@ network round-trip needed, so this check isn't itself hostage to network
 conditions) and only returns once both succeed. New test mirrors the
 existing control-socket-retry test for this second dimension; verified
 it fails against the round-8-only version and passes against the fix.
+Real, but not sufficient on its own - see below.
+
+**Medium, fixed live during this round's own CI verification (second
+finding in the same failure): the original `host.docker.internal`
+wiring path in `inject.sh` reached NSD via an address that couldn't
+carry a correct reply back, and Unbound's own anti-spoofing hardening
+silently dropped what NSD sent instead - the `waitReady` fix above was
+real but not what was still failing.** After the fix above, the exact
+same `ci.yml` step failed again, same symptom, same step, `waitReady`
+having already passed moments earlier in the same restart. Reproduced
+the whole sequence locally (fresh restart, PUT settings, diagnostic-
+logging start/stop, diagnostics call) against the real image with
+`unbound-control verbosity 4` and a host-side `tcpdump` running
+throughout, rather than continuing to guess from CI log excerpts alone.
+The capture showed Unbound sending its query to
+`host.docker.internal`'s address (the *default* Docker bridge's
+gateway) and getting a well-formed, correctly-sized reply back
+*immediately* - but from a *different* source address (the custom
+compose network's own gateway, since NSD is bound to `0.0.0.0:8053`
+and Linux picks a UDP reply's source address by route-to-client, not by
+which local address the query arrived on). Unbound `connect()`s its
+outbound UDP sockets to the exact peer it queried specifically to
+reject spoofed replies at the kernel level - so it silently discarded
+every one of NSD's replies as if they'd never arrived, retried with
+growing backoff, and gave up after ~10-15s with nothing sent back to
+the client at all: not a slow answer, no answer. `dig`, lacking that
+hardening, accepted the same replies without issue, which is why manual
+verification with `dig` during earlier rounds never caught this.
+Fixed by dropping `host.docker.internal` entirely and using the
+container's own network gateway unconditionally (see above) - the one
+address guaranteed to round-trip, since it's the address the host
+actually uses to reach that specific container. Verified the same way:
+reproduced the hang against the old wiring, then confirmed a cold-cache
+query resolves in well under a second against the fix, on the exact
+same host, same image, same sequence.

@@ -98,13 +98,13 @@ jobs:
       # under test. Confirmed live: main's own independent, scheduled run
       # of this exact job failed this way multiple times in a row.
       # setup.sh signs a small throwaway zone fresh every run and serves
-      # it locally; --add-host below is what makes it reachable from
-      # inside the container that's about to query it.
+      # it locally; inject.sh (below) reaches it via the container's own
+      # network gateway - no --add-host needed here.
       - name: Start local DNSSEC test authority
         run: ./scripts/ci/dnssec-test-zone/setup.sh
 
       - name: Start resolver smoke-test container
-        run: docker run --rm --detach --name rootguard-unbound-ci --add-host=host.docker.internal:host-gateway rootguard-unbound:test
+        run: docker run --rm --detach --name rootguard-unbound-ci rootguard-unbound:test
 
       - name: Wire the resolver up to the local DNSSEC test zone
         run: ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound-ci
