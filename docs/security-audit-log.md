@@ -2186,3 +2186,45 @@ check itself was incomplete. Retired the regex script; `ci.yml`'s
 checksum-verified, same install pattern `release-alpha.yml` already uses
 for `git-cliff`) and runs it `--offline` against every tracked `*.md`
 file - local file links only, no network requests.
+
+**High, fixed: the Debian package-pin refresh automation had been
+silently failing for four runs in a row.** `debian-pin-freshness.yml`
+detects drifted `apt` package pins in `rootguard-unbound/Dockerfile`,
+commits a fix to `chore/debian-pin-refresh`, and opens a PR - the commit
+and push succeeded every time (confirmed live: the remote branch already
+carried the correct `libssl-dev`/`libssl3t64` bump to
+`3.5.7-1~deb13u2`), but `gh pr create` failed every time with "GitHub
+Actions is not permitted to create or approve pull requests", a
+repository-level setting independent of the workflow's own already-
+correct `pull-requests: write` permission. Confirmed via
+`repos/.../actions/permissions/workflow`:
+`can_approve_pull_request_reviews` was `false`. Opened
+[#430](https://github.com/foxly-it/rootguard/pull/430) manually from the
+already-correct branch to unblock the immediate pin drift; the user then
+enabled the repository setting directly (Settings → Actions → General →
+"Allow GitHub Actions to create and approve pull requests"), verified
+live afterward (`can_approve_pull_request_reviews` now `true`) - the
+automation will open its own PRs again the next time a real pin drifts.
+
+**Medium, open - needs a repository-admin decision: `main` has no branch
+protection or ruleset at all.** Confirmed live: both
+`repos/.../branches/main/protection` (404, "Branch not protected") and
+`repos/.../rulesets` (`[]`) are empty. Nothing technically stops a
+force-push or branch deletion, and green PR checks aren't enforced. Not
+fixed in this round - repository-ruleset mutation is a sandboxed action
+this session isn't permitted to perform, and the right configuration is
+a real product decision the repo owner needs to make, not something to
+guess at via API: `release-alpha.yml`'s "Commit updated pins" step
+pushes directly to `main` using the built-in `GITHUB_TOKEN` (as
+`github-actions[bot]`), so a bare "require pull request before merging"
+rule would also block that push unless it's specifically exempted.
+Recommended path: a repository **ruleset** (not classic branch
+protection, which has no per-actor bypass) targeting `main`, with
+"Block force pushes" and "Restrict deletions" enabled unconditionally
+(these never affect a normal, non-force push, so they need no bypass and
+are safe to enable regardless of the rest), and separately "Require a
+pull request before merging" plus "Require status checks to pass" with
+**GitHub Actions** added to the ruleset's bypass list so the release
+workflow's own direct pin-commit push keeps working. Left open for the
+repo owner to configure via the GitHub UI (Settings → Rules → Rulesets →
+New branch ruleset).
