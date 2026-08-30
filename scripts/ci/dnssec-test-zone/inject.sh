@@ -55,6 +55,18 @@ cat >"$conf_path" <<EOF
 server:
   trust-anchor: "${trust_anchor}"
 
+  # Found live: root priming (the real-root "." NS query every fresh
+  # Unbound process issues on startup, before it can answer anything -
+  # in-memory only, so every restart pays this again) still went out
+  # over the real internet even with the local test zone wired up
+  # above, because the base image's do-ip6: yes (unbound.conf, correct
+  # for production) is unchanged here. GitHub Actions runners have no
+  # real outbound IPv6 route, so IPv6 root-server addresses hang until
+  # timeout before falling back to IPv4 - stalling ALL queries,
+  # including ones against this local zone, for several seconds right
+  # after restart. CI-only; production keeps real do-ip6: yes.
+  do-ip6: no
+
 forward-zone:
   name: "rgtest-ci.internal."
   forward-addr: ${gateway_ip}@${nsd_port}
