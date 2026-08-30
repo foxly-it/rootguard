@@ -2097,8 +2097,8 @@ A sixth independent review, covering round 5's own fixes plus live repo
 state (workflow run history, GitHub API settings) rather than only the
 diff. Same discipline as every round before.
 
-**Weitere Fehler, fixed: `semver-compare.sh`'s numeric-identifier
-comparison overflowed bash's signed 64-bit integer range.** Both
+**Medium, fixed: `semver-compare.sh`'s numeric-identifier comparison
+overflowed bash's signed 64-bit integer range.** Both
 major/minor/patch and numeric prerelease identifiers were compared via
 `$(( ))` bash arithmetic - SemVer 2.0 doesn't cap numeric identifiers at
 64 bits, bash does. Confirmed live:
@@ -2118,3 +2118,41 @@ the live-reproduced `0.9.9`-vs-`1.0.0-rc.1` case, and the overflow case
 above - wired into `ci.yml`. Verified both ways: reverting the fix
 reproduces exactly the three overflow-case failures above; the fixed
 version passes all of them.
+
+**Critical, fixed: promotion to the final release tag still happened
+*before* the last main-race check, not after.** Round 5 added an early
+"has main moved" check at the top of `update-alpha-pins`, but everything
+between it and the actual pin commit - buildx/cosign setup, per-image
+attestation checks, promoting all five images to their final `VERSION`
+tags, digest-pin file edits, compose validation, site refresh - still
+ran *before* the one check that actually gated anything irreversible
+(inside "Commit updated pins", unchanged since round 5). A PR merging
+into a narrower but still-real window between the early check and that
+one could still let this run promote final image tags publicly, then
+correctly abort the pin commit/tag/release - leaving the version number
+unusable (a later attempt at the same version number, from the new
+`main` tip, would hit the "published tag must never move" guard on
+promotion) even though nothing else about the release actually shipped.
+
+Reordered so promotion is the *last* thing that can happen, not one of
+the first: candidate/attestation verification (split into its own
+"Verify candidate images and attestations" step, no promotion) stays
+early since it's read-only and safe to abort before; digest-pin file
+edits, compose validation, and the site refresh stay local (no
+dependency on `main`'s state); the pin commit's own main-race check
+(unchanged) is now the single gate; actual promotion
+("Promote candidate images to the final release tag", moved after the
+pin commit) happens only once that commit already exists on `main` - at
+which point nothing left in the job still depends on `main`'s tip at
+all, so a promotion failure here is a plain retry, not a race. Git tag
+and GitHub Release creation were already last (round 5).
+
+Made the pin commit itself retry-safe for this new ordering: a run that
+fails between the pin commit and promotion needs a subsequent retry to
+recognize that its own earlier attempt already landed the commit
+(`origin/main`'s tip no longer equals `SOURCE_REF` at that point, which
+the existing race check would otherwise reject as a fresh race). "Commit
+updated pins" now checks first whether `origin/main`'s current tip
+already carries identical content for the three paths it writes - if so,
+resumes from that existing commit instead of re-committing or
+misreporting a race.
