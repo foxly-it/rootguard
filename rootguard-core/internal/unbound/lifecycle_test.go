@@ -159,6 +159,68 @@ func TestApplyRestoresPreviousFilesWhenRestartFails(t *testing.T) {
 	}
 }
 
+// TestApplyWaitsForUnboundToBecomeReadyAfterRestart is the regression test
+// for a real race found live in CI: `docker restart` returning success only
+// means the container process started again, not that Unbound has finished
+// its own startup and opened its remote-control socket. A caller that
+// immediately did anything else against the daemon (unbound-control,
+// StartDiagnosticLogging's own verbosity call) could lose that race.
+// Simulates unbound-control status failing for the first few polls, then
+// succeeding - Apply must retry through that, not return prematurely.
+func TestApplyWaitsForUnboundToBecomeReadyAfterRestart(t *testing.T) {
+	manager := newTestManager(t)
+	statusCalls := 0
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
+			statusCalls++
+			if statusCalls < 3 {
+				return []byte("error: connect() failed"), errors.New("exit 1")
+			}
+		}
+		return []byte("OK"), nil
+	}
+	if err := manager.Apply(context.Background(), DefaultSettings()); err != nil {
+		t.Fatalf("expected Apply to retry through a slow-starting daemon, got %v", err)
+	}
+	if statusCalls != 3 {
+		t.Fatalf("expected exactly 3 unbound-control status attempts (2 failures then success), got %d", statusCalls)
+	}
+}
+
+// TestApplyRollsBackWhenUnboundNeverBecomesReady is
+// TestApplyRestoresPreviousFilesWhenRestartFails' sibling for the new
+// readiness wait: unbound-control status never succeeding is as real a
+// sign the new config broke something as a restart command failing
+// outright, and gets the same automatic rollback.
+func TestApplyRollsBackWhenUnboundNeverBecomesReady(t *testing.T) {
+	manager := newTestManager(t)
+	initial := DefaultSettings()
+	initial.Threads = 3
+	if err := manager.Apply(context.Background(), initial); err != nil {
+		t.Fatal(err)
+	}
+
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
+			return []byte("error: connect() failed"), errors.New("exit 1")
+		}
+		return []byte("OK"), nil
+	}
+	changed := initial
+	changed.Threads = 8
+	err := manager.Apply(context.Background(), changed)
+	if err == nil || !strings.Contains(err.Error(), "wait for unbound to become ready") || !strings.Contains(err.Error(), "previous configuration restored") {
+		t.Fatalf("expected a rollback citing the readiness timeout, got %v", err)
+	}
+	loaded, loadErr := manager.Load()
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if !settingsEqual(loaded, initial) {
+		t.Fatalf("a never-ready restart left changed settings active: %+v", loaded)
+	}
+}
+
 func TestDiagnosticsChecksConfigurationResolutionAndDNSSEC(t *testing.T) {
 	manager := newTestManager(t)
 	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
@@ -259,6 +321,13 @@ func newTestManager(t *testing.T) *Manager {
 	manager.now = func() time.Time {
 		calls++
 		return base.Add(time.Duration(calls) * time.Nanosecond)
+	}
+	// Fires immediately - waitReady's retry loop uses this between
+	// polling attempts, and no test needs it to actually pause.
+	manager.sleep = func(time.Duration) <-chan time.Time {
+		fired := make(chan time.Time, 1)
+		fired <- base
+		return fired
 	}
 	return manager
 }

@@ -569,11 +569,15 @@ func yesNo(value bool) string {
 }
 
 type Manager struct {
-	hostConfigDir       string
-	containerConfigDir  string
-	containerName       string
-	run                 commandRunner
-	now                 func() time.Time
+	hostConfigDir      string
+	containerConfigDir string
+	containerName      string
+	run                commandRunner
+	now                func() time.Time
+	// sleep backs waitReady's poll loop - time.After by default,
+	// overridden in tests to a zero-delay channel so exercising the
+	// retry path doesn't actually pause the test suite.
+	sleep               func(time.Duration) <-chan time.Time
 	applyMu             sync.Mutex
 	diagnosticMu        sync.Mutex
 	diagnosticTimer     *time.Timer
@@ -591,6 +595,7 @@ func NewManager(hostConfigDir, containerConfigDir, containerName string) *Manage
 			return exec.CommandContext(ctx, name, args...).CombinedOutput()
 		},
 		now:                 time.Now,
+		sleep:               time.After,
 		diagnosticBaseLevel: 1,
 	}
 }
@@ -816,18 +821,86 @@ func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custo
 
 	output, err = m.run(ctx, "docker", "restart", m.containerName)
 	if err != nil {
-		rollbackErr := restoreState(configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
-		rollbackOutput, restartErr := m.run(ctx, "docker", "restart", m.containerName)
-		if rollbackErr != nil || restartErr != nil {
-			return fmt.Errorf("restart unbound: %w: %s; rollback failed: %v; rollback restart: %v: %s", err, output, rollbackErr, restartErr, rollbackOutput)
-		}
-		return fmt.Errorf("restart unbound: %w: %s; previous configuration restored", err, output)
+		return m.rollbackFailedApply(ctx, "restart unbound", fmt.Errorf("%w: %s", err, output),
+			configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
+	}
+
+	// Found in review: `docker restart` returning success only means the
+	// container process started again, not that Unbound has finished its
+	// own startup (reading the trust anchor, opening its remote-control
+	// socket) - any caller that immediately talks to the running daemon
+	// afterward (unbound-control, a live diagnostic query) can lose that
+	// race. Confirmed live in CI: StartDiagnosticLogging's own
+	// unbound-control call, issued right after this exact restart,
+	// intermittently failed because the control socket wasn't listening
+	// yet - reproducible under CI's own runner load, not a hypothetical.
+	// Poll the same interface every other live check in this package
+	// already uses (unbound-control status) rather than guessing a fixed
+	// sleep - the shortest reliable "is it actually up" signal, with no
+	// dependency on any particular startup log line. If it never comes
+	// up, that's as real a sign the new config is broken as a checkconf
+	// or restart failure - same rollback.
+	if err := m.waitReady(ctx); err != nil {
+		return m.rollbackFailedApply(ctx, "wait for unbound to become ready after restart", err,
+			configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
 	}
 	m.resetDiagnosticLoggingState(settings.LogVerbosity)
 	if err := m.recordSnapshot(settings, config, []byte(custom)); err != nil {
 		return fmt.Errorf("record active unbound version: %w", err)
 	}
 	return nil
+}
+
+// rollbackFailedApply restores the pre-apply config/settings/custom files
+// and restarts the container back onto them - the shared tail of every
+// applyStateLocked failure path that already wrote new files and started
+// (or tried to start) the container on them, so `action`/`cause` are the
+// only things that differ between call sites.
+func (m *Manager) rollbackFailedApply(ctx context.Context, action string, cause error,
+	configPath, settingsPath, customPath string, oldConfig, oldSettings, oldCustom []byte,
+	configExisted, settingsExisted, customExisted bool) error {
+	rollbackErr := restoreState(configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
+	rollbackOutput, restartErr := m.run(ctx, "docker", "restart", m.containerName)
+	if rollbackErr != nil || restartErr != nil {
+		return fmt.Errorf("%s: %w; rollback failed: %v; rollback restart: %v: %s", action, cause, rollbackErr, restartErr, rollbackOutput)
+	}
+	return fmt.Errorf("%s: %w; previous configuration restored", action, cause)
+}
+
+// unboundReadyAttempts/unboundReadyInterval bound how long waitReady polls
+// before giving up - generous enough for a slow/contended host (the CI race
+// this exists for took several seconds to lose), short enough that a
+// genuinely broken config still fails an Apply call in bounded time rather
+// than hanging it.
+const (
+	unboundReadyAttempts = 40
+	unboundReadyInterval = 250 * time.Millisecond
+)
+
+// waitReady polls `unbound-control status` - the same control-socket
+// interface every other live check in this package already uses - until it
+// succeeds or the budget above is exhausted. `docker restart` returning
+// success only means the container process started again, not that Unbound
+// has finished its own startup and is accepting control connections; this
+// is the shortest reliable signal that it actually has, independent of any
+// particular startup log line.
+func (m *Manager) waitReady(ctx context.Context) error {
+	var lastErr error
+	var lastOutput []byte
+	for attempt := 0; attempt < unboundReadyAttempts; attempt++ {
+		output, err := m.run(ctx, "docker", "exec", m.containerName, "unbound-control", "status")
+		if err == nil {
+			return nil
+		}
+		lastErr, lastOutput = err, output
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.sleep(unboundReadyInterval):
+		}
+	}
+	return fmt.Errorf("unbound-control status did not succeed within %s after restart: %w: %s",
+		time.Duration(unboundReadyAttempts)*unboundReadyInterval, lastErr, lastOutput)
 }
 
 func writeOrRemove(path string, data []byte, mode os.FileMode) error {
