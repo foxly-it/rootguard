@@ -111,6 +111,78 @@ func TestPreflightRequiresDockerAndCompose(t *testing.T) {
 	}
 }
 
+// TestPreflightWarnsAboutUnpatchedDockerCPVersion covers the advisory
+// added in review: RootGuard calls `docker cp` in three places
+// (backupexport, backuprestore, updater rollback), so an Engine predating
+// 29.5.1 - which fixed CVE-2026-41567 and CVE-2026-42306, both docker cp
+// vulnerabilities - is a real exposure. Deliberately never fails
+// Preflight (see dockerCPPatchWarning's own doc comment on why).
+func TestPreflightWarnsAboutUnpatchedDockerCPVersion(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "version" {
+				return []byte("29.4.0\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress: "192.168.1.2",
+		DNSPort:        53,
+	})
+
+	if !report.Ready {
+		t.Fatal("an unpatched-looking Docker Engine version must not fail preflight")
+	}
+	var warning *Check
+	for i := range report.Checks {
+		if report.Checks[i].Code == "docker_engine_cp_cve" {
+			warning = &report.Checks[i]
+		}
+	}
+	if warning == nil {
+		t.Fatal("expected a docker_engine_cp_cve advisory check for Docker Engine 29.4.0")
+	}
+	if !warning.OK || warning.Level != "warning" || warning.Detail != "29.4.0" {
+		t.Fatalf("unexpected advisory check: %#v", warning)
+	}
+}
+
+// TestPreflightSkipsDockerCPWarningForPatchedOrUnreadableVersions covers
+// both "no warning needed" cases: a Docker Engine already at or past
+// 29.5.1, and a version string dockerCPPatchWarning can't read with
+// confidence (a distro-packaging suffix, e.g. - see its own doc comment
+// on why that's treated as "assume patched" rather than "assume
+// vulnerable").
+func TestPreflightSkipsDockerCPWarningForPatchedOrUnreadableVersions(t *testing.T) {
+	for _, version := range []string{"29.5.1", "29.6.0", "30.0.0", "24.0.7-1ubuntu1", "ok"} {
+		t.Run(version, func(t *testing.T) {
+			manager := NewManager(Options{
+				DataDir: t.TempDir(),
+				Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+					if arguments[0] == "version" {
+						return []byte(version + "\n"), nil
+					}
+					return []byte("ok"), nil
+				},
+			})
+
+			report := manager.Preflight(context.Background(), Config{
+				DNSBindAddress: "192.168.1.2",
+				DNSPort:        53,
+			})
+
+			for _, check := range report.Checks {
+				if check.Code == "docker_engine_cp_cve" {
+					t.Fatalf("did not expect a docker_engine_cp_cve check for version %q", version)
+				}
+			}
+		})
+	}
+}
+
 func TestPreflightReportsOccupiedDockerDNSPort(t *testing.T) {
 	manager := NewManager(Options{
 		DataDir: t.TempDir(),

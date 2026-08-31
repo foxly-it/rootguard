@@ -2959,3 +2959,35 @@ still exits non-zero. This workflow still never runs on `pull_request`
 (schedule/`workflow_dispatch` only) and was already outside branch
 protection's required checks - this is a diagnostics fix, not a
 blocking-behavior change.
+
+## Follow-up review, round 13 (2026-08-31)
+
+**Medium, fixed: no warning existed for a host Docker Engine vulnerable
+to two `docker cp` CVEs RootGuard's own code path relies on.** Confirmed
+live against Docker's own release notes and the upstream advisories:
+CVE-2026-41567 (arbitrary host-binary execution via `PATH` resolution
+during `docker cp` archive decompression) and CVE-2026-42306 (a TOCTOU
+race letting `docker cp` redirect a bind-mount target to an arbitrary
+host path) were both fixed upstream in Docker Engine 29.5.1 - and
+RootGuard itself calls `docker cp` in three places (backupexport,
+backuprestore, updater rollback), so a host running an older, unpatched
+Engine is a real exposure, not a theoretical one. `Preflight` only ever
+checked Docker's *reachability*, never its patch level. Added a new
+advisory check (`docker_engine_cp_cve`) that parses the Server version
+already fetched for the reachability check and warns when it reads
+unambiguously below 29.5.1 - deliberately never failing `Ready`, per the
+review's own explicit caution: a distro package (Debian/Ubuntu's
+`docker.io`, e.g.) can backport this fix while still reporting an
+older-looking upstream version string, so blocking on the version number
+alone would produce real false positives. A version string that doesn't
+parse as a plain `MAJOR.MINOR.PATCH` (any distro-suffixed one) is treated
+identically to "already patched" for the same reason. Added a new
+`Check.Level` field (`omitempty`, every existing check leaves it unset)
+so the frontend can render this distinctly from a real pass/fail -
+amber, not green, and its action text now shows even though `ok` stays
+true, which the existing `!check.ok &&` render guard would otherwise have
+hidden. Documented the same requirement in `platform-support.md`
+directly, per the review's ask to require a patched Engine in the docs
+too. Covered by two new `installer` package tests (the warning firing for
+an old clean version, and *not* firing for a patched version, a newer
+major, and an unparseable/suffixed one).
