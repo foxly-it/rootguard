@@ -9,6 +9,113 @@ vulnerabilities:
       graph confirm that no vulnerable code is reachable. Recheck this scoped
       exception when age or x/crypto is updated.
 
+  # Found in review, round 13: trivy-image-scan.sh (added this round)
+  # scans Core/Updater's built images - every entry below is a HIGH
+  # finding it surfaced that isn't fixable by RootGuard itself today,
+  # confirmed live against a real `rootguard-updater:test` build after
+  # every actionable fix this round already landed (Alpine's
+  # libssl3/libcrypto3 patched, the unused buildx plugin removed, cosign
+  # bumped to the newest available release, v3.1.3). Two root causes
+  # account for all twelve of the "Go stdlib" entries below: each is
+  # baked into the *upstream* Go toolchain that built the docker CLI
+  # binary, its bundled compose plugin, and/or cosign - not something an
+  # apk pin or a version bump to the newest available release can fix,
+  # since even cosign's newest release (v3.1.3, 2026-08-06) predates the
+  # Go release that carries these particular fixes (1.26.6, 2026-08-13).
+  # Recheck when a newer build of each exists. The remaining two
+  # (CVE-2026-41567/CVE-2026-42306 - the same `docker cp` CVEs the new
+  # Preflight advisory warns about at the *host Docker Engine* level) also
+  # show up in the compose plugin's own vendored `github.com/docker/docker`
+  # client library, but compose's own binary never calls the vulnerable
+  # code path (container-to-host archive extraction only happens via
+  # `docker cp` itself, which compose doesn't implement or expose) - the
+  # vendored code is present but not reachable through anything this image
+  # runs.
+  - id: CVE-2026-33818
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-39821
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-39822
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-41567
+    expired_at: 2026-11-30
+    statement: >-
+      Present in the compose plugin's vendored docker client library, not
+      reachable - compose never calls docker cp. See the comment above
+      this block.
+  - id: CVE-2026-42306
+    expired_at: 2026-11-30
+    statement: >-
+      Present in the compose plugin's vendored docker client library, not
+      reachable - compose never calls docker cp. See the comment above
+      this block.
+  - id: CVE-2026-46600
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56852
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56853
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56858
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56859
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56860
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56862
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56864
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+  - id: CVE-2026-56865
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib CVE baked into the upstream Go toolchain that built the
+      docker CLI/compose/cosign binaries this image bundles - see the
+      comment above this block.
+
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so

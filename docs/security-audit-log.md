@@ -3055,3 +3055,23 @@ it. Bumped the pin to v3.1.3 (by digest) in both Dockerfiles and in
 release candidate's attestation before promotion using the identical
 version - the two were already required to move together (see the
 existing comment there) and previously both said v3.0.6.
+
+**Closed out: the new image scan's remaining findings, verified against
+a real post-fix build.** With every actionable round-13 fix landed
+(PRs #458, #459, #461), re-ran `trivy-image-scan.sh` against a fresh
+`rootguard-updater:test` build: Alpine's own findings are now 0, the
+buildx plugin's 13 are gone with the file itself, and cosign's 39 dropped
+to 13. What's left - 33 HIGH findings across 14 distinct CVE IDs, spread
+across the docker CLI binary, its compose plugin, and cosign itself - is
+genuinely not fixable by RootGuard today: 12 of the 14 are Go-stdlib CVEs
+baked into the upstream Go toolchain each of those three binaries was
+built with (not something a version bump can fix - even cosign's newest
+release, v3.1.3 from 2026-08-06, predates the Go release carrying the
+fix, 1.26.6 from 2026-08-13), and the remaining two
+(CVE-2026-41567/CVE-2026-42306, the same `docker cp` CVEs the new
+Preflight advisory covers at the host-Engine level) are present only in
+the compose plugin's *vendored* docker client library, which compose's
+own binary never actually calls into (compose doesn't implement or
+expose `docker cp`). Added all 14 to `.trivyignore.yaml`, each dated
+2026-11-30, so this doesn't stay silently suppressed once a newer
+upstream build of any of the three exists.
