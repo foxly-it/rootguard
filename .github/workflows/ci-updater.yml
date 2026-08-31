@@ -19,7 +19,11 @@ env:
   IMAGE: ghcr.io/foxly-it/rootguard-updater
 
 jobs:
+  # See ci-core.yml's identical job for the full rationale - this job id
+  # ("test") used to collide with an identically-named, unrelated check
+  # in two other workflows.
   test:
+    name: Updater unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -42,7 +46,11 @@ jobs:
             exit 1
           fi
 
+  # See ci-blockpage.yml's identical job for the full rationale - this
+  # job id ("build") used to collide with an identically-named,
+  # unrelated check in two other workflows.
   build:
+    name: Build and push updater image
     needs: test
     runs-on: ubuntu-latest
     permissions:

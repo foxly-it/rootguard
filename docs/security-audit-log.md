@@ -2716,3 +2716,36 @@ machine via `VITE_API_PROXY_TARGET`. Separately, `public/vite.svg` and
 `src/assets/react.svg` - the framework's own default scaffold assets -
 were never referenced anywhere in the app (confirmed via a repo-wide
 grep across `.html`/`.ts`/`.tsx`/`.css`/`.json`) and were removed.
+
+**Small, fixed: three pairs of identically-named jobs across unrelated
+workflows, each producing an unnamed check run with the same generic
+name.** GitHub identifies a status check by its name (plus reporting
+app) - two unrelated workflows each contributing a check called "Linux
+amd64" (`backup-restore.yml`/`clean-install.yml`) or "test"
+(`ci-core.yml`/`ci-webapp.yml`/`ci-updater.yml`) or "build"
+(`ci-blockpage.yml`/`ci-updater.yml`/`ci-webapp.yml`) is at best
+confusing in the Checks UI or `gh pr checks` output (confirmed live,
+this round: briefly mistook a `backup-restore.yml` "Linux amd64" failure
+for `clean-install.yml`'s own job while debugging an unrelated finding)
+and at worst ambiguous as a required-status-check entry, which
+identifies checks by name alone. Named every one of the six jobs
+explicitly and distinctly: `Core unit tests`, `Updater unit tests`,
+`WebApp backend and frontend tests`, `Build and push blockpage/updater/
+webapp image`, `Backup and restore, Linux ${{ matrix.arch }}`, `Clean
+install, Linux ${{ matrix.arch }}`. Branch protection's own required-
+status-check list (configured directly via the GitHub API, not
+committed to this repo) needs its `test` entry updated to the three new
+names in the same change that merges this - tracked as a manual
+follow-up immediately after merge, not automatable from inside a PR.
+
+Confirmed live, this same round: merging PR #446 (`release-alpha.yml`
+only, no `rootguard-core/**`/`rootguard-webapp/**`/`rootguard-updater/**`
+touched) hit exactly the failure mode round 10's finding 9 warns about -
+branch protection's required `test`/`validate`/etc. contexts include
+checks whose owning workflow is path-filtered and never triggers for
+every PR, so GitHub reported `mergeable_state: blocked` indefinitely
+rather than merging. Required an explicit admin-bypass merge. A single
+always-on aggregating "merge gate" job (finding 9's own recommendation)
+would close this for good; not implemented this round given the scope of
+restructuring it needs - recorded here as the concrete case for doing it
+next.

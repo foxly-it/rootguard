@@ -21,7 +21,11 @@ env:
   IMAGE_NAME: foxly-it/rootguard-webapp
 
 jobs:
+  # See ci-core.yml's identical job for the full rationale - this job id
+  # ("test") used to collide with an identically-named, unrelated check
+  # in two other workflows.
   test:
+    name: WebApp backend and frontend tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -85,7 +89,11 @@ jobs:
         working-directory: rootguard-webapp/frontend
         run: npm run build
 
+  # See ci-blockpage.yml's identical job for the full rationale - this
+  # job id ("build") used to collide with an identically-named,
+  # unrelated check in two other workflows.
   build:
+    name: Build and push webapp image
     needs: test
     runs-on: ubuntu-latest
     permissions:
