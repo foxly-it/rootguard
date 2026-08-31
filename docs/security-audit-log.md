@@ -2803,3 +2803,35 @@ the stopgap that stops every unrelated PR from needing an admin-bypass
 merge in the meantime. (PR #448 needed the same admin-bypass merge a
 third time before this fix landed - same root cause, same missing
 "Updater unit tests"/"WebApp backend and frontend tests" checks.)
+
+**Small, fixed: `setup.sh`'s split-DNS authority readiness check ran
+from the host against the container's own bridge IP - unreachable from a
+Docker Desktop host.** Round 10's `DNSSEC_TEST_AUTHORITY_IP` override
+only fixed `inject.sh`'s container-to-host gateway lookup; the split
+authority's own readiness loop (added in the same round, `setup.sh`) has
+a different problem entirely - it `dig`s the container's bridge IP
+*from the host*, which works on Linux (this script's own supported
+platform - now stated explicitly in its own header comment, since it
+also runs plain `apt-get`/GNU `date -d` with no portability layer at
+all) but not from a macOS/Windows Docker Desktop host, where the Docker
+daemon runs inside its own VM behind a network layer the host itself
+can't reach into. Fixed by checking readiness from *inside* the
+container instead (`docker exec ... dig @127.0.0.1`, `bind-tools` added
+to its `apk` install) - needs no host-to-container routability at all,
+so it works the same regardless of host OS. The container's bridge IP
+is still resolved separately afterward for the Go scenario tests' own
+container to use - that one only ever needs container-to-container
+reachability, which stays inside the Docker daemon's own network
+regardless of which OS that daemon runs on, so it was never actually
+broken.
+
+**Small, fixed alongside the above (same file, same review pass): the
+split authority container had none of the reproducibility/ownership
+safeguards this round's own `nsd`-pidfile fix already established for
+the host authority.** Pinned `alpine:3.20` to its current manifest-list
+digest (the tag alone is mutable - Alpine rebuilds patch releases in
+place) and labeled the container (`io.rootguard.ci=dnssec-split-authority`),
+checking that label before ever removing a same-named leftover - the
+identical "only ever touch something verifiably this script's own"
+reasoning already applied to the `nsd` pidfile check, now applied
+consistently to this container too.

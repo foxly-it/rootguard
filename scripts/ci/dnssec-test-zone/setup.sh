@@ -56,6 +56,14 @@
 #
 # Real internet resolution is still exercised, just not as a blocking PR/
 # release gate - see ci-real-dns-upstream.yml.
+#
+# Linux only: this script itself runs `apt-get` and GNU `date -d`
+# directly on the host (both true of every caller - ci.yml, ci-unbound.yml,
+# clean-install.yml, backup-restore.yml - which all run on GitHub's
+# ubuntu-latest/ubuntu-24.04(-arm) runners). Not portable to macOS/Docker
+# Desktop as-is; DNSSEC_TEST_AUTHORITY_IP (inject.sh) only fixes the
+# container-to-host gateway lookup for a container already running on
+# Linux, not this script's own host-side tooling.
 
 set -Eeuo pipefail
 
@@ -234,21 +242,44 @@ zone:
   zonefile: "/zones/split-zone.txt"
 EOF
 
-docker rm -f rgtest-split-authority >/dev/null 2>&1 || true
+# Only ever remove a leftover container this exact script created
+# earlier - same reasoning as the nsd pidfile check above, applied to
+# Docker instead of a bare process: label it ourselves and check that
+# label before removing anything by this name, rather than trusting the
+# name alone not to collide with something unrelated.
+split_authority_label="io.rootguard.ci=dnssec-split-authority"
+existing_split_authority="$(docker ps -aq --filter "name=^rgtest-split-authority$" --filter "label=${split_authority_label}")"
+if [[ -n "$existing_split_authority" ]]; then
+  docker rm -f "$existing_split_authority" >/dev/null
+fi
+# Pinned by digest, not just the "3.20" tag - alpine:3.20 is itself
+# regularly rebuilt in place (security patches), so the tag alone isn't
+# reproducible run to run. This is the "3.20" manifest list's digest as
+# of this comment being written; bump it by hand when there's a reason
+# to (a newer nsd package, e.g.), not silently on whatever happens to be
+# tagged "3.20" today.
 docker run --rm --detach --name rgtest-split-authority \
+  --label "${split_authority_label}" \
   -v "${out_dir}/split-nsd.conf:/etc/nsd.conf:ro" \
   -v "${out_dir}/split-zone.txt:/zones/split-zone.txt:ro" \
-  --entrypoint sh alpine:3.20 \
-  -c 'apk add --no-cache nsd >/dev/null 2>&1 && exec nsd -d -c /etc/nsd.conf' >/dev/null
+  --entrypoint sh \
+  alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc \
+  -c 'apk add --no-cache nsd bind-tools >/dev/null 2>&1 && exec nsd -d -c /etc/nsd.conf' >/dev/null
 
-split_authority_ip=""
+# Checked from *inside* the container (docker exec ... dig @127.0.0.1),
+# not from the host against the container's own bridge IP - found in
+# review: a host-side check works on Linux (this script's own supported
+# platform - see the header comment above) but not from a macOS/Windows
+# Docker Desktop host, where the Docker daemon runs inside its own VM and
+# the container's bridge IP isn't routable from the host at all. Querying
+# the container's own loopback from inside it needs no such routability,
+# so this check - unlike the rest of this script - actually works
+# regardless of host OS. bind-tools (added to the apk install above)
+# provides dig.
 split_answer=""
 for _ in $(seq 1 40); do
-  split_authority_ip="$(docker inspect --format '{{.NetworkSettings.IPAddress}}' rgtest-split-authority 2>/dev/null || true)"
-  if [[ -n "$split_authority_ip" ]]; then
-    split_answer="$(dig +short +time=1 +tries=1 @"$split_authority_ip" "split.${split_zone}" A 2>/dev/null || true)"
-    [[ "$split_answer" == "203.0.113.50" ]] && break
-  fi
+  split_answer="$(docker exec rgtest-split-authority dig +short +time=1 +tries=1 @127.0.0.1 "split.${split_zone}" A 2>/dev/null || true)"
+  [[ "$split_answer" == "203.0.113.50" ]] && break
   sleep 0.5
 done
 if [[ "$split_answer" != "203.0.113.50" ]]; then
@@ -256,5 +287,12 @@ if [[ "$split_answer" != "203.0.113.50" ]]; then
   docker logs rgtest-split-authority 2>&1 || true
   exit 1
 fi
+# The container's own bridge IP, resolved separately from the readiness
+# check above - this is genuinely needed by another *container* (the Go
+# scenario tests' own), not the host, so it's fine that it isn't
+# reachable from a Docker Desktop host itself: container-to-container
+# traffic on Docker's default bridge stays inside the Docker daemon's own
+# network regardless of which OS that daemon runs on.
+split_authority_ip="$(docker inspect --format '{{.NetworkSettings.IPAddress}}' rgtest-split-authority)"
 printf '%s' "$split_authority_ip" >"${out_dir}/split-authority-ip"
 echo "Split-DNS test authority is up at ${split_authority_ip}:53, serving ${split_zone}"
