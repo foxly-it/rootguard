@@ -92,6 +92,17 @@ jobs:
         working-directory: rootguard-webapp/frontend
         run: npm run build
 
+      # See ci-updater.yml's identical step for why this job needs its
+      # own single-platform local build rather than reusing the `build`
+      # job's multi-arch buildx one.
+      - name: Build image for scanning
+        working-directory: rootguard-webapp
+        run: docker build -t rootguard-webapp:test .
+
+      # See ci-core.yml's identical step for the full gap this closes.
+      - name: Scan image for vulnerabilities
+        run: ./scripts/ci/trivy-image-scan.sh rootguard-webapp:test
+
   # See ci-blockpage.yml's identical job for the full rationale - this
   # job id ("build") used to collide with an identically-named,
   # unrelated check in two other workflows.

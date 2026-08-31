@@ -61,6 +61,10 @@ jobs:
           fi
       - working-directory: rootguard-core
         run: docker build -t rootguard-core:test .
+      # Found in review: nothing ever scanned the image this step just
+      # built - see trivy-image-scan.sh's own header comment for the full
+      # gap this closes.
+      - run: ./scripts/ci/trivy-image-scan.sh rootguard-core:test
 
   # Exercises the pre-update snapshot/rollback path (Manager.backup,
   # Manager.rollback, and the SHA-256 checksum verification guarding it) and

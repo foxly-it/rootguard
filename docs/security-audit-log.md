@@ -3013,6 +3013,28 @@ Docker CLI, entirely unrelated to this image. Removed it from both
 images with `rm -f`, a real content reduction rather than something a
 future digest bump would need to add back.
 
+**Medium, fixed: no CI job ever scanned a *built* container image.**
+`ci-security.yml`'s trivy job only ever ran `trivy fs .` - repo files,
+dependency manifests, and Dockerfile misconfigurations - never a built
+image's actual base-layer content. Found in review, confirmed by the
+review's own live scan: the pinned `docker:29-cli` runtime base
+(Core and Updater's shared runtime, see their Dockerfiles) carried 35
+HIGH-severity package findings across 14 distinct CVEs at scan time,
+none of which any CI job would ever have caught. Added
+`scripts/ci/trivy-image-scan.sh`, called from `ci-core.yml`,
+`ci-updater.yml`, and `ci-webapp.yml` right after each workflow's own
+`docker build`, scanning the exact image content a real PR/release would
+ship. Updater and WebApp's `test` jobs previously had no single-platform
+build step to scan at all - their only image build lived in the `build`
+job's multi-arch `docker/build-push-action` step, which (a) never
+executes for real on a PR (`push: false` discards a multi-platform
+result entirely - there is nothing left to scan) and (b) couldn't be
+loaded locally to scan even if it did (a multi-arch manifest can't be
+`--load`ed into the local daemon). Added a plain single-platform
+`docker build` step to both `test` jobs specifically to give trivy
+something real to scan, mirroring `ci-core.yml`'s own `test` job, which
+already built (but never scanned) its image this way.
+
 **High, fixed: the pinned cosign binary itself carried 39 HIGH findings,
 including a real signature-verification bypass - found live by the new
 trivy-image-scan.sh, not by the review.** Running the new scan (round 13
@@ -3033,3 +3055,29 @@ it. Bumped the pin to v3.1.3 (by digest) in both Dockerfiles and in
 release candidate's attestation before promotion using the identical
 version - the two were already required to move together (see the
 existing comment there) and previously both said v3.0.6.
+
+**Closed out: the new image scan's remaining findings, verified against
+a real post-fix build.** With every actionable round-13 fix landed
+(PRs #458, #459, #461), re-ran `trivy-image-scan.sh` against a fresh
+`rootguard-updater:test` build: Alpine's own findings are now 0, the
+buildx plugin's 13 are gone with the file itself, and cosign's 39 dropped
+to 13. What's left - 33 HIGH findings across 14 distinct CVE IDs, spread
+across the docker CLI binary, its compose plugin, and cosign itself - is
+genuinely not fixable by RootGuard today: 12 of the 14 are Go-stdlib CVEs
+baked into the upstream Go toolchain each of those three binaries was
+built with (not something a version bump can fix - even cosign's newest
+release, v3.1.3 from 2026-08-06, predates the Go release carrying the
+fix, 1.26.6 from 2026-08-13), and the remaining two
+(CVE-2026-41567/CVE-2026-42306, the same `docker cp` CVEs the new
+Preflight advisory covers at the host-Engine level) are present only in
+the compose plugin's *vendored* docker client library, which compose's
+own binary never actually calls into (compose doesn't implement or
+expose `docker cp`). Added all 14 to `.trivyignore.yaml`, each dated
+2026-11-30, so this doesn't stay silently suppressed once a newer
+upstream build of any of the three exists. One more surfaced only after
+that re-run: bumping cosign to v3.1.3 (this round's own fix, above) pulled
+in a newer `google.golang.org/grpc` that itself has one known HIGH
+finding (GHSA-hrxh-6v49-42gf, fixed at grpc-go 1.82.1) - not present in
+v3.0.6's own dependency tree, not yet fixed in any cosign release
+(confirmed live: v3.1.3 is still the newest). Added with the same dated,
+justified pattern.

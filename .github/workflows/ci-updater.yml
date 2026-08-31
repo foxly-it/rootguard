@@ -47,6 +47,17 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+      # ci-core.yml's own `test` job already builds+scans its image this
+      # way (see its identical trivy step) - the `build` job below can't
+      # do this itself, since it only ever produces a pushed multi-arch
+      # manifest (buildx with push:false on a PR discards the result
+      # entirely, and a multi-platform build can't be `--load`ed into the
+      # local daemon to scan even when it is pushed) - so a real,
+      # single-platform, locally loaded build lives here instead,
+      # purely to give trivy something to scan.
+      - working-directory: rootguard-updater
+        run: docker build -t rootguard-updater:test .
+      - run: ./scripts/ci/trivy-image-scan.sh rootguard-updater:test
 
   # See ci-blockpage.yml's identical job for the full rationale - this
   # job id ("build") used to collide with an identically-named,
