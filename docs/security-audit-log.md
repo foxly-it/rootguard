@@ -3013,6 +3013,28 @@ Docker CLI, entirely unrelated to this image. Removed it from both
 images with `rm -f`, a real content reduction rather than something a
 future digest bump would need to add back.
 
+**Medium, fixed: no CI job ever scanned a *built* container image.**
+`ci-security.yml`'s trivy job only ever ran `trivy fs .` - repo files,
+dependency manifests, and Dockerfile misconfigurations - never a built
+image's actual base-layer content. Found in review, confirmed by the
+review's own live scan: the pinned `docker:29-cli` runtime base
+(Core and Updater's shared runtime, see their Dockerfiles) carried 35
+HIGH-severity package findings across 14 distinct CVEs at scan time,
+none of which any CI job would ever have caught. Added
+`scripts/ci/trivy-image-scan.sh`, called from `ci-core.yml`,
+`ci-updater.yml`, and `ci-webapp.yml` right after each workflow's own
+`docker build`, scanning the exact image content a real PR/release would
+ship. Updater and WebApp's `test` jobs previously had no single-platform
+build step to scan at all - their only image build lived in the `build`
+job's multi-arch `docker/build-push-action` step, which (a) never
+executes for real on a PR (`push: false` discards a multi-platform
+result entirely - there is nothing left to scan) and (b) couldn't be
+loaded locally to scan even if it did (a multi-arch manifest can't be
+`--load`ed into the local daemon). Added a plain single-platform
+`docker build` step to both `test` jobs specifically to give trivy
+something real to scan, mirroring `ci-core.yml`'s own `test` job, which
+already built (but never scanned) its image this way.
+
 **High, fixed: the pinned cosign binary itself carried 39 HIGH findings,
 including a real signature-verification bypass - found live by the new
 trivy-image-scan.sh, not by the review.** Running the new scan (round 13
