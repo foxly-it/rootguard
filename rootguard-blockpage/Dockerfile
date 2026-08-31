@@ -18,6 +18,28 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
       org.opencontainers.image.revision="${COMMIT}" \
       org.opencontainers.image.created="${CREATED}"
 
+# Found in review, round 14: the stock nginx:1.29-alpine base - already
+# the current tag as of this pin, confirmed live - carries 9 CVEs across
+# these 8 packages, all already fixed on Alpine 3.23's own `main` repo
+# (confirmed live via pkgs.alpinelinux.org) but not yet what this base
+# image's own layer has baked in - a plain digest bump doesn't help here,
+# since this pin already *is* the newest available "1.29-alpine" build.
+# Pinned to each package's actual current version on that repo (not
+# always trivy's own reported "fixed version" - expat and nghttp2 have
+# both moved past their respective CVE fixes since), same stopgap pattern
+# already used for docker:29-cli's OpenSSL pin in Core/Updater's
+# Dockerfiles: replace with a plain digest bump once upstream publishes a
+# nginx:1.29-alpine build with these baked in.
+RUN apk add --no-cache --upgrade \
+        c-ares=1.34.8-r0 \
+        curl=8.20.0-r0 \
+        libcurl=8.20.0-r0 \
+        libcrypto3=3.5.8-r0 \
+        libssl3=3.5.8-r0 \
+        libexpat=2.8.3-r0 \
+        libxml2=2.13.9-r1 \
+        nghttp2-libs=1.69.0-r0
+
 RUN rm -f /etc/nginx/conf.d/default.conf
 # Deliberately NOT under /etc/nginx/templates/: the stock image's own
 # 20-envsubst-on-templates.sh hook scans that directory and runs its own

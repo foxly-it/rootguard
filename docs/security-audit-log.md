@@ -3081,3 +3081,27 @@ finding (GHSA-hrxh-6v49-42gf, fixed at grpc-go 1.82.1) - not present in
 v3.0.6's own dependency tree, not yet fixed in any cosign release
 (confirmed live: v3.1.3 is still the newest). Added with the same dated,
 justified pattern.
+
+## Follow-up review, round 14 (2026-08-31)
+
+**High, fixed: Blockpage's base image carried 9 CVEs across 13 findings,
+none caught by any CI job.** Found in review: `trivy-image-scan.sh`
+(round 13) only runs for Core/Updater/WebApp - Unbound and Blockpage,
+the other two images the release pipeline actually publishes, were
+never scanned at all. Verified live by scanning the currently-published
+`ghcr.io/foxly-it/rootguard-blockpage:latest` directly (no local Docker
+daemon available this session either): exactly 13 HIGH findings across
+9 CVE IDs and 8 packages (c-ares, curl, libcurl, libcrypto3, libssl3,
+libexpat, libxml2, nghttp2-libs), matching the review's own numbers
+exactly. Confirmed live that `nginx:1.29-alpine` (the pinned base) is
+already the current tag - a plain digest bump doesn't help here, since
+this pin already *is* the newest available build of it. Pinned all 8
+packages to their actual current version on Alpine 3.23's own `main`
+repo (confirmed live via pkgs.alpinelinux.org) - not always trivy's own
+reported "fixed version" field: expat and nghttp2 have both moved past
+their respective CVE fixes since trivy's vulnerability DB snapshot
+(2.8.3-r0/1.69.0-r0 vs. trivy's 2.8.2-r0/1.68.1), so pinning to trivy's
+literal field would have under-shot what's actually available. Same
+stopgap pattern as docker:29-cli's own OpenSSL pin (round 13): replace
+with a plain digest bump once upstream ships a build with these baked
+in.
