@@ -21,21 +21,21 @@ import (
 const (
 	scenarioImage     = "rootguard-unbound:test"
 	scenarioContainer = "rootguard-unbound-scenario-ci"
-	// dnssecTestZoneDir must match setup.sh/inject.sh's own OUT_DIR
-	// default - DNSSEC_TEST_ZONE_DIR isn't set in the environments this
-	// package's tests actually run in (ci-unbound.yml's "scenario-tests"
-	// job, or a developer running setup.sh by hand), so both scripts
-	// always fall back to this same path.
-	dnssecTestZoneDir = "/tmp/rootguard-ci-dnssec-test"
 )
 
-func TestMain(m *testing.M) {
-	// Only the scenario tests need a live container; every other test in
-	// this package is a pure unit test and must keep working without
-	// Docker at all, so the container lifecycle lives here rather than in
-	// a package-level init that would run unconditionally.
-	os.Exit(m.Run())
-}
+// dnssecTestZoneDir must match setup.sh/inject.sh's own OUT_DIR -
+// found in review: this used to be a hardcoded constant, so a
+// DNSSEC_TEST_ZONE_DIR override (e.g. a developer running setup.sh by
+// hand with a custom directory) was honored by both scripts but silently
+// ignored here, leaving this test looking in the wrong place. Falls back
+// to the same default both scripts use when the variable isn't set,
+// which is the case for every CI job that runs this package's tests.
+var dnssecTestZoneDir = func() string {
+	if dir := os.Getenv("DNSSEC_TEST_ZONE_DIR"); dir != "" {
+		return dir
+	}
+	return "/tmp/rootguard-ci-dnssec-test"
+}()
 
 func startScenarioContainer(t *testing.T) {
 	t.Helper()
