@@ -2991,3 +2991,24 @@ directly, per the review's ask to require a patched Engine in the docs
 too. Covered by two new `installer` package tests (the warning firing for
 an old clean version, and *not* firing for a patched version, a newer
 major, and an unparseable/suffixed one).
+
+**Low, fixed: Core and Updater's shared `docker:29-cli` runtime pin
+carried a fixed OpenSSL CVE and a genuinely unused CLI plugin.** Verified
+live: this exact pinned digest's baked-in `libssl3`/`libcrypto3` sit at
+3.5.7-r0, which has CVE-2026-14456 - already fixed at 3.5.8-r0 and
+already published on Alpine 3.24's own `main` repo (confirmed via
+pkgs.alpinelinux.org), just not yet what this particular digest's own
+image layer contains. Added an explicit
+`apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0` to
+both Dockerfiles as a stopgap, meant to be replaced by a plain digest
+bump once upstream publishes a `docker:29-cli` build with the fix baked
+in. Separately, confirmed (via the upstream docker-library/docker
+Dockerfile this digest is built from, and a repo-wide grep of every
+`docker ...` invocation this codebase's own code and CI make) that the
+image's bundled buildx CLI plugin
+(`/usr/local/libexec/docker/cli-plugins/docker-buildx`) is genuinely dead
+weight, not a stopgap - nothing at runtime ever calls `docker buildx`;
+only this repo's own `release-alpha.yml` does, on the GitHub runner's own
+Docker CLI, entirely unrelated to this image. Removed it from both
+images with `rm -f`, a real content reduction rather than something a
+future digest bump would need to add back.
