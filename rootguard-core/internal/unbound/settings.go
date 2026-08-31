@@ -951,6 +951,13 @@ func (m *Manager) waitReady(ctx context.Context) error {
 			}
 		}
 		lastErr, lastOutput = err, output
+		// Found in review: this used to sleep unconditionally, including
+		// after the *last* attempt - a wait no subsequent check ever
+		// consumes, just a fixed delay tacked onto every readiness
+		// timeout for no benefit.
+		if attempt == unboundReadyAttempts-1 {
+			break
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

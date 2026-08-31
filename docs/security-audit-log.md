@@ -2749,3 +2749,29 @@ always-on aggregating "merge gate" job (finding 9's own recommendation)
 would close this for good; not implemented this round given the scope of
 restructuring it needs - recorded here as the concrete case for doing it
 next.
+
+**Small, fixed: `inject.sh`'s gateway auto-detection has no escape hatch
+for Docker Desktop.** The container-own-network-gateway approach round 9
+built and verified is specific to how Docker's Linux bridge networking
+routes container-to-host traffic - correct on the native-Linux GitHub
+runners this actually runs on in CI, but the same detection doesn't
+resolve to anything reachable from inside the container on Docker
+Desktop (macOS/Windows), where the Docker daemon runs inside its own VM
+behind a different network layer. That made the local DNSSEC scenario
+unreproducible on a developer's own Docker Desktop machine - not a
+production bug (nothing here ever runs against Docker Desktop outside
+local reproduction), but worth fixing for local debuggability. Added a
+`DNSSEC_TEST_AUTHORITY_IP` override: when set, `inject.sh` uses it
+directly instead of auto-detecting; CI itself never sets it, so the
+already-verified Linux path is unaffected.
+
+**Small, fixed: `waitReady`'s retry loop slept once more than it ever
+needed to.** It unconditionally waited `unboundReadyInterval` between
+every attempt, including after the very last one - a delay nothing
+downstream ever consumes, since the loop is about to give up and return
+an error either way. Not a bug (every existing readiness/rollback test
+still passed), just a fixed, pointless delay tacked onto every readiness
+timeout. Now breaks out before that final sleep. New
+`TestWaitReadySkipsTheFinalSleep` counts `sleep` calls directly against
+a daemon that never becomes ready: exactly `unboundReadyAttempts-1`, one
+fewer than the number of attempts made.

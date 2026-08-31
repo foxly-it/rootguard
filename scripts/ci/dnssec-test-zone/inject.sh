@@ -46,15 +46,29 @@ nsd_port="8053"
 
 trust_anchor="$(cat "${out_dir}/trust-anchor")"
 
-# Sorted for determinism - Go template range over a map (here,
-# NetworkSettings.Networks) iterates in random key order, so an
-# unsorted first-match on a multi-network container (every compose
-# service here has one) would pick a different network from run to
-# run. A network with no gateway of its own (e.g. an internal-only
-# network) renders empty and is filtered out below.
-gateway_ip="$(docker inspect "$container" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{"\n"}}{{end}}' | grep -v '^$' | sort | head -1)"
+# DNSSEC_TEST_AUTHORITY_IP overrides the auto-detected gateway - found in
+# review: the gateway-IP approach below is specific to how Docker's own
+# Linux bridge networking routes container-to-host traffic, verified
+# live only on native Linux GitHub runners. On Docker Desktop (macOS/
+# Windows, e.g. a developer reproducing a CI failure locally), the VM
+# running the Docker daemon sits behind a different, non-routable-from-
+# the-container network layer entirely - the resolved "gateway" is not
+# actually reachable from inside the container the way it is on Linux.
+# This lets a local run set the authority's real, reachable address by
+# hand instead (e.g. the host's LAN IP); CI itself never sets this, so
+# the auto-detected Linux gateway path is completely unaffected.
+gateway_ip="${DNSSEC_TEST_AUTHORITY_IP:-}"
 if [[ -z "$gateway_ip" ]]; then
-  echo "::error::${container} has no network gateway IP - can't reach the local DNSSEC test authority from inside it" >&2
+  # Sorted for determinism - Go template range over a map (here,
+  # NetworkSettings.Networks) iterates in random key order, so an
+  # unsorted first-match on a multi-network container (every compose
+  # service here has one) would pick a different network from run to
+  # run. A network with no gateway of its own (e.g. an internal-only
+  # network) renders empty and is filtered out below.
+  gateway_ip="$(docker inspect "$container" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{"\n"}}{{end}}' | grep -v '^$' | sort | head -1)"
+fi
+if [[ -z "$gateway_ip" ]]; then
+  echo "::error::${container} has no network gateway IP - can't reach the local DNSSEC test authority from inside it (set DNSSEC_TEST_AUTHORITY_IP to override, e.g. on Docker Desktop)" >&2
   exit 1
 fi
 
