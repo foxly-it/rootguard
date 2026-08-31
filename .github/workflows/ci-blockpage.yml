@@ -76,6 +76,14 @@ jobs:
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci
 
+      # Found in review, round 14: this is one of the two published
+      # images (Unbound is the other, see ci-unbound.yml) that
+      # trivy-image-scan.sh (round 13) never covered - see
+      # trivy-image-scan.sh's own header comment for the full gap this
+      # closes.
+      - name: Scan image for vulnerabilities
+        run: ./scripts/ci/trivy-image-scan.sh ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci
+
       - name: Verify the page serves and enforces its security headers
         run: |
           docker run -d --name blockpage-ci -p 18080:8080 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci

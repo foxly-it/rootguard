@@ -3104,4 +3104,6 @@ their respective CVE fixes since trivy's vulnerability DB snapshot
 literal field would have under-shot what's actually available. Same
 stopgap pattern as docker:29-cli's own OpenSSL pin (round 13): replace
 with a plain digest bump once upstream ships a build with these baked
-in.
+in. Also wired `trivy-image-scan.sh` into `ci-blockpage.yml`'s `build`
+job, so this same PR's own CI proves the fix (Unbound's identical
+wiring is its own separate PR, alongside its own package fixes).
