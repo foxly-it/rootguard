@@ -2937,3 +2937,25 @@ changes otherwise), and `.nvmrc` only pinned the major version (`22`),
 which lets an already-installed Node as old as 22.0.0 through -
 tightened to `22.22.0` to actually match the floor it's meant to
 communicate. `npm run lint`/`npm run test` both still pass unchanged.
+
+**Low, fixed: `ci-real-dns-upstream.yml`'s own failures were
+undiagnosable.** Found live, matching the review: this workflow's dig
+exit code 9 failure on its own schedule was expected (it deliberately
+checks the real internet, see this workflow's header comment on why)
+but genuinely uninformative - both checks assigned dig's output via a
+bare `var="$(dig ...)"`, and under this shell's default `set -e`, dig's
+own non-zero exit (9 here) killed the step at that exact line, before
+the following `grep` that would say which check failed ever ran. The
+log showed nothing beyond a bare non-zero exit: not which domain
+(example.com vs dnssec-failed.org), not dig's own error text (only
+`2>&1` captures that; the old code only kept stdout), not the resolver
+status. Rewrote the step to run both checks unconditionally (`|| true`
+on each dig call, `2>&1` to keep dig's real error text, `::group::`
+blocks so each check's own output is visible even on success), collect
+failures into one `fail` variable, and `exit "$fail"` at the end -
+verified locally against a stand-in for a failing dig call that the
+rewritten logic reports the failing domain, dig's real error text, and
+still exits non-zero. This workflow still never runs on `pull_request`
+(schedule/`workflow_dispatch` only) and was already outside branch
+protection's required checks - this is a diagnostics fix, not a
+blocking-behavior change.
