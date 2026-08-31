@@ -14,20 +14,45 @@
 # live: main's own independent, scheduled Unbound CI run failed this way
 # multiple times in a row, at the same time as an unrelated PR's.
 #
-# Serves two records under one throwaway zone, signed fresh on every run
-# (never committed - a checked-in signed zone would eventually expire and
-# break CI on its own, and committing private key material is bad
-# practice regardless of how throwaway it is):
+# Serves two records under one throwaway DNSSEC-signed zone, signed fresh
+# on every run (never committed - a checked-in signed zone would
+# eventually expire and break CI on its own, and committing private key
+# material is bad practice regardless of how throwaway it is):
 #   good.rgtest-ci.internal.  - validates cleanly (the example.com role)
 #   bad.rgtest-ci.internal.   - a deliberately corrupted RRSIG, so a
 #                               validating resolver must SERVFAIL it
 #                               (the dnssec-failed.org role)
 #
+# Also starts a second, throwaway authority for split-DNS scenarios that
+# need a forward target distinct from the signed zone above (a guided
+# ForwardZone forwarding rgtest-ci.internal itself would be
+# indistinguishable from this script's own base wiring, which already
+# forwards all of it - see inject.sh): a single unsigned record,
+# split.rgtest-split.internal. -> 203.0.113.50.
+#
+# That second authority runs as its own Docker container, on the
+# standard port 53 *inside its own network namespace* - not this
+# script's own nsd instance, and not the host's port 53 either. Found
+# live: a guided ForwardZone's own Settings.Validate() requires a bare
+# canonical IP address in `servers[]` (no "ip@port" syntax; that's
+# Unbound raw config's own forward-addr extension, which inject.sh's own
+# base wiring uses directly, not something the guided-settings API
+# accepts) - so a scenario test driving the real Settings.Render() path
+# needs this authority reachable on the port a bare IP implies. The
+# *host's* own port 53 turned out already bound on GitHub's runners
+# (confirmed live: nsd failed with "can't bind udp socket 0.0.0.0@53:
+# Address already in use") - a second container sidesteps that
+# entirely, its own port 53 in its own netns, reachable from another
+# unnetworked container (as the Go scenario tests start theirs) via
+# Docker's default bridge.
+#
 # Usage: ./setup.sh - installs nsd/ldns-utils if missing, generates and
-# signs the zone, starts nsd listening on 0.0.0.0:8053, and writes
-# $OUT_DIR/trust-anchor - the zone's DNSKEY as a single line, ready to
-# drop straight into an Unbound `trust-anchor:` config directive.
-# inject.sh (this directory) wires a given container up to consume it.
+# signs the DNSSEC zone, starts nsd listening on 0.0.0.0:8053 serving it,
+# and writes $OUT_DIR/trust-anchor - the signed zone's DNSKEY as a single
+# line, ready to drop straight into an Unbound `trust-anchor:` config
+# directive. Also starts the split-DNS container authority and writes
+# $OUT_DIR/split-authority-ip - its own reachable IP. inject.sh (this
+# directory) wires a given container up to the DNSSEC zone.
 #
 # Real internet resolution is still exercised, just not as a blocking PR/
 # release gate - see ci-real-dns-upstream.yml.
@@ -35,6 +60,7 @@
 set -Eeuo pipefail
 
 zone="rgtest-ci.internal."
+split_zone="rgtest-split.internal."
 nsd_port="8053"
 out_dir="${DNSSEC_TEST_ZONE_DIR:-/tmp/rootguard-ci-dnssec-test}"
 
@@ -125,15 +151,110 @@ EOF
 
 nsd-checkconf nsd.conf
 nsd-checkzone "${zone}" zone.txt.signed
-sudo pkill nsd 2>/dev/null || true
-sudo nsd -c "${out_dir}/nsd.conf"
 
+# Only ever stop a leftover nsd this exact script started earlier - a bare
+# `pkill nsd` would just as happily kill an unrelated nsd process on a
+# shared/self-hosted runner or a developer's own machine running this
+# locally. Identified by its own pidfile under this test directory, and
+# double-checked against /proc so a recycled PID that now belongs to some
+# other process is never touched.
+if [[ -f nsd.pid ]]; then
+  old_pid="$(cat nsd.pid)"
+  if [[ "$old_pid" =~ ^[0-9]+$ ]] && ps -p "$old_pid" -o args= 2>/dev/null | grep -qF "${out_dir}/nsd.conf"; then
+    sudo kill "$old_pid"
+    for _ in $(seq 1 20); do
+      kill -0 "$old_pid" 2>/dev/null || break
+      sleep 0.25
+    done
+  fi
+  rm -f nsd.pid
+fi
+# nsd logs its own startup failures (a bind conflict, e.g.) to its own
+# logfile, not stderr - found live already, for the remote-control TLS
+# issue above. Dump it on failure so a bind conflict is diagnosable from
+# CI output instead of just "exit 1" with nothing else to go on.
+if ! sudo nsd -c "${out_dir}/nsd.conf"; then
+  echo "::error::nsd failed to start - ${out_dir}/nsd.log follows" >&2
+  cat "${out_dir}/nsd.log" >&2 2>/dev/null || true
+  exit 1
+fi
+
+# Checks actual record content, not just dig's exit code - an exit code
+# alone can't tell a real answer apart from an empty NOERROR, REFUSED, or
+# NXDOMAIN response, any of which would let this loop declare the
+# authority "ready" before it can actually serve what the caller expects.
+dnssec_authority_ready=false
 for _ in $(seq 1 20); do
-  if dig +short +time=1 +tries=1 @127.0.0.1 -p "$nsd_port" "good.${zone}" A >/dev/null 2>&1; then
-    echo "Local DNSSEC test authority is up on 0.0.0.0:${nsd_port}, serving ${zone}"
-    exit 0
+  good_answer="$(dig +short +time=1 +tries=1 @127.0.0.1 -p "$nsd_port" "good.${zone}" A 2>/dev/null || true)"
+  if [[ "$good_answer" == "203.0.113.10" ]]; then
+    dnssec_authority_ready=true
+    break
   fi
   sleep 0.5
 done
-echo "::error::Local DNSSEC test authority never came up" >&2
-exit 1
+if [[ "$dnssec_authority_ready" != true ]]; then
+  echo "::error::Local DNSSEC test authority never came up" >&2
+  exit 1
+fi
+echo "Local DNSSEC test authority is up on 0.0.0.0:${nsd_port}, serving ${zone}"
+
+# Split-DNS authority: a throwaway container, not this script's own nsd
+# instance - see this file's own header comment on why. alpine, not the
+# rootguard-unbound image other CI steps build: this script runs before
+# that image exists in some callers (ci.yml's own "validate" job builds
+# the stack *after* calling this script), and alpine's own package
+# manager is fast enough that installing nsd fresh here each run is
+# still cheap.
+cat >split-zone.txt <<EOF
+\$TTL 300
+${split_zone}       IN SOA  ns.${split_zone} hostmaster.${split_zone} ( $(date +%s) 3600 900 604800 300 )
+${split_zone}       IN NS   ns.${split_zone}
+ns.${split_zone}    IN A    203.0.113.2
+split.${split_zone} IN A    203.0.113.50
+EOF
+# chroot/username/remote-control mirror the host nsd.conf above, same
+# reasons: an unset chroot can default to a path this throwaway zonesdir
+# was never placed under, dropping privileges to a package-created "nsd"
+# user can fail to read a bind-mounted zone owned by the container's
+# root, and the default remote-control TLS interface needs a cert this
+# throwaway setup never generates (the exact failure the host instance
+# above already hit and fixed the same way).
+cat >split-nsd.conf <<EOF
+server:
+  ip-address: 0.0.0.0@53
+  zonesdir: "/zones"
+  username: root
+  chroot: ""
+
+remote-control:
+  control-enable: no
+
+zone:
+  name: "${split_zone}"
+  zonefile: "/zones/split-zone.txt"
+EOF
+
+docker rm -f rgtest-split-authority >/dev/null 2>&1 || true
+docker run --rm --detach --name rgtest-split-authority \
+  -v "${out_dir}/split-nsd.conf:/etc/nsd.conf:ro" \
+  -v "${out_dir}/split-zone.txt:/zones/split-zone.txt:ro" \
+  --entrypoint sh alpine:3.20 \
+  -c 'apk add --no-cache nsd >/dev/null 2>&1 && exec nsd -d -c /etc/nsd.conf' >/dev/null
+
+split_authority_ip=""
+split_answer=""
+for _ in $(seq 1 40); do
+  split_authority_ip="$(docker inspect --format '{{.NetworkSettings.IPAddress}}' rgtest-split-authority 2>/dev/null || true)"
+  if [[ -n "$split_authority_ip" ]]; then
+    split_answer="$(dig +short +time=1 +tries=1 @"$split_authority_ip" "split.${split_zone}" A 2>/dev/null || true)"
+    [[ "$split_answer" == "203.0.113.50" ]] && break
+  fi
+  sleep 0.5
+done
+if [[ "$split_answer" != "203.0.113.50" ]]; then
+  echo "::error::Split-DNS test authority container never came up" >&2
+  docker logs rgtest-split-authority 2>&1 || true
+  exit 1
+fi
+printf '%s' "$split_authority_ip" >"${out_dir}/split-authority-ip"
+echo "Split-DNS test authority is up at ${split_authority_ip}:53, serving ${split_zone}"

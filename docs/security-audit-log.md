@@ -2599,3 +2599,91 @@ Also added a sibling test proving `rollbackFailedApply` reports honestly
 - not "previous configuration restored" - when the rollback restart's
 own readiness never arrives either, a case the existing test suite
 hadn't separately covered.
+
+## Follow-up review, round 10 (2026-08-31)
+
+A tenth independent review - no critical security issue found this
+round; round 9's local DNSSEC test zone and its live-found fixes hold up
+completely. Same discipline as every round before: each finding verified
+directly against the current code before being counted.
+
+**Medium, fixed: two more real-internet-DNS blocking-CI dependencies
+round 9 missed.** Round 9's own sweep converted `ci.yml`/`ci-unbound.yml`
+to the local test zone but missed two spots: `scenario_integration_test.go`
+(`TestScenarioHomeNetwork`, `TestScenarioSplitDNS`,
+`TestScenarioBrokenUpstream`, `TestScenarioDNSSECFailures` - `example.com`,
+`cloudflare.com`, `1.1.1.1` directly) and `verification-common.sh`'s
+`verify_dns` (`example.com`/`dnssec-failed.org`, shared by
+`verify-clean-install.sh` and `verify-backup-restore.sh`, run by
+`clean-install.yml`/`backup-restore.yml`). Same failure mode as round 9's
+own finding: a transient DNS hiccup on the runner fails the build for
+reasons unrelated to the code under test.
+
+Fixed the scenario tests by pointing every "external/unrelated domain"
+check at `good.rgtest-ci.internal` (already wired up for every scenario
+test via `wireUpLocalDNSSECTestZone`) instead. `TestScenarioSplitDNS`
+needed its own reachable forward target distinct from
+`rgtest-ci.internal` itself - forwarding that zone wouldn't have proven
+anything, since `inject.sh`'s own base config already forwards all of it
+before any scenario's settings are ever applied, so it would resolve
+identically whether or not `Settings.Render`'s `ForwardZone` handling
+actually worked. `setup.sh` now also starts a second, deliberately
+*unsigned* throwaway authority (one record,
+`split.rgtest-split.internal.` → `203.0.113.50`), never forwarded by
+`inject.sh`'s own base wiring - so only the scenario's own guided
+`ForwardZone` setting makes it resolve.
+
+Two live failures while building that, both caught by this PR's own CI
+before merging, not after. First: pointed the scenario's `ForwardZone`
+at the DNSSEC authority's existing `nsd` instance via an `"ip@8053"`
+server string - `Settings.Render()` calls `Settings.Validate()` first,
+which requires `forward_zones[].servers[]` to be a bare canonical IP
+with no port suffix (`@port` is Unbound raw config's own `forward-addr`
+extension, which `inject.sh`'s base wiring uses directly, not something
+the guided-settings API accepts) - failed immediately with "must be a
+canonical IPv4 or IPv6 address". Fixed by giving that same `nsd` a
+second bind, `0.0.0.0@53` alongside the existing `0.0.0.0@8053`, so the
+split zone would be reachable at the standard port a bare guided-
+settings IP always implies. Second: that second bind then failed nsd's
+own startup outright - `can't bind udp socket 0.0.0.0@53: Address
+already in use` - GitHub's own runners already have something bound to
+the host's port 53. Fixed for real by moving the split zone to its own
+throwaway Docker container instead (`alpine:3.20` + `nsd`, plain
+`docker run`, no host port published) - its port 53 lives entirely
+inside that container's own network namespace, so the host's port 53
+being taken is irrelevant, and it's directly reachable from another
+unnetworked container (as the Go scenario tests' own container is) via
+Docker's default bridge. `setup.sh` resolves and writes that container's
+IP to `$OUT_DIR/split-authority-ip`; the Go test reads it directly as
+the bare guided-settings target.
+
+Fixed `verify_dns` by making both domains configurable
+(`ROOTGUARD_VERIFY_DNS_DOMAIN`/`ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN`,
+defaulting to the real domains so any other caller's behavior is
+unchanged) and adding a shared `wire_local_dnssec_test_zone` helper that
+runs `inject.sh` against the running `rootguard-unbound` container and
+waits for it to report healthy again. `clean-install.yml` and
+`backup-restore.yml` now start the local test authority
+(`scripts/ci/dnssec-test-zone/setup.sh`) before their verify step and
+point both env vars at `good`/`bad.rgtest-ci.internal`;
+`verify-backup-restore.sh` calls `wire_local_dnssec_test_zone` twice -
+once for the primary instance, once more for the freshly-restored one,
+since restore deploys an entirely new `rootguard-unbound` container that
+needs its own wiring.
+
+**Small, fixed alongside the above (same file, same review pass):
+`setup.sh`'s own authority-readiness loop only checked `dig`'s exit
+code, and it unconditionally `pkill nsd` on every run.** An exit code
+alone can't distinguish a real answer from an empty NOERROR, REFUSED, or
+NXDOMAIN response - any of which would have let the loop declare the
+authority "ready" before it could actually serve what a caller expects.
+Now checks the actual resolved address against what `good.rgtest-ci.internal`
+and `split.rgtest-split.internal` are supposed to return. Separately,
+`pkill nsd` would kill *any* `nsd` process, not just this script's own -
+harmless on a GitHub-hosted, single-purpose, ephemeral runner, but a real
+hazard on a shared self-hosted runner or a developer's own machine
+running this locally. Now only stops a leftover `nsd` identified by its
+own pidfile under this exact test directory, and only after confirming
+via `ps` that the PID still actually belongs to a process running against
+this script's own `nsd.conf` - a recycled PID now owned by an unrelated
+process is left alone.

@@ -48,6 +48,7 @@ deploy_config="$(jq -n --arg address "127.0.0.1" --argjson port "${dns_port}" \
 
 echo "Installing the primary instance to back up"
 install_stack
+wire_local_dnssec_test_zone
 verify_dns >/dev/null
 
 echo "Exporting an encrypted backup"
@@ -76,6 +77,7 @@ curl --fail --silent --cookie "${cookie_file}" \
   --form "confirmation=RESTORE" \
   "http://127.0.0.1:${web_port}/api/backups/restore" >/dev/null
 wait_for_installed
+wire_local_dnssec_test_zone
 
 echo "Verifying DNS after restore"
 answer="$(verify_dns)"

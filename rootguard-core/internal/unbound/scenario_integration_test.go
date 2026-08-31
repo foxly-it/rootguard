@@ -21,6 +21,12 @@ import (
 const (
 	scenarioImage     = "rootguard-unbound:test"
 	scenarioContainer = "rootguard-unbound-scenario-ci"
+	// dnssecTestZoneDir must match setup.sh/inject.sh's own OUT_DIR
+	// default - DNSSEC_TEST_ZONE_DIR isn't set in the environments this
+	// package's tests actually run in (ci-unbound.yml's "scenario-tests"
+	// job, or a developer running setup.sh by hand), so both scripts
+	// always fall back to this same path.
+	dnssecTestZoneDir = "/tmp/rootguard-ci-dnssec-test"
 )
 
 func TestMain(m *testing.M) {
@@ -71,6 +77,35 @@ func wireUpLocalDNSSECTestZone(t *testing.T) {
 		t.Fatalf("wire up local DNSSEC test zone: %v: %s", err, output)
 	}
 	waitHealthy(t)
+}
+
+// localSplitDNSForwardTarget returns the split-DNS test authority
+// container's own IP, as setup.sh started it and resolved it (running
+// alongside the scenario container on Docker's default bridge, so it's
+// directly reachable from inside it). Used as a guided ForwardZone
+// target that only resolves setup.sh's unsigned
+// split.rgtest-split.internal record - unlike rgtest-ci.internal, that
+// authority is never forwarded by inject.sh's own base config, so a
+// query for it only succeeds if the scenario's own ForwardZone setting
+// actually took effect, not because of the CI harness's ambient wiring.
+//
+// A bare IP, no "@port" - found live: Settings.Render() calls
+// Settings.Validate() first, which requires forward_zones[].servers[]
+// to be a canonical IP address with no port suffix (that syntax is
+// Unbound raw config's own forward-addr extension, which inject.sh's
+// base wiring uses directly, not something the guided-settings API
+// accepts). The split authority listens on the standard port 53 inside
+// its own container specifically so this scenario - which drives the
+// real Settings.Render() path, unlike inject.sh - can reach it with a
+// production-shaped address; see setup.sh's own header comment for why
+// that isn't the host's port 53.
+func localSplitDNSForwardTarget(t *testing.T) string {
+	t.Helper()
+	authorityIP, err := os.ReadFile(dnssecTestZoneDir + "/split-authority-ip")
+	if err != nil {
+		t.Fatalf("read split-DNS test authority IP: %v", err)
+	}
+	return string(authorityIP)
 }
 
 func waitHealthy(t *testing.T) {
@@ -152,8 +187,12 @@ func TestScenarioHomeNetwork(t *testing.T) {
 	if ptr := dig(t, "-x", "192.168.1.10", "+short"); !strings.Contains(ptr, "nas.home.lab.") {
 		t.Fatalf("expected PTR for 192.168.1.10 to resolve to nas.home.lab., got %q", ptr)
 	}
-	if external := dig(t, "example.com", "A", "+short"); strings.TrimSpace(external) == "" {
-		t.Fatal("expected example.com to resolve via normal recursion")
+	// good.rgtest-ci.internal, not a real internet domain - see setup.sh's
+	// own doc comment on why a blocking CI gate shouldn't depend on real
+	// internet DNS being reachable and stable from whatever runner
+	// happens to execute this test.
+	if external := dig(t, "good.rgtest-ci.internal", "A", "+short"); strings.TrimSpace(external) == "" {
+		t.Fatal("expected good.rgtest-ci.internal to resolve via normal recursion")
 	}
 	// The default reverse-zone policy is NXDOMAIN for unassigned RFC1918
 	// addresses - an address in the same /24 but never registered as a
@@ -206,25 +245,32 @@ func TestScenarioVLANs(t *testing.T) {
 // domain-insecure never suppressed that failure in the first place, and
 // a domain this repo doesn't control staying in exactly the right DNSSEC
 // state indefinitely wasn't a good bet regardless.)
+//
+// The forward target is setup.sh's own unsigned split-DNS zone, not a
+// real internet domain - forwarding rgtest-ci.internal itself here
+// wouldn't prove anything: inject.sh's own base config already forwards
+// all of it before this scenario's settings are ever applied, so it
+// would resolve identically whether or not Settings.Render's ForwardZone
+// handling actually worked.
 func TestScenarioSplitDNS(t *testing.T) {
 	startScenarioContainer(t)
 
 	settings := baseScenarioSettings()
 	settings.ForwardZones = []ForwardZone{{
-		Name:          "cloudflare.com.",
-		Servers:       []string{"1.1.1.1"},
+		Name:          "rgtest-split.internal.",
+		Servers:       []string{localSplitDNSForwardTarget(t)},
 		AllowUnsigned: true,
 	}}
 	applyScenario(t, settings)
 
-	if got := strings.TrimSpace(dig(t, "cloudflare.com", "A", "+short")); got == "" {
-		t.Fatal("expected the forwarded zone to resolve")
+	if got := strings.TrimSpace(dig(t, "split.rgtest-split.internal", "A", "+short")); got != "203.0.113.50" {
+		t.Fatalf("expected the forwarded zone to resolve to 203.0.113.50, got %q", got)
 	}
 	// A domain outside that forward zone must still use normal recursion,
 	// not the private upstream - the forward must not leak beyond its own
 	// zone.
-	if external := dig(t, "example.com", "A", "+short"); strings.TrimSpace(external) == "" {
-		t.Fatal("expected example.com to still resolve via normal recursion outside the forward zone")
+	if external := dig(t, "good.rgtest-ci.internal", "A", "+short"); strings.TrimSpace(external) == "" {
+		t.Fatal("expected good.rgtest-ci.internal to still resolve via normal recursion outside the forward zone")
 	}
 }
 
@@ -293,7 +339,7 @@ func TestScenarioBrokenUpstream(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	start := time.Now()
-	if external := dig(t, "example.com", "A", "+short"); strings.TrimSpace(external) == "" {
+	if external := dig(t, "good.rgtest-ci.internal", "A", "+short"); strings.TrimSpace(external) == "" {
 		t.Fatal("expected normal recursion for an unrelated domain to be unaffected by the broken forward zone")
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
@@ -316,7 +362,13 @@ func TestScenarioDNSSECFailures(t *testing.T) {
 		Name:  "home.lab.",
 		Hosts: []LocalHost{{Hostname: "router", IPv4: "192.168.1.1"}},
 	}}
-	settings.ForwardZones = []ForwardZone{{Name: "example.org.", Servers: []string{"1.1.1.1"}}}
+	// Never actually queried below - present only to prove DNSSEC
+	// enforcement holds alongside an unrelated forward zone. 192.0.2.1 is
+	// TEST-NET-1 (RFC 5737, reserved for documentation), same choice
+	// TestScenarioBrokenUpstream already makes for the same reason: this
+	// value must never resolve to a real service, since it's not
+	// supposed to ever actually be dialed by this test.
+	settings.ForwardZones = []ForwardZone{{Name: "example.org.", Servers: []string{"192.0.2.1"}}}
 	applyScenario(t, settings)
 
 	if status := dig(t, "bad.rgtest-ci.internal", "A", "+noall", "+comments"); !strings.Contains(status, "status: SERVFAIL") {
