@@ -182,7 +182,15 @@ if [[ -f nsd.pid ]]; then
   fi
   rm -f nsd.pid
 fi
-sudo nsd -c "${out_dir}/nsd.conf"
+# nsd logs its own startup failures (a bind conflict, e.g.) to its own
+# logfile, not stderr - found live already, for the remote-control TLS
+# issue above. Dump it on failure so a bind conflict is diagnosable from
+# CI output instead of just "exit 1" with nothing else to go on.
+if ! sudo nsd -c "${out_dir}/nsd.conf"; then
+  echo "::error::nsd failed to start - ${out_dir}/nsd.log follows" >&2
+  cat "${out_dir}/nsd.log" >&2 2>/dev/null || true
+  exit 1
+fi
 
 # Checks actual record content, not just dig's exit code - an exit code
 # alone can't tell a real answer apart from an empty NOERROR, REFUSED, or
