@@ -71,6 +71,27 @@ Not supported: bare-metal/systemd installs and multi-node deployments are
 explicitly out of scope for 1.0 (`ROADMAP.md`'s "Post-1.0 / Future"
 section) - RootGuard 1.0 is a single-node Docker appliance only.
 
+## Docker Engine version
+
+RootGuard's Core and Updater containers call `docker cp` in three places
+(backup export, backup restore, and update rollback - see their own
+package docs). Two `docker cp` vulnerabilities, CVE-2026-41567 and
+CVE-2026-42306, were fixed upstream in Docker Engine 29.5.1
+([release notes](https://docs.docker.com/engine/release-notes/29/)); either
+one is exploitable by a container running under the same Docker Engine as
+RootGuard's own controllers. **Run Docker Engine 29.5.1 or later**, or
+confirm your distribution's own package has backported both fixes - some
+distributions patch security issues without bumping the version string
+they report, so a version below 29.5.1 is not on its own proof of being
+unpatched, only a reason to check.
+
+The installer's own preflight surfaces this as a non-blocking advisory
+check (`docker_engine_cp_cve`) whenever it can read Docker Engine's
+version unambiguously as below 29.5.1 - it warns instead of failing
+preflight specifically because a backported distro package is common
+enough here (Debian/Ubuntu's own `docker.io`, e.g.) that blocking on the
+version string alone would produce real false positives.
+
 ## Minimum requirements
 
 No hard minimum is enforced by the installer, but

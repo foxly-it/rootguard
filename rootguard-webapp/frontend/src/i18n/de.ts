@@ -237,6 +237,8 @@ export const de: LocaleDefinition = {
     "setup.diagnostic.docker_unreachable.message": "Docker Engine ist für RootGuard nicht erreichbar.",
     "setup.diagnostic.docker_unreachable.action": "Prüfe den Docker-Dienst und den Socket-Mount des RootGuard-Controllers.",
     "setup.diagnostic.docker_reachable.message": "Docker Engine ist erreichbar.",
+    "setup.diagnostic.docker_engine_cp_cve.message": "Diese Docker-Engine-Version liegt vor 29.5.1 und damit vor der Behebung zweier docker-cp-Schwachstellen (CVE-2026-41567, CVE-2026-42306), auf die RootGuards Backup-, Restore- und Update-Rollback-Pfade angewiesen sind{detail}.",
+    "setup.diagnostic.docker_engine_cp_cve.action": "Aktualisiere Docker Engine auf 29.5.1 oder neuer, oder bestätige, dass deine Distribution diese Fixes unabhängig von der angezeigten Versionsnummer bereits zurückportiert hat.",
     "setup.diagnostic.compose_unavailable.message": "Docker Compose ist im Controller nicht verfügbar.",
     "setup.diagnostic.compose_unavailable.action": "Verwende das unterstützte RootGuard-Core-Image oder installiere das Docker-Compose-Plugin.",
     "setup.diagnostic.compose_available.message": "Docker Compose ist verfügbar.",

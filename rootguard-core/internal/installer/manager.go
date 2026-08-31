@@ -52,6 +52,13 @@ type Check struct {
 	Message string `json:"message"`
 	Detail  string `json:"detail,omitempty"`
 	Action  string `json:"action,omitempty"`
+	// Level distinguishes an advisory check (OK is still true - it never
+	// gates Preflight.Ready) from the pass/fail checks above: empty for
+	// all of those, "warning" for a check like dockerCPPatchWarning below
+	// that has a real Action worth surfacing but isn't confident enough to
+	// block installation on. omitempty keeps every existing check's JSON
+	// unchanged.
+	Level string `json:"level,omitempty"`
 }
 
 type Preflight struct {
@@ -250,7 +257,7 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 	checks := validateConfig(config)
 
 	dockerOK := true
-	if _, err := m.run(ctx, "version", "--format", "{{.Server.Version}}"); err != nil {
+	if serverVersion, err := m.run(ctx, "version", "--format", "{{.Server.Version}}"); err != nil {
 		dockerOK = false
 		checks = append(checks, Check{
 			ID: "docker", Code: "docker_unreachable", OK: false,
@@ -262,6 +269,9 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 			ID: "docker", Code: "docker_reachable", OK: true,
 			Message: "Docker Engine is reachable.",
 		})
+		if warning, ok := dockerCPPatchWarning(strings.TrimSpace(string(serverVersion))); ok {
+			checks = append(checks, warning)
+		}
 	}
 
 	if _, err := m.run(ctx, "compose", "version", "--short"); err != nil {
@@ -351,6 +361,59 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 		}
 	}
 	return Preflight{Ready: ready, Config: config, Checks: checks}
+}
+
+// dockerCPFixedVersion is Docker Engine 29.5.1, the first upstream release
+// with both CVE-2026-41567 and CVE-2026-42306 fixed - two `docker cp`
+// vulnerabilities (arbitrary host-binary execution via PATH resolution
+// during archive decompression, and a TOCTOU race that can redirect a
+// bind-mount target to an arbitrary host path). Found in review: RootGuard
+// itself calls `docker cp` in three places - backupexport, backuprestore,
+// and updater's rollback path - so an unpatched host Docker Engine is a
+// real exposure, not a theoretical one.
+var dockerCPFixedVersion = [3]int{29, 5, 1}
+
+// cleanDockerVersion matches only a plain upstream MAJOR.MINOR.PATCH
+// version string (e.g. "29.4.0") - not one carrying a distro-packaging
+// suffix (Debian/Ubuntu's docker.io package reports things like
+// "24.0.7-1ubuntu1", e.g.). That distinction is deliberate: a distro can
+// (and, per review, sometimes does) backport a security fix onto a
+// package while keeping the same upstream-looking version number in its
+// own suffixed form, which makes a suffixed version string just as
+// uninformative about patch status as no version string at all. Only the
+// unsuffixed, unambiguous case is one this function can respond to with
+// any confidence.
+var cleanDockerVersion = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
+
+// dockerCPPatchWarning reports an advisory (Check.OK stays true - see
+// Check.Level's own doc comment) when the Docker Engine version Preflight
+// just observed unambiguously predates dockerCPFixedVersion. ok is false
+// whenever the version can't be read with that confidence, which is
+// deliberately treated the same as "assume patched" rather than "assume
+// vulnerable" - this can only ever warn, never block Ready, precisely
+// because a false positive here has no real cost while a false negative
+// only means the same information the two CVEs are already public with.
+func dockerCPPatchWarning(version string) (Check, bool) {
+	m := cleanDockerVersion.FindStringSubmatch(version)
+	if m == nil {
+		return Check{}, false
+	}
+	major, _ := strconv.Atoi(m[1])
+	minor, _ := strconv.Atoi(m[2])
+	patch, _ := strconv.Atoi(m[3])
+	fixedMajor, fixedMinor, fixedPatch := dockerCPFixedVersion[0], dockerCPFixedVersion[1], dockerCPFixedVersion[2]
+	patched := major > fixedMajor ||
+		(major == fixedMajor && minor > fixedMinor) ||
+		(major == fixedMajor && minor == fixedMinor && patch >= fixedPatch)
+	if patched {
+		return Check{}, false
+	}
+	return Check{
+		ID: "docker_engine_patch_level", Code: "docker_engine_cp_cve", OK: true, Level: "warning",
+		Message: "Docker Engine predates 29.5.1, which fixed two docker cp vulnerabilities (CVE-2026-41567, CVE-2026-42306) that RootGuard's backup, restore, and update-rollback paths rely on",
+		Detail:  version,
+		Action:  "Upgrade Docker Engine to 29.5.1 or later, or confirm your distribution has already backported these fixes independently of its reported version number.",
+	}, true
 }
 
 func (m *Manager) Start(ctx context.Context, config Config) (Status, error) {

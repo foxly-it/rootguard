@@ -617,6 +617,10 @@ export interface InstallationCheck {
   message: string;
   detail?: string;
   action?: string;
+  // "warning" for an advisory check that never fails preflight.ready -
+  // see rootguard-core's Check.Level doc comment for why it's separate
+  // from ok.
+  level?: "warning";
 }
 
 export interface InstallationPreflight {
