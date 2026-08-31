@@ -44,9 +44,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes dnsutils
 
+      # See verification-common.sh's own comment on verify_dns - a real
+      # internet domain here would fail this job on a transient DNS
+      # hiccup unrelated to the code under test.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Verify clean installation
         env:
           ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
+          ROOTGUARD_VERIFY_DNS_DOMAIN: good.rgtest-ci.internal
+          ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN: bad.rgtest-ci.internal
         run: ./scripts/verify-clean-install.sh
 
       - name: Record platform evidence

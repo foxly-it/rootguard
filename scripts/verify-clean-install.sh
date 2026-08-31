@@ -31,6 +31,7 @@ export ROOTGUARD_WEB_PORT="${web_port}"
 echo "Pulling immutable RootGuard alpha images for ${normalized_arch}"
 docker compose -f "${compose_file}" pull
 install_stack
+wire_local_dnssec_test_zone
 answer="$(verify_dns)"
 
 echo "RootGuard clean install passed"

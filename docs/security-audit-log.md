@@ -2599,3 +2599,74 @@ Also added a sibling test proving `rollbackFailedApply` reports honestly
 - not "previous configuration restored" - when the rollback restart's
 own readiness never arrives either, a case the existing test suite
 hadn't separately covered.
+
+## Follow-up review, round 10 (2026-08-31)
+
+A tenth independent review - no critical security issue found this
+round; round 9's local DNSSEC test zone and its live-found fixes hold up
+completely. Same discipline as every round before: each finding verified
+directly against the current code before being counted.
+
+**Medium, fixed: two more real-internet-DNS blocking-CI dependencies
+round 9 missed.** Round 9's own sweep converted `ci.yml`/`ci-unbound.yml`
+to the local test zone but missed two spots: `scenario_integration_test.go`
+(`TestScenarioHomeNetwork`, `TestScenarioSplitDNS`,
+`TestScenarioBrokenUpstream`, `TestScenarioDNSSECFailures` - `example.com`,
+`cloudflare.com`, `1.1.1.1` directly) and `verification-common.sh`'s
+`verify_dns` (`example.com`/`dnssec-failed.org`, shared by
+`verify-clean-install.sh` and `verify-backup-restore.sh`, run by
+`clean-install.yml`/`backup-restore.yml`). Same failure mode as round 9's
+own finding: a transient DNS hiccup on the runner fails the build for
+reasons unrelated to the code under test.
+
+Fixed the scenario tests by pointing every "external/unrelated domain"
+check at `good.rgtest-ci.internal` (already wired up for every scenario
+test via `wireUpLocalDNSSECTestZone`) instead. `TestScenarioSplitDNS`
+needed its own reachable forward target distinct from
+`rgtest-ci.internal` itself - forwarding that zone wouldn't have proven
+anything, since `inject.sh`'s own base config already forwards all of it
+before any scenario's settings are ever applied, so it would resolve
+identically whether or not `Settings.Render`'s `ForwardZone` handling
+actually worked. `setup.sh` now also serves a second, deliberately
+*unsigned* zone (`rgtest-split.internal.`, one record,
+`split.rgtest-split.internal.` → `203.0.113.50`) from the same `nsd`
+instance, on the same port, never forwarded by `inject.sh`'s own base
+wiring - so only the scenario's own guided `ForwardZone` setting makes it
+resolve. `inject.sh` now also writes the authority's resolved gateway IP
+to `$OUT_DIR/gateway-ip` so the Go test can address it directly
+(`gatewayIP@8053`, `ForwardZone.Servers` accepts this since the test
+calls `Settings.Render` directly, not the public API's `Validate`, which
+restricts `Servers` to a bare canonical IP - matching every other target
+in this file that's chosen to be safe-but-never-actually-real, e.g.
+`TestScenarioBrokenUpstream`'s `192.0.2.1`).
+
+Fixed `verify_dns` by making both domains configurable
+(`ROOTGUARD_VERIFY_DNS_DOMAIN`/`ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN`,
+defaulting to the real domains so any other caller's behavior is
+unchanged) and adding a shared `wire_local_dnssec_test_zone` helper that
+runs `inject.sh` against the running `rootguard-unbound` container and
+waits for it to report healthy again. `clean-install.yml` and
+`backup-restore.yml` now start the local test authority
+(`scripts/ci/dnssec-test-zone/setup.sh`) before their verify step and
+point both env vars at `good`/`bad.rgtest-ci.internal`;
+`verify-backup-restore.sh` calls `wire_local_dnssec_test_zone` twice -
+once for the primary instance, once more for the freshly-restored one,
+since restore deploys an entirely new `rootguard-unbound` container that
+needs its own wiring.
+
+**Small, fixed alongside the above (same file, same review pass):
+`setup.sh`'s own authority-readiness loop only checked `dig`'s exit
+code, and it unconditionally `pkill nsd` on every run.** An exit code
+alone can't distinguish a real answer from an empty NOERROR, REFUSED, or
+NXDOMAIN response - any of which would have let the loop declare the
+authority "ready" before it could actually serve what a caller expects.
+Now checks the actual resolved address against what `good.rgtest-ci.internal`
+and `split.rgtest-split.internal` are supposed to return. Separately,
+`pkill nsd` would kill *any* `nsd` process, not just this script's own -
+harmless on a GitHub-hosted, single-purpose, ephemeral runner, but a real
+hazard on a shared self-hosted runner or a developer's own machine
+running this locally. Now only stops a leftover `nsd` identified by its
+own pidfile under this exact test directory, and only after confirming
+via `ps` that the PID still actually belongs to a process running against
+this script's own `nsd.conf` - a recycled PID now owned by an unrelated
+process is left alone.

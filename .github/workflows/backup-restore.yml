@@ -62,11 +62,19 @@ jobs:
       - name: Build rootguard-webapp from this checkout
         run: docker build -t rootguard-webapp:e2e ./rootguard-webapp
 
+      # See verification-common.sh's own comment on verify_dns - a real
+      # internet domain here would fail this job on a transient DNS
+      # hiccup unrelated to the code under test.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Verify backup export and restore
         env:
           ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
           ROOTGUARD_CORE_IMAGE: rootguard-core:e2e
           ROOTGUARD_WEBAPP_IMAGE: rootguard-webapp:e2e
+          ROOTGUARD_VERIFY_DNS_DOMAIN: good.rgtest-ci.internal
+          ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN: bad.rgtest-ci.internal
           # This job builds rootguard-core (and, when BlockpageEnabled,
           # would deploy Unbound/Blockpage) from this checkout - none of
           # that carries a real cosign attestation, so the installer's

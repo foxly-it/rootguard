@@ -14,20 +14,28 @@
 # live: main's own independent, scheduled Unbound CI run failed this way
 # multiple times in a row, at the same time as an unrelated PR's.
 #
-# Serves two records under one throwaway zone, signed fresh on every run
-# (never committed - a checked-in signed zone would eventually expire and
-# break CI on its own, and committing private key material is bad
-# practice regardless of how throwaway it is):
+# Serves two records under one throwaway DNSSEC-signed zone, signed fresh
+# on every run (never committed - a checked-in signed zone would
+# eventually expire and break CI on its own, and committing private key
+# material is bad practice regardless of how throwaway it is):
 #   good.rgtest-ci.internal.  - validates cleanly (the example.com role)
 #   bad.rgtest-ci.internal.   - a deliberately corrupted RRSIG, so a
 #                               validating resolver must SERVFAIL it
 #                               (the dnssec-failed.org role)
 #
+# Also serves a second, deliberately unsigned zone for split-DNS
+# scenarios that need a forward target distinct from the signed zone
+# above (a guided ForwardZone forwarding rgtest-ci.internal itself would
+# be indistinguishable from this script's own base wiring, which already
+# forwards all of it - see inject.sh):
+#   split.rgtest-split.internal. - plain A record, no DNSSEC at all
+#
 # Usage: ./setup.sh - installs nsd/ldns-utils if missing, generates and
-# signs the zone, starts nsd listening on 0.0.0.0:8053, and writes
-# $OUT_DIR/trust-anchor - the zone's DNSKEY as a single line, ready to
-# drop straight into an Unbound `trust-anchor:` config directive.
-# inject.sh (this directory) wires a given container up to consume it.
+# signs the zone, starts nsd listening on 0.0.0.0:8053 serving both
+# zones, and writes $OUT_DIR/trust-anchor - the signed zone's DNSKEY as a
+# single line, ready to drop straight into an Unbound `trust-anchor:`
+# config directive. inject.sh (this directory) wires a given container up
+# to consume it.
 #
 # Real internet resolution is still exercised, just not as a blocking PR/
 # release gate - see ci-real-dns-upstream.yml.
@@ -35,6 +43,7 @@
 set -Eeuo pipefail
 
 zone="rgtest-ci.internal."
+split_zone="rgtest-split.internal."
 nsd_port="8053"
 out_dir="${DNSSEC_TEST_ZONE_DIR:-/tmp/rootguard-ci-dnssec-test}"
 
@@ -53,6 +62,16 @@ ${zone}      IN NS   ns.${zone}
 ns.${zone}   IN A    203.0.113.1
 good.${zone} IN A    203.0.113.10
 bad.${zone}  IN A    203.0.113.20
+EOF
+
+# Unsigned on purpose - split-DNS only needs a forward target reachable
+# through a guided ForwardZone, not DNSSEC coverage of its own.
+cat >split-zone.txt <<EOF
+\$TTL 300
+${split_zone}       IN SOA  ns.${split_zone} hostmaster.${split_zone} ( $(date +%s) 3600 900 604800 300 )
+${split_zone}       IN NS   ns.${split_zone}
+ns.${split_zone}    IN A    203.0.113.2
+split.${split_zone} IN A    203.0.113.50
 EOF
 
 ksk="$(ldns-keygen -a RSASHA256 -b 2048 -k "${zone}")"
@@ -121,16 +140,44 @@ remote-control:
 zone:
   name: "${zone}"
   zonefile: "${out_dir}/zone.txt.signed"
+
+zone:
+  name: "${split_zone}"
+  zonefile: "${out_dir}/split-zone.txt"
 EOF
 
 nsd-checkconf nsd.conf
 nsd-checkzone "${zone}" zone.txt.signed
-sudo pkill nsd 2>/dev/null || true
+nsd-checkzone "${split_zone}" split-zone.txt
+
+# Only ever stop a leftover nsd this exact script started earlier - a bare
+# `pkill nsd` would just as happily kill an unrelated nsd process on a
+# shared/self-hosted runner or a developer's own machine running this
+# locally. Identified by its own pidfile under this test directory, and
+# double-checked against /proc so a recycled PID that now belongs to some
+# other process is never touched.
+if [[ -f nsd.pid ]]; then
+  old_pid="$(cat nsd.pid)"
+  if [[ "$old_pid" =~ ^[0-9]+$ ]] && ps -p "$old_pid" -o args= 2>/dev/null | grep -qF "${out_dir}/nsd.conf"; then
+    sudo kill "$old_pid"
+    for _ in $(seq 1 20); do
+      kill -0 "$old_pid" 2>/dev/null || break
+      sleep 0.25
+    done
+  fi
+  rm -f nsd.pid
+fi
 sudo nsd -c "${out_dir}/nsd.conf"
 
+# Checks actual record content, not just dig's exit code - an exit code
+# alone can't tell a real answer apart from an empty NOERROR, REFUSED, or
+# NXDOMAIN response, any of which would let this loop declare the
+# authority "ready" before it can actually serve what the caller expects.
 for _ in $(seq 1 20); do
-  if dig +short +time=1 +tries=1 @127.0.0.1 -p "$nsd_port" "good.${zone}" A >/dev/null 2>&1; then
-    echo "Local DNSSEC test authority is up on 0.0.0.0:${nsd_port}, serving ${zone}"
+  good_answer="$(dig +short +time=1 +tries=1 @127.0.0.1 -p "$nsd_port" "good.${zone}" A 2>/dev/null || true)"
+  split_answer="$(dig +short +time=1 +tries=1 @127.0.0.1 -p "$nsd_port" "split.${split_zone}" A 2>/dev/null || true)"
+  if [[ "$good_answer" == "203.0.113.10" && "$split_answer" == "203.0.113.50" ]]; then
+    echo "Local DNSSEC test authority is up on 0.0.0.0:${nsd_port}, serving ${zone} and ${split_zone}"
     exit 0
   fi
   sleep 0.5
