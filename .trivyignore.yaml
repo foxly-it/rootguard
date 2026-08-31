@@ -131,6 +131,169 @@ vulnerabilities:
       dependency tree, not yet fixed upstream in any cosign release -
       see the comment above this block.
 
+  # Found in review, round 14: Unbound's debian:13-slim-based image
+  # wasn't scanned by any CI job at all until this round's own
+  # trivy-image-scan.sh addition (ci-unbound.yml) - these 20 entries are
+  # every one of its remaining findings after the util-linux family fix
+  # above (Dockerfile) closed the other 4. Each was checked individually,
+  # live, against the Debian Security Tracker (not assumed) - every one
+  # is Debian's own <no-dsa>/"minor issue"/"postponed" classification for
+  # trixie, with the fix only in unstable/forky (not yet a stable point
+  # release RootGuard could pin to the way the util-linux fix above did).
+  # `purls` scopes each to the exact Debian package trivy reported it
+  # against - per review, an unscoped entry would also hide the same CVE
+  # ID anywhere else it might later appear (a different image, a
+  # genuinely reachable RootGuard binary), which none of these need.
+  - id: CVE-2019-16224
+    purls: ["pkg:deb/debian/liblmdb0"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, unfixed in trixie (confirmed live). liblmdb0
+      arrives only as bind9-libs' own dependency (bind9-dnsutils, for
+      `dig` in health checks/diagnostics - confirmed live via
+      packages.debian.org) - Unbound's own resolver process never uses
+      it. The CVE text itself describes py-lmdb (the Python binding),
+      not the plain C library this image links.
+  - id: CVE-2019-16225
+    purls: ["pkg:deb/debian/liblmdb0"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
+      statement above.
+  - id: CVE-2019-16226
+    purls: ["pkg:deb/debian/liblmdb0"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
+      statement above.
+  - id: CVE-2019-16227
+    purls: ["pkg:deb/debian/liblmdb0"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
+      statement above.
+  - id: CVE-2019-16228
+    purls: ["pkg:deb/debian/liblmdb0"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
+      statement above.
+  - id: CVE-2025-69720
+    # All three ncurses binary packages this image carries, not just
+    # libtinfo6 - confirmed live via a second scan pass (this entry's
+    # first version scoped only libtinfo6 and still failed CI on the
+    # other two).
+    purls:
+      - "pkg:deb/debian/libtinfo6"
+      - "pkg:deb/debian/ncurses-base"
+      - "pkg:deb/debian/ncurses-bin"
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue, Crash in CLI tool" - unfixed in
+      trixie (confirmed live). Stack overflow in infocmp, a terminfo CLI
+      tool nothing in this image's own entrypoint/healthcheck ever
+      invokes.
+  - id: CVE-2026-11822
+    purls: ["pkg:deb/debian/libsqlite3-0"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "minor issue" - unfixed in trixie (confirmed
+      live). Affects sqlite3's FTS5 full-text search extension; Unbound
+      itself doesn't use sqlite3 at all - present only as a transitive
+      base-image dependency.
+  - id: CVE-2026-11824
+    purls: ["pkg:deb/debian/libsqlite3-0"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "minor issue" - unfixed in trixie - see
+      CVE-2026-11822's identical statement above.
+  - id: CVE-2026-41992
+    purls: ["pkg:deb/debian/gzip"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - unfixed in trixie (confirmed
+      live). Buffer overflow in gzip's own LZH decompression path;
+      nothing in this image's entrypoint/healthcheck ever runs gzip
+      against untrusted input.
+  - id: CVE-2026-54369
+    purls: ["pkg:deb/debian/libacl1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Unfixed in trixie (confirmed live) - Debian's own tracker note
+      says the fix lands "first in unstable, then point release update;
+      not to be backported by individual patches". Symlink-traversal
+      issue in libacl's pathname-based functions; this image's own
+      entrypoint/healthcheck never calls into libacl at all.
+  - id: CVE-2026-57432
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Unfixed in trixie (confirmed live), fix only in unstable/forky.
+      perl-base is Debian's own base-install component (Priority:
+      important) - nothing in this image ever invokes perl.
+  - id: CVE-2026-57433
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Unfixed in trixie (confirmed live), fix only in unstable/forky -
+      see CVE-2026-57432's identical statement above.
+  - id: CVE-2026-66046
+    purls: ["pkg:deb/debian/libexpat1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - unfixed in trixie (confirmed
+      live). Quadratic-complexity DoS in expat's storeAtts() when
+      parsing XML with many non-normalized attributes; Unbound's own
+      resolver process doesn't parse XML at all.
+  - id: CVE-2026-6653
+    purls: ["pkg:deb/debian/libxml2"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "minor issue" - unfixed in trixie (confirmed
+      live). Use-after-free in libxml2's internal-subset parsing;
+      libxml2 arrives only as bind9-libs' own dependency (see
+      CVE-2019-16224's statement above) - Unbound's own resolver process
+      doesn't use it.
+  - id: CVE-2026-8376
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue; can be fixed in point release" -
+      unfixed in trixie - see CVE-2026-57432's identical statement above.
+  - id: CVE-2026-9538
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian postponed, "wait for regressions upstream sorted out" -
+      unfixed in trixie - see CVE-2026-57432's identical statement above.
+  - id: CVE-2026-13221
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Unfixed in trixie (confirmed live), fix only in
+      forky/sid/experimental - see CVE-2026-57432's identical statement
+      above.
+  - id: CVE-2026-42496
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian postponed, "wait for regressions upstream sorted out" -
+      unfixed in trixie - see CVE-2026-57432's identical statement above.
+  - id: CVE-2026-42497
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian postponed, "wait for regressions upstream sorted out" -
+      unfixed in trixie - see CVE-2026-57432's identical statement above.
+  - id: CVE-2026-48962
+    purls: ["pkg:deb/debian/perl-base"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, unfixed in trixie (confirmed live; the sibling
+      libio-compress-perl package this same CVE also affects is not
+      installed in this image at all) - see CVE-2026-57432's identical
+      statement above.
+
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so

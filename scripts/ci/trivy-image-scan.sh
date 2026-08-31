@@ -27,14 +27,35 @@ if [[ $# -ne 1 ]]; then
 fi
 image="$1"
 
-# Same pinned version/checksum as ci-security.yml's own trivy install -
-# kept in sync by hand, not by reference, since a shared step needs
-# GitHub Actions' reusable-workflow/composite-action machinery to avoid
-# that duplication, and this repo's CI doesn't use either yet.
+# Same pinned version as ci-security.yml's own trivy install - kept in
+# sync by hand, not by reference, since a shared step needs GitHub
+# Actions' reusable-workflow/composite-action machinery to avoid that
+# duplication, and this repo's CI doesn't use either yet.
+#
+# Found in review, round 14: this used to hardcode the amd64 asset and
+# checksum - silently fine on every caller except this workflow's own
+# arm64 matrix leg (ubuntu-24.04-arm), where it failed live with "cannot
+# execute binary file: Exec format error". `uname -m` picks the matching
+# release asset/checksum for both architectures this repo's CI actually
+# runs on.
 if ! command -v trivy >/dev/null 2>&1; then
+  case "$(uname -m)" in
+    x86_64)
+      asset="trivy_0.73.0_Linux-64bit.tar.gz"
+      checksum="2edd39da482bb4e9831962487b68f68e3928ec3137794757f54d00383d79547b"
+      ;;
+    aarch64)
+      asset="trivy_0.73.0_Linux-ARM64.tar.gz"
+      checksum="13833d97e8a1a5367471c372a173180157f593bece570e20d5d925fef552f5dd"
+      ;;
+    *)
+      echo "::error::trivy-image-scan.sh: unsupported architecture $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
   curl -sSfL -o trivy.tar.gz \
-    https://github.com/aquasecurity/trivy/releases/download/v0.73.0/trivy_0.73.0_Linux-64bit.tar.gz
-  echo "2edd39da482bb4e9831962487b68f68e3928ec3137794757f54d00383d79547b  trivy.tar.gz" | sha256sum -c -
+    "https://github.com/aquasecurity/trivy/releases/download/v0.73.0/${asset}"
+  echo "${checksum}  trivy.tar.gz" | sha256sum -c -
   sudo tar -xz -C /usr/local/bin -f trivy.tar.gz trivy
   rm trivy.tar.gz
 fi
