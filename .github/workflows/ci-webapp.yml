@@ -7,6 +7,9 @@ on:
     paths:
       - "rootguard-webapp/**"
       - ".github/workflows/ci-webapp.yml"
+      # See ci-core.yml's identical comment for why.
+      - "scripts/ci/trivy-image-scan.sh"
+      - ".trivyignore.yaml"
   # No paths filter on pull_request - see ci-core.yml's identical
   # comment for the full rationale: "WebApp backend and frontend tests"
   # is a required branch-protection status check, and a path filter here

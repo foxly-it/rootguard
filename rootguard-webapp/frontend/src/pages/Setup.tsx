@@ -266,7 +266,7 @@ export default function Setup() {
               const status = check.ok ? (check.level === "warning" ? "warning" : "ok") : "failed";
               return (
                 <div className={`check-row ${status}`} key={check.id}>
-                  <span aria-hidden="true">{status === "failed" ? "!" : status === "warning" ? "!" : "✓"}</span>
+                  <span aria-hidden="true">{status === "ok" ? "✓" : "!"}</span>
                   <div>
                     <p>{diagnosticText(t, check.code, "message", check.message, check.detail)}</p>
                     {status !== "ok" && check.action && (

@@ -6,6 +6,9 @@ on:
     paths:
       - "rootguard-updater/**"
       - ".github/workflows/ci-updater.yml"
+      # See ci-core.yml's identical comment for why.
+      - "scripts/ci/trivy-image-scan.sh"
+      - ".trivyignore.yaml"
   # No paths filter on pull_request - see ci-core.yml's identical
   # comment for the full rationale: "Updater unit tests" is a required
   # branch-protection status check, and a path filter here meant a PR
