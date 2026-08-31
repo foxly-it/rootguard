@@ -33,7 +33,7 @@ image="$1"
 # duplication, and this repo's CI doesn't use either yet.
 #
 # Found in review, round 14: this used to hardcode the amd64 asset and
-# checksum - silently fine on every caller except this workflow's own
+# checksum - silently fine on every caller except ci-unbound.yml's own
 # arm64 matrix leg (ubuntu-24.04-arm), where it failed live with "cannot
 # execute binary file: Exec format error". `uname -m` picks the matching
 # release asset/checksum for both architectures this repo's CI actually
