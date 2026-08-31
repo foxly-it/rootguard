@@ -7,10 +7,13 @@ on:
     paths:
       - "rootguard-webapp/**"
       - ".github/workflows/ci-webapp.yml"
-  pull_request:
-    paths:
-      - "rootguard-webapp/**"
-      - ".github/workflows/ci-webapp.yml"
+  # No paths filter on pull_request - see ci-core.yml's identical
+  # comment for the full rationale: "WebApp backend and frontend tests"
+  # is a required branch-protection status check, and a path filter here
+  # meant a PR that never touched rootguard-webapp/** never got this
+  # check at all, leaving GitHub waiting forever for one that would
+  # never report.
+  pull_request: {}
   workflow_dispatch:
 
 permissions:
