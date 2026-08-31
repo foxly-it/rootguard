@@ -3136,4 +3136,11 @@ this Dockerfile installs for health checks and diagnostics. `perl-base`
 is Debian's own base-install component; nothing in this image ever
 invokes perl. Added all 20 to `.trivyignore.yaml`, each scoped to its
 exact Debian package via `purls` (not left global - see this round's
-separate finding on why that matters) and dated 2026-11-30.
+separate finding on why that matters) and dated 2026-11-30. Two bugs
+surfaced only once this PR's own CI actually ran the new scan on this
+image: `trivy-image-scan.sh` hardcoded the amd64 trivy binary/checksum,
+which fails with "Exec format error" on `ci-unbound.yml`'s own arm64
+matrix leg - the only caller with an arm64 runner; `uname -m` now picks
+the right release asset. And CVE-2025-69720's ignore entry only scoped
+`libtinfo6`, missing that the same CVE also hits `ncurses-base`/
+`ncurses-bin` in this image - added both.

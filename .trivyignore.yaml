@@ -179,7 +179,14 @@ vulnerabilities:
       Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
       statement above.
   - id: CVE-2025-69720
-    purls: ["pkg:deb/debian/libtinfo6"]
+    # All three ncurses binary packages this image carries, not just
+    # libtinfo6 - confirmed live via a second scan pass (this entry's
+    # first version scoped only libtinfo6 and still failed CI on the
+    # other two).
+    purls:
+      - "pkg:deb/debian/libtinfo6"
+      - "pkg:deb/debian/ncurses-base"
+      - "pkg:deb/debian/ncurses-bin"
     expired_at: 2026-11-30
     statement: >-
       Debian <no-dsa>, "Minor issue, Crash in CLI tool" - unfixed in
