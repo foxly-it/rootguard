@@ -2,7 +2,10 @@
 # integration test (see ../rollback_integration_test.go). Not a RootGuard
 # component image - only the mechanics Manager itself depends on: a real
 # container with a real BackupPaths directory and a real HEALTHCHECK.
-FROM alpine:3.23
+#
+# Pinned by digest, not just the "3.23" tag - see dnssec-test-zone/setup.sh's
+# identical comment on why. Found in review, round 12.
+FROM alpine:3.23@sha256:fd791d74b68913cbb027c6546007b3f0d3bc45125f797758156952bc2d6daf40
 
 ARG HEALTHY=true
 # Two otherwise-identical healthy tags must still build to distinct image
