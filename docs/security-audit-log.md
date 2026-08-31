@@ -2687,3 +2687,21 @@ own pidfile under this exact test directory, and only after confirming
 via `ps` that the PID still actually belongs to a process running against
 this script's own `nsd.conf` - a recycled PID now owned by an unrelated
 process is left alone.
+
+**Small, fixed: `release-alpha.yml`'s own `source_ref` was the raw,
+possibly-abbreviated dispatch input, not the resolved full SHA.** Round
+9's fix normalized `resolve_release_pin_commit`'s own string comparison
+against an abbreviated `SOURCE_REF`, but the workflow's `source_ref`
+*output* itself - what every job's checkout, the candidate tag, the OCI
+revision label, and the `origin/main` equality check all consume - was
+still `inputs.source_sha || github.sha` verbatim. `release-version-bump.yml`
+always passes a full 40-character SHA, so the automated path was never
+actually affected, but the input's own description explicitly allows a
+manual by-hand dispatch to type an abbreviated one instead - and every
+later full-SHA comparison in this file would then silently never match,
+surfacing late (at the pin-commit step, after the candidate images are
+already built, scanned, and smoke-tested) instead of failing fast.
+Resolved once, via `git rev-parse HEAD` right after the initial checkout,
+and recorded as `steps.release.outputs.source_ref`; every other job
+already consumed `needs.version.outputs.source_ref` rather than the raw
+input, so fixing it in this one place is sufficient.
