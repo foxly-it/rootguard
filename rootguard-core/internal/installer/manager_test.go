@@ -151,14 +151,16 @@ func TestPreflightWarnsAboutUnpatchedDockerCPVersion(t *testing.T) {
 	}
 }
 
-// TestPreflightSkipsDockerCPWarningForPatchedOrUnreadableVersions covers
-// both "no warning needed" cases: a Docker Engine already at or past
-// 29.5.1, and a version string dockerCPPatchWarning can't read with
-// confidence (a distro-packaging suffix, e.g. - see its own doc comment
-// on why that's treated as "assume patched" rather than "assume
-// vulnerable").
-func TestPreflightSkipsDockerCPWarningForPatchedOrUnreadableVersions(t *testing.T) {
-	for _, version := range []string{"29.5.1", "29.6.0", "30.0.0", "24.0.7-1ubuntu1", "ok"} {
+// TestPreflightSkipsDockerCPAdvisoryForPatchedOrNonVersionValues covers
+// the two genuinely silent cases: a Docker Engine already at or past
+// 29.5.1 (nothing to report), and a value that isn't version-shaped at
+// all (this package's own test suite's generic "ok" CommandRunner
+// stand-in included - see dockerVersionLike's own doc comment on why
+// that specifically must never gain an advisory of its own, or most of
+// this file's other Preflight tests would need updating for an advisory
+// they have nothing to do with).
+func TestPreflightSkipsDockerCPAdvisoryForPatchedOrNonVersionValues(t *testing.T) {
+	for _, version := range []string{"29.5.1", "29.6.0", "30.0.0", "ok"} {
 		t.Run(version, func(t *testing.T) {
 			manager := NewManager(Options{
 				DataDir: t.TempDir(),
@@ -176,11 +178,51 @@ func TestPreflightSkipsDockerCPWarningForPatchedOrUnreadableVersions(t *testing.
 			})
 
 			for _, check := range report.Checks {
-				if check.Code == "docker_engine_cp_cve" {
-					t.Fatalf("did not expect a docker_engine_cp_cve check for version %q", version)
+				if check.Code == "docker_engine_cp_cve" || check.Code == "docker_engine_cp_cve_unknown" {
+					t.Fatalf("did not expect a docker-cp advisory for version %q, got %#v", version, check)
 				}
 			}
 		})
+	}
+}
+
+// TestPreflightWarnsWhenDockerCPPatchLevelIsUnknown covers the case
+// found in review: a version string that looks like a real attempt at a
+// version (a distro-packaging suffix, e.g.) but that dockerCPPatchWarning
+// can't read with the confidence dockerCPFixedVersion comparison needs -
+// previously indistinguishable from "confirmed patched" (both produced
+// total silence); now a distinct, lower-confidence advisory instead,
+// still never failing Ready.
+func TestPreflightWarnsWhenDockerCPPatchLevelIsUnknown(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "version" {
+				return []byte("24.0.7-1ubuntu1\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress: "192.168.1.2",
+		DNSPort:        53,
+	})
+
+	if !report.Ready {
+		t.Fatal("an unreadable Docker Engine version must not fail preflight")
+	}
+	var warning *Check
+	for i := range report.Checks {
+		if report.Checks[i].Code == "docker_engine_cp_cve_unknown" {
+			warning = &report.Checks[i]
+		}
+	}
+	if warning == nil {
+		t.Fatal("expected a docker_engine_cp_cve_unknown advisory check for an unreadable version")
+	}
+	if !warning.OK || warning.Level != "warning" || warning.Detail != "24.0.7-1ubuntu1" {
+		t.Fatalf("unexpected advisory check: %#v", warning)
 	}
 }
 

@@ -6,6 +6,13 @@ on:
     paths:
       - "rootguard-core/**"
       - ".github/workflows/ci-core.yml"
+      # Found in review, round 14: a push touching only the image-scan
+      # tooling (not rootguard-core/** itself) used to not trigger this
+      # workflow at all on push - pull_request already runs
+      # unconditionally (see the comment below), this only closes the
+      # same gap for a direct push to main.
+      - "scripts/ci/trivy-image-scan.sh"
+      - ".trivyignore.yaml"
   # No paths filter on pull_request, unlike push above - found in review:
   # this job ("Core unit tests") is a required branch-protection status
   # check. A PR that never touches rootguard-core/** used to never

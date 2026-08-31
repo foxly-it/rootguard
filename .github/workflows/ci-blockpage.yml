@@ -7,10 +7,20 @@ on:
     paths:
       - "rootguard-blockpage/**"
       - ".github/workflows/ci-blockpage.yml"
+      # Found in review, round 14: a push/PR touching only the image-scan
+      # tooling (not rootguard-blockpage/** itself) used to not trigger
+      # this workflow at all - unlike ci-core.yml/ci-updater.yml/
+      # ci-webapp.yml/ci-unbound.yml, this one's pull_request trigger
+      # keeps its own paths filter (its checks aren't required), so both
+      # triggers need the same addition here.
+      - "scripts/ci/trivy-image-scan.sh"
+      - ".trivyignore.yaml"
   pull_request:
     paths:
       - "rootguard-blockpage/**"
       - ".github/workflows/ci-blockpage.yml"
+      - "scripts/ci/trivy-image-scan.sh"
+      - ".trivyignore.yaml"
   workflow_dispatch:
 
 permissions:

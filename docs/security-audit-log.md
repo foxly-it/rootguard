@@ -3176,3 +3176,33 @@ threshold (29.5.1) was already correct and needed no change. Updated the
 advisory's message text, `manager.go`'s and `manager_test.go`'s own doc
 comments, `platform-support.md`, and both `en.ts`/`de.ts` i18n strings to
 name all three.
+
+**Low, fixed: four smaller gaps from this round's own new tooling.**
+
+- `ci-core.yml`/`ci-updater.yml`/`ci-webapp.yml`/`ci-blockpage.yml`/
+  `ci-unbound.yml`'s `push.paths` filters didn't include
+  `scripts/ci/trivy-image-scan.sh` or `.trivyignore.yaml` - a direct
+  push to main touching only those (a dated-ignore expiry fix, e.g.)
+  wouldn't have triggered any of them. `pull_request` was already
+  unconditional on four of the five (round 10/11); blockpage's own PR
+  trigger keeps a paths filter (its checks aren't required), so it
+  needed the same addition on both triggers. Added to all five.
+- `Preflight`'s docker-cp advisory treated "confirmed patched" and
+  "genuinely can't tell" identically - both produced total silence.
+  Added a distinct `docker_engine_cp_cve_unknown` advisory (still
+  `Level: "warning"`, still never fails `Ready`) for a version that
+  looks version-shaped but isn't the clean, confident form the real
+  warning needs (a distro-suffixed version, e.g.) - scoped narrowly
+  enough (a loose `^\d+\.\d+` check) that this package's own test
+  suite's generic `"ok"` `CommandRunner` stand-in, used across most of
+  its other tests, still resolves to true silence rather than gaining
+  an advisory none of those tests are about.
+- `Setup.tsx`'s check-row icon ternary
+  (`status === "failed" ? "!" : status === "warning" ? "!" : "✓"`)
+  simplified to `status === "ok" ? "✓" : "!"` - both branches already
+  rendered the same glyph.
+- The round-13 warning-level check had backend test coverage but no
+  frontend test of its own. Added one: it renders with a distinct
+  `warning` class (neither `ok` nor `failed`), its action text stays
+  visible despite `check.ok` being `true` (the exact bug the round-13
+  render-guard fix addressed), and the install button stays enabled.

@@ -389,18 +389,47 @@ var dockerCPFixedVersion = [3]int{29, 5, 1}
 // any confidence.
 var cleanDockerVersion = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
 
+// dockerVersionLike loosely matches anything that at least attempts to
+// look like a version string ("digits.digits...") without requiring
+// cleanDockerVersion's strict unsuffixed form. Used only to decide
+// whether an unparseable version is worth a distinct "patch level
+// unknown" advisory (a real distro-suffixed version, e.g. - see
+// cleanDockerVersion's own comment) versus staying fully silent for a
+// value that plainly isn't a version string at all. Found in review:
+// this repo's own test suite's fake CommandRunner stubs return a
+// generic "ok" placeholder for any command they don't specifically
+// care about, `docker version` included - that string not matching
+// this looser pattern either is exactly why none of those tests needed
+// updating for the new advisory below.
+var dockerVersionLike = regexp.MustCompile(`^\d+\.\d+`)
+
 // dockerCPPatchWarning reports an advisory (Check.OK stays true - see
-// Check.Level's own doc comment) when the Docker Engine version Preflight
-// just observed unambiguously predates dockerCPFixedVersion. ok is false
-// whenever the version can't be read with that confidence, which is
-// deliberately treated the same as "assume patched" rather than "assume
-// vulnerable" - this can only ever warn, never block Ready, precisely
-// because a false positive here has no real cost while a false negative
-// only means the same information the two CVEs are already public with.
+// Check.Level's own doc comment) about the Docker Engine version
+// Preflight just observed, relative to dockerCPFixedVersion. ok is false
+// only when the version reads as confidently already patched - silence
+// is the correct outcome there. Otherwise this returns one of two
+// distinct advisories: a real warning when the version unambiguously
+// predates the fix, or a lower-confidence "patch level unknown" notice
+// when the version merely looks version-shaped but couldn't be read with
+// that confidence at all (found in review: previously indistinguishable
+// from "confirmed patched" - both produced total silence, even though
+// "we genuinely can't tell" is worth surfacing differently from "we
+// checked, it's fine"). Neither ever fails Ready - this can only ever
+// warn, precisely because a false positive here has no real cost while a
+// false negative only means the same information the CVEs are already
+// public with.
 func dockerCPPatchWarning(version string) (Check, bool) {
 	m := cleanDockerVersion.FindStringSubmatch(version)
 	if m == nil {
-		return Check{}, false
+		if !dockerVersionLike.MatchString(version) {
+			return Check{}, false
+		}
+		return Check{
+			ID: "docker_engine_patch_level", Code: "docker_engine_cp_cve_unknown", OK: true, Level: "warning",
+			Message: "Docker Engine's reported version couldn't be read with confidence, so whether it has the docker cp fixes (CVE-2026-41567, CVE-2026-41568, CVE-2026-42306, all fixed in 29.5.1) is unknown",
+			Detail:  version,
+			Action:  "Confirm your Docker Engine is 29.5.1 or later, or that your distribution has backported these fixes.",
+		}, true
 	}
 	major, _ := strconv.Atoi(m[1])
 	minor, _ := strconv.Atoi(m[2])
