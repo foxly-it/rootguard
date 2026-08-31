@@ -3074,4 +3074,10 @@ the compose plugin's *vendored* docker client library, which compose's
 own binary never actually calls into (compose doesn't implement or
 expose `docker cp`). Added all 14 to `.trivyignore.yaml`, each dated
 2026-11-30, so this doesn't stay silently suppressed once a newer
-upstream build of any of the three exists.
+upstream build of any of the three exists. One more surfaced only after
+that re-run: bumping cosign to v3.1.3 (this round's own fix, above) pulled
+in a newer `google.golang.org/grpc` that itself has one known HIGH
+finding (GHSA-hrxh-6v49-42gf, fixed at grpc-go 1.82.1) - not present in
+v3.0.6's own dependency tree, not yet fixed in any cosign release
+(confirmed live: v3.1.3 is still the newest). Added with the same dated,
+justified pattern.

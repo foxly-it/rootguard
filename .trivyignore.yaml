@@ -116,6 +116,21 @@ vulnerabilities:
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
 
+  # Found live, round 13: bumping cosign to v3.1.3 above (the newest
+  # release, confirmed live against sigstore/cosign's own releases page)
+  # to fix the 39-HIGH-finding v3.0.6 pin also pulled in a newer
+  # google.golang.org/grpc that itself has one known HIGH finding, not
+  # yet fixed in any cosign release - v3.1.3 predates grpc-go's own
+  # 1.82.1 fix. Nothing else in this repo depends on or is reachable
+  # through cosign's own vendored grpc client. Recheck when a newer
+  # cosign release exists.
+  - id: GHSA-hrxh-6v49-42gf
+    expired_at: 2026-11-30
+    statement: >-
+      google.golang.org/grpc HIGH finding in cosign v3.1.3's own
+      dependency tree, not yet fixed upstream in any cosign release -
+      see the comment above this block.
+
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so
