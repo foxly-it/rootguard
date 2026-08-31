@@ -9,13 +9,15 @@ on:
       - "rootguard-core/go.mod"
       - "rootguard-core/go.sum"
       - ".github/workflows/ci-unbound.yml"
-  pull_request:
-    paths:
-      - "rootguard-unbound/**"
-      - "rootguard-core/internal/unbound/**"
-      - "rootguard-core/go.mod"
-      - "rootguard-core/go.sum"
-      - ".github/workflows/ci-unbound.yml"
+  # No paths filter here, unlike push above - found in review: "Test
+  # amd64"/"Test arm64"/"Guided-settings scenario tests" are required
+  # branch-protection status checks (round 11), and a path filter meant
+  # they wouldn't trigger on every PR (round 10 finding 9). The
+  # expensive multi-arch build below stays path-gated on its own
+  # (detect-unbound-changes) rather than also running unconditionally -
+  # it was never required and there's no reason to build+publish-check
+  # unbound images for a PR that never touched them.
+  pull_request: {}
   workflow_dispatch:
     inputs:
       release_tag:
@@ -191,6 +193,33 @@ jobs:
         working-directory: rootguard-core
         run: go test -tags integration ./internal/unbound/... -run TestScenario -v
 
+  # Only meaningful for a pull_request run - now that this workflow
+  # triggers unconditionally on PRs (see the "on:" block's own comment),
+  # build-push itself stays gated on whether the PR actually touched
+  # anything unbound-related, same scope the old pull_request.paths
+  # filter used to cover. push/workflow_dispatch/schedule runs always
+  # want the real build regardless, so this job is a no-op skip for
+  # those (build-push's own "needs" tolerates a skipped dependency - see
+  # its own condition below).
+  detect-unbound-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          git fetch --quiet origin "${{ github.event.pull_request.base.sha }}"
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD \
+             | grep -qE '^(rootguard-unbound/|rootguard-core/internal/unbound/|rootguard-core/go\.(mod|sum)$|\.github/workflows/ci-unbound\.yml$)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Runs only after both native amd64 and arm64 legs of `test` pass, plus
   # the guided-settings scenario tests - the multi-arch image built and
   # pushed here previously went out with only amd64 ever having run
@@ -200,7 +229,8 @@ jobs:
   # guided-settings regression as a publish blocker too.
   build-push:
     name: Build and push multi-arch image
-    needs: [test, scenario-tests]
+    needs: [test, scenario-tests, detect-unbound-changes]
+    if: always() && needs.test.result == 'success' && needs.scenario-tests.result == 'success' && (github.event_name != 'pull_request' || needs.detect-unbound-changes.outputs.changed == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read
