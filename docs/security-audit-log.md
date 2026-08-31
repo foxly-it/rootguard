@@ -2705,3 +2705,14 @@ Resolved once, via `git rev-parse HEAD` right after the initial checkout,
 and recorded as `steps.release.outputs.source_ref`; every other job
 already consumed `needs.version.outputs.source_ref` rather than the raw
 input, so fixing it in this one place is sufficient.
+
+**Small, cleaned up: two leftover hazards in the frontend, unrelated to
+each other but both found in the same pass.** `vite.config.ts`'s dev
+proxy hardcoded one developer's own LAN IP (`10.100.0.2`) as its target
+- `npm run dev` only ever worked out of the box on that one machine,
+silently proxying nowhere (`ECONNREFUSED`) for anyone else. Now defaults
+to loopback (where WebApp listens locally by default), overridable per
+machine via `VITE_API_PROXY_TARGET`. Separately, `public/vite.svg` and
+`src/assets/react.svg` - the framework's own default scaffold assets -
+were never referenced anywhere in the app (confirmed via a repo-wide
+grep across `.html`/`.ts`/`.tsx`/`.css`/`.json`) and were removed.

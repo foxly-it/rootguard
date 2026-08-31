@@ -7,7 +7,13 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://10.100.0.2:8080',
+        // Found in review: this was a fixed developer machine's own LAN
+        // IP - `npm run dev` only ever worked out of the box on that one
+        // machine, silently proxying nowhere (ECONNREFUSED) for anyone
+        // else. Defaults to loopback, where WebApp listens locally by
+        // default; override per-machine via .env.local if the backend
+        // runs elsewhere (see vite's own env file loading).
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8080',
         changeOrigin: true,
       }
     }
