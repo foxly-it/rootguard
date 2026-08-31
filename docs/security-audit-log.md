@@ -2835,3 +2835,21 @@ checking that label before ever removing a same-named leftover - the
 identical "only ever touch something verifiably this script's own"
 reasoning already applied to the `nsd` pidfile check, now applied
 consistently to this container too.
+
+**Small, fixed: `scenario_integration_test.go` ignored `DNSSEC_TEST_ZONE_DIR`
+even though `setup.sh`/`inject.sh` both honor it.** A developer running
+`setup.sh` by hand with that variable set would have it write the local
+authority to a custom directory while this test kept looking in the
+hardcoded default - a real, if narrow, local-repro gap (every CI job
+that runs this package's tests leaves the variable unset, so nothing in
+CI was ever affected). Changed the constant to a package var resolved
+from the environment once, at init, falling back to the same default
+either script uses unset.
+
+**Small, cleaned up: `TestMain` didn't do what its own comment claimed.**
+Its comment described managing container lifecycle "here rather than in
+a package-level init"; the function body was `os.Exit(m.Run())` - Go's
+own default test-binary entry point does exactly that already when no
+`TestMain` is defined, and the real per-test container lifecycle lives
+in `startScenarioContainer`, not here. Removed the now-inaccurate,
+functionally redundant override.
