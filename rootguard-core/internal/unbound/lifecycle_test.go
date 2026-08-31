@@ -259,6 +259,52 @@ func TestApplyRollsBackWhenUnboundNeverBecomesReady(t *testing.T) {
 	}
 }
 
+// TestWaitReadySkipsTheFinalSleep is the regression test for a small
+// robustness finding: waitReady used to sleep unconditionally between
+// every attempt, including after the very last one - a delay nothing
+// afterward ever consumes, since the loop is about to give up and return
+// an error either way. Counts sleep calls directly against a primary
+// restart that never becomes ready (same setup as
+// TestApplyRollsBackWhenUnboundNeverBecomesReady): must be exactly
+// unboundReadyAttempts-1, one fewer than the number of attempts made.
+func TestWaitReadySkipsTheFinalSleep(t *testing.T) {
+	manager := newTestManager(t)
+	initial := DefaultSettings()
+	initial.Threads = 3
+	if err := manager.Apply(context.Background(), initial); err != nil {
+		t.Fatal(err)
+	}
+
+	sleepCalls := 0
+	manager.sleep = func(time.Duration) <-chan time.Time {
+		sleepCalls++
+		fired := make(chan time.Time, 1)
+		fired <- time.Time{}
+		return fired
+	}
+	restartCount := 0
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		if len(args) > 0 && args[0] == "restart" {
+			restartCount++
+		}
+		// Only the first restart's readiness never arrives - the rollback
+		// restart (restartCount == 2) succeeds on its very first check, so
+		// it never sleeps at all and can't add to the count below.
+		if restartCount <= 1 && len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
+			return []byte("error: connect() failed"), errors.New("exit 1")
+		}
+		return []byte("OK"), nil
+	}
+	changed := initial
+	changed.Threads = 8
+	if err := manager.Apply(context.Background(), changed); err == nil {
+		t.Fatal("expected Apply to fail against a daemon that never becomes ready")
+	}
+	if sleepCalls != unboundReadyAttempts-1 {
+		t.Fatalf("expected exactly %d sleeps (one fewer than the attempt count, none after the last), got %d", unboundReadyAttempts-1, sleepCalls)
+	}
+}
+
 // TestApplyReportsWhenTheRollbackRestartItselfNeverBecomesReady is the
 // never-succeeds counterpart of the test above: if unbound-control status
 // never comes back even for the *rollback* restart, rollbackFailedApply
