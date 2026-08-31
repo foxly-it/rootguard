@@ -2924,3 +2924,16 @@ else in this repo (see round 8's audit-log entries on that). Both are
 now pinned by digest too, `alpine:3.23` left in place since it's still
 within its own support window (main through 2027-11-01) - only the
 missing digest was the gap.
+
+**Low, fixed: the frontend's Node version floor wasn't fully wired
+up.** Round 11 added `"engines": {"node": ">=22.22.0"}` to
+`rootguard-webapp/frontend/package.json` (react-router@8.3.0's own
+stated minimum), but two things were still out of step with it: the
+committed `package-lock.json` predated that change and didn't carry it
+in its own root-package metadata (`npm install` against the current
+`package.json` regenerates exactly the three lines - `engines` -
+`package.json` declares, confirmed live, no dependency or version
+changes otherwise), and `.nvmrc` only pinned the major version (`22`),
+which lets an already-installed Node as old as 22.0.0 through -
+tightened to `22.22.0` to actually match the floor it's meant to
+communicate. `npm run lint`/`npm run test` both still pass unchanged.
