@@ -1,12 +1,11 @@
 name: Public clean install
 
 on:
-  pull_request:
-    paths:
-      - "compose.release.yaml"
-      - ".env.release.example"
-      - "scripts/verify-clean-install.sh"
-      - ".github/workflows/clean-install.yml"
+  # No paths filter on pull_request - see backup-restore.yml's identical
+  # comment for the full rationale (round 10 finding 9). Runs in ~1-1.5
+  # minutes (both arches in parallel), cheap enough to run
+  # unconditionally.
+  pull_request: {}
   push:
     branches: [main]
     paths:

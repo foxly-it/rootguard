@@ -2865,3 +2865,41 @@ value read directly from `react-router`'s own installed `package.json`,
 not guessed) and a `.nvmrc` (`22`, matching `ci-webapp.yml`'s own
 `setup-node` `node-version: 22`) so a version manager picks up the right
 major version automatically.
+
+**Medium, closed: round 10 finding 9 (Backup/Restore and Unbound never
+part of the required checks).** Requested as "one always-on aggregating
+merge-gate job" - implemented as the equivalent of that instead, for a
+concrete reason: this session has no way to trigger and observe a real
+GitHub Actions run before merging, and a multi-workflow `workflow_call`
+orchestrator (the textbook way to build that single job) has enough
+moving parts - job-name remapping through the caller, `needs`/`if`
+semantics across a reusable-workflow boundary - that getting it wrong
+would only surface once already merged. The already-proven mechanism
+from this same round (drop the `pull_request.paths` filter, so the
+check always triggers) reaches the identical branch-protection outcome
+with far less new surface: `backup-restore.yml` and `clean-install.yml`
+now trigger unconditionally on `pull_request` (their jobs are cheap -
+~3-4 and ~1-1.5 minutes respectively, both arches in parallel), added to
+required status checks. `ci-unbound.yml`'s `test`/`scenario-tests` jobs
+do the same (~2-3 minutes) - its `build-push` job deliberately does
+*not* go unconditional alongside them: it was never required and still
+shouldn't be, so a new `detect-unbound-changes` job (a plain `git diff`
+against the PR's base SHA, no third-party paths-filter action) gates it
+back to only actually building when a PR touches something
+unbound-related, preserving today's behavior instead of adding a ~20-
+minute build to every unrelated PR. `updater-rollback-integration`
+(`ci-core.yml`) and `integration` (`ci-updater.yml`) needed no workflow
+change at all - round 11's own path-filter removal on those two
+workflows already made them unconditional; only branch protection's
+required-checks list itself was missing them. Required status checks
+now: `validate`, `check`, `gitleaks`, `trivy`, the three `go-security`
+legs, `Core unit tests`, `Updater unit tests`,
+`WebApp backend and frontend tests`, `updater-rollback-integration`,
+`integration`, `Backup and restore, Linux amd64`/`arm64`,
+`Clean install, Linux amd64`/`arm64`, `Test amd64`/`arm64`, and
+`Guided-settings scenario tests`. The real single aggregating job is
+still the cleaner end state and stays open as a future improvement, not
+a correctness gap - every one of these checks now triggers
+unconditionally, so the actual bug finding 9 and this entry both
+describe (a required check that silently never fires) cannot recur for
+any of them.
