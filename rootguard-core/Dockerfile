@@ -42,7 +42,27 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 # install was purely redundant, not filling a real gap. Removing it
 # entirely closes the reproducibility gap outright instead of merely
 # pinning a package version that was never needed.
-RUN mkdir -p /var/lib/rootguard/unbound
+#
+# Found in review: this exact pinned digest also carries two stopgap
+# fixes, current as of this comment - replace both with a plain digest
+# bump once a docker:29-cli build exists with them baked in upstream.
+#   - libssl3/libcrypto3 3.5.7-r0 here has CVE-2026-14456, fixed in
+#     3.5.8-r0 - already published on Alpine 3.24's own `main` repo
+#     (confirmed live via pkgs.alpinelinux.org), just not yet what this
+#     digest's own image layer has baked in.
+#   - the bundled buildx CLI plugin
+#     (/usr/local/libexec/docker/cli-plugins/docker-buildx, confirmed via
+#     the upstream docker-library/docker Dockerfile this digest is built
+#     from) is dead weight, not a stopgap: nothing in this codebase's own
+#     `docker ...` invocations (m.run calls, see above) or in any of the
+#     managed containers ever calls `docker buildx` - only this repo's own
+#     CI (release-alpha.yml) does, on the runner's Docker CLI, entirely
+#     separate from this image. Removing it is a real image-content
+#     reduction (fewer packages a scanner can find something in), not
+#     something a later digest bump would ever need to add back.
+RUN apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 \
+    && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
+    && mkdir -p /var/lib/rootguard/unbound
 
 COPY --from=builder /rootguard-core /usr/local/bin/rootguard-core
 COPY --from=cosign /ko-app/cosign /usr/local/bin/cosign
