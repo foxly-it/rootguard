@@ -469,13 +469,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # Same cosign version rootguard-core's own Dockerfile pins (see its
-      # `FROM ghcr.io/sigstore/cosign/cosign:v3.0.6@sha256:...` stage) -
-      # needed below to validate a candidate's attestation before
-      # promoting it, the same check stack.RequireAttestation performs at
-      # deploy time (internal/stack/attestation.go).
+      # `FROM ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:...` stage, and
+      # its comment there on why it moved from v3.0.6) - needed below to
+      # validate a candidate's attestation before promoting it, the same
+      # check stack.RequireAttestation performs at deploy time
+      # (internal/stack/attestation.go).
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
-          cosign-release: "v3.0.6"
+          cosign-release: "v3.1.3"
 
       # Verification only - no promotion here. Found in review, round 6:
       # this used to promote in the same loop, before the pin commit and
