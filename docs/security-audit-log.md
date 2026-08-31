@@ -2775,3 +2775,31 @@ timeout. Now breaks out before that final sleep. New
 `TestWaitReadySkipsTheFinalSleep` counts `sleep` calls directly against
 a daemon that never becomes ready: exactly `unboundReadyAttempts-1`, one
 fewer than the number of attempts made.
+
+## Follow-up review, round 11 (2026-08-31)
+
+An eleventh independent review - no critical production or security
+issue found this round. Same discipline as every round before.
+
+**Medium, fixed: required branch-protection status checks and their own
+`pull_request.paths` filters directly contradicted each other.** Round
+10's own finding 9 (recorded above) predicted this and it recurred twice
+more within the same round: merging PR #446 and then PR #449 each hit
+`mergeable_state: blocked` - `mergeable: true`, no actual conflict, just
+GitHub waiting forever for a required check whose owning workflow's path
+filter meant it would never trigger for that particular PR. Round 10's
+fix (naming every job distinctly) made the problem *more* visible, not
+less: before that round, `ci-core.yml`/`ci-webapp.yml`/`ci-updater.yml`
+happened to share one required "test" context, so any one of them
+reporting satisfied it; after distinct names, each of "Core unit tests",
+"Updater unit tests", "WebApp backend and frontend tests" needs its own
+workflow to actually run. Fixed the fast, robust way for now (this
+round's own suggestion): dropped the `pull_request.paths` filter on all
+three - they run on every PR unconditionally now (each well under a
+minute, cheap insurance), `push.paths` on `main` is untouched. The
+proper fix - one always-on job that aggregates exactly the required
+checks for whatever paths a PR actually touched - is still open; this is
+the stopgap that stops every unrelated PR from needing an admin-bypass
+merge in the meantime. (PR #448 needed the same admin-bypass merge a
+third time before this fix landed - same root cause, same missing
+"Updater unit tests"/"WebApp backend and frontend tests" checks.)

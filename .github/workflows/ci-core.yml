@@ -6,10 +6,19 @@ on:
     paths:
       - "rootguard-core/**"
       - ".github/workflows/ci-core.yml"
-  pull_request:
-    paths:
-      - "rootguard-core/**"
-      - ".github/workflows/ci-core.yml"
+  # No paths filter on pull_request, unlike push above - found in review:
+  # this job ("Core unit tests") is a required branch-protection status
+  # check. A PR that never touches rootguard-core/** used to never
+  # trigger this workflow at all, so GitHub waited forever for a check
+  # that was never going to report - confirmed live: PR #446
+  # (release-alpha.yml only) came back mergeable: true but
+  # mergeable_state: blocked for exactly this reason, needing an
+  # explicit admin-bypass merge. This job is fast (well under a minute)
+  # - running it unconditionally on every PR is cheap insurance against
+  # every PR needing that same bypass, until docs/security-audit-log.md's
+  # round 10 finding 9 (a single aggregating merge-gate job) replaces
+  # this entirely.
+  pull_request: {}
 
 permissions:
   contents: read

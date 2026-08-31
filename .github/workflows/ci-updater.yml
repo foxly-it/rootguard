@@ -6,10 +6,12 @@ on:
     paths:
       - "rootguard-updater/**"
       - ".github/workflows/ci-updater.yml"
-  pull_request:
-    paths:
-      - "rootguard-updater/**"
-      - ".github/workflows/ci-updater.yml"
+  # No paths filter on pull_request - see ci-core.yml's identical
+  # comment for the full rationale: "Updater unit tests" is a required
+  # branch-protection status check, and a path filter here meant a PR
+  # that never touched rootguard-updater/** never got this check at all,
+  # leaving GitHub waiting forever for one that would never report.
+  pull_request: {}
   workflow_dispatch:
 
 permissions:
