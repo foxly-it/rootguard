@@ -35,6 +35,17 @@ jobs:
       - name: Start resolver
         run: docker run --rm --detach --name rootguard-unbound-real-dns rootguard-unbound:test
 
+      # Found in review, round 12: both dig checks below used to run as a
+      # bare `var="$(dig ...)"` assignment - under this shell's default
+      # `set -e`, a non-zero dig exit code (9, e.g. "no reply") kills the
+      # step on the spot, before the grep that would have said which
+      # check failed even runs. Every `::error::`/`::group::` below exists
+      # so a real failure here - which is expected to happen occasionally,
+      # see this workflow's own header comment - leaves the log saying
+      # which domain, dig's own error text (`2>&1`, not just stdout), and
+      # the resolver's actual status line, instead of just a bare non-zero
+      # exit. `|| true` on each dig call is what stops `set -e` from
+      # discarding that output before it can be printed.
       - name: Verify real-internet resolution and DNSSEC validation
         run: |
           for attempt in {1..30}; do
@@ -44,10 +55,28 @@ jobs:
             sleep 1
           done
           test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-real-dns)" = "healthy"
-          valid="$(docker exec rootguard-unbound-real-dns dig @127.0.0.1 -p 5335 example.com A +dnssec +time=5 +tries=2)"
-          grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
-          broken="$(docker exec rootguard-unbound-real-dns dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=5 +tries=2)"
-          grep -q 'status: SERVFAIL' <<<"$broken"
+
+          fail=0
+
+          echo "::group::example.com (expect an 'ad' flag - DNSSEC validates)"
+          valid="$(docker exec rootguard-unbound-real-dns dig @127.0.0.1 -p 5335 example.com A +dnssec +time=5 +tries=2 2>&1)" || true
+          echo "$valid"
+          echo "::endgroup::"
+          if ! grep -Eq 'flags:.* ad[ ;]' <<<"$valid"; then
+            echo "::error::example.com did not validate (no 'ad' flag - see dig output above)"
+            fail=1
+          fi
+
+          echo "::group::dnssec-failed.org (expect SERVFAIL)"
+          broken="$(docker exec rootguard-unbound-real-dns dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=5 +tries=2 2>&1)" || true
+          echo "$broken"
+          echo "::endgroup::"
+          if ! grep -q 'status: SERVFAIL' <<<"$broken"; then
+            echo "::error::dnssec-failed.org did not SERVFAIL (see dig output above)"
+            fail=1
+          fi
+
+          exit "$fail"
 
       - name: Show logs after failure
         if: failure()
