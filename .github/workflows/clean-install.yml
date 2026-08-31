@@ -24,8 +24,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # See backup-restore.yml's identical job for the full rationale - this
+  # job id/name pair used to collide with an identically-named, unrelated
+  # check in that other workflow.
   linux:
-    name: Linux ${{ matrix.arch }}
+    name: Clean install, Linux ${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:

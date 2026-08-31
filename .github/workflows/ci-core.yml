@@ -15,7 +15,16 @@ permissions:
   contents: read
 
 jobs:
+  # Found in review: this job id ("test") is identical across ci-core.yml,
+  # ci-webapp.yml, and ci-updater.yml, each producing an unnamed check
+  # run literally called "test" - GitHub identifies required status
+  # checks by check name (plus reporting app), so three unrelated,
+  # identically-named checks is at best confusing and at worst
+  # ambiguous for branch protection. Named explicitly so each is
+  # unambiguous both in the Checks UI and as a required-status-check
+  # entry.
   test:
+    name: Core unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

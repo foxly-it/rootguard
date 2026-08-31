@@ -30,8 +30,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Found in review: this job id/name pair ("linux" / "Linux
+  # ${{ matrix.arch }}") is identical to clean-install.yml's own job -
+  # both produce a check literally named "Linux amd64"/"Linux arm64",
+  # indistinguishable from each other in the Checks UI, in gh pr checks
+  # output, or as a required-status-check entry.
   linux:
-    name: Linux ${{ matrix.arch }}
+    name: Backup and restore, Linux ${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:

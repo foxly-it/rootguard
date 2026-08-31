@@ -22,7 +22,12 @@ env:
   IMAGE_NAME: foxly-it/rootguard-blockpage
 
 jobs:
+  # Found in review: this job id ("build") is identical across
+  # ci-blockpage.yml, ci-updater.yml, and ci-webapp.yml, each producing
+  # an unnamed check run literally called "build" - see ci-core.yml's
+  # own "test" job for the identical class of finding.
   build:
+    name: Build and push blockpage image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
