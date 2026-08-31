@@ -30,6 +30,15 @@
 # forwards all of it - see inject.sh):
 #   split.rgtest-split.internal. - plain A record, no DNSSEC at all
 #
+# Reachable on the standard port 53, not just 8053 - found live: a
+# guided ForwardZone's own Settings.Validate() requires a bare canonical
+# IP address in `servers[]` (no "ip@port" syntax; that's Unbound raw
+# config's own forward-addr extension, not something the guided-settings
+# API accepts), so a scenario test driving the real Settings.Render()
+# path - not just this directory's own raw-config inject.sh - needs this
+# authority reachable on the port a bare IP implies. Same nsd instance,
+# a second `ip-address:` bind alongside the existing one.
+#
 # Usage: ./setup.sh - installs nsd/ldns-utils if missing, generates and
 # signs the zone, starts nsd listening on 0.0.0.0:8053 serving both
 # zones, and writes $OUT_DIR/trust-anchor - the signed zone's DNSKEY as a
@@ -122,6 +131,12 @@ sed -E 's/[[:space:]]+;\{.*\}$//' "${ksk}.key" >trust-anchor
 cat >nsd.conf <<EOF
 server:
   ip-address: 0.0.0.0@${nsd_port}
+  # Split-DNS's own bind, on top of the one above - see this script's
+  # own header comment on why 8053 alone isn't enough for it. Both binds
+  # serve every zone below; nothing else ever queries rgtest-ci.internal
+  # via port 53, and rgtest-split.internal being also technically
+  # reachable at 8053 is harmless.
+  ip-address: 0.0.0.0@53
   hide-version: yes
   username: root
   zonesdir: "${out_dir}"
@@ -175,9 +190,13 @@ sudo nsd -c "${out_dir}/nsd.conf"
 # authority "ready" before it can actually serve what the caller expects.
 for _ in $(seq 1 20); do
   good_answer="$(dig +short +time=1 +tries=1 @127.0.0.1 -p "$nsd_port" "good.${zone}" A 2>/dev/null || true)"
-  split_answer="$(dig +short +time=1 +tries=1 @127.0.0.1 -p "$nsd_port" "split.${split_zone}" A 2>/dev/null || true)"
+  # Checked against the port-53 bind specifically, not 8053 - that's the
+  # one a guided ForwardZone's bare-IP target actually reaches; a stale
+  # or failed second `ip-address:` bind would otherwise go unnoticed
+  # since the 8053 bind alone already satisfies the check above.
+  split_answer="$(dig +short +time=1 +tries=1 @127.0.0.1 -p 53 "split.${split_zone}" A 2>/dev/null || true)"
   if [[ "$good_answer" == "203.0.113.10" && "$split_answer" == "203.0.113.50" ]]; then
-    echo "Local DNSSEC test authority is up on 0.0.0.0:${nsd_port}, serving ${zone} and ${split_zone}"
+    echo "Local DNSSEC test authority is up on 0.0.0.0:${nsd_port} and :53, serving ${zone} and ${split_zone}"
     exit 0
   fi
   sleep 0.5

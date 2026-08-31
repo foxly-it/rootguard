@@ -2630,15 +2630,22 @@ identically whether or not `Settings.Render`'s `ForwardZone` handling
 actually worked. `setup.sh` now also serves a second, deliberately
 *unsigned* zone (`rgtest-split.internal.`, one record,
 `split.rgtest-split.internal.` → `203.0.113.50`) from the same `nsd`
-instance, on the same port, never forwarded by `inject.sh`'s own base
-wiring - so only the scenario's own guided `ForwardZone` setting makes it
-resolve. `inject.sh` now also writes the authority's resolved gateway IP
-to `$OUT_DIR/gateway-ip` so the Go test can address it directly
-(`gatewayIP@8053`, `ForwardZone.Servers` accepts this since the test
-calls `Settings.Render` directly, not the public API's `Validate`, which
-restricts `Servers` to a bare canonical IP - matching every other target
-in this file that's chosen to be safe-but-never-actually-real, e.g.
-`TestScenarioBrokenUpstream`'s `192.0.2.1`).
+instance, never forwarded by `inject.sh`'s own base wiring - so only the
+scenario's own guided `ForwardZone` setting makes it resolve. Found live
+in this same pass: a first attempt pointed the scenario's `ForwardZone`
+at the authority's existing `8053` port via an `"ip@port"` server string
+- `Settings.Render()` calls `Settings.Validate()` first, which requires
+`forward_zones[].servers[]` to be a bare canonical IP with no port
+suffix (`@port` is Unbound raw config's own `forward-addr` extension,
+which `inject.sh`'s base wiring uses directly, not something the guided-
+settings API accepts), so this failed immediately with "must be a
+canonical IPv4 or IPv6 address" - caught by this PR's own CI run before
+merging. Fixed by giving `nsd` a second bind, `0.0.0.0@53` alongside the
+existing `0.0.0.0@8053`, both serving every zone below - so the split
+zone is reachable at the standard port a bare guided-settings IP always
+implies. `inject.sh` now also writes the authority's resolved gateway IP
+to `$OUT_DIR/gateway-ip` so the Go test can address it directly as that
+bare IP.
 
 Fixed `verify_dns` by making both domains configurable
 (`ROOTGUARD_VERIFY_DNS_DOMAIN`/`ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN`,

@@ -79,22 +79,32 @@ func wireUpLocalDNSSECTestZone(t *testing.T) {
 	waitHealthy(t)
 }
 
-// localSplitDNSForwardTarget returns "gateway-ip@8053" - the local
-// DNSSEC test authority's own address, as inject.sh (already run by
-// startScenarioContainer via wireUpLocalDNSSECTestZone) resolved it and
-// wrote to disk. Used as a guided ForwardZone target that only resolves
-// setup.sh's unsigned split.rgtest-split.internal record - unlike
-// rgtest-ci.internal, that zone is deliberately never forwarded by
-// inject.sh's own base config, so a query for it only succeeds if the
-// scenario's own ForwardZone setting actually took effect, not because
-// of the CI harness's ambient wiring.
+// localSplitDNSForwardTarget returns the local DNSSEC test authority's
+// own gateway IP, as inject.sh (already run by startScenarioContainer
+// via wireUpLocalDNSSECTestZone) resolved it and wrote to disk. Used as
+// a guided ForwardZone target that only resolves setup.sh's unsigned
+// split.rgtest-split.internal record - unlike rgtest-ci.internal, that
+// zone is deliberately never forwarded by inject.sh's own base config,
+// so a query for it only succeeds if the scenario's own ForwardZone
+// setting actually took effect, not because of the CI harness's ambient
+// wiring.
+//
+// A bare IP, no "@port" - found live: Settings.Render() calls
+// Settings.Validate() first, which requires forward_zones[].servers[]
+// to be a canonical IP address with no port suffix (that syntax is
+// Unbound raw config's own forward-addr extension, which inject.sh's
+// base wiring uses directly, not something the guided-settings API
+// accepts). setup.sh's own authority listens on the standard port 53
+// too, specifically so this scenario - which drives the real
+// Settings.Render() path, unlike inject.sh - can reach it with a
+// production-shaped address.
 func localSplitDNSForwardTarget(t *testing.T) string {
 	t.Helper()
 	gatewayIP, err := os.ReadFile(dnssecTestZoneDir + "/gateway-ip")
 	if err != nil {
 		t.Fatalf("read local DNSSEC test authority gateway IP: %v", err)
 	}
-	return string(gatewayIP) + "@8053"
+	return string(gatewayIP)
 }
 
 func waitHealthy(t *testing.T) {
