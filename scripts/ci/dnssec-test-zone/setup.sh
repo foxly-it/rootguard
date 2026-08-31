@@ -252,18 +252,21 @@ existing_split_authority="$(docker ps -aq --filter "name=^rgtest-split-authority
 if [[ -n "$existing_split_authority" ]]; then
   docker rm -f "$existing_split_authority" >/dev/null
 fi
-# Pinned by digest, not just the "3.20" tag - alpine:3.20 is itself
+# Pinned by digest, not just the "3.24" tag - alpine:3.24 is itself
 # regularly rebuilt in place (security patches), so the tag alone isn't
-# reproducible run to run. This is the "3.20" manifest list's digest as
+# reproducible run to run. This is the "3.24" manifest list's digest as
 # of this comment being written; bump it by hand when there's a reason
-# to (a newer nsd package, e.g.), not silently on whatever happens to be
-# tagged "3.20" today.
+# to (a newer nsd package, or 3.24 itself nearing end of support, e.g.),
+# not silently on whatever happens to be tagged "3.24" today. Found in
+# review, round 12: 3.20 (the previous pin) had already passed its own
+# regular support window (2026-04-01) - 3.24 is the current release with
+# the longest support horizon (main through 2028-06-01).
 docker run --rm --detach --name rgtest-split-authority \
   --label "${split_authority_label}" \
   -v "${out_dir}/split-nsd.conf:/etc/nsd.conf:ro" \
   -v "${out_dir}/split-zone.txt:/zones/split-zone.txt:ro" \
   --entrypoint sh \
-  alpine:3.20@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc \
+  alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b \
   -c 'apk add --no-cache nsd bind-tools >/dev/null 2>&1 && exec nsd -d -c /etc/nsd.conf' >/dev/null
 
 # Checked from *inside* the container (docker exec ... dig @127.0.0.1),

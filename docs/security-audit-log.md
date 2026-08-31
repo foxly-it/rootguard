@@ -2903,3 +2903,24 @@ a correctness gap - every one of these checks now triggers
 unconditionally, so the actual bug finding 9 and this entry both
 describe (a required check that silently never fires) cannot recur for
 any of them.
+
+## Follow-up review, round 12 (2026-08-31)
+
+**Low, fixed: the DNSSEC test harness's Alpine pin had passed its own
+end of support.** `dnssec-test-zone/setup.sh`'s split-authority
+container was pinned (by digest, round 11) to `alpine:3.20` - correct
+practice for reproducibility, but 3.20 itself reached the end of its
+regular support window on 2026-04-01 (confirmed against Alpine's own
+release-branches table live) and now only gets patches "on request".
+Repinned to `alpine:3.24@sha256:28bd5fe8b...` - the current release
+with the longest support horizon (main through 2028-06-01). While
+verifying this, the review's second observation checked out too: the
+two integration-test fixture images
+(`rootguard-core/internal/updater/testdata/fixture/Dockerfile`,
+`rootguard-updater/integration/fixture/Dockerfile`) referenced
+`alpine:3.23`/`golang:1.26-alpine` by tag only, with none of the
+reproducibility rationale that motivated digest-pinning everything
+else in this repo (see round 8's audit-log entries on that). Both are
+now pinned by digest too, `alpine:3.23` left in place since it's still
+within its own support window (main through 2027-11-01) - only the
+missing digest was the gap.
