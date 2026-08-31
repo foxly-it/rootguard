@@ -11,7 +11,19 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /rootguard-core ./cmd/rootguard
 
-FROM ghcr.io/sigstore/cosign/cosign:v3.0.6@sha256:de9c65609e6bde17e6b48de485ee788407c9502fa08b8f4459f595b21f56cd00 AS cosign
+# Bumped from v3.0.6 - found live via the new trivy-image-scan.sh step
+# (round 13): that pin's own bundled binary carried 39 HIGH findings of
+# its own (mostly the same Go-stdlib CVEs docker:29-cli's own CLI binary
+# has, since it embedded the same stale toolchain, plus a handful of
+# sigstore/fulcio-specific ones), none of which the review's own scan had
+# surfaced. v3.1.3 also fixes GHSA-fx35-mq7g-6g98, a real signature-
+# verification bypass via an unexpected public key in a legacy bundle -
+# directly relevant here, since this exact binary is what
+# stack.RequireAttestation (rootguard-core/internal/stack) calls at
+# deploy time to verify a published image's attestation before trusting
+# it. release-alpha.yml's own cosign-installer pin must move with this
+# one - see its identical comment.
+FROM ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 AS cosign
 
 FROM docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe
 

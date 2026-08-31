@@ -3012,3 +3012,24 @@ only this repo's own `release-alpha.yml` does, on the GitHub runner's own
 Docker CLI, entirely unrelated to this image. Removed it from both
 images with `rm -f`, a real content reduction rather than something a
 future digest bump would need to add back.
+
+**High, fixed: the pinned cosign binary itself carried 39 HIGH findings,
+including a real signature-verification bypass - found live by the new
+trivy-image-scan.sh, not by the review.** Running the new scan (round 13
+finding 1, PR #460) against a real `rootguard-updater:test` image before
+it had PR #459's fixes surfaced five separate targets inside the image,
+not just the `docker:29-cli` base the review's own scan covered:
+`usr/local/bin/cosign` alone reported 39 HIGH findings - mostly the same
+Go-stdlib CVEs `usr/local/bin/docker` has (cosign v3.0.6 embeds the same
+stale toolchain), plus several sigstore/fulcio-specific ones. Checked
+upstream: three cosign releases exist past v3.0.6 (v3.1.1, v3.1.2,
+v3.1.3), and v3.1.3 fixes GHSA-fx35-mq7g-6g98, a real signature-
+verification bypass via an unexpected public key in a legacy bundle -
+directly relevant here, since this exact binary is what
+`stack.RequireAttestation` (`rootguard-core/internal/stack`) calls at
+deploy time to verify a published image's attestation before trusting
+it. Bumped the pin to v3.1.3 (by digest) in both Dockerfiles and in
+`release-alpha.yml`'s own `cosign-installer` step, which verifies a
+release candidate's attestation before promotion using the identical
+version - the two were already required to move together (see the
+existing comment there) and previously both said v3.0.6.
