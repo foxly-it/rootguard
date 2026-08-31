@@ -3164,3 +3164,15 @@ would need to bump their own vendored `golang.org/x/mod`/`x/text`
 dependency instead. Corrected all three statements. (The
 `trivy-image-scan.sh` arm64 bug this same review pass found is covered
 above, in Unbound's own entry - discovered and fixed there first.)
+
+**Low, fixed: the docker-cp preflight advisory (round 13) only named
+two of the three CVEs Docker Engine 29.5.1 actually fixed.** Confirmed
+live against Docker's own 29.5.1 release notes: CVE-2026-41568 (a
+second, separate TOCTOU race letting a container create empty
+files/directories at an arbitrary host path) is fixed in the exact same
+release as the two already covered, listed alongside them in Docker's
+own notes - a real gap, not a different-severity omission. The version
+threshold (29.5.1) was already correct and needed no change. Updated the
+advisory's message text, `manager.go`'s and `manager_test.go`'s own doc
+comments, `platform-support.md`, and both `en.ts`/`de.ts` i18n strings to
+name all three.
