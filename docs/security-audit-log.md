@@ -2853,3 +2853,15 @@ own default test-binary entry point does exactly that already when no
 `TestMain` is defined, and the real per-test container lifecycle lives
 in `startScenarioContainer`, not here. Removed the now-inaccurate,
 functionally redundant override.
+
+**Small, fixed: the frontend had no declared minimum Node version, and
+already needed one.** `react-router@8.3.0`'s own `package.json` requires
+`node >= 22.22.0`; nothing in this repo said so, so an older Node 22
+(confirmed live: 22.17.0) installs and builds with only a silent
+`EBADENGINE` warning easy to miss - not a failure, just a real version
+floor with nothing enforcing or even documenting it. Added a matching
+`engines.node` to `rootguard-webapp/frontend/package.json` (the exact
+value read directly from `react-router`'s own installed `package.json`,
+not guessed) and a `.nvmrc` (`22`, matching `ci-webapp.yml`'s own
+`setup-node` `node-version: 22`) so a version manager picks up the right
+major version automatically.
