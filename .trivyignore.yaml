@@ -15,106 +15,133 @@ vulnerabilities:
   # confirmed live against a real `rootguard-updater:test` build after
   # every actionable fix this round already landed (Alpine's
   # libssl3/libcrypto3 patched, the unused buildx plugin removed, cosign
-  # bumped to the newest available release, v3.1.3). Two root causes
-  # account for all twelve of the "Go stdlib" entries below: each is
-  # baked into the *upstream* Go toolchain that built the docker CLI
-  # binary, its bundled compose plugin, and/or cosign - not something an
-  # apk pin or a version bump to the newest available release can fix,
-  # since even cosign's newest release (v3.1.3, 2026-08-06) predates the
-  # Go release that carries these particular fixes (1.26.6, 2026-08-13).
-  # Recheck when a newer build of each exists. The remaining two
-  # (CVE-2026-41567/CVE-2026-42306 - the same `docker cp` CVEs the new
-  # Preflight advisory warns about at the *host Docker Engine* level) also
-  # show up in the compose plugin's own vendored `github.com/docker/docker`
-  # client library, but compose's own binary never calls the vulnerable
-  # code path (container-to-host archive extraction only happens via
-  # `docker cp` itself, which compose doesn't implement or expose) - the
-  # vendored code is present but not reachable through anything this image
-  # runs.
+  # bumped to the newest available release, v3.1.3).
+  #
+  # Found in review, round 14: every entry here originally had neither
+  # `paths` nor `purls`, so - per trivy's own documented behavior - each
+  # applied globally to that CVE ID wherever it might ever appear, not
+  # just in the specific package this Dockerfile actually can't fix
+  # today. `purls` now scopes each to the exact package trivy reported it
+  # against. The same review pass also caught three statements that were
+  # simply wrong: CVE-2026-56852 is a `golang.org/x/text` CVE, and
+  # CVE-2026-56864/CVE-2026-56865 are `golang.org/x/mod` CVEs - none of
+  # the three are Go standard-library code, so bumping the Go toolchain
+  # that built these binaries doesn't fix them; they need cosign/compose
+  # to bump their own vendored dependency instead (`golang.org/x/mod` to
+  # v0.40.0, confirmed live against each CVE's own advisory).
+  #
+  # The nine genuine Go-stdlib CVEs below are baked into the *upstream*
+  # Go toolchain that built the docker CLI binary, its bundled compose
+  # plugin, and/or cosign - not something an apk pin or a version bump to
+  # the newest available release can fix, since even cosign's newest
+  # release (v3.1.3, 2026-08-06) predates the Go release that carries
+  # these particular fixes (1.26.6, 2026-08-13). Recheck when a newer
+  # build of each exists. CVE-2026-41567/CVE-2026-42306 (the same
+  # `docker cp` CVEs the new Preflight advisory warns about at the *host
+  # Docker Engine* level) show up in the compose plugin's own vendored
+  # `github.com/docker/docker` client library, but compose's own binary
+  # never calls the vulnerable code path (container-to-host archive
+  # extraction only happens via `docker cp` itself, which compose doesn't
+  # implement or expose) - the vendored code is present but not reachable
+  # through anything this image runs.
   - id: CVE-2026-33818
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-39821
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-39822
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-41567
+    purls: ["pkg:golang/github.com/docker/docker"]
     expired_at: 2026-11-30
     statement: >-
       Present in the compose plugin's vendored docker client library, not
       reachable - compose never calls docker cp. See the comment above
       this block.
   - id: CVE-2026-42306
+    purls: ["pkg:golang/github.com/docker/docker"]
     expired_at: 2026-11-30
     statement: >-
       Present in the compose plugin's vendored docker client library, not
       reachable - compose never calls docker cp. See the comment above
       this block.
   - id: CVE-2026-46600
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-56852
+    purls: ["pkg:golang/golang.org/x/text"]
     expired_at: 2026-11-30
     statement: >-
-      Go stdlib CVE baked into the upstream Go toolchain that built the
-      docker CLI/compose/cosign binaries this image bundles - see the
-      comment above this block.
+      golang.org/x/text CVE (not Go stdlib - corrected in review, round
+      14) in cosign's own dependency tree, fixed upstream at x/text
+      v0.39.0 but not yet what cosign v3.1.3 (the newest release,
+      confirmed live) bundles.
   - id: CVE-2026-56853
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-56858
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-56859
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-56860
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-56862
+    purls: ["pkg:golang/stdlib"]
     expired_at: 2026-11-30
     statement: >-
       Go stdlib CVE baked into the upstream Go toolchain that built the
       docker CLI/compose/cosign binaries this image bundles - see the
       comment above this block.
   - id: CVE-2026-56864
+    purls: ["pkg:golang/golang.org/x/mod"]
     expired_at: 2026-11-30
     statement: >-
-      Go stdlib CVE baked into the upstream Go toolchain that built the
-      docker CLI/compose/cosign binaries this image bundles - see the
-      comment above this block.
+      golang.org/x/mod CVE (not Go stdlib - corrected in review, round
+      14) in cosign/compose's own dependency tree, fixed upstream at
+      x/mod v0.40.0 but not yet what either bundles.
   - id: CVE-2026-56865
+    purls: ["pkg:golang/golang.org/x/mod"]
     expired_at: 2026-11-30
     statement: >-
-      Go stdlib CVE baked into the upstream Go toolchain that built the
-      docker CLI/compose/cosign binaries this image bundles - see the
-      comment above this block.
+      golang.org/x/mod CVE (not Go stdlib - corrected in review, round
+      14) - see CVE-2026-56864's identical statement above.
 
   # Found live, round 13: bumping cosign to v3.1.3 above (the newest
   # release, confirmed live against sigstore/cosign's own releases page)
@@ -125,6 +152,7 @@ vulnerabilities:
   # through cosign's own vendored grpc client. Recheck when a newer
   # cosign release exists.
   - id: GHSA-hrxh-6v49-42gf
+    purls: ["pkg:golang/google.golang.org/grpc"]
     expired_at: 2026-11-30
     statement: >-
       google.golang.org/grpc HIGH finding in cosign v3.1.3's own

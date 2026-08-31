@@ -3144,3 +3144,23 @@ matrix leg - the only caller with an arm64 runner; `uname -m` now picks
 the right release asset. And CVE-2025-69720's ignore entry only scoped
 `libtinfo6`, missing that the same CVE also hits `ncurses-base`/
 `ncurses-bin` in this image - added both.
+
+**Medium, fixed: round 13's own trivy ignores had no `paths`/`purls`,
+so each applied globally - and three of their statements were factually
+wrong.** Confirmed live against trivy's own documentation: an entry with
+neither field "is applied to all files"/"all packages" - so, e.g., the
+same CVE ID would have been silently hidden even if it later showed up
+in a genuinely reachable RootGuard binary or an unrelated image, not
+just the specific package these entries were written for. Added `purls`
+to every one of the 16 round-13 entries, scoping each to the exact
+package trivy reported it against (`pkg:golang/stdlib` for the genuine
+Go-stdlib ones, `pkg:golang/github.com/docker/docker` for the two
+docker-cp CVEs, etc.). Also confirmed live, individually, against each
+CVE's own advisory: CVE-2026-56852 is a `golang.org/x/text` CVE, and
+CVE-2026-56864/CVE-2026-56865 are `golang.org/x/mod` CVEs - none of the
+three are Go standard-library code the way the original statements
+claimed, so a Go-toolchain bump alone doesn't fix them; cosign/compose
+would need to bump their own vendored `golang.org/x/mod`/`x/text`
+dependency instead. Corrected all three statements. (The
+`trivy-image-scan.sh` arm64 bug this same review pass found is covered
+above, in Unbound's own entry - discovered and fixed there first.)
