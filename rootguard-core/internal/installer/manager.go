@@ -364,13 +364,17 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 }
 
 // dockerCPFixedVersion is Docker Engine 29.5.1, the first upstream release
-// with both CVE-2026-41567 and CVE-2026-42306 fixed - two `docker cp`
-// vulnerabilities (arbitrary host-binary execution via PATH resolution
-// during archive decompression, and a TOCTOU race that can redirect a
-// bind-mount target to an arbitrary host path). Found in review: RootGuard
-// itself calls `docker cp` in three places - backupexport, backuprestore,
-// and updater's rollback path - so an unpatched host Docker Engine is a
-// real exposure, not a theoretical one.
+// with all three `docker cp` CVEs fixed: CVE-2026-41567 (arbitrary
+// host-binary execution via PATH resolution during archive decompression),
+// CVE-2026-41568 (a second, separate TOCTOU race letting a container
+// create empty files/directories at an arbitrary host path - found in
+// review: missing from this file's own original two-CVE list even though
+// Docker's own 29.5.1 release notes cover all three together), and
+// CVE-2026-42306 (a TOCTOU race that can redirect a bind-mount target to
+// an arbitrary host path). Found in review: RootGuard itself calls
+// `docker cp` in three places - backupexport, backuprestore, and
+// updater's rollback path - so an unpatched host Docker Engine is a real
+// exposure, not a theoretical one.
 var dockerCPFixedVersion = [3]int{29, 5, 1}
 
 // cleanDockerVersion matches only a plain upstream MAJOR.MINOR.PATCH
@@ -410,7 +414,7 @@ func dockerCPPatchWarning(version string) (Check, bool) {
 	}
 	return Check{
 		ID: "docker_engine_patch_level", Code: "docker_engine_cp_cve", OK: true, Level: "warning",
-		Message: "Docker Engine predates 29.5.1, which fixed two docker cp vulnerabilities (CVE-2026-41567, CVE-2026-42306) that RootGuard's backup, restore, and update-rollback paths rely on",
+		Message: "Docker Engine predates 29.5.1, which fixed three docker cp vulnerabilities (CVE-2026-41567, CVE-2026-41568, CVE-2026-42306) that RootGuard's backup, restore, and update-rollback paths rely on",
 		Detail:  version,
 		Action:  "Upgrade Docker Engine to 29.5.1 or later, or confirm your distribution has already backported these fixes independently of its reported version number.",
 	}, true

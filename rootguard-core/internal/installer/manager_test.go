@@ -114,9 +114,10 @@ func TestPreflightRequiresDockerAndCompose(t *testing.T) {
 // TestPreflightWarnsAboutUnpatchedDockerCPVersion covers the advisory
 // added in review: RootGuard calls `docker cp` in three places
 // (backupexport, backuprestore, updater rollback), so an Engine predating
-// 29.5.1 - which fixed CVE-2026-41567 and CVE-2026-42306, both docker cp
-// vulnerabilities - is a real exposure. Deliberately never fails
-// Preflight (see dockerCPPatchWarning's own doc comment on why).
+// 29.5.1 - which fixed CVE-2026-41567, CVE-2026-41568, and
+// CVE-2026-42306, all three docker cp vulnerabilities - is a real
+// exposure. Deliberately never fails Preflight (see dockerCPPatchWarning's
+// own doc comment on why).
 func TestPreflightWarnsAboutUnpatchedDockerCPVersion(t *testing.T) {
 	manager := NewManager(Options{
 		DataDir: t.TempDir(),
