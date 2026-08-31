@@ -51,6 +51,14 @@ jobs:
         working-directory: rootguard-unbound
         run: docker build -t rootguard-unbound:test .
 
+      # Found in review, round 14: this is one of the two published
+      # images (Blockpage is the other, see ci-blockpage.yml) that
+      # trivy-image-scan.sh (round 13) never covered - see
+      # trivy-image-scan.sh's own header comment for the full gap this
+      # closes.
+      - name: Scan image for vulnerabilities
+        run: ./scripts/ci/trivy-image-scan.sh rootguard-unbound:test
+
       - name: Validate Unbound configuration
         run: >-
           docker run --rm

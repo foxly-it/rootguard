@@ -3107,3 +3107,33 @@ with a plain digest bump once upstream ships a build with these baked
 in. Also wired `trivy-image-scan.sh` into `ci-blockpage.yml`'s `build`
 job, so this same PR's own CI proves the fix (Unbound's identical
 wiring is its own separate PR, alongside its own package fixes).
+
+**High, fixed: Unbound's base image carried 58 HIGH/CRITICAL findings
+across 24 CVEs, none caught by any CI job.** Same root cause as
+Blockpage's own entry this round: `trivy-image-scan.sh` never covered
+Unbound either. Verified live by scanning the currently-published
+`ghcr.io/foxly-it/rootguard-unbound:latest`: 58 findings across 24 CVE
+IDs, matching the review's own numbers exactly - including the review's
+own headline finding that 36 of those 58 come from just 4 CVEs
+(CVE-2026-53612..53615) spread across the 9 binary packages the
+util-linux source package builds. Confirmed live via the Debian
+Security Tracker: Debian fixed all 4 in trixie at 2.41.5-0+deb13u1
+(already the current trixie version, not just trixie-security).
+Explicit `apt-get install` pin for all 9 packages closes that.
+
+The remaining 20 CVEs were each checked individually, live, against the
+Debian Security Tracker - not assumed, per the review's own explicit
+caution against a blanket ignore. Every one is genuinely unfixed in
+trixie today: Debian's own tracker marks each `<no-dsa>` ("minor
+issue"), "postponed" ("wait for regressions upstream sorted out"), or
+notes the fix ships "first in unstable, then a point release" - none
+have a trixie-stable fix to pin to the way util-linux did. Checked what
+actually pulls in the more surprising packages rather than assuming: `dig
++deps` (`packages.debian.org` for `bind9-libs`, confirmed live) is what
+brings in `liblmdb0` and this image's second copy of `libxml2` - Unbound's
+own resolver process never touches either, only the `dig`/`host` tools
+this Dockerfile installs for health checks and diagnostics. `perl-base`
+is Debian's own base-install component; nothing in this image ever
+invokes perl. Added all 20 to `.trivyignore.yaml`, each scoped to its
+exact Debian package via `purls` (not left global - see this round's
+separate finding on why that matters) and dated 2026-11-30.
