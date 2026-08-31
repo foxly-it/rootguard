@@ -62,7 +62,20 @@ jobs:
       # inputs.source_sha (set by release-version-bump.yml) pins it
       # explicitly; a manual by-hand dispatch with no source_sha still
       # gets today's previous behavior (github.sha).
-      source_ref: ${{ inputs.source_sha || github.sha }}
+      #
+      # Found in review: this used to be the raw
+      # `inputs.source_sha || github.sha` expression - release-version-
+      # bump.yml always passes a full 40-character SHA, but the input's
+      # own description explicitly allows a manual by-hand dispatch to
+      # type an abbreviated one instead. Every later full-SHA comparison
+      # in this file (origin/main's tip, a tag's dereferenced commit, the
+      # commit-ancestry guard below) would then silently never match, and
+      # the mismatch surfaces late - after the candidate images are
+      # already built and scanned - instead of failing fast. Resolved
+      # once, below, via `git rev-parse HEAD` against the checkout at
+      # that ref, so every job downstream always sees the same full SHA
+      # regardless of what was actually typed into the dispatch input.
+      source_ref: ${{ steps.release.outputs.source_ref }}
       # Computed once here, not per-job/per-matrix-leg, so publish,
       # smoke-test, upgrade-test, and update-alpha-pins all agree on
       # exactly the same candidate tag without each having to re-derive it
@@ -81,8 +94,14 @@ jobs:
       - id: release
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
-          SOURCE_REF: ${{ inputs.source_sha || github.sha }}
         run: |
+          # Resolved to the full 40-character SHA the checkout above
+          # actually landed on, not the raw (possibly abbreviated)
+          # dispatch input - see the "source_ref" output's own comment
+          # above on why. Every later use of SOURCE_REF in this file,
+          # including the outputs below, is this resolved value.
+          SOURCE_REF="$(git rev-parse HEAD)"
+          echo "source_ref=${SOURCE_REF}" >> "$GITHUB_OUTPUT"
           # workflow_dispatch's own "version" input is required (schema
           # default: 0.1.0-alpha.4), so DISPATCH_VERSION is always
           # non-empty now that this workflow no longer also triggers on
