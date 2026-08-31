@@ -93,14 +93,20 @@ RUN apt-get update \
     # packages.debian.org - already the current trixie version, not just
     # trixie-security). Explicit upgrade, not a version bump anywhere
     # else in this file, since none of these were pinned to begin with.
+    # Two of the nine don't share that plain version string, confirmed
+    # live per-package against packages.debian.org rather than assumed:
+    # bsdutils carries an epoch ("1:"), and login - historically its own
+    # "shadow" source package, later folded into util-linux's own build -
+    # keeps its own upstream version number with the util-linux release
+    # appended ("+really2.41.5-0+deb13u1").
     && apt-get install -y --no-install-recommends \
-        bsdutils=2.41.5-0+deb13u1 \
+        bsdutils=1:2.41.5-0+deb13u1 \
         libblkid1=2.41.5-0+deb13u1 \
         liblastlog2-2=2.41.5-0+deb13u1 \
         libmount1=2.41.5-0+deb13u1 \
         libsmartcols1=2.41.5-0+deb13u1 \
         libuuid1=2.41.5-0+deb13u1 \
-        login=2.41.5-0+deb13u1 \
+        login=1:4.16.0-2+really2.41.5-0+deb13u1 \
         mount=2.41.5-0+deb13u1 \
         util-linux=2.41.5-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/* \
