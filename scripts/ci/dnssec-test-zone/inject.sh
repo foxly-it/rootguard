@@ -57,12 +57,6 @@ if [[ -z "$gateway_ip" ]]; then
   echo "::error::${container} has no network gateway IP - can't reach the local DNSSEC test authority from inside it" >&2
   exit 1
 fi
-# Recorded for callers that need to reach the authority themselves - e.g.
-# a guided ForwardZone under test that has to point at the same address
-# this script just resolved, for a zone this script deliberately doesn't
-# forward itself (setup.sh's unsigned split-DNS zone; see
-# scenario_integration_test.go).
-printf '%s' "$gateway_ip" >"${out_dir}/gateway-ip"
 
 conf_path="${out_dir}/99-ci-dnssec-test.conf"
 cat >"$conf_path" <<EOF

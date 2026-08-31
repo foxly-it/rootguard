@@ -2627,25 +2627,35 @@ needed its own reachable forward target distinct from
 anything, since `inject.sh`'s own base config already forwards all of it
 before any scenario's settings are ever applied, so it would resolve
 identically whether or not `Settings.Render`'s `ForwardZone` handling
-actually worked. `setup.sh` now also serves a second, deliberately
-*unsigned* zone (`rgtest-split.internal.`, one record,
-`split.rgtest-split.internal.` → `203.0.113.50`) from the same `nsd`
-instance, never forwarded by `inject.sh`'s own base wiring - so only the
-scenario's own guided `ForwardZone` setting makes it resolve. Found live
-in this same pass: a first attempt pointed the scenario's `ForwardZone`
-at the authority's existing `8053` port via an `"ip@port"` server string
-- `Settings.Render()` calls `Settings.Validate()` first, which requires
-`forward_zones[].servers[]` to be a bare canonical IP with no port
-suffix (`@port` is Unbound raw config's own `forward-addr` extension,
-which `inject.sh`'s base wiring uses directly, not something the guided-
-settings API accepts), so this failed immediately with "must be a
-canonical IPv4 or IPv6 address" - caught by this PR's own CI run before
-merging. Fixed by giving `nsd` a second bind, `0.0.0.0@53` alongside the
-existing `0.0.0.0@8053`, both serving every zone below - so the split
-zone is reachable at the standard port a bare guided-settings IP always
-implies. `inject.sh` now also writes the authority's resolved gateway IP
-to `$OUT_DIR/gateway-ip` so the Go test can address it directly as that
-bare IP.
+actually worked. `setup.sh` now also starts a second, deliberately
+*unsigned* throwaway authority (one record,
+`split.rgtest-split.internal.` → `203.0.113.50`), never forwarded by
+`inject.sh`'s own base wiring - so only the scenario's own guided
+`ForwardZone` setting makes it resolve.
+
+Two live failures while building that, both caught by this PR's own CI
+before merging, not after. First: pointed the scenario's `ForwardZone`
+at the DNSSEC authority's existing `nsd` instance via an `"ip@8053"`
+server string - `Settings.Render()` calls `Settings.Validate()` first,
+which requires `forward_zones[].servers[]` to be a bare canonical IP
+with no port suffix (`@port` is Unbound raw config's own `forward-addr`
+extension, which `inject.sh`'s base wiring uses directly, not something
+the guided-settings API accepts) - failed immediately with "must be a
+canonical IPv4 or IPv6 address". Fixed by giving that same `nsd` a
+second bind, `0.0.0.0@53` alongside the existing `0.0.0.0@8053`, so the
+split zone would be reachable at the standard port a bare guided-
+settings IP always implies. Second: that second bind then failed nsd's
+own startup outright - `can't bind udp socket 0.0.0.0@53: Address
+already in use` - GitHub's own runners already have something bound to
+the host's port 53. Fixed for real by moving the split zone to its own
+throwaway Docker container instead (`alpine:3.20` + `nsd`, plain
+`docker run`, no host port published) - its port 53 lives entirely
+inside that container's own network namespace, so the host's port 53
+being taken is irrelevant, and it's directly reachable from another
+unnetworked container (as the Go scenario tests' own container is) via
+Docker's default bridge. `setup.sh` resolves and writes that container's
+IP to `$OUT_DIR/split-authority-ip`; the Go test reads it directly as
+the bare guided-settings target.
 
 Fixed `verify_dns` by making both domains configurable
 (`ROOTGUARD_VERIFY_DNS_DOMAIN`/`ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN`,
