@@ -357,6 +357,47 @@ jobs:
           name: digest-${{ matrix.component }}
           path: /tmp/digests/${{ matrix.image }}.digest
 
+  # Found in review, round 15: trivy-image-scan.sh (round 13) only ever
+  # ran against a component's own PR-time build (single-platform, never
+  # published) - nothing in this pipeline ever scanned the actual
+  # multi-arch candidate images publish just pushed, so a CVE reachable
+  # only on one platform, or introduced by something specific to the
+  # release build (a build-arg, a base-image digest that moved between a
+  # component's last PR and this release), could ship undetected. Scans
+  # every one of the five images publish just built, on both platforms it
+  # actually published (matrix, not a single combined scan, so one
+  # platform's findings can never mask another's) - the exact
+  # ghcr.io/.../IMAGE:candidate_tag references, before promotion to the
+  # final version tag. `trivy image` reads a remote registry reference
+  # directly (confirmed live, no local `docker pull` needed) - the
+  # login-action above already leaves it able to authenticate through
+  # ~/.docker/config.json the same way it would for a local `docker
+  # build`.
+  image-scan:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [rootguard-core, rootguard-webapp, rootguard-updater, rootguard-unbound, rootguard-blockpage]
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.version.outputs.source_ref }}
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Scan candidate image for vulnerabilities
+        run: >-
+          ./scripts/ci/trivy-image-scan.sh --platform ${{ matrix.platform }}
+          ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.candidate_tag }}
+
   # compose.release.yaml and .env.release.example are the pinned, no-build public
   # release model - their default/documented image references need to track
   # whatever publish just pushed, or every fresh clone silently keeps running
@@ -382,7 +423,7 @@ jobs:
   # (The GitHub Release itself moved here too, for the same reason - see
   # its own step below.)
   update-alpha-pins:
-    needs: [version, publish, smoke-test, upgrade-test]
+    needs: [version, publish, image-scan, smoke-test, upgrade-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -959,7 +1000,7 @@ jobs:
         run: gh workflow run pages.yml --repo "${{ github.repository }}" --ref main
 
   smoke-test:
-    needs: [version, publish]
+    needs: [version, publish, image-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1089,7 +1130,7 @@ jobs:
   # release directly before this one - RootGuard is pre-1.0 alpha and
   # doesn't yet promise compatibility further back than that.
   upgrade-test:
-    needs: [version, publish]
+    needs: [version, publish, image-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read

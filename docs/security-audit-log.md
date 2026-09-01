@@ -3209,6 +3209,32 @@ name all three.
 
 ## Follow-up review, round 15 (2026-09-01)
 
+**Medium, fixed: release candidates were never actually image-scanned.**
+`trivy-image-scan.sh` (round 13) only ever ran against a component's own
+PR-time build - single-platform, never published. Nothing in
+`release-alpha.yml` scanned the real multi-arch candidate images
+`publish` pushes, so a platform-specific finding, or something
+introduced only by the release build itself (a build-arg, a base-image
+digest that moved between a component's last PR and this release),
+could ship undetected. Added a new `image-scan` job, matrixed over all
+five images × both published platforms (10 legs, `fail-fast: false` so
+one platform's findings never mask another's) - scans the exact
+`ghcr.io/.../IMAGE:candidate_tag` references `publish` just pushed,
+before promotion to the final version tag. `trivy image` reads a remote
+registry reference directly (confirmed live - no local `docker pull`
+needed), authenticating through the same `~/.docker/config.json`
+`docker/login-action` already leaves behind. `smoke-test`, `upgrade-test`,
+and `update-alpha-pins` all now depend on it - a scan failure blocks
+promotion the same way a failed smoke/upgrade test already does.
+`trivy-image-scan.sh` gained an optional `--platform` flag for this.
+
+Fixed a second bug in the same script while there: it only ever
+installed the pinned trivy release when the `trivy` command was
+completely missing, trusting any pre-existing one (a runner image that
+ships its own, e.g.) to already be the right version without checking.
+Now compares `trivy --version` against the pinned version explicitly and
+reinstalls on any mismatch.
+
 **High, fixed: CI-blocking CVEs trivy's own vulnerability DB surfaced
 overnight, unrelated to anything either review found.** Not a review
 finding - discovered live because every round-15 PR runs the same
