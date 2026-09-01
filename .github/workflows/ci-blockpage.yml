@@ -7,20 +7,19 @@ on:
     paths:
       - "rootguard-blockpage/**"
       - ".github/workflows/ci-blockpage.yml"
-      # Found in review, round 14: a push/PR touching only the image-scan
-      # tooling (not rootguard-blockpage/** itself) used to not trigger
-      # this workflow at all - unlike ci-core.yml/ci-updater.yml/
-      # ci-webapp.yml/ci-unbound.yml, this one's pull_request trigger
-      # keeps its own paths filter (its checks aren't required), so both
-      # triggers need the same addition here.
       - "scripts/ci/trivy-image-scan.sh"
       - ".trivyignore.yaml"
-  pull_request:
-    paths:
-      - "rootguard-blockpage/**"
-      - ".github/workflows/ci-blockpage.yml"
-      - "scripts/ci/trivy-image-scan.sh"
-      - ".trivyignore.yaml"
+  # No paths filter on pull_request, unlike push above - found in review,
+  # round 15: "Build and push blockpage image" carries the only image
+  # scan for Blockpage that runs on every PR (ci-blockpage.yml's own
+  # `Scan image for vulnerabilities` step, round 14) but wasn't a
+  # required branch-protection check, and the round-14 paths filter here
+  # meant a PR that never touched rootguard-blockpage/** wouldn't even
+  # produce the check to require in the first place - a Blockpage PR
+  # with a genuinely failing scan could still merge. Same fix already
+  # applied to ci-core.yml/ci-updater.yml/ci-webapp.yml/ci-unbound.yml in
+  # round 10/11, for the identical reason.
+  pull_request: {}
   workflow_dispatch:
 
 permissions:
