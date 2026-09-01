@@ -79,8 +79,14 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     openssl fix above. Trivy's own vulnerability DB surfaced these only
 #     after round 13/14's own scans - not something either round missed,
 #     genuinely new since.
+#   - Found live, round 15: libexpat 2.8.2-r0 here (a different package
+#     from Blockpage's own nginx-base libexpat pin - this is
+#     docker:29-cli's own bundled copy) has CVE-2026-66046/CVE-2026-76641
+#     (both "Expat through 2.8.3" DoS), fixed in 2.8.4-r0 - already
+#     published on Alpine 3.24's own `main` repo (confirmed live). Same
+#     stopgap pattern as the rest of this block.
 RUN apk add --no-cache --upgrade \
-        libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 \
+        libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 libexpat=2.8.4-r0 \
         openssh-client-common=10.3_p1-r1 openssh-client-default=10.3_p1-r1 openssh-keygen=10.3_p1-r1 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
