@@ -53,9 +53,22 @@ jobs:
   version-and-changelog:
     runs-on: ubuntu-latest
     steps:
+      # Found live: `main` requires 20 status checks on every push, not
+      # just PR merges - the default GITHUB_TOKEN authenticates as the
+      # "github-actions" app, which isn't a repository admin and so can't
+      # bypass that, even with `contents: write`. `RELEASE_PAT` is a
+      # fine-grained token scoped to this repo only (Contents: Read and
+      # write), owned by an account that *does* have admin rights here -
+      # admins bypass required status checks on a direct push
+      # (`enforce_admins` is off), the same way a maintainer pushing this
+      # exact commit by hand always could. Checking out with this token
+      # instead of the default one means every git command in this job
+      # (the "Commit the changelog" push below) authenticates as that
+      # account instead.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
 
       - name: Determine next version
         id: next

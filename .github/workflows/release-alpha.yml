@@ -432,10 +432,16 @@ jobs:
       # (the final version tag) pointing at an already-published digest.
       packages: write
     steps:
+      # Found live: `main` requires 20 status checks on every push, not
+      # just PR merges - see release-version-bump.yml's identical
+      # checkout-step comment for the full rationale. This job pushes to
+      # `main` twice (the pin commit below, and the release tag) and
+      # needs the same admin-owned `RELEASE_PAT` for both.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.version.outputs.source_ref }}
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
 
       # Found in review, round 5: the only place this job checked "has main
       # moved on since this release was tested" used to be the "Commit
