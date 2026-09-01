@@ -14,7 +14,15 @@ services:
   # path. See rootguard-attestation-proxy/README.md for the full
   # rationale and its hardcoded, 3-host allowlist.
   attestation-proxy:
-    image: "${ROOTGUARD_ATTESTATION_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.0-rc.2@sha256:0000000000000000000000000000000000000000000000000000000000000000}"
+    # Bootstrap pin: this component's very first published image, pushed
+    # by hand (real, public, multi-arch manifest - no real release has
+    # cut it yet) so `docker compose pull` and the "Clean install" CI
+    # check have something real to fetch before release-alpha.yml's own
+    # update-alpha-pins has ever run for it. Gets superseded by that
+    # step's own real digest the moment a real release actually
+    # promotes this component, same as every other component's own
+    # first-ever pin.
+    image: "${ROOTGUARD_ATTESTATION_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.0-rc.2@sha256:237fe8c8ac8565085bf05723da8094db430bd2c0cfe9aa58416729aa45dac297}"
     container_name: rootguard-attestation-proxy
     restart: unless-stopped
     read_only: true
