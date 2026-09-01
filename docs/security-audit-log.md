@@ -3239,3 +3239,11 @@ since. Two real, actionable fixes and one genuinely-unfixed set:
   and its own remote-control interface is TCP-only (confirmed live in
   `unbound.conf`), never AF_UNIX. None of the four are reachable through
   anything this image actually does.
+
+**High, fixed: one more CI-blocking CVE, surfaced by the very next PR
+rebase.** `libexpat` 2.8.2-r0 in Core/Updater's shared `docker:29-cli`
+base - a different package from Blockpage's own nginx-base libexpat pin
+(round 14) - carries CVE-2026-66046/CVE-2026-76641 (both "Expat through
+2.8.3" DoS), fixed at 2.8.4-r0, already published on Alpine 3.24's own
+`main` repo (confirmed live). Same stopgap-apk-pin pattern as the rest
+of this round's own openssh/openssl entries.
