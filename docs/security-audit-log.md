@@ -3300,3 +3300,31 @@ the newer build, so `apk`'s own dependency solver rejected the pin
 outright ("unable to select packages", confirmed live in CI - not a CVE
 finding, a hard build failure). Bumped the pin to 2.8.4-r0 to match what
 Alpine's mirror actually carries.
+
+**Kleine Punkte, fixed: `platform-support.md` didn't document round
+14's second preflight advisory.** The doc already covered
+`docker_engine_cp_cve` (confidently-unpatched version) but never
+mentioned `docker_engine_cp_cve_unknown` (version string looks
+version-shaped but couldn't be parsed with confidence) - added, with
+the same non-blocking-advisory framing as its sibling. `trivy-image-
+scan.sh`'s "trusts any pre-existing trivy binary" gap is fixed as part
+of finding 1's own PR (explicit version check, not just
+`command -v`).
+
+**Kleiner Punkt, found live, not RootGuard's own bug: the Real-DNS
+workflow (`ci-real-dns-upstream.yml`) was manually re-triggered via
+`workflow_dispatch` as asked - and consistently failed, twice in a row,
+at the same step both times.** `example.com` resolves and validates
+DNSSEC correctly (`ad` flag present); `dnssec-failed.org` - queried
+specifically to confirm Unbound correctly SERVFAILs a domain with
+broken DNSSEC - times out on both `dig` attempts instead, both runs.
+The domain itself is reachable and correctly SERVFAILs from outside
+GitHub Actions (confirmed live from a separate network), so this reads
+as a GitHub Actions runner network-path issue reaching that specific
+domain's authoritative servers, not a RootGuard config regression - but
+that's not yet proven, only the more likely of the two explanations.
+This workflow is diagnostics-only (schedule/`workflow_dispatch`, never
+`pull_request`, not a required check - round 12's own PR #457 already
+noted this), so it doesn't block round 15 or RC2, but it's a real,
+reproducible failure worth tracking as its own follow-up rather than
+closing quietly.

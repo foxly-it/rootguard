@@ -92,6 +92,16 @@ preflight specifically because a backported distro package is common
 enough here (Debian/Ubuntu's own `docker.io`, e.g.) that blocking on the
 version string alone would produce real false positives.
 
+A separate, lower-confidence advisory (`docker_engine_cp_cve_unknown`)
+fires instead when the reported version looks version-shaped but
+couldn't be parsed as a plain `major.minor.patch` string with
+confidence - some vendor builds append a distro/build suffix preflight
+doesn't try to interpret. This is deliberately distinct from staying
+silent: "we genuinely can't tell whether you have the fix" is worth
+surfacing differently from "we checked, you're fine". Preflight stays
+non-blocking either way; the advisory just asks you to confirm your
+Docker Engine is 29.5.1+ (or backported) yourself.
+
 ## Minimum requirements
 
 No hard minimum is enforced by the installer, but
