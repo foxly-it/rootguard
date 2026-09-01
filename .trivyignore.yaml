@@ -242,22 +242,28 @@ vulnerabilities:
       dependency tree, not yet fixed upstream in any cosign release -
       see the comment above this block.
 
-  # Found live, round 15: trivy's own vulnerability DB surfaced this only
-  # after round 13/14's scans - genuinely new, not something either round
-  # missed. CVE-2026-56854 (golang.org/x/crypto/ssh, fixed at 0.55.0) hit
-  # both cosign v3.1.3's own dependency tree and the compose plugin's -
-  # confirmed live, still the newest cosign release available, same
-  # unfixable-until-a-new-upstream-build situation as the two entries
-  # above it.
+  # CVE-2026-56854 affects the SSH server-side NewServerConn path that
+  # enforces source-address critical options returned by authentication
+  # callbacks. RootGuard invokes both bundled tools as clients only:
+  # cosign verifies registry attestations and compose talks to the local
+  # Docker socket. Keep each suppression tied to the exact binary and
+  # dependency version so another bundled Go binary cannot inherit it.
   - id: CVE-2026-56854
-    purls:
-      - "pkg:golang/golang.org/x/crypto@v0.53.0"
-      - "pkg:golang/golang.org/x/crypto@v0.54.0"
+    purls: ["pkg:golang/golang.org/x/crypto@v0.53.0"]
+    paths: ["usr/local/bin/cosign"]
     expired_at: 2026-11-30
     statement: >-
-      golang.org/x/crypto/ssh CRITICAL finding in cosign/compose's own
-      dependency tree, not yet fixed upstream in any release of either -
-      see the comment above this block.
+      cosign v3.1.3 contains the affected x/crypto version, but RootGuard
+      uses cosign only for registry-attestation verification and never
+      invokes the vulnerable SSH server-side NewServerConn path.
+  - id: CVE-2026-56854
+    purls: ["pkg:golang/golang.org/x/crypto@v0.54.0"]
+    paths: ["usr/local/libexec/docker/cli-plugins/docker-compose"]
+    expired_at: 2026-11-30
+    statement: >-
+      the bundled compose plugin contains the affected x/crypto version,
+      but RootGuard connects it only to the local Docker socket and never
+      invokes the vulnerable SSH server-side NewServerConn path.
 
   # Found in review, round 14: Unbound's debian:13-slim-based image
   # wasn't scanned by any CI job at all until this round's own

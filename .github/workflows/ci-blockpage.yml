@@ -8,6 +8,7 @@ on:
       - "rootguard-blockpage/**"
       - ".github/workflows/ci-blockpage.yml"
       - "scripts/ci/trivy-image-scan.sh"
+      - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
   # No paths filter on pull_request, unlike push above - found in review,
   # round 15: "Build and push blockpage image" carries the only image

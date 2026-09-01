@@ -3358,3 +3358,92 @@ This workflow is diagnostics-only (schedule/`workflow_dispatch`, never
 noted this), so it doesn't block round 15 or RC2, but it's a real,
 reproducible failure worth tracking as its own follow-up rather than
 closing quietly.
+
+## Independent hardening pass (2026-09-01)
+
+Foxly's own follow-up work on top of round 15, not triggered by an
+external review - `.trivyignore.yaml` precision, the Trivy scan
+tooling, and the Debian pin checker all got a further pass.
+
+**`CVE-2026-56854` split into two precisely-scoped entries instead of
+one shared purl pair.** Round 15 had already pinned both affected
+`x/crypto` versions (cosign's v0.53.0, compose's v0.54.0) on one entry
+without `paths`. Now each version has its own entry with the matching
+binary path (`usr/local/bin/cosign` /
+`usr/local/libexec/docker/cli-plugins/docker-compose`) and its own
+reachability statement: the CVE is in the SSH *server-side*
+`NewServerConn` path that enforces source-address critical options from
+authentication callbacks - both bundled tools only ever act as SSH
+clients (cosign verifies registry attestations, compose talks to the
+local Docker socket), so neither invokes the vulnerable code path.
+
+**OpenSSH removed outright from Core/Updater instead of being patched
+release after release.** `docker:29-cli` only installs it for optional
+`ssh://` Docker contexts; RootGuard always uses the mounted local
+Docker socket and never creates or selects a remote context, so
+`apk del openssh-client` in both Dockerfiles closes the whole class of
+future OpenSSH CVEs (round 15 alone had already patched three) instead
+of carrying an unused client indefinitely. Verified live: built on both
+amd64 and arm64, confirmed OpenSSH and the already-removed buildx
+plugin are both gone, Docker Compose v5.4.0 and cosign still work.
+
+**`trivy-image-scan.sh`'s `--platform` flag accepted a missing value
+without a bad-usage exit.** `trivy-image-scan.sh --platform` (or
+`--platform` followed only by an image ref) used to fall through and
+either use an empty `--platform` argument or misread the platform value
+as the image reference - fixed with an explicit argument-count check
+before consuming `$2`, covered by a new regression test
+(`trivy-image-scan.test.sh`) that stubs `trivy` itself and asserts both
+the usage-error paths and the real argument forwarding.
+
+**Trivy's version and both platform checksums centralized into
+`scripts/ci/trivy-version.env`**, sourced by both
+`trivy-image-scan.sh` and `ci-security.yml`'s own install step instead
+of keeping three hand-synced copies of the same three values - a future
+Trivy bump is now a one-file change. Every `push.paths` filter that
+already watched `trivy-image-scan.sh` now also watches this new file.
+
+**`scripts/check-debian-pins.sh` had four separate live-found bugs,
+all fixed together:**
+- the pin-extraction regex used `\s` in extended-regex mode, which BSD
+  grep/sed (macOS) doesn't support - switched to POSIX `[[:space:]]`
+  so the script actually runs on a macOS dev machine, not just Linux CI;
+- the old `apt-cache policy` output was matched with a `grep` prefix
+  search (`^${pinned_name}=`) that could false-positive against another
+  pinned package sharing a name prefix - replaced with an `awk` exact
+  field match;
+- a package apt couldn't find a candidate for silently printed a `WARN`
+  and kept going, exiting 0 if that was the only issue - now exits 2
+  (a new, distinct "unfixable" exit code, documented at the top of the
+  script) and `--fix` refuses to run at all when any pin is unfixable,
+  rather than silently fixing the ones it could and leaving the rest
+  looking checked;
+- `--fix`'s in-place `sed` also broke on any pinned version containing a
+  literal `+` (common in Debian versions, e.g. `4.16.0-2+really2.41.5-0+deb13u1`)
+  since only `.` was escaped for the replacement pattern - version
+  strings pass through unescaped now since `+` needs no escaping in the
+  replacement text, and each replacement is verified afterward (old
+  string gone, new string present) before anything is written back, all
+  routed through a temporary file that's only `mv`'d into place once
+  every update in the batch validates - `--fix` is now atomic across
+  several drifted packages in one run instead of leaving the Dockerfile
+  half-updated if a later replacement fails.
+Both new behaviors are covered by `check-debian-pins.test.sh`, which
+stubs `docker` to simulate current/drifted/missing-candidate/operational-
+error states and asserts the exit code and file contents for each.
+
+**`debian-pin-freshness.yml`'s auto-fix job used to run `--fix` on any
+non-zero exit code from the checker**, including exit 2 (the new
+"unfixable" code) and genuine operational failures (a `docker pull`
+timeout, e.g.) - now only exit 1 (real, fixable drift) triggers `--fix`;
+any other non-zero exit fails the job outright instead of quietly
+opening a PR built on a broken check. Also added: a post-`--fix`
+`git diff --quiet` guard against opening a no-op PR if the repository
+state changed between the check and the fix step.
+
+Validated live: Core/Updater built and scanned clean on both
+architectures, all four component images show zero unsuppressed
+HIGH/CRITICAL findings under Trivy 0.74, a full repository Trivy
+filesystem scan is clean, all Go/frontend/shell test suites and
+`actionlint` pass, all 21 Debian pins are current against the live
+repository, and Gitleaks found nothing across 636 commits.

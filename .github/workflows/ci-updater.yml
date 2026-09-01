@@ -8,6 +8,7 @@ on:
       - ".github/workflows/ci-updater.yml"
       # See ci-core.yml's identical comment for why.
       - "scripts/ci/trivy-image-scan.sh"
+      - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
   # No paths filter on pull_request - see ci-core.yml's identical
   # comment for the full rationale: "Updater unit tests" is a required

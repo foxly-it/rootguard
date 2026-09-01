@@ -23,6 +23,10 @@ set -Eeuo pipefail
 
 platform=""
 if [[ "${1:-}" == "--platform" ]]; then
+  if [[ $# -lt 3 || -z "${2:-}" ]]; then
+    echo "usage: $0 [--platform <os/arch>] <image-ref>" >&2
+    exit 2
+  fi
   platform="$2"
   shift 2
 fi
@@ -32,10 +36,8 @@ if [[ $# -ne 1 ]]; then
 fi
 image="$1"
 
-# Same pinned version as ci-security.yml's own trivy install - kept in
-# sync by hand, not by reference, since a shared step needs GitHub
-# Actions' reusable-workflow/composite-action machinery to avoid that
-# duplication, and this repo's CI doesn't use either yet.
+# ci-security.yml sources the same file, keeping the version and asset
+# checksums in one place.
 #
 # Found in review, round 14: this used to hardcode the amd64 asset and
 # checksum - silently fine on every caller except ci-unbound.yml's own
@@ -53,17 +55,21 @@ image="$1"
 # applies the same way against a different DB/ruleset. Now installs
 # whenever the version doesn't match exactly, not just when the command
 # is missing.
-want_version="0.73.0"
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=scripts/ci/trivy-version.env
+source "${script_dir}/trivy-version.env"
+
+want_version="$TRIVY_VERSION"
 have_version="$(trivy --version 2>/dev/null | awk '/^Version:/ {print $2; exit}' || true)"
 if [[ "$have_version" != "$want_version" ]]; then
   case "$(uname -m)" in
     x86_64)
-      asset="trivy_0.73.0_Linux-64bit.tar.gz"
-      checksum="2edd39da482bb4e9831962487b68f68e3928ec3137794757f54d00383d79547b"
+      asset="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+      checksum="$TRIVY_LINUX_AMD64_SHA256"
       ;;
     aarch64)
-      asset="trivy_0.73.0_Linux-ARM64.tar.gz"
-      checksum="13833d97e8a1a5367471c372a173180157f593bece570e20d5d925fef552f5dd"
+      asset="trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz"
+      checksum="$TRIVY_LINUX_ARM64_SHA256"
       ;;
     *)
       echo "::error::trivy-image-scan.sh: unsupported architecture $(uname -m)" >&2
@@ -71,7 +77,7 @@ if [[ "$have_version" != "$want_version" ]]; then
       ;;
   esac
   curl -sSfL -o trivy.tar.gz \
-    "https://github.com/aquasecurity/trivy/releases/download/v0.73.0/${asset}"
+    "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${asset}"
   echo "${checksum}  trivy.tar.gz" | sha256sum -c -
   sudo tar -xz -C /usr/local/bin -f trivy.tar.gz trivy
   rm trivy.tar.gz

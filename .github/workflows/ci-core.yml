@@ -12,6 +12,7 @@ on:
       # unconditionally (see the comment below), this only closes the
       # same gap for a direct push to main.
       - "scripts/ci/trivy-image-scan.sh"
+      - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
   # No paths filter on pull_request, unlike push above - found in review:
   # this job ("Core unit tests") is a required branch-protection status
