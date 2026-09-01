@@ -64,6 +64,20 @@ gets a different candidate.
 
 ## Pin update, release tag, and GitHub Release
 
+Both `release-version-bump.yml`'s changelog commit and this job's own pin
+commit/tag push authenticate as `secrets.RELEASE_PAT` (a fine-grained
+token, Contents: Read and write only, scoped to this repository), not
+the default `GITHUB_TOKEN` - found live, cutting 1.0.0-rc.2: `main`
+requires all 20 status checks on every push, not just PR merges, and the
+default token authenticates as the "github-actions" app, which isn't a
+repository admin and so can't bypass that even with `contents: write`
+granted. `RELEASE_PAT` belongs to an account that does have admin rights
+on this repo - admins bypass required status checks on a direct push
+(`enforce_admins` is off), the same way a maintainer pushing either
+commit by hand always could. Both checkout steps pass this token
+explicitly so every subsequent git command in that job authenticates
+with it.
+
 Before any of this, `update-alpha-pins` re-verifies `origin/main` still
 equals `source_ref` - twice: once immediately, before promoting a single
 image, and once more right before the pin commit itself. If `main` has
