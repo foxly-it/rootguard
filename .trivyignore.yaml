@@ -159,6 +159,23 @@ vulnerabilities:
       dependency tree, not yet fixed upstream in any cosign release -
       see the comment above this block.
 
+  # Found live, round 15: trivy's own vulnerability DB surfaced this only
+  # after round 13/14's scans - genuinely new, not something either round
+  # missed. CVE-2026-56854 (golang.org/x/crypto/ssh, fixed at 0.55.0) hit
+  # both cosign v3.1.3's own dependency tree and the compose plugin's -
+  # confirmed live, still the newest cosign release available, same
+  # unfixable-until-a-new-upstream-build situation as the two entries
+  # above it.
+  - id: CVE-2026-56854
+    purls:
+      - "pkg:golang/golang.org/x/crypto@v0.53.0"
+      - "pkg:golang/golang.org/x/crypto@v0.54.0"
+    expired_at: 2026-11-30
+    statement: >-
+      golang.org/x/crypto/ssh CRITICAL finding in cosign/compose's own
+      dependency tree, not yet fixed upstream in any release of either -
+      see the comment above this block.
+
   # Found in review, round 14: Unbound's debian:13-slim-based image
   # wasn't scanned by any CI job at all until this round's own
   # trivy-image-scan.sh addition (ci-unbound.yml) - these 20 entries are
@@ -321,6 +338,54 @@ vulnerabilities:
       libio-compress-perl package this same CVE also affects is not
       installed in this image at all) - see CVE-2026-57432's identical
       statement above.
+
+  # Found live, round 15: trivy's own vulnerability DB surfaced these
+  # only now - genuinely new since round 14's own Unbound scan, not
+  # something that round missed. Unlike the other Unbound findings above
+  # (all transitively-pulled diagnostic tooling), libevent is a real,
+  # direct build dependency Unbound links against for its own event loop
+  # (--with-libevent, see rootguard-unbound/Dockerfile) - a materially
+  # different reachability question, checked accordingly: Unbound
+  # implements DNS wire-format parsing entirely itself and never uses
+  # libevent's own bundled `evdns` convenience API or its RPC/tagging
+  # framework (`event_rpcgen`/`event_tagging.c`) - it only uses
+  # libevent's event-loop/socket-buffering primitives (event_base,
+  # bufferevent). All four findings below are in exactly those two unused
+  # subsystems. Confirmed unfixed in trixie live (Debian Security
+  # Tracker) - no `<no-dsa>` classification exists yet either, this is
+  # simply too new; fixed only in forky/sid at 2.1.13-stable-1.
+  - id: CVE-2026-63383
+    purls: ["pkg:deb/debian/libevent-2.1-7t64"]
+    expired_at: 2026-11-30
+    statement: >-
+      event_tagging.c (evtag_unmarshal_header) - libevent's own RPC/
+      tagging framework, which Unbound never uses. Unfixed in trixie,
+      confirmed live - see the comment above this block.
+  - id: CVE-2026-63384
+    purls: ["pkg:deb/debian/libevent-2.1-7t64"]
+    expired_at: 2026-11-30
+    statement: >-
+      event_tagging.c (evtag_unmarshal_header/evtag_unmarshal_string) -
+      libevent's own RPC/tagging framework, which Unbound never uses -
+      see CVE-2026-63383's identical statement above.
+  - id: CVE-2026-63387
+    purls: ["pkg:deb/debian/libevent-2.1-7t64"]
+    expired_at: 2026-11-30
+    statement: >-
+      evdns.c (evdns_server_request_format_response) - libevent's own
+      bundled DNS server-response-formatting helper, which Unbound never
+      uses (it implements DNS wire-format parsing entirely itself) - see
+      CVE-2026-63383's identical statement above on the unfixed-in-trixie
+      status.
+  - id: CVE-2026-63388
+    purls: ["pkg:deb/debian/libevent-2.1-7t64"]
+    expired_at: 2026-11-30
+    statement: >-
+      bufferevent_sock.c, requires an AF_UNIX listener socket - RootGuard
+      Unbound's own remote-control interface is TCP-only
+      (`control-interface: 127.0.0.1`, confirmed live in unbound.conf),
+      never AF_UNIX. See CVE-2026-63383's identical statement above on
+      the unfixed-in-trixie status.
 
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
