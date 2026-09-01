@@ -3273,3 +3273,19 @@ base - a different package from Blockpage's own nginx-base libexpat pin
 2.8.3" DoS), fixed at 2.8.4-r0, already published on Alpine 3.24's own
 `main` repo (confirmed live). Same stopgap-apk-pin pattern as the rest
 of this round's own openssh/openssl entries.
+
+**Medium, fixed: Blockpage's own image scan wasn't a required check, and
+couldn't have been even if listed.** Confirmed live against branch
+protection's own `required_status_checks.contexts` (19 entries): "Build
+and push blockpage image" - the only check that runs
+`trivy-image-scan.sh` for Blockpage (round 14) - wasn't among them, so a
+PR with a genuinely failing Blockpage scan could still merge. The deeper
+issue: `ci-blockpage.yml`'s own `pull_request` trigger still carried a
+`paths` filter (round 14 only added the image-scan tooling paths to it,
+not removed it entirely) - a PR that never touched
+`rootguard-blockpage/**` wouldn't even produce the check to require in
+the first place, the identical structural gap round 10/11 already fixed
+for `ci-core.yml`/`ci-updater.yml`/`ci-webapp.yml`/`ci-unbound.yml`.
+Dropped the filter (`pull_request: {}`, matching those four) and added
+"Build and push blockpage image" to the required list (19 → 20,
+confirmed live).
