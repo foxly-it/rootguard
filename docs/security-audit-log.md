@@ -3289,3 +3289,14 @@ for `ci-core.yml`/`ci-updater.yml`/`ci-webapp.yml`/`ci-unbound.yml`.
 Dropped the filter (`pull_request: {}`, matching those four) and added
 "Build and push blockpage image" to the required list (19 → 20,
 confirmed live).
+
+**High, fixed: the newly-required Blockpage build broke outright, live,
+minutes after becoming a required check.** Alpine 3.23's `main` repo
+moved `libexpat` past this Dockerfile's own round-14 pin (2.8.3-r0) to
+2.8.4-r0 (the same libexpat CVE fix already applied to Core/Updater's
+`docker:29-cli` base this round) and stopped carrying 2.8.3-r0 at all -
+`fontconfig`'s own `libexpat.so.1` dependency now resolves only against
+the newer build, so `apk`'s own dependency solver rejected the pin
+outright ("unable to select packages", confirmed live in CI - not a CVE
+finding, a hard build failure). Bumped the pin to 2.8.4-r0 to match what
+Alpine's mirror actually carries.
