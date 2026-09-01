@@ -40,8 +40,10 @@ LABEL org.opencontainers.image.title="RootGuard Updater" \
 # Found in review: see rootguard-core/Dockerfile's identical comment for
 # the full CVE-2026-14456 and unused-buildx-plugin rationale - this exact
 # pinned digest is the same one Core uses, so both stopgaps apply here
-# too.
-RUN apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 \
+# too. Same for round 15's openssh (CVE-2026-60002/59999/60000) stopgap.
+RUN apk add --no-cache --upgrade \
+        libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 \
+        openssh-client-common=10.3_p1-r1 openssh-client-default=10.3_p1-r1 openssh-keygen=10.3_p1-r1 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx
 
 COPY --from=builder /rootguard-updater /usr/local/bin/rootguard-updater

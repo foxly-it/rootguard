@@ -3206,3 +3206,36 @@ name all three.
   `warning` class (neither `ok` nor `failed`), its action text stays
   visible despite `check.ok` being `true` (the exact bug the round-13
   render-guard fix addressed), and the install button stays enabled.
+
+## Follow-up review, round 15 (2026-09-01)
+
+**High, fixed: CI-blocking CVEs trivy's own vulnerability DB surfaced
+overnight, unrelated to anything either review found.** Not a review
+finding - discovered live because every round-15 PR runs the same
+required scans round 13/14 already wired up, and the DB had moved on
+since. Two real, actionable fixes and one genuinely-unfixed set:
+
+- Core/Updater's shared `docker:29-cli` pin: openssh 10.3_p1-r0 has
+  CVE-2026-60002 (CRITICAL), CVE-2026-59999/CVE-2026-60000 (HIGH), fixed
+  at 10.3_p1-r1 - already published on Alpine 3.24's own `main` repo
+  (confirmed live). Same stopgap-apk-pin pattern as the existing
+  openssl/libcrypto3 entries.
+- cosign v3.1.3 (still the newest release, confirmed live) and the
+  compose plugin both carry CVE-2026-56854
+  (`golang.org/x/crypto/ssh`, CRITICAL, fixed at 0.55.0) in their own
+  dependency trees - not fixed in any release of either. Added with the
+  same dated, justified pattern as the existing grpc entry, versioned
+  purls for both resolved versions.
+- Unbound's `libevent-2.1-7t64` (2.1.12-stable-10+b1) carries four new
+  HIGH findings (CVE-2026-63383/63384/63387/63388), all unfixed in
+  trixie (Debian's own tracker doesn't even have a `<no-dsa>`
+  classification yet - simply too new). Unlike every other Unbound
+  ignore entry so far, libevent is a real, direct build dependency
+  (`--with-libevent`) - checked accordingly, not assumed: two are in
+  libevent's own RPC/tagging framework (`event_tagging.c`), one is in
+  its bundled `evdns` DNS-server-response helper, one requires an
+  AF_UNIX listener - Unbound implements DNS wire-format parsing entirely
+  itself (never libevent's own `evdns` API or RPC/tagging framework)
+  and its own remote-control interface is TCP-only (confirmed live in
+  `unbound.conf`), never AF_UNIX. None of the four are reachable through
+  anything this image actually does.

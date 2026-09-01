@@ -72,7 +72,16 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     separate from this image. Removing it is a real image-content
 #     reduction (fewer packages a scanner can find something in), not
 #     something a later digest bump would ever need to add back.
-RUN apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 \
+#   - Found live, round 15: openssh 10.3_p1-r0 here has three more CVEs
+#     (CVE-2026-60002, CRITICAL; CVE-2026-59999/CVE-2026-60000, HIGH),
+#     fixed in 10.3_p1-r1 - already published on Alpine 3.24's own `main`
+#     repo (confirmed live), same stopgap-with-digest-bump pattern as the
+#     openssl fix above. Trivy's own vulnerability DB surfaced these only
+#     after round 13/14's own scans - not something either round missed,
+#     genuinely new since.
+RUN apk add --no-cache --upgrade \
+        libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 \
+        openssh-client-common=10.3_p1-r1 openssh-client-default=10.3_p1-r1 openssh-keygen=10.3_p1-r1 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 
