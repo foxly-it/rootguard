@@ -1,0 +1,38 @@
+name: Diagnostic - attestation repro
+
+# Temporary, throwaway diagnostic - not part of the normal pipeline.
+# Reproduces the exact `cosign verify-attestation` call RequireAttestation
+# makes, but from *inside* rootguard-core's own published image on a real
+# GitHub Actions runner, to isolate whether the smoke-test failure is
+# specific to running inside that image/container context rather than a
+# plain host invocation.
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Full image ref with digest to verify"
+        required: true
+
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify from inside rootguard-core's own image
+        run: |
+          set -x
+          docker run --rm --entrypoint cosign \
+            ghcr.io/foxly-it/rootguard-core:1.0.0-rc.2-candidate-100d7818689a \
+            verify-attestation \
+            --type "https://slsa.dev/provenance/v1" \
+            --certificate-identity-regexp '^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$' \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            --certificate-github-workflow-repository "foxly-it/rootguard" \
+            "${{ inputs.image }}"
