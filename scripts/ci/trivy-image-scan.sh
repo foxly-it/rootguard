@@ -13,7 +13,7 @@
 # real PR/release would ship - not a separately-tagged or hypothetical
 # one.
 #
-# Usage: ./scripts/ci/trivy-image-scan.sh <image-ref>
+# Usage: ./scripts/ci/trivy-image-scan.sh [--platform <os/arch>] <image-ref>
 # Run from the repo root (matches every caller - ci-core.yml,
 # ci-updater.yml, ci-webapp.yml - none of which set a working-directory
 # on the step that calls this), so the relative .trivyignore.yaml path
@@ -21,8 +21,13 @@
 # relies on.
 set -Eeuo pipefail
 
+platform=""
+if [[ "${1:-}" == "--platform" ]]; then
+  platform="$2"
+  shift 2
+fi
 if [[ $# -ne 1 ]]; then
-  echo "usage: $0 <image-ref>" >&2
+  echo "usage: $0 [--platform <os/arch>] <image-ref>" >&2
   exit 2
 fi
 image="$1"
@@ -38,7 +43,19 @@ image="$1"
 # execute binary file: Exec format error". `uname -m` picks the matching
 # release asset/checksum for both architectures this repo's CI actually
 # runs on.
-if ! command -v trivy >/dev/null 2>&1; then
+#
+# Found in review, round 15: this used to skip installing entirely
+# whenever *any* `trivy` was already on PATH, trusting it to be this
+# exact pinned version without ever checking - a runner image that ships
+# its own trivy (GitHub's hosted images add security tools like this
+# over time) would then silently scan with whatever version that happened
+# to be, unpinned, with no `.trivyignore.yaml` entry safe to assume still
+# applies the same way against a different DB/ruleset. Now installs
+# whenever the version doesn't match exactly, not just when the command
+# is missing.
+want_version="0.73.0"
+have_version="$(trivy --version 2>/dev/null | awk '/^Version:/ {print $2; exit}' || true)"
+if [[ "$have_version" != "$want_version" ]]; then
   case "$(uname -m)" in
     x86_64)
       asset="trivy_0.73.0_Linux-64bit.tar.gz"
@@ -60,8 +77,14 @@ if ! command -v trivy >/dev/null 2>&1; then
   rm trivy.tar.gz
 fi
 
+platform_args=()
+if [[ -n "$platform" ]]; then
+  platform_args=(--platform "$platform")
+fi
+
 trivy image \
   --severity HIGH,CRITICAL \
   --ignorefile .trivyignore.yaml \
   --exit-code 1 \
+  "${platform_args[@]}" \
   "$image"
