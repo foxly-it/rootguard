@@ -30,13 +30,21 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # already used for docker:29-cli's OpenSSL pin in Core/Updater's
 # Dockerfiles: replace with a plain digest bump once upstream publishes a
 # nginx:1.29-alpine build with these baked in.
+#
+# Found live, round 15: Alpine 3.23's `main` repo moved libexpat past
+# this pin's own 2.8.3-r0 to 2.8.4-r0 (the same libexpat CVE fix already
+# applied to Core/Updater's docker:29-cli base this round) - the mirror
+# no longer carries 2.8.3-r0 at all, and fontconfig's own `libexpat.so.1`
+# dependency now resolves only against the newer build, so the pin
+# outright broke every build (`apk`'s own "unable to select packages",
+# confirmed live in CI). Bumped to match what's actually installable.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.8-r0 \
         curl=8.20.0-r0 \
         libcurl=8.20.0-r0 \
         libcrypto3=3.5.8-r0 \
         libssl3=3.5.8-r0 \
-        libexpat=2.8.3-r0 \
+        libexpat=2.8.4-r0 \
         libxml2=2.13.9-r1 \
         nghttp2-libs=1.69.0-r0
 
