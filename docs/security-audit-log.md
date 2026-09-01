@@ -3301,6 +3301,36 @@ outright ("unable to select packages", confirmed live in CI - not a CVE
 finding, a hard build failure). Bumped the pin to 2.8.4-r0 to match what
 Alpine's mirror actually carries.
 
+**Mittel bis niedrig, fixed: `.trivyignore.yaml`'s `purls` exceptions
+still weren't precise enough.** Every one of the 41 vulnerability
+entries carried a bare, unversioned purl (`pkg:golang/stdlib`,
+`pkg:deb/debian/perl-base`, ...) - correct per round 14's own fix, but
+still not precise: a bare purl suppresses every version of that
+package, so a later toolchain/apt bump that reused the same CVE ID
+against a genuinely different, newly-affected version would stay
+silently hidden. Rewrote every purl to the exact installed version
+trivy itself reported, read live from a real scan's own `PURL` field
+(never guessed) - docker CLI and the compose plugin share one Go
+toolchain (stdlib v1.26.5), cosign a separate, older one (v1.26.4), so
+the eight shared stdlib CVEs each list both versions. Also added
+`paths` to the 15 Go-binary entries, naming exactly which of the three
+bundled binaries (`usr/local/bin/docker`,
+`usr/local/libexec/docker/cli-plugins/docker-compose`,
+`usr/local/bin/cosign`) each finding's own scan `Target` field showed it
+against - trivy requires both purl and path to match, so this narrows
+each entry to the specific binary carrying that package/version, not
+merely the package/version wherever it might appear. Re-verified live
+against `rootguard-updater:latest` and `rootguard-unbound:latest` after
+the rewrite: the ignore file still suppresses everything it did before
+(0 residual findings on Unbound; the 2 residual findings on Updater are
+the pre-#470 libexpat CVEs on the stale `:latest` tag, not a
+purl-matching gap - they're gone once a new image ships). Left the
+review's "separate ignore file per image" suggestion unimplemented: the
+versioned-purl-plus-path scoping now does the same job per-entry
+(nothing here can leak onto a different image's package identity by
+version+path), without the added maintenance overhead of tracking five
+parallel files.
+
 **Kleine Punkte, fixed: `platform-support.md` didn't document round
 14's second preflight advisory.** The doc already covered
 `docker_engine_cp_cve` (confidently-unpatched version) but never
