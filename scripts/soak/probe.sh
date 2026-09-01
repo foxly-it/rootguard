@@ -50,7 +50,7 @@ latency_ms=$(( (t1 - t0) / 1000000 ))
 # failure - the follow-up jq -e check only guards against the pipeline
 # succeeding but producing something unexpected, not against it failing.
 mem_json="$(docker stats --no-stream --format '{{json .}}' \
-  rootguard-core rootguard-webapp rootguard-updater rootguard-adguard rootguard-unbound 2>/dev/null \
+  rootguard-core rootguard-webapp rootguard-updater rootguard-adguard rootguard-unbound rootguard-attestation-proxy 2>/dev/null \
   | jq -cs '[.[] | {name: .Name, mem: .MemUsage, cpu: .CPUPerc}]' 2>/dev/null)" || mem_json='[]'
 jq -e . >/dev/null 2>&1 <<<"$mem_json" || mem_json='[]'
 

@@ -5,6 +5,30 @@ name: rootguard
 # Copy .env.release.example to .env and replace all placeholder secrets.
 
 services:
+  # The one, narrow, auditable bridge letting cosign's own attestation
+  # checks (see core's/updater's ROOTGUARD_ATTESTATION_PROXY_URL below)
+  # reach GHCR/Sigstore from the fully internet-isolated `control`
+  # network - found live, cutting 1.0.0-rc.2: Core/the Updater never had
+  # any route to the internet at all, so `RequireAttestation`'s cosign
+  # calls could never succeed once wired into the real deploy/update
+  # path. See rootguard-attestation-proxy/README.md for the full
+  # rationale and its hardcoded, 3-host allowlist.
+  attestation-proxy:
+    image: "${ROOTGUARD_ATTESTATION_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.0-rc.2@sha256:0000000000000000000000000000000000000000000000000000000000000000}"
+    container_name: rootguard-attestation-proxy
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      - control
+      - egress
+    healthcheck:
+      test: ["CMD", "/rootguard-attestation-proxy", "healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
   core:
     image: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.0-rc.1@sha256:b6d4232118ea51527bf4460d38bd3c28a6bbd7d76fbc66356526b30f7ea4166a}"
     container_name: rootguard-core
@@ -12,8 +36,14 @@ services:
     depends_on:
       updater:
         condition: service_healthy
+      attestation-proxy:
+        condition: service_healthy
     environment:
       PORT: "8081"
+      # See rootguard-core/internal/stack/attestation.go's
+      # runAttestationCommand doc comment for the full rationale - scoped
+      # to cosign's own subprocess only, never Core's ambient environment.
+      ROOTGUARD_ATTESTATION_PROXY_URL: http://attestation-proxy:8888
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_CORE_CONTAINER: rootguard-core
       # Test-only escape hatch - see cmd/rootguard/main.go's own doc
@@ -118,7 +148,14 @@ services:
     image: "${ROOTGUARD_UPDATER_IMAGE:-ghcr.io/foxly-it/rootguard-updater:1.0.0-rc.1@sha256:668d85738f353f6bbd74282786292e2188617be06f214e90d242801a90b9e50b}"
     container_name: rootguard-updater
     restart: unless-stopped
+    depends_on:
+      attestation-proxy:
+        condition: service_healthy
     environment:
+      # See rootguard-updater/attestation.go's verifyAttestation doc
+      # comment for the full rationale - scoped to cosign's own
+      # subprocess only, never the Updater's ambient environment.
+      ROOTGUARD_ATTESTATION_PROXY_URL: http://attestation-proxy:8888
       ROOTGUARD_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.release.yaml
@@ -155,6 +192,10 @@ networks:
   edge:
   control:
     internal: true
+  # Not internal - real internet access, but only
+  # rootguard-attestation-proxy sits here. Core/the Updater stay on
+  # `control` only; they never join `egress` directly.
+  egress:
 
 volumes:
   unbound-config:

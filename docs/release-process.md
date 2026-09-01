@@ -2,11 +2,12 @@
 
 `.github/workflows/release-alpha.yml` is the release pipeline for every
 component image (`rootguard-core`, `rootguard-webapp`, `rootguard-updater`,
-`rootguard-unbound`, `rootguard-blockpage`). This document is the
-architecture-level map of what it does and why it's shaped the way it is;
-the workflow file itself keeps its own inline comments for the specific,
-often incident-driven reasoning behind individual steps - this doc doesn't
-duplicate those, it gives the overall picture they each sit inside.
+`rootguard-unbound`, `rootguard-blockpage`, `rootguard-attestation-proxy`).
+This document is the architecture-level map of what it does and why it's
+shaped the way it is; the workflow file itself keeps its own inline
+comments for the specific, often incident-driven reasoning behind
+individual steps - this doc doesn't duplicate those, it gives the overall
+picture they each sit inside.
 
 ## Trigger and identity
 
@@ -134,3 +135,27 @@ next compression step for the rest, but a release pipeline is exactly the
 kind of file where a rushed refactor risks introducing a real regression
 for a marginal readability gain - deferred as a deliberate, separate
 piece of work rather than folded into a documentation pass.
+
+## Self-update can never deliver a compose-topology change
+
+Self-update (both Core's own self-replacement of Core/WebApp and the
+Updater's self-replacement) only ever swaps container *images* in place
+(`docker compose ... up -d --no-deps <service>`) against whatever
+compose file already exists on the operator's disk - it never re-fetches
+`compose.release.yaml` itself. Adding `rootguard-attestation-proxy` (a
+new service, a new `egress` network) is exactly the kind of change
+self-update structurally cannot carry to an existing installation: an
+operator already running an older release, updating via the WebGUI
+alone, ends up with new core/updater binaries that expect
+`ROOTGUARD_ATTESTATION_PROXY_URL` and the proxy service to exist, but
+neither does - the environment variable simply reads empty, which falls
+back to pre-proxy (no-proxy) behavior, and any release whose
+attestation-gating actually depends on the proxy being present would
+fail cosign verification again, the same way as before the proxy
+existed. Only a fresh `install.sh` run, or an operator manually
+refreshing their local `compose.release.yaml`, can cross a
+topology change like this. This is a pre-existing, structural property
+of the whole self-update mechanism - not something this change
+introduced, and not something worth solving here (making self-update
+topology-aware is a materially bigger, separate undertaking) - just
+worth knowing next time a release adds a new service or network.

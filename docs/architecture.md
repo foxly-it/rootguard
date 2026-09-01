@@ -9,10 +9,12 @@ and development workflows.
 ```text
 rootguard/
 ├── docs/
+├── rootguard-attestation-proxy/
+├── rootguard-blockpage/
 ├── rootguard-core/
+├── rootguard-unbound/
 ├── rootguard-updater/
-├── rootguard-webapp/
-└── rootguard-unbound/
+└── rootguard-webapp/
 ```
 
 A commit in the main repository references exactly one commit per
@@ -93,15 +95,27 @@ AdGuard continues to publish only TCP/UDP 53; its native administration
 stays private. Bootstrap waits, with a bound, for the actual AdGuard
 installer API - a running container alone doesn't yet count as ready.
 
-For Core and WebApp releases referenced immutably by digest, Core
-additionally verifies the signed SLSA provenance. The embedded Cosign
-verifier, itself pinned by digest, enforces the expected GitHub repository
-and workflow signer identity plus the GitHub Actions OIDC issuer, and
-checks the Sigstore transparency data. Results are cached for ten minutes.
-A missing attestation, a cryptographically invalid one, and a temporarily
-unreachable registry are deliberately reported as distinct states. Local
-builds, mutable tags, and third-party images never receive RootGuard trust
-approval.
+For Core/WebApp/Updater/Unbound/Blockpage releases referenced immutably by
+digest, Core (and, for its own two managed images, the separate updater
+helper) additionally verifies the signed SLSA provenance before
+activation. The embedded Cosign verifier, itself pinned by digest,
+enforces the expected GitHub repository and workflow signer identity plus
+the GitHub Actions OIDC issuer, and checks the Sigstore transparency data.
+Results are cached for ten minutes. A missing attestation, a
+cryptographically invalid one, and a temporarily unreachable registry are
+deliberately reported as distinct states. Local builds, mutable tags, and
+third-party images never receive RootGuard trust approval.
+
+Core and the updater helper both run only on the internal `control`
+network (no route to the internet at all), so this Cosign check needs a
+narrow, explicit bridge to actually reach GHCR/Sigstore:
+`rootguard-attestation-proxy`, a minimal CONNECT-only forward proxy with
+a hardcoded, 3-host allowlist, sitting on both `control` and a separate,
+real-internet-facing `egress` network. It's the sixth RootGuard
+component, static/manually-updated infrastructure (not self-update
+managed like the other five) - see
+`rootguard-attestation-proxy/README.md` and `docs/threat-model.md`
+(§3) for the full design and trust model.
 
 ## AdGuard first-time setup
 

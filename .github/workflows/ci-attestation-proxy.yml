@@ -1,0 +1,91 @@
+name: Attestation Proxy CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "rootguard-attestation-proxy/**"
+      - ".github/workflows/ci-attestation-proxy.yml"
+      # See ci-core.yml's identical comment for why.
+      - "scripts/ci/trivy-image-scan.sh"
+      - "scripts/ci/trivy-version.env"
+      - ".trivyignore.yaml"
+  # No paths filter on pull_request - see ci-core.yml's identical
+  # comment for the full rationale: a required branch-protection status
+  # check must run on every PR, not just ones that happen to touch this
+  # component's own path, or GitHub waits forever for one that would
+  # never report.
+  pull_request: {}
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/foxly-it/rootguard-attestation-proxy
+
+jobs:
+  test:
+    name: Attestation proxy unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: rootguard-attestation-proxy/go.mod
+          cache: false
+      - working-directory: rootguard-attestation-proxy
+        run: go test ./...
+      - working-directory: rootguard-attestation-proxy
+        run: go vet ./...
+      - working-directory: rootguard-attestation-proxy
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::Not gofmt-formatted (run 'gofmt -w' on these):"
+            echo "$unformatted"
+            exit 1
+          fi
+      # Same reasoning as ci-updater.yml's identical step: the `build`
+      # job below only ever produces a pushed multi-arch manifest, which
+      # can't be `--load`ed into the local daemon to scan - a real,
+      # single-platform, locally loaded build lives here purely to give
+      # trivy something to scan.
+      - working-directory: rootguard-attestation-proxy
+        run: docker build -t rootguard-attestation-proxy:test .
+      - run: ./scripts/ci/trivy-image-scan.sh rootguard-attestation-proxy:test
+
+  build:
+    name: Build and push attestation proxy image
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,format=short,prefix=sha-
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: rootguard-attestation-proxy
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            COMMIT=${{ github.sha }}
