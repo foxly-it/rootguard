@@ -55,9 +55,10 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 # entirely closes the reproducibility gap outright instead of merely
 # pinning a package version that was never needed.
 #
-# Found in review: this exact pinned digest also carries two stopgap
-# fixes, current as of this comment - replace both with a plain digest
-# bump once a docker:29-cli build exists with them baked in upstream.
+# Found in review: this exact pinned digest also needs the package fixes
+# and runtime reductions below. Replace the version pins with a plain
+# digest bump once a docker:29-cli build contains those fixes upstream;
+# the unused-tool removals remain intentional across future digest bumps.
 #   - libssl3/libcrypto3 3.5.7-r0 here has CVE-2026-14456, fixed in
 #     3.5.8-r0 - already published on Alpine 3.24's own `main` repo
 #     (confirmed live via pkgs.alpinelinux.org), just not yet what this
@@ -72,22 +73,19 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     separate from this image. Removing it is a real image-content
 #     reduction (fewer packages a scanner can find something in), not
 #     something a later digest bump would ever need to add back.
-#   - Found live, round 15: openssh 10.3_p1-r0 here has three more CVEs
-#     (CVE-2026-60002, CRITICAL; CVE-2026-59999/CVE-2026-60000, HIGH),
-#     fixed in 10.3_p1-r1 - already published on Alpine 3.24's own `main`
-#     repo (confirmed live), same stopgap-with-digest-bump pattern as the
-#     openssl fix above. Trivy's own vulnerability DB surfaced these only
-#     after round 13/14's own scans - not something either round missed,
-#     genuinely new since.
+#   - docker:29-cli installs OpenSSH only for optional ssh:// Docker
+#     contexts. RootGuard deliberately uses the mounted local Docker socket
+#     and never creates or selects a remote context, so remove OpenSSH
+#     instead of carrying and continuously patching an unused SSH client.
 #   - Found live, round 15: libexpat 2.8.2-r0 here (a different package
 #     from Blockpage's own nginx-base libexpat pin - this is
 #     docker:29-cli's own bundled copy) has CVE-2026-66046/CVE-2026-76641
 #     (both "Expat through 2.8.3" DoS), fixed in 2.8.4-r0 - already
 #     published on Alpine 3.24's own `main` repo (confirmed live). Same
 #     stopgap pattern as the rest of this block.
-RUN apk add --no-cache --upgrade \
+RUN apk del openssh-client \
+    && apk add --no-cache --upgrade \
         libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 libexpat=2.8.4-r0 \
-        openssh-client-common=10.3_p1-r1 openssh-client-default=10.3_p1-r1 openssh-keygen=10.3_p1-r1 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 

@@ -40,19 +40,31 @@ jobs:
             echo "$report"
             echo "PINEOF"
           } >> "$GITHUB_OUTPUT"
-          echo "drift=$exit_code" >> "$GITHUB_OUTPUT"
+          if [ "$exit_code" -ne 0 ] && [ "$exit_code" -ne 1 ]; then
+            echo "::error::Debian pin check failed operationally (exit ${exit_code}); refusing to run --fix"
+            exit "$exit_code"
+          fi
+          if [ "$exit_code" -eq 1 ]; then
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Reuses one deterministic branch, force-pushed, rather than opening
       # a new PR on every drifted run before a human gets to review the
       # last one - the same convention dependabot itself uses.
       - name: Apply the fix and open or update a PR
-        if: steps.check.outputs.drift != '0'
+        if: steps.check.outputs.drift == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           DRIFT_REPORT: ${{ steps.check.outputs.report }}
         run: |
           set -euo pipefail
           ./scripts/check-debian-pins.sh --fix
+          if git diff --quiet -- rootguard-unbound/Dockerfile; then
+            echo "Repository changed while checking; no stale pins remain and no PR is needed"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="chore/debian-pin-refresh"
