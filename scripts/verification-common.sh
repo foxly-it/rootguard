@@ -12,6 +12,7 @@ managed_containers=(
   rootguard-adguard
   rootguard-unbound
   rootguard-blockpage
+  rootguard-attestation-proxy
 )
 managed_volumes=(
   rootguard-data

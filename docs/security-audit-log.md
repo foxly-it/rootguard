@@ -3474,3 +3474,140 @@ token explicitly. Separately, `main`'s branch protection also had
 status-check requirement and blocking the same pushes for an
 independent reason - removed, since it directly contradicts this
 pipeline's own documented, intentional design.
+
+## A sixth component: rootguard-attestation-proxy (2026-09-01)
+
+**High, fixed: `RequireAttestation`'s cosign checks could never succeed
+in production - the smoke-test failure above (`smoke-test` in
+`release-alpha.yml` refusing to activate Unbound with "release
+attestation ... is failed") wasn't an image or code bug, it was a
+network-topology one.** Both Core and the separate Updater run only on
+the `control` Docker network, deliberately `internal: true` (no route
+to the internet at all - real privilege isolation for two components
+that hold the Docker socket). `stack.RequireAttestation`
+(`rootguard-core/internal/stack/attestation.go`) and its own
+near-duplicate `verifyAttestation` (`rootguard-updater/attestation.go`)
+shell out to `cosign verify-attestation`, which genuinely needs outbound
+HTTPS - something `control`'s isolation makes structurally impossible.
+This gating was wired into the real deploy/update path only recently
+(previously attestation was checked only for the dashboard's own status
+display, never gating activation) and had never actually been exercised
+end to end before this release attempt - confirmed by comparing the
+`upgrade-test` job (passed, unaffected) against `smoke-test` (failed):
+`upgrade-test`'s own initial deploy and its "upgrade in place" step are
+both driven by the *previous* release's Core binary, which predates
+this gate's existence entirely and so never calls it; only
+`smoke-test`'s fresh, full-candidate deploy actually exercises the new
+code.
+
+Confirmed live, not guessed, at every step:
+- Reproduced the exact `cosign verify-attestation` call both locally
+  (real network - succeeded) and from inside Core's own published
+  candidate image, run via `docker run` on a real GitHub Actions runner
+  with normal internet access (also succeeded) - isolating the failure
+  to the network-isolated deployment context specifically, not the
+  image, the code, or a Sigstore/GHCR outage.
+- Traced exactly which hosts a real, successful verification needs by
+  routing `cosign` through a local HTTPS_PROXY pointed at a
+  purpose-built CONNECT-logging forwarding proxy, once with a
+  completely cold TUF cache to also catch first-run-only bootstrap
+  traffic. Exactly three, port 443 only: `ghcr.io` (registry API),
+  `pkg-containers.githubusercontent.com` (GHCR's actual blob storage
+  CDN, where the registry API redirects), `tuf-repo-cdn.sigstore.dev`
+  (Sigstore trust-root bootstrap). No live call to
+  `fulcio.sigstore.dev` or `rekor.sigstore.dev` happens - both the
+  certificate chain and the transparency-log inclusion proof verify
+  offline, from data embedded in the attestation bundle plus the
+  TUF-provided trust root.
+
+**Fix, chosen explicitly over two lighter alternatives (attaching Core
+directly to `edge`; temporarily reverting the attestation gate) after a
+full design plan and an independent review pass: a genuine sixth
+RootGuard component**, `rootguard-attestation-proxy` - a minimal,
+`scratch`-based, non-root Go binary that does exactly one thing: a
+CONNECT-only forward proxy with the three hosts above hardcoded as its
+complete allowlist, port 443 only. It never terminates TLS itself (a
+pure byte-copying tunnel), so it needs zero CA certificates, zero
+shell, zero OS at all - the smallest, and the first, RootGuard image
+that needs no `.trivyignore.yaml` AVD-DS-0002/0026 suppression (a real
+`USER` and a real `HEALTHCHECK`, not a suppressed absence of either).
+Sits on both `control` and a new, non-internal `egress` network; Core
+and the Updater themselves stay on `control` only, never joining
+`egress` directly. Explicit trust-model note (in the code, the README,
+and `docs/threat-model.md`): the allowlist is defense-in-depth, not an
+authentication boundary - the only two possible callers (Core, the
+Updater) already hold the Docker socket and run as root, i.e. already
+have full host privilege; the point is keeping `control` itself
+provably internet-isolated while making the one legitimate egress path
+explicit and auditable.
+
+Core and the Updater reach it via a new `ROOTGUARD_ATTESTATION_PROXY_URL`
+env var, read only by the two cosign call sites and set only on that
+one `exec.Cmd`'s own `Env` (`HTTPS_PROXY`/`HTTP_PROXY`), never on the
+container's ambient environment - deliberately not a container-wide
+proxy setting, confirmed by code search that no other outbound-HTTPS
+call in either module would fit the narrow 3-host allowlist. (One
+other outbound call exists: Core's own GitHub Releases
+self-update-discovery check, `internal/updater/github_release.go`,
+`api.github.com` - a separate, pre-existing gap on the same isolated
+network, already degrading gracefully to the static image pin today;
+left alone, not silently routed through an allowlist it doesn't fit.)
+
+Wired into both `compose.release.yaml` and the local dev `compose.yaml`
+identically - found live that a developer overriding `ROOTGUARD_*_IMAGE`
+locally to real, signed `ghcr.io` digests (rather than
+`ROOTGUARD_SKIP_ATTESTATION`) hits the exact same isolated-network
+failure `compose.yaml`'s own comment already half-anticipated.
+Deliberately **not** self-update managed like the other five
+components - static, manually-updated infrastructure instead
+(`docs/release-process.md`), reasoned as the simpler, smaller-attack-
+surface choice for a piece this narrow.
+
+**Known, documented, not solved: self-update alone can never deliver
+this (or any) compose-topology change to an existing installation** -
+it only ever swaps container images in place against whatever compose
+file already exists on disk, never re-fetches `compose.release.yaml`
+itself. An operator on an older release updating via the WebGUI alone
+won't get the new proxy/network/env-var topology; only a fresh
+`install.sh` run or a manual `compose.release.yaml` refresh can cross
+it. Pre-existing, structural property of the whole update mechanism,
+not introduced by this change - documented in
+`docs/release-process.md` rather than solved (solving it properly is a
+materially bigger, separate undertaking).
+
+Also fixed while in the area: `docs/threat-model.md`/`.de.md` had a
+stale claim that Unbound "doesn't go through a Cosign provenance check
+like Core/WebApp" - the code already covers Unbound and Blockpage too
+(only AdGuard, a third-party image, is legitimately exempt); every
+"five components" reference across `docs/release-process.md`,
+`docs/threat-model.md`/`.de.md`, `docs/architecture.md`/`.de.md`,
+`CLAUDE.md` (gitignored, local-only, updated for this session's own
+sake), `scripts/verification-common.sh`, and `scripts/soak/probe.sh`
+now says six or lists the new component explicitly - except
+`docs/performance-baseline.md`'s own "all five managed containers"
+line, deliberately left alone since it describes a specific, already-
+completed August 2026 soak-test measurement that genuinely only sampled
+five containers at the time, and `site/docs.html`'s public "five
+components" marketing heading, deliberately left alone too since it's
+scoped to user-relevant, visible components - invisible internal
+plumbing like this proxy was never meant to be counted there.
+`docs/architecture.md`/`.de.md`'s repository-structure tree was also
+separately stale (missing `rootguard-blockpage/` entirely, predating
+this change) - fixed in the same edit rather than left half-corrected
+next to it; the tree's own surrounding prose still describes the
+pre-monorepo submodule era and stays out of scope here (a materially
+bigger, separate cleanup).
+
+Validated live: all new Go code built, `go vet`, and unit-tested
+(including a real end-to-end CONNECT-tunnel test against a local echo
+listener, injected via the same `dialUpstream`-swap pattern
+`rootguard-core`'s own attestation code already uses for testing);
+image built and scanned clean with both `trivy image` (0 findings) and
+`trivy config` (0 Dockerfile misconfigurations - no suppressions
+needed); a running container's `/healthz` and real CONNECT behavior
+(200 for `ghcr.io:443`, 403 for a disallowed host) verified directly
+against the built image; `docker compose config` validated for both
+`compose.release.yaml` and `compose.yaml` after every wiring change.
+The real acceptance test - `release-alpha.yml`'s `smoke-test` actually
+passing end to end for `1.0.0-rc.2` - is still pending as of this
+entry, tracked as the next step once this change merges.

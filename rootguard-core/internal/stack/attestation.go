@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -148,6 +149,26 @@ func classifyAttestationResult(output []byte, err error) string {
 	return "failed"
 }
 
+// runAttestationCommand's own subprocess environment is the one place
+// this repository ever routes traffic through
+// rootguard-attestation-proxy - found live, cutting 1.0.0-rc.2: Core
+// runs only on the `control` Docker network, deliberately
+// `internal: true` (no route to the internet at all), so cosign's own
+// outbound calls to GHCR/Sigstore can never succeed unmodified. Setting
+// HTTPS_PROXY/HTTP_PROXY only on this exec.Cmd's own Env (never on the
+// container's ambient environment) scopes the proxy to exactly this one
+// subprocess - Core's other outbound HTTP calls (e.g.
+// internal/updater/github_release.go's GitHub Releases self-update
+// check) are a separate, already-known, pre-existing gap on the same
+// isolated network and must not be silently routed through the same
+// narrow 3-host allowlist, which they don't fit.
+// ROOTGUARD_ATTESTATION_PROXY_URL unset/empty (local dev's compose.yaml
+// without the proxy service, unit tests, the integration/E2E fixtures)
+// means no proxy env is set at all - unchanged, pre-proxy behavior.
 func runAttestationCommand(ctx context.Context, name string, arguments ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, arguments...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, name, arguments...)
+	if proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL"); proxyURL != "" {
+		cmd.Env = append(os.Environ(), "HTTPS_PROXY="+proxyURL, "HTTP_PROXY="+proxyURL)
+	}
+	return cmd.CombinedOutput()
 }

@@ -251,6 +251,9 @@ jobs:
           - component: blockpage
             image: rootguard-blockpage
             context: rootguard-blockpage
+          - component: attestation-proxy
+            image: rootguard-attestation-proxy
+            context: rootguard-attestation-proxy
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -382,7 +385,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [rootguard-core, rootguard-webapp, rootguard-updater, rootguard-unbound, rootguard-blockpage]
+        image: [rootguard-core, rootguard-webapp, rootguard-updater, rootguard-unbound, rootguard-blockpage, rootguard-attestation-proxy]
         platform: [linux/amd64, linux/arm64]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -538,7 +541,7 @@ jobs:
           SOURCE_REF: ${{ needs.version.outputs.source_ref }}
         run: |
           set -euo pipefail
-          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage; do
+          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage rootguard-attestation-proxy; do
             digest="$(cat "/tmp/digests/${image}.digest")"
             test -n "$digest"
             source_ref="ghcr.io/${OWNER}/${image}@${digest}"
@@ -591,7 +594,7 @@ jobs:
         run: |
           set -euo pipefail
           for file in compose.release.yaml .env.release.example; do
-            for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage; do
+            for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage rootguard-attestation-proxy; do
               digest="$(cat "/tmp/digests/${image}.digest")"
               test -n "$digest"
               # [^@\"}] - not just [^@\"] - because ROOTGUARD_UPDATER_UPDATE_IMAGE
@@ -630,6 +633,9 @@ jobs:
           docker compose -f compose.release.yaml config --quiet
           model="$(docker compose -f compose.release.yaml config --format json)"
           test "$(jq -r 'any(.services[]; has("build"))' <<<"$model")" = false
+          # .services[].image already covers attestation-proxy too - it
+          # has an `image:` key like every other service, no separate
+          # line needed.
           test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
           test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false
 
@@ -762,7 +768,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage; do
+          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage rootguard-attestation-proxy; do
             digest="$(cat "/tmp/digests/${image}.digest")"
             test -n "$digest"
             source_ref="ghcr.io/${OWNER}/${image}@${digest}"
@@ -1029,6 +1035,11 @@ jobs:
       # attested, or smoke-tested by any release. A broken blockpage image
       # could ship undetected.
       ROOTGUARD_BLOCKPAGE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-blockpage:${{ needs.version.outputs.candidate_tag }}
+      # Also new this round: without this, the deploy below would fall
+      # back to compose.release.yaml's own placeholder default pin (not
+      # a real, pullable image yet at this point) instead of the
+      # candidate publish just built.
+      ROOTGUARD_ATTESTATION_PROXY_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-attestation-proxy:${{ needs.version.outputs.candidate_tag }}
       ROOTGUARD_API_TOKEN: alpha-smoke-test-token-not-a-real-secret-32
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: alpha-smoke-test-password

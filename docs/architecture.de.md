@@ -9,10 +9,12 @@ Releases und Entwicklungsabläufe.
 ```text
 rootguard/
 ├── docs/
+├── rootguard-attestation-proxy/
+├── rootguard-blockpage/
 ├── rootguard-core/
+├── rootguard-unbound/
 ├── rootguard-updater/
-├── rootguard-webapp/
-└── rootguard-unbound/
+└── rootguard-webapp/
 ```
 
 Ein Commit im Hauptrepository verweist auf genau einen Commit je Submodule.
@@ -93,15 +95,29 @@ weiterhin ausschließlich TCP/UDP 53; seine native Administration bleibt privat.
 Der Bootstrap wartet begrenzt auf die tatsächliche AdGuard-Installer-API; ein
 laufender Container allein gilt noch nicht als betriebsbereit.
 
-Für unveränderlich per Digest referenzierte Core- und WebApp-Releases prüft
-Core zusätzlich die signierte SLSA-Provenienz. Der eingebettete, selbst per
-Digest gepinnte Cosign-Verifier erzwingt den erwarteten GitHub-Repository- und
+Für unveränderlich per Digest referenzierte Core-/WebApp-/Updater-/Unbound-/
+Blockpage-Releases prüft Core (und, für seine eigenen zwei verwalteten
+Images, der separate Updater-Helper) zusätzlich die signierte
+SLSA-Provenienz vor der Aktivierung. Der eingebettete, selbst per Digest
+gepinnte Cosign-Verifier erzwingt den erwarteten GitHub-Repository- und
 Workflow-Unterzeichner sowie den GitHub-Actions-OIDC-Aussteller und prüft die
 Sigstore-Transparenzdaten. Die Ergebnisse werden zehn Minuten gecacht. Ein
 fehlender Nachweis, eine kryptografisch ungültige Attestierung und eine
 vorübergehend nicht erreichbare Registry werden absichtlich getrennt
 ausgewiesen. Lokale Builds, veränderliche Tags und Fremdimages erhalten keine
 RootGuard-Vertrauensfreigabe.
+
+Core und der Updater-Helper laufen beide ausschließlich im internen
+`control`-Netzwerk (keine Internet-Route) - diese Cosign-Prüfung braucht
+deshalb eine schmale, explizite Brücke, um GHCR/Sigstore überhaupt zu
+erreichen: `rootguard-attestation-proxy`, ein minimaler, reiner
+CONNECT-Forward-Proxy mit fest einprogrammierter 3-Host-Allowlist, der
+sowohl im `control`- als auch in einem separaten, echt
+internetfähigen `egress`-Netzwerk hängt. Die sechste RootGuard-Komponente,
+statische, nur manuell aktualisierte Infrastruktur (anders als die
+übrigen fünf nicht selbst-update-fähig) - siehe
+`rootguard-attestation-proxy/README.md` und `docs/threat-model.de.md`
+(§3) für das vollständige Design und Vertrauensmodell.
 
 ## AdGuard-Ersteinrichtung
 

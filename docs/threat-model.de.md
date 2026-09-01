@@ -125,11 +125,13 @@ Updates, AdGuard-Verwaltung.
   die eigentliche Zugriffskontrolle, das Rate-Limit ist eine zusätzliche
   Schadensbegrenzung.
 
-### 3. Interne Netzwerke (control, edge, DNS-Netz)
+### 3. Interne Netzwerke (control, edge, egress, DNS-Netz)
 
-**Zugriff:** Drei Docker-Netzwerke trennen Zuständigkeiten: `edge`
-(WebApp-Host-Port), `control` (WebApp↔Core↔Updater), und das interne
-DNS-Netz (AdGuard↔Unbound). Nur WebApp und der DNS-Port erhalten Host-Ports;
+**Zugriff:** Vier Docker-Netzwerke trennen Zuständigkeiten: `edge`
+(WebApp-Host-Port), `control` (WebApp↔Core↔Updater, `internal: true` -
+keine Internet-Route), `egress` (echter Internetzugang, aber nur
+`rootguard-attestation-proxy` hängt hier), und das interne DNS-Netz
+(AdGuard↔Unbound). Nur WebApp und der DNS-Port erhalten Host-Ports;
 AdGuards native Administration bleibt ausschließlich intern erreichbar.
 
 **Wenn kompromittiert (z.B. ein anderer Container im selben
@@ -142,6 +144,20 @@ gedachte Schnittstellen (AdGuard-Admin-API, Core-Bearer-Token-API).
   Fallback.
 - Core-API ist bearer-token-geschützt (`ROOTGUARD_API_TOKEN`), nicht nur
   netzwerk-isoliert.
+- `control`s eigene Internet-Isolation bleibt vollständig, bis auf einen
+  einzigen schmalen, auditierbaren Pfad: `rootguard-attestation-proxy`,
+  ein reiner CONNECT-Forward-Proxy mit fest einprogrammierter
+  3-Host-Allowlist (`ghcr.io`, `pkg-containers.githubusercontent.com`,
+  `tuf-repo-cdn.sigstore.dev` - genau das, was Cosigns eigene
+  Attestation-Prüfung braucht, empirisch bestätigt, nicht mehr). Das ist
+  Defense-in-Depth, keine Authentifizierungsgrenze - Core und der
+  Updater, die einzigen zwei möglichen Aufrufer, halten bereits den
+  Docker-Socket und laufen als root, besitzen also schon volle
+  Host-Privilegien; der Zweck ist, `control` nachweislich
+  internet-isoliert zu halten und dabei den einen legitimen
+  Egress-Pfad explizit zu machen, statt Internetzugang pauschal wieder
+  zu öffnen. Siehe `rootguard-attestation-proxy/README.md` für das
+  vollständige Design.
 
 **Bekannte Restrisiken / offen:**
 - Wer bereits *im selben Docker-Host* beliebige Container starten kann, kann
@@ -155,7 +171,7 @@ gedachte Schnittstellen (AdGuard-Admin-API, Core-Bearer-Token-API).
 
 ### 4. Update-Supply-Chain
 
-**Zugriff:** GHCR-Images für alle fünf Komponenten; der Updater-Helper zieht
+**Zugriff:** GHCR-Images für alle sechs Komponenten; der Updater-Helper zieht
 und aktiviert neue Core-/WebApp-/AdGuard-/Unbound-Images.
 
 **Wenn kompromittiert (z.B. gestohlene GHCR-Publish-Credentials, kompromittierter
@@ -165,19 +181,24 @@ letztlich gleichbedeutend mit Akteur 1 (Host-Kompromittierung), nur über den
 Update-Pfad statt direkt.
 
 **Bestehende Gegenmaßnahmen:**
-- Digest-gepinnte Core-/WebApp-Releases werden vor der Aktivierung per
-  Cosign gegen die signierte SLSA-Provenienz geprüft: erwarteter
-  GitHub-Repository- und Workflow-Unterzeichner, erwarteter
-  GitHub-Actions-OIDC-Aussteller, Prüfung der Sigstore-Transparenzdaten
-  (`docs/architecture.md`, „AIO-Bootstrap"). Der eingebettete
-  Cosign-Verifier selbst ist per Digest gepinnt - keine bewegliche
-  Abhängigkeit an dieser Stelle.
+- Digest-gepinnte Core-/WebApp-/Updater-/Unbound-/Blockpage-Releases
+  werden alle vor der Aktivierung per Cosign gegen die signierte
+  SLSA-Provenienz geprüft: erwarteter GitHub-Repository- und
+  Workflow-Unterzeichner, erwarteter GitHub-Actions-OIDC-Aussteller,
+  Prüfung der Sigstore-Transparenzdaten (`docs/architecture.md`,
+  „AIO-Bootstrap"). Der eingebettete Cosign-Verifier selbst ist per
+  Digest gepinnt - keine bewegliche Abhängigkeit an dieser Stelle.
+  (Korrigiert eine veraltete Aussage an dieser Stelle - früher stand
+  hier, nur Core/WebApp würden geprüft; das stimmte, als es geschrieben
+  wurde, der Code deckt inzwischen aber auch Unbound und Blockpage ab,
+  siehe `attestationPolicies` in
+  `rootguard-core/internal/stack/attestation.go`.)
 - Lokale Builds, veränderliche Tags (`:latest` o.ä.) und Fremdimages
   erhalten explizit keine RootGuard-Vertrauensfreigabe.
 - Ein Update-Fehlschlag (Healthcheck nach Austausch) pinnt automatisch die
   vorherige Image-ID zurück und prüft erneut (`docs/architecture.md`,
   „Kontrollierte Container-Updates").
-- CI-seitig: `trivy` prüft alle fünf Komponenten-Images/-Dockerfiles auf
+- CI-seitig: `trivy` prüft alle sechs Komponenten-Images/-Dockerfiles auf
   bekannte Schwachstellen und Fehlkonfigurationen, `govulncheck` und
   `staticcheck` laufen gegen jedes Go-Modul, `gitleaks` gegen die gesamte
   Git-Historie (`.github/workflows/ci-security.yml`) - reduziert das
@@ -185,15 +206,29 @@ Update-Pfad statt direkt.
   committetes Secret unbemerkt in ein veröffentlichtes Release gelangt.
 
 **Bekannte Restrisiken / offen:**
-- AdGuard Home und Unbound (Basis-Images von Drittanbietern bzw. eigener
-  Reproducible Build) durchlaufen aktuell keine Cosign-Provenienzprüfung wie
-  Core/WebApp - Vertrauen basiert hier auf Digest-Pinning und der
-  Upstream-Signatur/dem eigenen SHA-256-verifizierten Reproducible-Build,
-  nicht auf einer RootGuard-eigenen Signaturkette.
+- AdGuard Home (ein Fremd-Image) ist die eine Komponente, die keine
+  Cosign-Provenienzprüfung durchläuft - Vertrauen basiert hier auf
+  Digest-Pinning und der Upstream-Signatur, nicht auf einer
+  RootGuard-eigenen Signaturkette. `rootguard-attestation-proxy` ist
+  eine zweite, andere Ausnahme: statische, nur manuell aktualisierte
+  Infrastruktur (siehe `docs/release-process.md`), anders als die fünf
+  selbst-update-fähigen Komponenten nie zur Laufzeit erneut gezogen
+  oder geprüft - Vertrauen kommt hier aus Digest-Pinning und dem
+  eigenen minimalen, auditierbaren Quellcode (wenige hundert Zeilen,
+  `scratch`-basiert, keine Abhängigkeiten), nicht aus einer
+  Live-Cosign-Prüfung.
+- Cores eigene GitHub-Releases-Selbstupdate-Erkennung
+  (`internal/updater/github_release.go`, `api.github.com`) hat dasselbe
+  `control`-Netzwerk-Isolationsproblem, das `rootguard-attestation-proxy`
+  für Cosign lösen sollte, aber für einen anderen Host, der nicht in
+  die schmale Allowlist des Proxys passt - degradiert bereits sauber
+  (fällt auf den statischen Image-Pin zurück) statt zu scheitern, also
+  eine bekannte, akzeptierte, dauerhaft degradierte Lücke, kein
+  Ausfallrisiko.
 - Kein SBOM/keine Provenance für jedes Release (ROADMAP.md 0.6) - erschwert
   aktuell eine nachträgliche forensische Analyse eines betroffenen Releases.
-- Kein Image-Signing im eigentlichen Sinn über Cosign hinaus für alle fünf
-  Komponenten einheitlich (ROADMAP.md 0.6).
+- Kein Image-Signing im eigentlichen Sinn über Cosign hinaus für die fünf
+  selbst-update-fähigen Komponenten einheitlich (ROADMAP.md 0.6).
 
 ### 5. Backups
 
