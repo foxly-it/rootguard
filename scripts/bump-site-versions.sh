@@ -22,13 +22,7 @@ cd "${repository_dir}"
 # shellcheck source=version-pattern.sh
 . "${repository_dir}/scripts/version-pattern.sh"
 
-latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E "^v${rootguard_version_pattern}\$" | head -1 || true)"
-if [[ -z "${latest_tag}" ]]; then
-  echo "No release tag found - cannot determine the current version" >&2
-  exit 1
-fi
-latest_version="${latest_tag#v}"
+latest_version="$(rootguard_current_version)"
 
 # Same exclusion as check-site-facts.sh: a line naming a version boundary
 # ("Starting with 0.1.0-beta.1, ..." or "bis einschließlich 0.1.0-beta.14

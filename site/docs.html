@@ -118,8 +118,8 @@
             <div class="manual-callout"><b data-de="Automatische Installation" data-en="Automated installation">Automatische Installation</b><span data-de="Für die schnelle Variante mit automatischer Docker-Erkennung/-Installation, automatisch erzeugten Sicherheitsschlüsseln und einer kurzen Abfrage für Benutzername/Passwort siehe den Ein-Befehl-Schnellstart auf der Startseite. Der folgende Weg zeigt jeden Schritt einzeln zum manuellen Nachvollziehen." data-en="For the fast path with automatic Docker detection/installation, auto-generated security keys, and a short username/password prompt, see the one-command quick start on the homepage. The steps below show every step individually for manual use.">Für die schnelle Variante mit automatischer Docker-Erkennung/-Installation, automatisch erzeugten Sicherheitsschlüsseln und einer kurzen Abfrage für Benutzername/Passwort siehe den Ein-Befehl-Schnellstart auf der Startseite. Der folgende Weg zeigt jeden Schritt einzeln zum manuellen Nachvollziehen.</span> <a href="index.html#quickstart" data-de="Ein-Befehl-Schnellstart öffnen ↗" data-en="Open one-command quick start ↗">Ein-Befehl-Schnellstart öffnen ↗</a></div>
             <div class="code-block"><div>shell</div><pre><code>mkdir rootguard &amp;&amp; cd rootguard
 
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.1/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.1/.env.release.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/.env.release.example
 
 # Zwei unabhängige Sicherheitsschlüssel erzeugen
 openssl rand -hex 32
@@ -211,7 +211,7 @@ dig +dnssec @192.168.178.10 dnssec-failed.org A</code></pre></div>
             <div class="code-block"><div>shell</div><pre><code>docker exec rootguard-core wget -qO- \
   --header="Authorization: Bearer $ROOTGUARD_API_TOKEN" \
   --header="Content-Type: application/json" \
-  --post-data='{"target_images":{"core":"ghcr.io/foxly-it/rootguard-core:1.0.0-rc.1","webapp":"ghcr.io/foxly-it/rootguard-webapp:1.0.0-rc.1"}}' \
+  --post-data='{"target_images":{"core":"ghcr.io/foxly-it/rootguard-core:1.0.0-rc.2","webapp":"ghcr.io/foxly-it/rootguard-webapp:1.0.0-rc.2"}}' \
   http://updater:8082/api/control-plane/update</code></pre></div>
             <div class="manual-callout"><b data-de="Realer Rollback-Test" data-en="Real rollback test">Realer Rollback-Test</b><span data-de="Die Updater-CI ersetzt echte Core- und WebApp-Testcontainer gemeinsam. Ein absichtlich fehlerhafter WebApp-Kandidat liefert HTTP 503; der Test weist danach beide vorherigen laufenden Image-IDs und den gespeicherten Rollback-Verlauf nach." data-en="Updater CI replaces real Core and WebApp fixture containers as a pair. A deliberately unhealthy WebApp candidate returns HTTP 503; the test then proves both previous running image IDs and the persisted rollback history.">Die Updater-CI ersetzt echte Core- und WebApp-Testcontainer gemeinsam. Ein absichtlich fehlerhafter WebApp-Kandidat liefert HTTP 503; der Test weist danach beide vorherigen laufenden Image-IDs und den gespeicherten Rollback-Verlauf nach.</span></div>
             <h3 data-de="Verlauf und begrenztes Aufräumen" data-en="History and bounded cleanup">Verlauf und begrenztes Aufräumen</h3>

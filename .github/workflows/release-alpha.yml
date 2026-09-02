@@ -664,7 +664,17 @@ jobs:
       # bump-site-versions.sh runs the exact same logic
       # check-site-facts.sh checks for, so this and that check can never
       # drift apart. Idempotent: a no-op when the site already matches.
+      # ROOTGUARD_RELEASE_VERSION overrides both scripts' git-tag-based
+      # "current version" detection - found live, cutting 1.0.0-rc.2: this
+      # run's own release tag doesn't exist yet at this point in the job
+      # (created much later, once every other gate has passed), so without
+      # the override both scripts fell back to the *previous* release's
+      # tag and silently left every general version reference one release
+      # behind. See rootguard_current_version's own comment in
+      # version-pattern.sh for the full rationale.
       - name: Refresh site/*.html version references
+        env:
+          ROOTGUARD_RELEASE_VERSION: ${{ needs.version.outputs.value }}
         run: ./scripts/bump-site-versions.sh
 
       # The pin commit below carries [skip ci] (a mechanical, low-risk
@@ -673,6 +683,8 @@ jobs:
       # verify right here instead, so a gap in bump-site-versions.sh fails
       # this workflow loudly instead of shipping an unverified site.
       - name: Verify site facts are current
+        env:
+          ROOTGUARD_RELEASE_VERSION: ${{ needs.version.outputs.value }}
         run: ./scripts/check-site-facts.sh
 
       # Found in review, round 7: this step used to re-decide "is this a
