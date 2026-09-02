@@ -3,6 +3,7 @@ package stack
 import (
 	"context"
 	"errors"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -141,4 +142,86 @@ func resetAttestationCache() {
 	attestationCache.Lock()
 	defer attestationCache.Unlock()
 	attestationCache.items = make(map[string]attestationResult)
+}
+
+// TestCheckAttestationProxyReachableUnset and the two tests below cover
+// the pre-flight check found in review, round of cutting 1.0.0-rc.2:
+// distinguishing "no proxy configured at all" (stale, pre-proxy compose
+// topology) from "configured but unreachable" (proxy service present in
+// the env var but not actually running/reachable), each with its own
+// specific, actionable message - rather than letting cosign's own
+// generic network-error text stand in for both.
+func TestCheckAttestationProxyReachableUnset(t *testing.T) {
+	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "")
+	err := checkAttestationProxyReachable()
+	if err == nil {
+		t.Fatal("expected an error when ROOTGUARD_ATTESTATION_PROXY_URL is unset")
+	}
+	if !strings.Contains(err.Error(), "no attestation proxy configured") {
+		t.Fatalf("expected the unset-specific message, got: %v", err)
+	}
+}
+
+func TestCheckAttestationProxyReachableConfiguredButUnreachable(t *testing.T) {
+	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "http://attestation-proxy:8888")
+	original := dialProxy
+	dialProxy = func(network, addr string) (net.Conn, error) {
+		return nil, errors.New("connection refused")
+	}
+	defer func() { dialProxy = original }()
+
+	err := checkAttestationProxyReachable()
+	if err == nil {
+		t.Fatal("expected an error when the configured proxy is unreachable")
+	}
+	if !strings.Contains(err.Error(), "unreachable") || !strings.Contains(err.Error(), "attestation-proxy:8888") {
+		t.Fatalf("expected the unreachable-specific message naming the configured URL, got: %v", err)
+	}
+}
+
+func TestCheckAttestationProxyReachableConfiguredAndUp(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			conn.Close()
+		}
+	}()
+
+	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "http://"+ln.Addr().String())
+	if err := checkAttestationProxyReachable(); err != nil {
+		t.Fatalf("expected no error against a real, reachable listener: %v", err)
+	}
+}
+
+// TestRequireAttestationFailsClearlyWithoutCallingCosignWhenProxyMissing
+// is the direct regression test for the fix itself: RequireAttestation
+// must refuse an update with the specific, actionable message before
+// ever invoking cosign - not fall through to cosign's own opaque
+// network-error text - when the attestation proxy isn't configured.
+func TestRequireAttestationFailsClearlyWithoutCallingCosignWhenProxyMissing(t *testing.T) {
+	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "")
+	resetAttestationCache()
+	called := false
+	original := attestationRun
+	attestationRun = func(context.Context, string, ...string) ([]byte, error) { called = true; return nil, nil }
+	defer func() { attestationRun = original }()
+
+	err := RequireAttestation(context.Background(), "core", "ghcr.io/foxly-it/rootguard-core:v1@sha256:abc")
+	if err == nil {
+		t.Fatal("expected RequireAttestation to refuse activation when no proxy is configured")
+	}
+	if !strings.Contains(err.Error(), "no attestation proxy configured") {
+		t.Fatalf("expected the proxy-specific message, got: %v", err)
+	}
+	if called {
+		t.Fatal("cosign must not be invoked at all once the proxy pre-check has already failed")
+	}
 }

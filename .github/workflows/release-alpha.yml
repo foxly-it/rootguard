@@ -638,6 +638,13 @@ jobs:
           # line needed.
           test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
           test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false
+          # Found in review: nothing ever automated-checked that Core
+          # and the Updater actually get ROOTGUARD_ATTESTATION_PROXY_URL
+          # - a silently-dropped env var here would reproduce the exact
+          # isolated-network attestation failure this component exists
+          # to fix, undetected until a real deploy hit it.
+          test "$(jq -r '.services.core.environment.ROOTGUARD_ATTESTATION_PROXY_URL, .services.updater.environment.ROOTGUARD_ATTESTATION_PROXY_URL | . == "http://attestation-proxy:8888"' <<<"$model" | sort -u)" = "true"
+          test "$(jq -r '.services["attestation-proxy"].networks | has("control") and has("egress")' <<<"$model")" = true
 
       # site/*.html's version references went stale twice in the two days
       # after v0.1.0-beta.2 and v0.1.0-beta.3 each shipped - nothing here
@@ -1442,6 +1449,32 @@ jobs:
           test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1055 \
             bad.rgtest-ci.internal A | sed -n \
             's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
+
+      # Found in review: self-update never re-fetches compose.release.yaml
+      # (docs/release-process.md, "Self-update can never deliver a
+      # compose-topology change") - the core/updater containers this job
+      # just upgraded to already run the new, attestation-gated code, but
+      # on the *previous* release's own topology (no
+      # rootguard-attestation-proxy service, no `egress` network, no
+      # ROOTGUARD_ATTESTATION_PROXY_URL). This is exactly that scenario,
+      # for real, not simulated - logged explicitly so it stays visible
+      # on every release cut rather than silently relying on the unit
+      # tests covering RequireAttestation's/verifyAttestation's own
+      # proxy pre-check (rootguard-core/internal/stack/attestation_test.go,
+      # rootguard-updater/attestation_test.go) to be the only place this
+      # is ever exercised. Informational, not a failing assertion - the
+      # gap itself is known and accepted (see docs/release-process.md),
+      # not something this job is meant to catch as a regression.
+      - name: Log the known post-upgrade topology gap
+        if: steps.previous.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          proxy_url="$(docker exec rootguard-core printenv ROOTGUARD_ATTESTATION_PROXY_URL 2>/dev/null || true)"
+          if [ -z "$proxy_url" ]; then
+            echo "::notice::Known, accepted gap (docs/release-process.md): the just-upgraded rootguard-core has no ROOTGUARD_ATTESTATION_PROXY_URL, because self-update never delivers a compose-topology change - any further attestation-gated update from here would fail with a clear, specific error (see RequireAttestation's own proxy pre-check) rather than a silent success or an opaque hang."
+          else
+            echo "::notice::rootguard-core now reports ROOTGUARD_ATTESTATION_PROXY_URL=${proxy_url} after the upgrade - the topology gap this step exists to surface may have closed; consider whether docs/release-process.md's own note is still accurate."
+          fi
 
       - name: Show logs after failure
         if: failure() && steps.previous.outputs.skip != 'true'

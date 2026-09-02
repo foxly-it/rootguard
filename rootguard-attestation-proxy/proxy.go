@@ -20,11 +20,18 @@ import (
 // attestation-verification calls) explicit and auditable, rather than
 // reopening internet access wholesale for everything on that network.
 const (
-	maxHeaderBytes     = 8 * 1024
+	maxHeaderBytes = 8 * 1024
+	dialTimeout    = 10 * time.Second
+	maxConnections = 64
+)
+
+// headerReadDeadline and idleTimeout are vars, not consts, so tests can
+// temporarily shrink them (see the timeout-behavior tests in
+// proxy_test.go) rather than genuinely waiting out a 10s/60s deadline
+// on every run.
+var (
 	headerReadDeadline = 10 * time.Second
-	dialTimeout        = 10 * time.Second
 	idleTimeout        = 60 * time.Second
-	maxConnections     = 64
 )
 
 // dialUpstream is swapped out in tests so the allowed-CONNECT/tunnel
@@ -38,6 +45,14 @@ var dialUpstream = func(network, addr string) (net.Conn, error) {
 
 type proxyServer struct {
 	sem chan struct{}
+	// wg tracks in-flight handleConn goroutines - not needed for
+	// production behavior (nothing waits on it there), but lets tests
+	// deterministically wait for every connection this instance
+	// accepted to actually finish before restoring a package-level
+	// timing var (headerReadDeadline/idleTimeout/dialUpstream) those
+	// same goroutines may still be reading, rather than racing on it -
+	// see proxy_test.go's own waitForNoActiveConns helper.
+	wg sync.WaitGroup
 }
 
 func newProxyServer() *proxyServer {
@@ -59,7 +74,9 @@ func (p *proxyServer) serve(ln net.Listener) error {
 		}
 		select {
 		case p.sem <- struct{}{}:
+			p.wg.Add(1)
 			go func() {
+				defer p.wg.Done()
 				defer func() { <-p.sem }()
 				handleConn(conn)
 			}()
@@ -156,6 +173,18 @@ func tunnel(client, upstream net.Conn) {
 	wg.Wait()
 }
 
+// Found in review: only src's own read deadline was ever set - a peer
+// that accepts the connection but stops reading (TCP receive window
+// exhausted, or simply hangs) leaves dst.Write below with no deadline
+// at all, since a plain net.Conn.Write blocks indefinitely with none
+// set. Enough connections wedged that way exhaust the whole
+// maxConnections cap, refusing every subsequent, otherwise-legitimate
+// attestation check. A write deadline closes that: after idleTimeout
+// of the peer not accepting data, this goroutine gives up, both
+// directions unwind (the other side's own Read/Write next hits its own
+// deadline or a closed connection), and handleConn's own deferred
+// Close on both conns runs once tunnel's WaitGroup clears, freeing the
+// semaphore slot.
 func pipe(dst, src net.Conn) {
 	buf := make([]byte, 32*1024)
 	for {
@@ -164,6 +193,9 @@ func pipe(dst, src net.Conn) {
 		}
 		n, err := src.Read(buf)
 		if n > 0 {
+			if werr := dst.SetWriteDeadline(time.Now().Add(idleTimeout)); werr != nil {
+				break
+			}
 			if _, werr := dst.Write(buf[:n]); werr != nil {
 				break
 			}

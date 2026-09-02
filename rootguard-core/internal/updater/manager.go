@@ -357,11 +357,29 @@ func (m *Manager) update(service string) {
 		m.fail(service, fmt.Errorf("backup %s: %w", service, err))
 		return
 	}
-	defer m.enforceBackupRetention()
+	// Found in review: a plain `defer m.enforceBackupRetention()` here
+	// used to run *after* this function's own fail()/finish() call had
+	// already unlocked m.mu with a terminal state (Idle/Failed) visible
+	// - a BackupStatus() call landing in that exact window saw the
+	// pre-pruning backup count, confirmed live by a real, reproducible
+	// test failure (retention count off by one, only under CI's own
+	// timing). enforceBackupRetention() must complete before the
+	// terminal state becomes observable, on every exit path below
+	// (success, every failure, rollback, no_change alike) - these two
+	// wrappers guarantee that ordering uniformly instead of repeating
+	// the call at each of the nine return points individually.
+	fail := func(err error) {
+		m.enforceBackupRetention()
+		m.fail(service, err)
+	}
+	finish := func(image, currentID, candidateID string, available bool, message string) {
+		m.enforceBackupRetention()
+		m.finish(service, image, currentID, candidateID, available, message)
+	}
 	m.setProgress(service, "Lade das freigegebene Ziel-Image.")
 	pullOutput, err := m.run(ctx, "pull", targetImage)
 	if err != nil {
-		m.fail(service, fmt.Errorf("pull target image: %w", err))
+		fail(fmt.Errorf("pull target image: %w", err))
 		return
 	}
 	if qualified, ok := digestFromPullOutput(targetImage, pullOutput); ok {
@@ -371,7 +389,7 @@ func (m *Manager) update(service string) {
 	}
 	candidateID, err := m.inspectImage(ctx, targetImage)
 	if err != nil {
-		m.fail(service, err)
+		fail(err)
 		return
 	}
 	if candidateID == oldID {
@@ -379,20 +397,20 @@ func (m *Manager) update(service string) {
 			Service: service, Outcome: "no_change", FromID: oldID, ToID: candidateID,
 			Message: "Der Dienst verwendet bereits das aktuelle Image.", CreatedAt: time.Now().UTC(),
 		})
-		m.finish(service, currentImage, oldID, candidateID, false, "Der Dienst verwendet bereits das aktuelle Image.")
+		finish(currentImage, oldID, candidateID, false, "Der Dienst verwendet bereits das aktuelle Image.")
 		return
 	}
 
 	m.setProgress(service, "Prüfe die Release-Attestierung des Ziel-Images.")
 	if err := m.attestationVerifier(ctx, service, targetImage); err != nil {
-		m.fail(service, fmt.Errorf("attestation: %w", err))
+		fail(fmt.Errorf("attestation: %w", err))
 		return
 	}
 
 	m.setProgress(service, "Migriere persistente Volume-Berechtigungen für das Ziel-Image.")
 	previousOwnership, err := m.migrateVolumeOwnership(ctx, spec, oldID, candidateID)
 	if err != nil {
-		m.fail(service, fmt.Errorf("migrate persistent volume ownership: %w", err))
+		fail(fmt.Errorf("migrate persistent volume ownership: %w", err))
 		return
 	}
 
@@ -401,7 +419,7 @@ func (m *Manager) update(service string) {
 		if restoreErr := m.restoreVolumeOwnership(ctx, previousOwnership, oldID); restoreErr != nil {
 			err = fmt.Errorf("%v; restore volume ownership: %w", err, restoreErr)
 		}
-		m.fail(service, err)
+		fail(err)
 		return
 	}
 	err = m.composeUp(ctx, service)
@@ -417,14 +435,14 @@ func (m *Manager) update(service string) {
 				Service: service, Outcome: "failed", FromID: oldID, ToID: candidateID,
 				Message: fmt.Sprintf("Update und Rollback fehlgeschlagen: %v", rollbackErr), CreatedAt: time.Now().UTC(),
 			})
-			m.fail(service, fmt.Errorf("update failed: %v; rollback failed: %w", updateErr, rollbackErr))
+			fail(fmt.Errorf("update failed: %v; rollback failed: %w", updateErr, rollbackErr))
 			return
 		}
 		m.recordHistory(HistoryEntry{
 			Service: service, Outcome: "rolled_back", FromID: oldID, ToID: candidateID,
 			Message: "Das fehlerhafte Update wurde sicher zurückgesetzt.", CreatedAt: time.Now().UTC(),
 		})
-		m.fail(service, fmt.Errorf("update failed and was rolled back safely: %w", updateErr))
+		fail(fmt.Errorf("update failed and was rolled back safely: %w", updateErr))
 		return
 	}
 	entry := HistoryEntry{
@@ -434,7 +452,7 @@ func (m *Manager) update(service string) {
 	m.recordHistory(entry)
 	cleanup := m.cleanupAfterSuccess(ctx, service)
 	m.attachCleanup(cleanup)
-	m.finish(service, targetImage, candidateID, candidateID, false, spec.DisplayName+" wurde aktualisiert und erfolgreich geprüft.")
+	finish(targetImage, candidateID, candidateID, false, spec.DisplayName+" wurde aktualisiert und erfolgreich geprüft.")
 }
 
 func (m *Manager) recordHistory(entry HistoryEntry) {
