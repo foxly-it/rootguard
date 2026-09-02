@@ -35,21 +35,16 @@ latest_version="${latest_tag#v}"
 # ...") is a historical fact, not a current-version claim, and must never
 # be bumped.
 historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
-# The two docs.html .env-example lines carry a version *and* a digest -
-# a plain version-string substitution would leave the old digest in
-# place, so they're excluded here and handled explicitly below instead.
-update_image_line_pattern='ROOTGUARD_(CORE|WEBAPP)_UPDATE_IMAGE='
-
 changed_files=()
 for file in site/*.html README.md; do
   stale_versions="$(grep -vE "${historical_reference_pattern}" "${file}" \
-    | grep -vE "${update_image_line_pattern}" \
+    | grep -vE "${rootguard_update_image_line_pattern}" \
     | rootguard_extract_versions | sort -u || true)"
   file_changed=0
   for stale in ${stale_versions}; do
     [[ "${stale}" == "${latest_version}" ]] && continue
     awk -v old="${stale}" -v new="${latest_version}" \
-        -v hist="${historical_reference_pattern}" -v img="${update_image_line_pattern}" '
+        -v hist="${historical_reference_pattern}" -v img="${rootguard_update_image_line_pattern}" '
       $0 !~ hist && $0 !~ img { gsub(old, new) }
       { print }
     ' "${file}" > "${file}.tmp"
