@@ -13,6 +13,18 @@
 # has none.
 rootguard_version_pattern='[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?'
 
+# rootguard_update_image_line_pattern: matches docs.html's/README's two
+# ROOTGUARD_*_UPDATE_IMAGE= example lines, which carry a version *and* a
+# digest mirrored verbatim from .env.release.example (see
+# bump-site-versions.sh's own docs_file block) rather than a standalone
+# "current release" claim. Shared here - found live, cutting 1.0.0-rc.2:
+# bump-site-versions.sh already excluded these from its generic version-
+# bump loop, but check-site-facts.sh's generic version-scan didn't carry
+# the same exclusion, so it flagged the freshly-mirrored new-release
+# digest line as "stale" against the not-yet-moved release tag every
+# single time this job actually ran the two steps back to back.
+rootguard_update_image_line_pattern='ROOTGUARD_(CORE|WEBAPP)_UPDATE_IMAGE='
+
 # rootguard_extract_versions: reads HTML text on stdin, prints one
 # plausible RootGuard version mention per line. Exists because the naive
 # approach - grep -Eo rootguard_version_pattern directly over page text -

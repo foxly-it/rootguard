@@ -56,7 +56,9 @@ echo "== Version references =="
 historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
 version_matches=""
 for file in site/*.html README.md; do
-  matches="$(grep -vE "${historical_reference_pattern}" "${file}" | rootguard_extract_versions | sed "s#^#${file}:#" || true)"
+  matches="$(grep -vE "${historical_reference_pattern}" "${file}" \
+    | grep -vE "${rootguard_update_image_line_pattern}" \
+    | rootguard_extract_versions | sed "s#^#${file}:#" || true)"
   if [[ -n "${matches}" ]]; then
     version_matches+="${matches}"$'\n'
   fi
