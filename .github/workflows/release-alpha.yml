@@ -434,6 +434,18 @@ jobs:
       # For the promotion step below - imagetools create pushes a new tag
       # (the final version tag) pointing at an already-published digest.
       packages: write
+    # Dummy values, not real secrets - only needed so "docker compose config"
+    # can interpolate compose.release.yaml's mandatory ${VAR:?...} entries
+    # for the structural validation step below; no container in this job
+    # actually starts. Mirrors ci.yml's "validate" job env block exactly -
+    # found live, cutting 1.0.0-rc.2: this job only started running its own
+    # compose-validation step on 2026-08-28 (gated behind smoke-test/
+    # upgrade-test passing first) and had never actually reached it in a
+    # real run until now, so the missing env block went unnoticed.
+    env:
+      ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
+      ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
+      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token-not-a-real-secret-32
     steps:
       # Found live: `main` requires 20 status checks on every push, not
       # just PR merges - see release-version-bump.yml's identical
