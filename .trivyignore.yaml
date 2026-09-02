@@ -242,6 +242,30 @@ vulnerabilities:
       dependency tree, not yet fixed upstream in any cosign release -
       see the comment above this block.
 
+  # Found live, round of cutting 1.0.0-rc.2: trivy's own vulnerability DB
+  # surfaced this only now - genuinely new, not something an earlier
+  # round missed. Same unfixable-until-a-new-upstream-build situation as
+  # the grpc entry directly above: cosign v3.1.3 (still the newest
+  # release, confirmed live) and the compose plugin each bundle their
+  # own separate grpc-go version, both older than 1.83.1.
+  - id: CVE-2026-84304
+    purls: ["pkg:golang/google.golang.org/grpc@v1.82.0"]
+    paths: ["usr/local/bin/cosign"]
+    expired_at: 2026-11-30
+    statement: >-
+      google.golang.org/grpc HIGH finding in cosign v3.1.3's own
+      dependency tree, not yet fixed upstream in any cosign release -
+      see the comment above this block.
+  - id: CVE-2026-84304
+    purls: ["pkg:golang/google.golang.org/grpc@v1.82.1"]
+    paths: ["usr/local/libexec/docker/cli-plugins/docker-compose"]
+    expired_at: 2026-11-30
+    statement: >-
+      google.golang.org/grpc HIGH finding in the bundled compose
+      plugin's own dependency tree, not yet fixed in the docker:29-cli
+      digest this repo currently pins - see the comment above this
+      block.
+
   # CVE-2026-56854 affects the SSH server-side NewServerConn path that
   # enforces source-address critical options returned by authentication
   # callbacks. RootGuard invokes both bundled tools as clients only:

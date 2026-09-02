@@ -148,14 +148,20 @@ self-update structurally cannot carry to an existing installation: an
 operator already running an older release, updating via the WebGUI
 alone, ends up with new core/updater binaries that expect
 `ROOTGUARD_ATTESTATION_PROXY_URL` and the proxy service to exist, but
-neither does - the environment variable simply reads empty, which falls
-back to pre-proxy (no-proxy) behavior, and any release whose
-attestation-gating actually depends on the proxy being present would
-fail cosign verification again, the same way as before the proxy
-existed. Only a fresh `install.sh` run, or an operator manually
-refreshing their local `compose.release.yaml`, can cross a
-topology change like this. This is a pre-existing, structural property
-of the whole self-update mechanism - not something this change
+neither does. This is not a silent failure, though: `RequireAttestation`
+(Core) and `verifyAttestation` (the Updater) both check the proxy is
+actually configured and reachable *before* ever invoking cosign - an
+empty `ROOTGUARD_ATTESTATION_PROXY_URL` refuses the update outright with
+"no attestation proxy configured ... this installation's compose
+topology likely predates rootguard-attestation-proxy; a fresh install or
+a manual compose.release.yaml refresh is required" (or, if the variable
+is set but nothing answers on it, an equally specific "configured but
+unreachable" message) - not cosign's own generic network-error text, and
+not a hang. Only a fresh `install.sh` run, or an operator manually
+refreshing their local `compose.release.yaml`, can actually cross a
+topology change like this; the clear error is a diagnosis, not a fix.
+This is a pre-existing, structural property of the whole self-update
+mechanism - not something this change
 introduced, and not something worth solving here (making self-update
 topology-aware is a materially bigger, separate undertaking) - just
 worth knowing next time a release adds a new service or network.

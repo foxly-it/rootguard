@@ -3611,3 +3611,143 @@ against the built image; `docker compose config` validated for both
 The real acceptance test - `release-alpha.yml`'s `smoke-test` actually
 passing end to end for `1.0.0-rc.2` - is still pending as of this
 entry, tracked as the next step once this change merges.
+
+## Independent review of the attestation-proxy work (2026-09-02)
+
+A second, independent review of the merged attestation-proxy change
+found eight concrete issues, none of them speculative - two genuine bugs
+confirmed live via `-race`/CI logs, one real gap in the update path's
+own failure behavior, and five smaller gaps. All were verified before
+fixing, per this project's own established practice.
+
+**High, fixed: a real backup-retention race, reproducible under CI's own
+timing.** `Manager.update()` (`rootguard-core/internal/updater/manager.go`)
+used `defer m.enforceBackupRetention()` to prune old backups on every
+exit path - but `finish()`/`fail()` (both called *before* that defer
+runs, at the end of the enclosing function) already set the manager's
+state to `idle`/`failed` and released the lock, making that terminal
+state externally observable *before* the deferred pruning had actually
+run. A `BackupStatus()` call landing in that exact window saw the
+pre-pruning count - confirmed live: `TestUpdateEnforcesBackupRetentionAfterLifecycle`
+failed reproducibly in CI ("expected 5, got 6") while passing reliably
+locally, exactly the signature of a race that only manifests under
+different I/O timing, not a flaky-and-unrelated test as first assumed.
+Fixed by replacing the single `defer` with two local closures
+(`fail`/`finish`) that call `enforceBackupRetention()` first and then
+delegate - covering all nine exit points uniformly (every failure path,
+rollback, no-change, and success alike) without repeating the call at
+each one. Verified: the existing test now passes reliably under
+`-race -count=5`, and the fix makes the ordering structurally guaranteed
+rather than timing-dependent, so no separate stress test was needed on
+top of it.
+
+**Medium, fixed: a real resource-exhaustion bug in the proxy's own
+tunnel logic.** `pipe()` (`rootguard-attestation-proxy/proxy.go`) set a
+read deadline on the source connection but never a write deadline on
+the destination - a peer that accepts the tunnel but stops reading
+(TCP receive window exhausted, or simply hangs) left the copying
+goroutine's `dst.Write` blocked indefinitely, permanently pinning one of
+the 64 `maxConnections` slots. Enough stalled peers exhaust the whole
+cap, refusing every subsequent, legitimate attestation check. Fixed by
+setting a write deadline before every write, matching the existing read
+deadline's `idleTimeout`. Verified with a new, direct regression test
+(`TestIdleTimeoutUnblocksStalledPeer`) using a real listener that
+accepts a connection and then never reads again - confirms the tunnel
+actually unwinds within the timeout instead of hanging.
+
+Writing that test (and several others added alongside it - see below)
+surfaced a second, genuine bug of its own: tests that temporarily
+override a package-level timing var
+(`headerReadDeadline`/`idleTimeout`/`dialUpstream`) via a plain `defer`
+raced with still-running server-side goroutines that outlive the test
+function's own return, caught live by `-race`. Fixed by giving
+`proxyServer` its own `sync.WaitGroup` tracking in-flight `handleConn`
+goroutines, and switching the affected tests from `defer` to
+`t.Cleanup` registered in an order that guarantees the "wait for every
+goroutine to actually finish" cleanup runs *before* the "restore the
+var" one (`t.Cleanup` callbacks run in LIFO order, same as `defer`, but
+run separately and afterward - documented in `newClientConn`'s own
+comment for future tests). Verified clean under `-race -count=5`.
+
+**Medium, fixed: an update failure with no clear diagnosis was possible
+after the same self-update limitation the previous entry already
+documented (not solved, by design - see "Self-update can never deliver
+a compose-topology change" above).** An operator on an older release
+whose self-update carries them onto the new attestation-gated code
+without the new proxy topology used to get whatever generic
+network-error text cosign itself produced - not obviously distinguishable
+from a transient hiccup worth retrying. Fixed: `RequireAttestation`
+(Core) and `verifyAttestation` (the Updater, its own separate copy)
+both now check the proxy is configured and reachable *before* ever
+invoking cosign, via a new `checkAttestationProxyReachable()` in each -
+an unset `ROOTGUARD_ATTESTATION_PROXY_URL` or an unreachable one each
+produce a specific, actionable message naming the likely cause (a stale
+compose topology) and the fix (reinstall or a manual
+`compose.release.yaml` refresh), not cosign's own opaque text. The
+dashboard's own read-only attestation status field
+(`rootguard-webapp/frontend/src/api/client.ts`'s five-value
+`"verified"|"missing"|"failed"|"unavailable"|"not_applicable"` union)
+is deliberately untouched by this - the richer message is constructed
+only on `RequireAttestation`'s/`verifyAttestation`'s own
+activation-gating error path, not folded into the cached status a
+different, unrelated API surface already type-checks against. Also
+added: an informational (non-failing) log step in `release-alpha.yml`'s
+own `upgrade-test` job, printing whether the just-upgraded Core actually
+has `ROOTGUARD_ATTESTATION_PROXY_URL` set - the real post-upgrade
+scenario this whole finding is about already exists at that point in
+the job for free (no synthetic reproduction needed), so surfacing it in
+every release's own CI log keeps the known gap visible rather than only
+living in a doc comment. A full second-update E2E reproduction (actually
+triggering and observing a real refused update inside that job) was
+considered and deferred - the unit-level tests already prove the exact
+failure behavior deterministically and fast; the E2E version would need
+its own non-trivial harness (a locally-committed, differently-tagged
+image to update to, matching the existing rollback-test pattern) for
+proportionally little additional confidence.
+
+**Low, fixed: a real staticcheck finding (SA4023) in `main.go`** -
+`serve()` only ever returns with a non-nil error (its only exit is
+`Accept` failing), so the `if err := server.serve(ln); err != nil`
+form's branch was always taken, which staticcheck correctly flagged as
+dead-code-shaped. Simplified to `log.Fatalf("serve: %v", server.serve(ln))`.
+
+**Low, fixed: `rootguard-attestation-proxy` was missing from the shared
+`go-security` matrix** (`ci-security.yml`) - the component's own
+`ci-attestation-proxy.yml` ran `go test`/`vet`/`gofmt`/trivy, but neither
+`staticcheck` nor `govulncheck`, unlike every other module (which get
+both centrally, not duplicated per-component - confirmed by checking
+`ci-updater.yml`/`ci-core.yml` don't run either directly, the same
+pattern this fix now follows). Added `rootguard-attestation-proxy` to
+the matrix; both tools already reported clean once run.
+
+**Low, fixed: test coverage gaps in the proxy's own timeout/limit
+logic** - added tests for an unreachable-upstream 502, an oversized
+CONNECT header, the header-read timeout, the idle/write-deadline fix
+above, the `maxConnections` cap actually rejecting excess connections
+(exercising the real `proxyServer.serve` path, not the
+`handleConn`-direct helper the rest of the suite uses), the
+`/healthz` endpoint against a real running server, and a client that
+sends tunnel payload before waiting to read the 200 response (the
+buffered-bytes-drain path `handleConn` already had, previously
+untested). Statement coverage moved from ~54% to ~71%; the remaining
+gap is `main()`'s own CLI dispatch and `runHealthcheck()` (both
+exercised by the real, running Docker image directly - confirmed live -
+rather than unit tests, consistent with keeping `main` itself thin).
+Also added: two new `jq` assertions in `release-alpha.yml`'s own
+"Validate the rewritten public release Compose model" step, confirming
+`ROOTGUARD_ATTESTATION_PROXY_URL` is actually set on both Core and the
+Updater and that `rootguard-attestation-proxy` itself is on both
+`control` and `egress` - closing the one remaining gap from that list
+(compose-level propagation of the proxy variable was previously only
+checked by hand, not automated).
+
+**Separately, live and unrelated to the code review itself: GHCR
+rejected the real release-alpha.yml publish job's own push
+(`denied: permission_denied: write_package`) for the bootstrap image
+pushed by hand in the previous entry** - a manually-created GHCR
+package isn't automatically linked to the repository the way one
+created by that repository's own Actions workflow is, so the repo's
+`GITHUB_TOKEN` (already granted `packages: write`) had nothing to write
+to. No API exists to link an existing package to a repository after the
+fact - fixed via the package's own web settings ("Manage Actions
+access"), a manual, one-time step.

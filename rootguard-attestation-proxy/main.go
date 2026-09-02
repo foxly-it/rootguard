@@ -39,10 +39,11 @@ func main() {
 	}
 	log.Printf("rootguard-attestation-proxy listening on %s", listenAddr)
 
+	// serve only ever returns with a non-nil error (Accept failing is
+	// its only exit) - staticcheck (SA4023) correctly flags the
+	// equivalent `if err := ...; err != nil` form as always true.
 	server := newProxyServer()
-	if err := server.serve(ln); err != nil {
-		log.Fatalf("serve: %v", err)
-	}
+	log.Fatalf("serve: %v", server.serve(ln))
 }
 
 // runHealthcheck is invoked as `rootguard-attestation-proxy healthcheck`
