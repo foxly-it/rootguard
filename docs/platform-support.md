@@ -2,8 +2,9 @@
 
 Tracked by [issue #39](https://github.com/foxly-it/rootguard/issues/39).
 
-RootGuard's public beta uses one immutable Compose model on every supported
-Docker platform. The clean-install verifier proves more than image
+RootGuard's public release-candidate phase uses one immutable Compose model
+on every supported Docker platform. The clean-install verifier proves more
+than image
 availability: it starts the control plane, signs in, runs the AIO preflight,
 deploys AdGuard Home and Unbound, resolves a public name, and verifies that an
 invalid DNSSEC chain is rejected.
@@ -70,6 +71,37 @@ Not supported: bare-metal/systemd installs and multi-node deployments are
 explicitly out of scope for 1.0 (`ROADMAP.md`'s "Post-1.0 / Future"
 section) - RootGuard 1.0 is a single-node Docker appliance only.
 
+## Docker Engine version
+
+RootGuard's Core and Updater containers call `docker cp` in three places
+(backup export, backup restore, and update rollback - see their own
+package docs). Three `docker cp` vulnerabilities, CVE-2026-41567,
+CVE-2026-41568, and CVE-2026-42306, were fixed upstream in Docker Engine
+29.5.1 ([release notes](https://docs.docker.com/engine/release-notes/29/));
+any one of them is exploitable by a container running under the same
+Docker Engine as RootGuard's own controllers. **Run Docker Engine 29.5.1
+or later**, or confirm your distribution's own package has backported all
+three fixes - some distributions patch security issues without bumping
+the version string they report, so a version below 29.5.1 is not on its
+own proof of being unpatched, only a reason to check.
+
+The installer's own preflight surfaces this as a non-blocking advisory
+check (`docker_engine_cp_cve`) whenever it can read Docker Engine's
+version unambiguously as below 29.5.1 - it warns instead of failing
+preflight specifically because a backported distro package is common
+enough here (Debian/Ubuntu's own `docker.io`, e.g.) that blocking on the
+version string alone would produce real false positives.
+
+A separate, lower-confidence advisory (`docker_engine_cp_cve_unknown`)
+fires instead when the reported version looks version-shaped but
+couldn't be parsed as a plain `major.minor.patch` string with
+confidence - some vendor builds append a distro/build suffix preflight
+doesn't try to interpret. This is deliberately distinct from staying
+silent: "we genuinely can't tell whether you have the fix" is worth
+surfacing differently from "we checked, you're fine". Preflight stays
+non-blocking either way; the advisory just asks you to confirm your
+Docker Engine is 29.5.1+ (or backported) yourself.
+
 ## Minimum requirements
 
 No hard minimum is enforced by the installer, but
@@ -104,9 +136,9 @@ profile's bigger caches.
 
 ## Support policy
 
-- Each `0.1.0-{alpha,beta}.N` / future `1.0.x` release is supported until
-  the next one ships - only the current release receives fixes; there's no
-  parallel maintenance of older lines pre-1.0.
+- Each `0.1.0-{alpha,beta}.N` / `1.0.0-rc.N` / future `1.0.x` release is
+  supported until the next one ships - only the current release receives
+  fixes; there's no parallel maintenance of older lines pre-1.0.
 - Security-relevant fixes land as a new release promptly rather than being
   backported; there is no separate security-only release channel before
   1.0.

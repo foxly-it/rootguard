@@ -1,11 +1,16 @@
 name: Cut next release
 
 # Computes the next version, generates the changelog section for everything
-# merged since the last tag, pushes a new tag, and explicitly dispatches
+# merged since the last tag, commits it, and explicitly dispatches
 # release-alpha.yml's existing publish pipeline for it (unchanged itself).
 # Manually triggered rather than automatic on every push to main: a human
 # still decides *when* to cut a release, this only removes having to type
 # or remember the next version number by hand.
+#
+# Does not create the release tag itself (a follow-up review's finding -
+# see the "Commit the changelog" step's own comment for the full
+# rationale): release-alpha.yml creates it, once, after every one of its
+# own gates has actually passed.
 #
 # Defaults to incrementing the latest release tag's own trailing number
 # (e.g. 0.1.0-beta.14 -> 0.1.0-beta.15). Pass the optional "version" input
@@ -30,8 +35,8 @@ on:
 
 # Shares its group name with release-alpha.yml deliberately - see that
 # workflow's own concurrency block for why. Both workflows push to main;
-# without a shared lock, this workflow's own commit+tag push here could
-# race with release-alpha.yml's update-alpha-pins job pushing a pin
+# without a shared lock, this workflow's own changelog-commit push here
+# could race with release-alpha.yml's update-alpha-pins job pushing a pin
 # commit for an *earlier* dispatch that's still in flight.
 concurrency:
   group: release-pipeline
@@ -48,9 +53,22 @@ jobs:
   version-and-changelog:
     runs-on: ubuntu-latest
     steps:
+      # Found live: `main` requires 20 status checks on every push, not
+      # just PR merges - the default GITHUB_TOKEN authenticates as the
+      # "github-actions" app, which isn't a repository admin and so can't
+      # bypass that, even with `contents: write`. `RELEASE_PAT` is a
+      # fine-grained token scoped to this repo only (Contents: Read and
+      # write), owned by an account that *does* have admin rights here -
+      # admins bypass required status checks on a direct push
+      # (`enforce_admins` is off), the same way a maintainer pushing this
+      # exact commit by hand always could. Checking out with this token
+      # instead of the default one means every git command in this job
+      # (the "Commit the changelog" push below) authenticates as that
+      # account instead.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
 
       - name: Determine next version
         id: next
@@ -102,6 +120,23 @@ jobs:
             echo "Tag v${next_version} already exists" >&2
             exit 1
           fi
+          # Found in review: grammar validity (require_semver above)
+          # says nothing about *ordering* - the auto-increment path above
+          # always produces a genuinely higher version by construction,
+          # but a hand-typed VERSION_OVERRIDE could name any valid,
+          # unused SemVer string, including one with lower precedence
+          # than what's already published (confirmed live: an override
+          # of "0.9.9" against a real "1.0.0-rc.1" passed every other
+          # check here). require_new_version enforces real SemVer 2.0
+          # precedence (not sort -V, confirmed live to get this project's
+          # own upcoming rc->stable transition backwards - see
+          # semver-compare.sh's own comment), not just tag-string
+          # inequality. The exact-same-version case can't reach this
+          # point at all - already rejected above as "tag already
+          # exists", since that's the same tag by construction whenever
+          # next_version equals latest_tag's own version.
+          source scripts/lib/semver-compare.sh
+          require_new_version "$next_version" "${latest_tag#v}"
           echo "latest_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
           echo "version=${next_version}" >> "$GITHUB_OUTPUT"
           echo "tag=v${next_version}" >> "$GITHUB_OUTPUT"
@@ -126,7 +161,21 @@ jobs:
           git-cliff --config cliff.toml --tag "${{ steps.next.outputs.tag }}" \
             "${{ steps.next.outputs.latest_tag }}..HEAD" --prepend CHANGELOG.md
 
-      - name: Commit changelog and tag the release
+      # Found in a follow-up review: this used to also create the release
+      # tag right here, pointing at this changelog commit, before
+      # release-alpha.yml (dispatched below) had run a single test against
+      # it. release-alpha.yml's own update-alpha-pins job then *moved* that
+      # pre-existing tag onto its later pin commit once everything passed
+      # - which meant a tag existed, briefly, pointing at a commit nothing
+      # had verified yet, and every subsequent run had to distinguish "the
+      # legitimate first move" from "something redirected a published
+      # reference", indistinguishably from the outside. No tag is created
+      # here anymore at all: release-alpha.yml's update-alpha-pins job now
+      # creates it exactly once, after every gate (test, security,
+      # smoke-test, upgrade-test) has actually passed, directly on the
+      # final pin commit - see that job's own "Point the release tag at
+      # the pin-update commit" step.
+      - name: Commit the changelog
         id: commit
         run: |
           set -euo pipefail
@@ -134,12 +183,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
           git commit -m "chore(release): ${{ steps.next.outputs.version }}"
-          git tag -a "${{ steps.next.outputs.tag }}" -m "${{ steps.next.outputs.version }}"
-          # --atomic: both refs land together or neither does - found in
-          # review, pushing them as two separate calls left a window where
-          # main had advanced but the tag hadn't (or vice versa) if
-          # anything else pushed to main in between.
-          git push --atomic origin HEAD:main "${{ steps.next.outputs.tag }}"
+          git push origin HEAD:main
           # Recorded so the dispatched release-alpha.yml run below builds
           # from exactly this commit - found in review: dispatching with
           # only --ref main lets release-alpha.yml resolve its own

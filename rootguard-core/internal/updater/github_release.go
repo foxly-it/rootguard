@@ -111,7 +111,7 @@ func digestQualify(ctx context.Context, run CommandRunner, image string) string 
 	if strings.Contains(image, "@sha256:") {
 		return image
 	}
-	repo, _, ok := strings.Cut(image, ":")
+	repo, ok := imageRepo(image)
 	if !ok {
 		return image
 	}
@@ -142,7 +142,7 @@ func digestQualify(ctx context.Context, run CommandRunner, image string) string 
 // Also kept in sync by hand with rootguard-updater/image.go's identical
 // copy - see digestQualify's own doc comment above for why.
 func digestFromPullOutput(image string, output []byte) (string, bool) {
-	repo, _, ok := strings.Cut(image, ":")
+	repo, ok := imageRepo(image)
 	if !ok {
 		return "", false
 	}
@@ -153,4 +153,31 @@ func digestFromPullOutput(image string, output []byte) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// imageRepo returns the repository portion of a "repo:tag" reference,
+// correctly handling a registry host:port prefix - e.g.
+// "registry.example:5000/rootguard-unbound:tag" - which the previous
+// strings.Cut(image, ":") (first colon) used by both functions above
+// mis-split into "registry.example" and "5000/rootguard-unbound:tag",
+// silently breaking the digest lookup for that entire class of
+// reference. Found in a follow-up review of internal/installer's
+// identical, newer copy of this same lookup - the bug predates that copy
+// and was already live here. A colon only separates the tag if it
+// appears after the last "/"; any colon before that (or without a
+// following "/" at all) is part of the registry host:port, not a tag
+// separator - the same rule Docker's own reference parser
+// (distribution/reference) uses. ok is false only when there's no colon
+// after the repository path at all (an already-bare, tagless reference),
+// matching the previous strings.Cut behavior's own "not found" case.
+//
+// Kept in sync by hand with rootguard-updater's identical copy - see
+// digestQualify's own doc comment above for why.
+func imageRepo(image string) (repo string, ok bool) {
+	lastSlash := strings.LastIndex(image, "/")
+	lastColon := strings.LastIndex(image, ":")
+	if lastColon <= lastSlash {
+		return "", false
+	}
+	return image[:lastColon], true
 }

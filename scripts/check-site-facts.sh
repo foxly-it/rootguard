@@ -1,10 +1,20 @@
 #!/usr/bin/env bash
-# Checks the checkable facts in site/*.html against reality: every mentioned
-# RootGuard version string matches the latest real release tag, and every
-# local (non-http) href/src actually resolves to a file in the repo.
-# Deliberately does not attempt to judge prose accuracy - see ROADMAP.md 0.6
-# ("Website status and Wiki updated as a required CI/release check"), scoped
-# to hard, checkable facts rather than content review.
+# Checks the checkable facts in site/*.html and README.md against reality:
+# every mentioned RootGuard version string matches the latest real release
+# tag, and every local (non-http) href/src actually resolves to a file in
+# the repo. Deliberately does not attempt to judge prose accuracy - see
+# ROADMAP.md 0.6 ("Website status and Wiki updated as a required CI/release
+# check"), scoped to hard, checkable facts rather than content review.
+#
+# README.md joined the site/*.html set here after a follow-up review found
+# it silently stale for a long time (still pointing new users at
+# v0.1.0-beta.1's compose.alpha.yaml while site/*.html had long since moved
+# on to the current release under the compose.release.yaml name) - nothing
+# checked it because it lives outside site/. The local link/asset check
+# below is deliberately still site/*.html-only: README.md's relative links
+# resolve against the repo root, a different base than site/*.html's, and
+# it has none of the kind that check exists for (a broken local
+# image/stylesheet reference on the public site).
 
 set -Eeuo pipefail
 
@@ -14,16 +24,7 @@ cd "${repository_dir}"
 # shellcheck source=version-pattern.sh
 . "${repository_dir}/scripts/version-pattern.sh"
 
-# Ranked by creation date (not sort -V), so a later-cut stable tag
-# correctly outranks an earlier rc for the same release without needing
-# install.sh's sort -V precedence workaround.
-latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E "^v${rootguard_version_pattern}\$" | head -1)"
-if [[ -z "${latest_tag}" ]]; then
-  echo "No release tag found - cannot determine the current version" >&2
-  exit 1
-fi
-latest_version="${latest_tag#v}"
+latest_version="$(rootguard_current_version)"
 echo "Current release: ${latest_version}"
 
 failures=0
@@ -45,8 +46,10 @@ echo "== Version references =="
 # before it already rules out SVG/IP/date noise matching by accident.
 historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
 version_matches=""
-for file in site/*.html; do
-  matches="$(grep -vE "${historical_reference_pattern}" "${file}" | rootguard_extract_versions | sed "s#^#${file}:#" || true)"
+for file in site/*.html README.md; do
+  matches="$(grep -vE "${historical_reference_pattern}" "${file}" \
+    | grep -vE "${rootguard_update_image_line_pattern}" \
+    | rootguard_extract_versions | sed "s#^#${file}:#" || true)"
   if [[ -n "${matches}" ]]; then
     version_matches+="${matches}"$'\n'
   fi
@@ -79,7 +82,7 @@ done < <(grep -rEo '(href|src)="[^"]*"' site/*.html | sed -E 's#^(site/[^:]+):(h
 
 echo
 if [[ "${failures}" -gt 0 ]]; then
-  echo "${failures} stale or broken reference(s) found in site/*.html" >&2
+  echo "${failures} stale or broken reference(s) found in site/*.html or README.md" >&2
   exit 1
 fi
 echo "All checked site facts are current."

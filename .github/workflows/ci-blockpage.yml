@@ -7,10 +7,20 @@ on:
     paths:
       - "rootguard-blockpage/**"
       - ".github/workflows/ci-blockpage.yml"
-  pull_request:
-    paths:
-      - "rootguard-blockpage/**"
-      - ".github/workflows/ci-blockpage.yml"
+      - "scripts/ci/trivy-image-scan.sh"
+      - "scripts/ci/trivy-version.env"
+      - ".trivyignore.yaml"
+  # No paths filter on pull_request, unlike push above - found in review,
+  # round 15: "Build and push blockpage image" carries the only image
+  # scan for Blockpage that runs on every PR (ci-blockpage.yml's own
+  # `Scan image for vulnerabilities` step, round 14) but wasn't a
+  # required branch-protection check, and the round-14 paths filter here
+  # meant a PR that never touched rootguard-blockpage/** wouldn't even
+  # produce the check to require in the first place - a Blockpage PR
+  # with a genuinely failing scan could still merge. Same fix already
+  # applied to ci-core.yml/ci-updater.yml/ci-webapp.yml/ci-unbound.yml in
+  # round 10/11, for the identical reason.
+  pull_request: {}
   workflow_dispatch:
 
 permissions:
@@ -22,11 +32,26 @@ env:
   IMAGE_NAME: foxly-it/rootguard-blockpage
 
 jobs:
+  # Found in review: this job id ("build") is identical across
+  # ci-blockpage.yml, ci-updater.yml, and ci-webapp.yml, each producing
+  # an unnamed check run literally called "build" - see ci-core.yml's
+  # own "test" job for the identical class of finding.
   build:
+    name: Build and push blockpage image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # web/theme.js is deliberately duplicated, byte-for-byte, at
+      # rootguard-webapp/frontend/public/blockpage-preview/theme.js (the
+      # webapp's own in-app preview of the real blockpage) rather than
+      # built from one shared source - found in review as a low-priority
+      # drift risk, not a bug (both copies were, and still are, correct).
+      # This check exists purely so a future edit to one side without the
+      # other fails loudly here instead of silently drifting unnoticed.
+      - name: Check theme.js stays in sync with its webapp preview copy
+        run: diff rootguard-blockpage/web/theme.js rootguard-webapp/frontend/public/blockpage-preview/theme.js
 
       - name: Extract metadata (tags, labels)
         id: meta
@@ -60,6 +85,14 @@ jobs:
           load: true
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci
+
+      # Found in review, round 14: this is one of the two published
+      # images (Unbound is the other, see ci-unbound.yml) that
+      # trivy-image-scan.sh (round 13) never covered - see
+      # trivy-image-scan.sh's own header comment for the full gap this
+      # closes.
+      - name: Scan image for vulnerabilities
+        run: ./scripts/ci/trivy-image-scan.sh ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci
 
       - name: Verify the page serves and enforces its security headers
         run: |

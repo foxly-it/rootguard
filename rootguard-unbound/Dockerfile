@@ -22,7 +22,7 @@ RUN apt-get update \
         curl=8.14.1-2+deb13u4 \
         libevent-dev=2.1.12-stable-10+b1 \
         libexpat1-dev=2.8.3-1~deb13u1 \
-        libssl-dev=3.5.6-1~deb13u2 \
+        libssl-dev=3.5.7-1~deb13u2 \
         pkg-config=1.8.1-4 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -83,7 +83,32 @@ RUN apt-get update \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.12-stable-10+b1 \
         libexpat1=2.8.3-1~deb13u1 \
-        libssl3t64=3.5.6-1~deb13u2 \
+        libssl3t64=3.5.7-1~deb13u2 \
+    # Found in review, round 14: the debian:13-slim base's own util-linux
+    # family (transitively present, not one of the packages listed above -
+    # confirmed live these 9 binary packages all build from the one
+    # util-linux source package) carried four HIGH CVEs
+    # (CVE-2026-53612..53615), fixed by Debian in 2.41.5-0+deb13u1
+    # (confirmed live via the Debian Security Tracker and
+    # packages.debian.org - already the current trixie version, not just
+    # trixie-security). Explicit upgrade, not a version bump anywhere
+    # else in this file, since none of these were pinned to begin with.
+    # Two of the nine don't share that plain version string, confirmed
+    # live per-package against packages.debian.org rather than assumed:
+    # bsdutils carries an epoch ("1:"), and login - historically its own
+    # "shadow" source package, later folded into util-linux's own build -
+    # keeps its own upstream version number with the util-linux release
+    # appended ("+really2.41.5-0+deb13u1").
+    && apt-get install -y --no-install-recommends \
+        bsdutils=1:2.41.5-0+deb13u1 \
+        libblkid1=2.41.5-0+deb13u1 \
+        liblastlog2-2=2.41.5-0+deb13u1 \
+        libmount1=2.41.5-0+deb13u1 \
+        libsmartcols1=2.41.5-0+deb13u1 \
+        libuuid1=2.41.5-0+deb13u1 \
+        login=1:4.16.0-2+really2.41.5-0+deb13u1 \
+        mount=2.41.5-0+deb13u1 \
+        util-linux=2.41.5-0+deb13u1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 101 unbound \
     && useradd --uid 100 --gid 101 --system --home-dir /var/lib/unbound --no-create-home --shell /usr/sbin/nologin unbound \

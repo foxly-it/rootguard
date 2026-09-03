@@ -247,7 +247,7 @@ const digTimeout = "+time=5"
 // in which host/port they query, the retry count, and the fallback detail
 // text on failure.
 func (m *Manager) resolutionCheck(ctx context.Context, name, host, port, tries, noAddressDetail string) DiagnosticCheck {
-	check := m.diagnosticCommand(ctx, name, "dig", "+short", digTimeout, tries, "@"+host, "-p", port, "example.com", "A")
+	check := m.diagnosticCommand(ctx, name, "dig", "+short", digTimeout, tries, "@"+host, "-p", port, m.resolutionCheckDomain, "A")
 	check.Passed = check.Passed && strings.TrimSpace(check.Detail) != "" && check.Detail != "OK"
 	if !check.Passed && check.Detail == "OK" {
 		check.Detail = noAddressDetail
@@ -256,7 +256,7 @@ func (m *Manager) resolutionCheck(ctx context.Context, name, host, port, tries, 
 }
 
 func (m *Manager) dnssecCheck(ctx context.Context, name, host, port, tries, rejectedDetailPrefix string) DiagnosticCheck {
-	check := m.diagnosticCommand(ctx, name, "dig", "+dnssec", digTimeout, tries, "@"+host, "-p", port, "dnssec-failed.org", "A")
+	check := m.diagnosticCommand(ctx, name, "dig", "+dnssec", digTimeout, tries, "@"+host, "-p", port, m.dnssecCheckDomain, "A")
 	check.Passed = check.Passed && strings.Contains(check.Detail, "status: SERVFAIL")
 	if !check.Passed && !strings.Contains(check.Detail, "SERVFAIL") {
 		check.Detail = rejectedDetailPrefix + check.Detail

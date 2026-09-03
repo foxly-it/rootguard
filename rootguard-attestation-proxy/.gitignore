@@ -1,0 +1,5 @@
+# Compiled binary from a plain `go build .` in this directory - the
+# module name doubles as the default output filename, easy to leave
+# behind accidentally.
+/rootguard-attestation-proxy
+*.test

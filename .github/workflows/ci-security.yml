@@ -50,12 +50,17 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.ref || github.sha }}
+      - name: Test image-scan argument handling
+        run: ./scripts/ci/trivy-image-scan.test.sh
+      - name: Test Debian pin checker
+        run: ./scripts/check-debian-pins.test.sh
       - name: Install trivy
         run: |
           set -euo pipefail
+          source scripts/ci/trivy-version.env
           curl -sSfL -o trivy.tar.gz \
-            https://github.com/aquasecurity/trivy/releases/download/v0.73.0/trivy_0.73.0_Linux-64bit.tar.gz
-          echo "2edd39da482bb4e9831962487b68f68e3928ec3137794757f54d00383d79547b  trivy.tar.gz" | sha256sum -c -
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_LINUX_AMD64_SHA256}  trivy.tar.gz" | sha256sum -c -
           tar -xz -C /usr/local/bin -f trivy.tar.gz trivy
       - name: Scan for vulnerabilities, secrets, and Dockerfile misconfigurations
         run: |
@@ -70,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [rootguard-core, rootguard-updater, rootguard-webapp/backend]
+        module: [rootguard-core, rootguard-updater, rootguard-webapp/backend, rootguard-attestation-proxy]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

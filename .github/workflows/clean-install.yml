@@ -1,12 +1,11 @@
 name: Public clean install
 
 on:
-  pull_request:
-    paths:
-      - "compose.release.yaml"
-      - ".env.release.example"
-      - "scripts/verify-clean-install.sh"
-      - ".github/workflows/clean-install.yml"
+  # No paths filter on pull_request - see backup-restore.yml's identical
+  # comment for the full rationale (round 10 finding 9). Runs in ~1-1.5
+  # minutes (both arches in parallel), cheap enough to run
+  # unconditionally.
+  pull_request: {}
   push:
     branches: [main]
     paths:
@@ -24,8 +23,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # See backup-restore.yml's identical job for the full rationale - this
+  # job id/name pair used to collide with an identically-named, unrelated
+  # check in that other workflow.
   linux:
-    name: Linux ${{ matrix.arch }}
+    name: Clean install, Linux ${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:
@@ -44,9 +46,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes dnsutils
 
+      # See verification-common.sh's own comment on verify_dns - a real
+      # internet domain here would fail this job on a transient DNS
+      # hiccup unrelated to the code under test.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Verify clean installation
         env:
           ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
+          ROOTGUARD_VERIFY_DNS_DOMAIN: good.rgtest-ci.internal
+          ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN: bad.rgtest-ci.internal
         run: ./scripts/verify-clean-install.sh
 
       - name: Record platform evidence

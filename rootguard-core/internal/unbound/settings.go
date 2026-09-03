@@ -569,16 +569,26 @@ func yesNo(value bool) string {
 }
 
 type Manager struct {
-	hostConfigDir       string
-	containerConfigDir  string
-	containerName       string
-	run                 commandRunner
-	now                 func() time.Time
+	hostConfigDir      string
+	containerConfigDir string
+	containerName      string
+	run                commandRunner
+	now                func() time.Time
+	// sleep backs waitReady's poll loop - time.After by default,
+	// overridden in tests to a zero-delay channel so exercising the
+	// retry path doesn't actually pause the test suite.
+	sleep               func(time.Duration) <-chan time.Time
 	applyMu             sync.Mutex
 	diagnosticMu        sync.Mutex
 	diagnosticTimer     *time.Timer
 	diagnosticExpiresAt *time.Time
 	diagnosticBaseLevel int
+	// resolutionCheckDomain/dnssecCheckDomain are what Diagnose queries to
+	// prove Unbound can resolve, and correctly rejects invalid DNSSEC,
+	// against the real internet - see SetDiagnosticDomains for why these
+	// are overridable at all.
+	resolutionCheckDomain string
+	dnssecCheckDomain     string
 }
 
 type commandRunner func(context.Context, string, ...string) ([]byte, error)
@@ -590,8 +600,29 @@ func NewManager(hostConfigDir, containerConfigDir, containerName string) *Manage
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
 			return exec.CommandContext(ctx, name, args...).CombinedOutput()
 		},
-		now:                 time.Now,
-		diagnosticBaseLevel: 1,
+		now:                   time.Now,
+		sleep:                 time.After,
+		diagnosticBaseLevel:   1,
+		resolutionCheckDomain: "example.com",
+		dnssecCheckDomain:     "dnssec-failed.org",
+	}
+}
+
+// SetDiagnosticDomains overrides the domains Diagnose queries for its
+// resolution and DNSSEC-rejection checks - example.com/dnssec-failed.org
+// by default, correct for a real deployment genuinely proving it can
+// reach and validate the real internet. Test-only escape hatch, same
+// shape and same reason as main.go's own ROOTGUARD_SKIP_ATTESTATION: a
+// CI job's own network conditions are not the thing under test, and a
+// transient hiccup on the runner's own connection shouldn't fail a build
+// for reasons that have nothing to do with the code under test. Neither
+// argument overrides anything if empty, so a caller can set just one.
+func (m *Manager) SetDiagnosticDomains(resolutionDomain, dnssecDomain string) {
+	if resolutionDomain != "" {
+		m.resolutionCheckDomain = resolutionDomain
+	}
+	if dnssecDomain != "" {
+		m.dnssecCheckDomain = dnssecDomain
 	}
 }
 
@@ -816,18 +847,125 @@ func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custo
 
 	output, err = m.run(ctx, "docker", "restart", m.containerName)
 	if err != nil {
-		rollbackErr := restoreState(configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
-		rollbackOutput, restartErr := m.run(ctx, "docker", "restart", m.containerName)
-		if rollbackErr != nil || restartErr != nil {
-			return fmt.Errorf("restart unbound: %w: %s; rollback failed: %v; rollback restart: %v: %s", err, output, rollbackErr, restartErr, rollbackOutput)
-		}
-		return fmt.Errorf("restart unbound: %w: %s; previous configuration restored", err, output)
+		return m.rollbackFailedApply(ctx, "restart unbound", fmt.Errorf("%w: %s", err, output),
+			configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
+	}
+
+	// Found in review: `docker restart` returning success only means the
+	// container process started again, not that Unbound has finished its
+	// own startup (reading the trust anchor, opening its remote-control
+	// socket) - any caller that immediately talks to the running daemon
+	// afterward (unbound-control, a live diagnostic query) can lose that
+	// race. Confirmed live in CI: StartDiagnosticLogging's own
+	// unbound-control call, issued right after this exact restart,
+	// intermittently failed because the control socket wasn't listening
+	// yet - reproducible under CI's own runner load, not a hypothetical.
+	// Poll the same interface every other live check in this package
+	// already uses (unbound-control status) rather than guessing a fixed
+	// sleep - the shortest reliable "is it actually up" signal, with no
+	// dependency on any particular startup log line. If it never comes
+	// up, that's as real a sign the new config is broken as a checkconf
+	// or restart failure - same rollback.
+	if err := m.waitReady(ctx); err != nil {
+		return m.rollbackFailedApply(ctx, "wait for unbound to become ready after restart", err,
+			configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
 	}
 	m.resetDiagnosticLoggingState(settings.LogVerbosity)
 	if err := m.recordSnapshot(settings, config, []byte(custom)); err != nil {
 		return fmt.Errorf("record active unbound version: %w", err)
 	}
 	return nil
+}
+
+// rollbackFailedApply restores the pre-apply config/settings/custom files
+// and restarts the container back onto them - the shared tail of every
+// applyStateLocked failure path that already wrote new files and started
+// (or tried to start) the container on them, so `action`/`cause` are the
+// only things that differ between call sites.
+func (m *Manager) rollbackFailedApply(ctx context.Context, action string, cause error,
+	configPath, settingsPath, customPath string, oldConfig, oldSettings, oldCustom []byte,
+	configExisted, settingsExisted, customExisted bool) error {
+	rollbackErr := restoreState(configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
+
+	// Found in review: this used to restart (and, once waitReady existed,
+	// wait) using the same ctx that got this function called in the first
+	// place - if that ctx is itself what's canceled (e.g. the HTTP
+	// request that triggered Apply was aborted by the client mid-flight,
+	// which cause can legitimately be if waitReady's own ctx.Done() case
+	// is what fired), the rollback `docker restart` below could be killed
+	// or refused to even start, leaving the just-restored *files* out of
+	// sync with whatever Unbound is actually still running. A rollback
+	// must not be at the mercy of whatever canceled the operation it's
+	// cleaning up after - detach from ctx's cancellation (WithoutCancel
+	// keeps any deadline-independent values, drops only the
+	// cancellation/deadline) and give it its own bounded timeout instead,
+	// so it still can't hang forever if something is genuinely stuck.
+	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	rollbackOutput, restartErr := m.run(rollbackCtx, "docker", "restart", m.containerName)
+	if restartErr == nil {
+		restartErr = m.waitReady(rollbackCtx)
+	}
+	if rollbackErr != nil || restartErr != nil {
+		return fmt.Errorf("%s: %w; rollback failed: %v; rollback restart: %v: %s", action, cause, rollbackErr, restartErr, rollbackOutput)
+	}
+	return fmt.Errorf("%s: %w; previous configuration restored", action, cause)
+}
+
+// unboundReadyAttempts/unboundReadyInterval bound how long waitReady polls
+// before giving up - generous enough for a slow/contended host (the CI race
+// this exists for took several seconds to lose), short enough that a
+// genuinely broken config still fails an Apply call in bounded time rather
+// than hanging it.
+const (
+	unboundReadyAttempts = 40
+	unboundReadyInterval = 250 * time.Millisecond
+)
+
+// waitReady polls until both of these succeed, or the budget above is
+// exhausted:
+//  1. `unbound-control status` - the control-socket interface every other
+//     live check in this package already uses.
+//  2. A real DNS query against Unbound's own listening port (a root NS
+//     lookup - answerable straight from Unbound's built-in root hints, no
+//     real network round-trip required, so this isn't itself hostage to
+//     network conditions).
+//
+// `docker restart` returning success only means the container process
+// started again, not that Unbound has finished its own startup. Found in
+// review: (1) alone isn't a strong enough signal either - the control
+// socket and the actual DNS listener don't necessarily finish binding at
+// the same moment, confirmed live: a caller that immediately queried the
+// DNS port right after (1) alone succeeded got "communications error ...
+// timed out" - a full timeout, not a slow response, meaning the listener
+// genuinely wasn't up yet despite the control socket already answering.
+func (m *Manager) waitReady(ctx context.Context) error {
+	var lastErr error
+	var lastOutput []byte
+	for attempt := 0; attempt < unboundReadyAttempts; attempt++ {
+		output, err := m.run(ctx, "docker", "exec", m.containerName, "unbound-control", "status")
+		if err == nil {
+			output, err = m.run(ctx, "docker", "exec", m.containerName, "dig", "@127.0.0.1", "-p", "5335", ".", "NS", "+time=1", "+tries=1")
+			if err == nil {
+				return nil
+			}
+		}
+		lastErr, lastOutput = err, output
+		// Found in review: this used to sleep unconditionally, including
+		// after the *last* attempt - a wait no subsequent check ever
+		// consumes, just a fixed delay tacked onto every readiness
+		// timeout for no benefit.
+		if attempt == unboundReadyAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-m.sleep(unboundReadyInterval):
+		}
+	}
+	return fmt.Errorf("unbound did not become ready (control status and a real DNS query) within %s after restart: %w: %s",
+		time.Duration(unboundReadyAttempts)*unboundReadyInterval, lastErr, lastOutput)
 }
 
 func writeOrRemove(path string, data []byte, mode os.FileMode) error {

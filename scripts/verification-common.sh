@@ -12,6 +12,7 @@ managed_containers=(
   rootguard-adguard
   rootguard-unbound
   rootguard-blockpage
+  rootguard-attestation-proxy
 )
 managed_volumes=(
   rootguard-data
@@ -184,20 +185,53 @@ install_stack() {
   wait_for_installed
 }
 
+# wire_local_dnssec_test_zone points the running rootguard-unbound
+# container at scripts/ci/dnssec-test-zone's local, throwaway DNSSEC
+# authority instead of the real internet - see verify_dns's own comment
+# for why. Requires the caller's workflow to have already run that
+# directory's setup.sh. Waits for Unbound to report healthy again after
+# inject.sh's own restart, the same way any other config-apply-then-
+# restart in this codebase does.
+wire_local_dnssec_test_zone() {
+  "${repository_dir}/scripts/ci/dnssec-test-zone/inject.sh" rootguard-unbound
+  local status
+  for _ in {1..30}; do
+    status="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound 2>/dev/null || true)"
+    [[ "${status}" == "healthy" ]] && return 0
+    sleep 1
+  done
+  echo "rootguard-unbound did not become healthy after wiring up the local DNSSEC test zone (status: ${status})" >&2
+  exit 1
+}
+
 # verify_dns asserts recursive resolution works and an invalid DNSSEC chain
 # is rejected, printing the resolved address to stdout on success.
+#
+# Found in review: this used to query real internet domains
+# (example.com, dnssec-failed.org) directly - a transient DNS/network
+# hiccup on the runner's own connection then fails clean-install.yml/
+# backup-restore.yml for reasons that have nothing to do with the code
+# under test, same class of problem ci.yml/ci-unbound.yml already fixed
+# for their own DNS checks (see scripts/ci/dnssec-test-zone). Domains are
+# now configurable - callers that want the local test zone instead of the
+# real internet set ROOTGUARD_VERIFY_DNS_DOMAIN/
+# ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN and call
+# wire_local_dnssec_test_zone first; the defaults keep exercising real
+# internet resolution for any caller that doesn't.
 verify_dns() {
-  local answer dnssec_status
-  answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p "${dns_port}" example.com A)"
+  local domain dnssec_fail_domain answer dnssec_status
+  domain="${ROOTGUARD_VERIFY_DNS_DOMAIN:-example.com}"
+  dnssec_fail_domain="${ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN:-dnssec-failed.org}"
+  answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p "${dns_port}" "${domain}" A)"
   if [[ -z "${answer}" ]]; then
-    echo "Recursive DNS returned no address" >&2
+    echo "Recursive DNS returned no address for ${domain}" >&2
     exit 1
   fi
   dnssec_status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p "${dns_port}" \
-    dnssec-failed.org A | sed -n \
+    "${dnssec_fail_domain}" A | sed -n \
     's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
   if [[ "${dnssec_status}" != "SERVFAIL" ]]; then
-    echo "Invalid DNSSEC chain was not rejected (status ${dnssec_status})" >&2
+    echo "Invalid DNSSEC chain was not rejected for ${dnssec_fail_domain} (status ${dnssec_status})" >&2
     exit 1
   fi
   printf '%s' "${answer%%$'\n'*}"

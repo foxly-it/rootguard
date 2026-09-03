@@ -1,9 +1,20 @@
 name: Publish RootGuard release images
 
+# workflow_dispatch only - found in review: this used to also trigger on
+# a pushed "v*.*.*" tag, structurally incompatible with the tag-lifecycle
+# rework a few PRs earlier in this same round: that rework requires the
+# release tag to not exist yet when this workflow starts, created here
+# exactly once, only after every gate has passed, directly on the final
+# pin commit - and never moved again afterward under any circumstance.
+# A manually pushed tag violates that up front (the tag already exists,
+# pointing at the pre-pin source commit, before a single test has run)
+# and the later "never move a published tag" guard would then correctly,
+# but unhelpfully, refuse to finish the release at all. The one
+# supported way to cut a release is release-version-bump.yml's own
+# workflow_dispatch of this workflow (see docs/release-process.md); a
+# fully separate tag-push procedure was judged not worth maintaining
+# alongside it for what would only ever be a manual escape hatch.
 on:
-  push:
-    tags:
-      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
@@ -51,7 +62,20 @@ jobs:
       # inputs.source_sha (set by release-version-bump.yml) pins it
       # explicitly; a manual by-hand dispatch with no source_sha still
       # gets today's previous behavior (github.sha).
-      source_ref: ${{ inputs.source_sha || github.sha }}
+      #
+      # Found in review: this used to be the raw
+      # `inputs.source_sha || github.sha` expression - release-version-
+      # bump.yml always passes a full 40-character SHA, but the input's
+      # own description explicitly allows a manual by-hand dispatch to
+      # type an abbreviated one instead. Every later full-SHA comparison
+      # in this file (origin/main's tip, a tag's dereferenced commit, the
+      # commit-ancestry guard below) would then silently never match, and
+      # the mismatch surfaces late - after the candidate images are
+      # already built and scanned - instead of failing fast. Resolved
+      # once, below, via `git rev-parse HEAD` against the checkout at
+      # that ref, so every job downstream always sees the same full SHA
+      # regardless of what was actually typed into the dispatch input.
+      source_ref: ${{ steps.release.outputs.source_ref }}
       # Computed once here, not per-job/per-matrix-leg, so publish,
       # smoke-test, upgrade-test, and update-alpha-pins all agree on
       # exactly the same candidate tag without each having to re-derive it
@@ -60,19 +84,32 @@ jobs:
       # duplicating that shell logic four times over).
       candidate_tag: ${{ steps.release.outputs.candidate_tag }}
     steps:
+      # fetch-depth: 0, not the default shallow clone - the ancestry guard
+      # below needs the full tag history to find the currently-published
+      # latest release and walk the commit graph from it.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.source_sha || github.sha }}
+          fetch-depth: 0
       - id: release
         env:
           DISPATCH_VERSION: ${{ inputs.version }}
-          SOURCE_REF: ${{ inputs.source_sha || github.sha }}
         run: |
-          if [ -n "$DISPATCH_VERSION" ]; then
-            version="$DISPATCH_VERSION"
-          else
-            version="${GITHUB_REF_NAME#v}"
-          fi
+          # Resolved to the full 40-character SHA the checkout above
+          # actually landed on, not the raw (possibly abbreviated)
+          # dispatch input - see the "source_ref" output's own comment
+          # above on why. Every later use of SOURCE_REF in this file,
+          # including the outputs below, is this resolved value.
+          SOURCE_REF="$(git rev-parse HEAD)"
+          echo "source_ref=${SOURCE_REF}" >> "$GITHUB_OUTPUT"
+          # workflow_dispatch's own "version" input is required (schema
+          # default: 0.1.0-alpha.4), so DISPATCH_VERSION is always
+          # non-empty now that this workflow no longer also triggers on
+          # a pushed tag (see the "on:" block's own comment on why that
+          # trigger was removed) - the GITHUB_REF_NAME-derived fallback
+          # that branch needed is gone with it, not left behind as dead
+          # code nothing can ever reach.
+          version="$DISPATCH_VERSION"
           # A shell glob like [0-9]*.[0-9]*.[0-9]* only checks "digit,
           # anything, digit, anything, digit, anything" - it happily
           # accepts "1foo.2bar.3baz", a leading-zero core like "01.2.3",
@@ -86,6 +123,49 @@ jobs:
           # release-version-bump.yml's own check rather than duplicated.
           source scripts/lib/semver-validate.sh
           require_semver "$version"
+          # Found in review: nothing ever checked that this run's
+          # SOURCE_REF actually descends from the currently-published
+          # latest release - a stale re-dispatch (an old workflow re-run,
+          # a hand-typed version override against an old branch/commit)
+          # could silently regress the public compose.release.yaml/
+          # .env.release.example pins back to an older state. Reject
+          # outright unless SOURCE_REF has the latest release's own commit
+          # as an ancestor (or is that exact commit again - the legitimate
+          # same-version-retry case, and the only-release-so-far case where
+          # no prior tag exists yet, both fall through untouched). This is
+          # commit-ancestry, not a version-number comparison - a
+          # deliberately higher version string typed against an old commit
+          # is caught exactly the same way a lower one would be.
+          #
+          # Found in review: the two other places in this file that filter
+          # tags down to "real SemVer ones" each hand-wrote their own copy
+          # of this same regex - one of them silently drifted (missing the
+          # hyphen SemVer allows inside a prerelease identifier, so a real
+          # tag like v1.2.3-rc-hotfix.1 was invisible to it). Reusing
+          # $SEMVER_PATTERN (sourced above) at all three sites means a
+          # future grammar change can't silently re-diverge the same way.
+          latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
+            | grep -E "^v${SEMVER_PATTERN#^}" | head -1 || true)"
+          if [ -n "$latest_tag" ] && [ "$latest_tag" != "v${version}" ]; then
+            latest_commit="$(git rev-parse "${latest_tag}^{}")"
+            if ! git merge-base --is-ancestor "$latest_commit" "$SOURCE_REF"; then
+              echo "::error::${SOURCE_REF} does not descend from ${latest_tag} (${latest_commit}), the currently-published latest release - refusing to cut ${version} from a commit that isn't ahead of what's already public. This is very likely a stale re-dispatch or a version override against the wrong commit; start a fresh release from the current main instead." >&2
+              exit 1
+            fi
+            # Found in review: commit ancestry alone says nothing about
+            # whether the *version number* itself is actually newer -
+            # confirmed live that "0.9.9" against a HEAD descending from
+            # the real published "1.0.0-rc.1" passed the ancestry check
+            # above cleanly. require_new_version enforces real SemVer 2.0
+            # precedence (see semver-compare.sh's own comment on why not
+            # sort -V) so a manual override can't publish an unused but
+            # semantically older version and reset public pins back to
+            # it. Inside this same "not the identical version again"
+            # branch deliberately - the legitimate same-version-retry
+            # case must keep skipping both checks the same way.
+            source scripts/lib/semver-compare.sh
+            require_new_version "$version" "${latest_tag#v}"
+          fi
           echo "value=$version" >> "$GITHUB_OUTPUT"
           # Commit-scoped, not just version-scoped - see the "Determine the
           # candidate tag" comment in the publish job for why that matters.
@@ -171,6 +251,9 @@ jobs:
           - component: blockpage
             image: rootguard-blockpage
             context: rootguard-blockpage
+          - component: attestation-proxy
+            image: rootguard-attestation-proxy
+            context: rootguard-attestation-proxy
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -277,6 +360,47 @@ jobs:
           name: digest-${{ matrix.component }}
           path: /tmp/digests/${{ matrix.image }}.digest
 
+  # Found in review, round 15: trivy-image-scan.sh (round 13) only ever
+  # ran against a component's own PR-time build (single-platform, never
+  # published) - nothing in this pipeline ever scanned the actual
+  # multi-arch candidate images publish just pushed, so a CVE reachable
+  # only on one platform, or introduced by something specific to the
+  # release build (a build-arg, a base-image digest that moved between a
+  # component's last PR and this release), could ship undetected. Scans
+  # every one of the five images publish just built, on both platforms it
+  # actually published (matrix, not a single combined scan, so one
+  # platform's findings can never mask another's) - the exact
+  # ghcr.io/.../IMAGE:candidate_tag references, before promotion to the
+  # final version tag. `trivy image` reads a remote registry reference
+  # directly (confirmed live, no local `docker pull` needed) - the
+  # login-action above already leaves it able to authenticate through
+  # ~/.docker/config.json the same way it would for a local `docker
+  # build`.
+  image-scan:
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [rootguard-core, rootguard-webapp, rootguard-updater, rootguard-unbound, rootguard-blockpage, rootguard-attestation-proxy]
+        platform: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.version.outputs.source_ref }}
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Scan candidate image for vulnerabilities
+        run: >-
+          ./scripts/ci/trivy-image-scan.sh --platform ${{ matrix.platform }}
+          ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}:${{ needs.version.outputs.candidate_tag }}
+
   # compose.release.yaml and .env.release.example are the pinned, no-build public
   # release model - their default/documented image references need to track
   # whatever publish just pushed, or every fresh clone silently keeps running
@@ -302,7 +426,7 @@ jobs:
   # (The GitHub Release itself moved here too, for the same reason - see
   # its own step below.)
   update-alpha-pins:
-    needs: [version, publish, smoke-test, upgrade-test]
+    needs: [version, publish, image-scan, smoke-test, upgrade-test]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -310,11 +434,89 @@ jobs:
       # For the promotion step below - imagetools create pushes a new tag
       # (the final version tag) pointing at an already-published digest.
       packages: write
+    # Dummy values, not real secrets - only needed so "docker compose config"
+    # can interpolate compose.release.yaml's mandatory ${VAR:?...} entries
+    # for the structural validation step below; no container in this job
+    # actually starts. Mirrors ci.yml's "validate" job env block exactly -
+    # found live, cutting 1.0.0-rc.2: this job only started running its own
+    # compose-validation step on 2026-08-28 (gated behind smoke-test/
+    # upgrade-test passing first) and had never actually reached it in a
+    # real run until now, so the missing env block went unnoticed.
+    env:
+      ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
+      ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
+      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token-not-a-real-secret-32
     steps:
+      # Found live: `main` requires 20 status checks on every push, not
+      # just PR merges - see release-version-bump.yml's identical
+      # checkout-step comment for the full rationale. This job pushes to
+      # `main` twice (the pin commit below, and the release tag) and
+      # needs the same admin-owned `RELEASE_PAT` for both.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.version.outputs.source_ref }}
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
+
+      # Found in review, round 5: the only place this job checked "has main
+      # moved on since this release was tested" used to be the "Commit
+      # updated pins" step, far below - by which point candidate images had
+      # already been irreversibly promoted to the *final* VERSION image
+      # tags. This cheap early check avoids wasting the rest of the job
+      # (buildx/cosign setup, attestation checks, pin generation) on a run
+      # that's already doomed.
+      #
+      # Found in review, round 6: a cheap early check alone isn't enough -
+      # every step between here and the actual promotion (buildx/cosign
+      # setup, per-image attestation checks, digest-pin file edits, compose
+      # validation, site refresh) still ran *before* promotion, all inside
+      # the same race window. The real fix is ordering, not just an extra
+      # check: promotion (irreversible, public) now happens only after the
+      # pin commit has already landed on main - see "Promote candidate
+      # images to the final release tag" further below for where it moved
+      # to, and "Commit updated pins" for the one check that actually gates
+      # it now.
+      #
+      # Found in review, round 7: that round-6 reorder made this guard's
+      # own strict SOURCE_REF-equality check unreachable for the exact
+      # retry case it was meant to allow - once "Commit updated pins" has
+      # ever successfully pushed, origin/main is that pin commit (a child
+      # of SOURCE_REF), not SOURCE_REF itself, so this step aborted every
+      # retry before "Commit updated pins" ever got a chance to recognize
+      # its own earlier commit. Delegates to
+      # resolve-release-pin-commit.sh now - the one place that decides
+      # "is this a fresh run, a safe retry of our own pin commit, or a
+      # genuine race", precisely (by this release's own unique commit
+      # message and shape, not by comparing file content) rather than by
+      # strict equality alone.
+      #
+      # Just a cheap fail-fast here, not the real gate - found in review,
+      # round 8: this step's own result used to be handed straight to
+      # "Commit updated pins" as its answer too, but the buildx/cosign
+      # setup, attestation checks, digest-pin edits, compose validation,
+      # and site refresh in between are exactly the kind of window this
+      # job already treats as unsafe to trust a stale answer across (see
+      # "Commit updated pins" itself, and "Verify main hasn't moved" two
+      # rounds ago). This step exists purely so a run that's already
+      # doomed - main moved and no valid retry point exists - fails
+      # before wasting all of that, not to hand its answer downstream;
+      # "Commit updated pins" resolves fresh, right before it matters.
+      - name: Resolve main state (fresh run, or a retry of our own earlier pin commit)
+        env:
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
+          VERSION: ${{ needs.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          source scripts/lib/resolve-release-pin-commit.sh
+          git fetch origin main
+          # resolve_release_pin_commit prints its own descriptive message
+          # to stderr and returns non-zero on anything it won't vouch for
+          # - under set -e, that fails this step outright (its message is
+          # already in the log by then, no need to re-wrap it here).
+          pin_commit="$(resolve_release_pin_commit "$SOURCE_REF" "$VERSION" origin/main)"
+          if [ -n "$pin_commit" ]; then
+            echo "origin/main has moved past ${SOURCE_REF}, but ${pin_commit} is verified as this exact release's own earlier pin commit - resuming from it"
+          fi
 
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
@@ -328,41 +530,73 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Same cosign version rootguard-core's own Dockerfile pins (see its
+      # `FROM ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:...` stage, and
+      # its comment there on why it moved from v3.0.6) - needed below to
+      # validate a candidate's attestation before promoting it, the same
+      # check stack.RequireAttestation performs at deploy time
+      # (internal/stack/attestation.go).
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v3.1.3"
 
-      # This is the actual promotion moment for releasekritisch #1/#2: the
-      # publish job never touched the final version tag at all, only a
-      # commit-scoped candidate one - reaching this step means both
-      # smoke-test and upgrade-test already passed against that exact
-      # candidate (needs: above), so it's now safe to make the final tag
-      # point at it. imagetools create republishes the existing manifest
-      # under a new tag without rebuilding anything - the final tag ends up
-      # byte-for-byte the same multi-arch manifest (and thus the same
-      # digest, same attestation, same org.opencontainers.image.revision
-      # label) that was actually tested, not a fresh build that could
-      # differ from what smoke-test/upgrade-test just verified.
-      #
-      # Verified immediately after, per image: re-inspect the final tag's
-      # own digest and assert it's byte-for-byte the one just promoted -
-      # defense in depth against a promotion that silently succeeded
-      # against the wrong source (e.g. a stale digest file), so this job
-      # fails loudly instead of shipping a final tag nobody actually tested.
-      - name: Promote candidate images to the final release tag
+      # Verification only - no promotion here. Found in review, round 6:
+      # this used to promote in the same loop, before the pin commit and
+      # its own main-race check further below - meaning candidate images
+      # could already be public under the final VERSION tag by the time
+      # that check ran, so an abort there still burned the version number.
+      # Splitting verification (safe to run early, nothing irreversible)
+      # from promotion (moved after the pin commit, see below) closes that.
+      - name: Verify candidate images and attestations
         env:
-          VERSION: ${{ needs.version.outputs.value }}
           OWNER: ${{ github.repository_owner }}
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
         run: |
           set -euo pipefail
-          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage; do
+          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage rootguard-attestation-proxy; do
             digest="$(cat "/tmp/digests/${image}.digest")"
             test -n "$digest"
             source_ref="ghcr.io/${OWNER}/${image}@${digest}"
-            final_ref="ghcr.io/${OWNER}/${image}:${VERSION}"
-            docker buildx imagetools create -t "$final_ref" "$source_ref"
-            promoted_digest="$(docker buildx imagetools inspect "$final_ref" --format '{{.Manifest.Digest}}')"
-            if [ "$promoted_digest" != "$digest" ]; then
-              echo "::error::${image}: promoted tag ${final_ref} resolved to ${promoted_digest}, expected ${digest}"
+
+            # The digest above came from an artifact written by the publish
+            # job's matrix leg for this image, trusted as-is - including on
+            # its "candidate already existed" retry path, which never
+            # re-runs the build or the attest step at all (see publish's
+            # own "Record published digest" comment) and just looks the
+            # digest up from the registry. Re-verify both properties this
+            # job actually depends on, here, every time, regardless of
+            # which path produced the digest:
+            #
+            # 1. The candidate was genuinely built from the exact commit
+            #    this release run tested/security-scanned - not just a tag
+            #    collision or a stale artifact. Compare the full
+            #    org.opencontainers.image.revision label (candidate_tag
+            #    only encodes a 12-char commit prefix), across exactly the
+            #    two platforms the publish job's build matrix always
+            #    produces (see its own `platforms:` line) - not just a
+            #    platform *count*, confirmed live to let e.g.
+            #    linux/amd64+linux/s390x through unnoticed.
+            platform_check="$(docker buildx imagetools inspect "$source_ref" --format '{{json .Image}}' \
+              | jq -r --arg want "$SOURCE_REF" '
+                  (keys | sort) as $platforms
+                  | (["linux/amd64","linux/arm64"] == $platforms) as $platforms_ok
+                  | (all(.[]; .config.Labels["org.opencontainers.image.revision"] == $want)) as $all_match
+                  | if $platforms_ok and $all_match then "ok" else "platforms=\($platforms), expected exactly [\"linux/amd64\",\"linux/arm64\"]; all matching \($want): \($all_match)" end
+                ')"
+            if [ "$platform_check" != "ok" ]; then
+              echo "::error::${image}: candidate ${source_ref} failed the per-platform revision check (${platform_check})." >&2
               exit 1
             fi
+            # 2. A valid release attestation actually exists for it - the
+            #    same policy stack.RequireAttestation enforces at deploy
+            #    time (internal/stack/attestation.go), checked here too so
+            #    a candidate whose attest step silently failed (or never
+            #    ran, on the retry path above) can never be promoted.
+            cosign verify-attestation --type https://slsa.dev/provenance/v1 \
+              --certificate-identity-regexp '^https://github\.com/foxly-it/rootguard/\.github/workflows/release-alpha\.yml@refs/(tags/v[^/]+|heads/main)$' \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              --certificate-github-workflow-repository foxly-it/rootguard \
+              "$source_ref" >/dev/null
           done
 
       - name: Update digest pins
@@ -372,7 +606,7 @@ jobs:
         run: |
           set -euo pipefail
           for file in compose.release.yaml .env.release.example; do
-            for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage; do
+            for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage rootguard-attestation-proxy; do
               digest="$(cat "/tmp/digests/${image}.digest")"
               test -n "$digest"
               # [^@\"}] - not just [^@\"] - because ROOTGUARD_UPDATER_UPDATE_IMAGE
@@ -411,8 +645,18 @@ jobs:
           docker compose -f compose.release.yaml config --quiet
           model="$(docker compose -f compose.release.yaml config --format json)"
           test "$(jq -r 'any(.services[]; has("build"))' <<<"$model")" = false
+          # .services[].image already covers attestation-proxy too - it
+          # has an `image:` key like every other service, no separate
+          # line needed.
           test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
           test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false
+          # Found in review: nothing ever automated-checked that Core
+          # and the Updater actually get ROOTGUARD_ATTESTATION_PROXY_URL
+          # - a silently-dropped env var here would reproduce the exact
+          # isolated-network attestation failure this component exists
+          # to fix, undetected until a real deploy hit it.
+          test "$(jq -r '.services.core.environment.ROOTGUARD_ATTESTATION_PROXY_URL, .services.updater.environment.ROOTGUARD_ATTESTATION_PROXY_URL | . == "http://attestation-proxy:8888"' <<<"$model" | sort -u)" = "true"
+          test "$(jq -r '.services["attestation-proxy"].networks | has("control") and has("egress")' <<<"$model")" = true
 
       # site/*.html's version references went stale twice in the two days
       # after v0.1.0-beta.2 and v0.1.0-beta.3 each shipped - nothing here
@@ -420,7 +664,17 @@ jobs:
       # bump-site-versions.sh runs the exact same logic
       # check-site-facts.sh checks for, so this and that check can never
       # drift apart. Idempotent: a no-op when the site already matches.
+      # ROOTGUARD_RELEASE_VERSION overrides both scripts' git-tag-based
+      # "current version" detection - found live, cutting 1.0.0-rc.2: this
+      # run's own release tag doesn't exist yet at this point in the job
+      # (created much later, once every other gate has passed), so without
+      # the override both scripts fell back to the *previous* release's
+      # tag and silently left every general version reference one release
+      # behind. See rootguard_current_version's own comment in
+      # version-pattern.sh for the full rationale.
       - name: Refresh site/*.html version references
+        env:
+          ROOTGUARD_RELEASE_VERSION: ${{ needs.version.outputs.value }}
         run: ./scripts/bump-site-versions.sh
 
       # The pin commit below carries [skip ci] (a mechanical, low-risk
@@ -429,73 +683,251 @@ jobs:
       # verify right here instead, so a gap in bump-site-versions.sh fails
       # this workflow loudly instead of shipping an unverified site.
       - name: Verify site facts are current
+        env:
+          ROOTGUARD_RELEASE_VERSION: ${{ needs.version.outputs.value }}
         run: ./scripts/check-site-facts.sh
 
+      # Found in review, round 7: this step used to re-decide "is this a
+      # safe retry" itself, a second and looser way than the early guard
+      # above - comparing file *content* at origin/main's tip against
+      # what this run had just regenerated, true for this release's own
+      # earlier pin commit but equally true for any later, unrelated
+      # commit that simply never touched these paths.
+      #
+      # Found in review, round 8: rather than trust "Resolve main
+      # state"'s earlier answer, this step now resolves fresh - the
+      # window between that step and this one (buildx/cosign setup,
+      # attestation checks, digest-pin edits, compose validation, site
+      # refresh) is exactly the kind of gap a revert could land in.
+      # resolve_release_pin_commit itself is what actually closes the
+      # revert case: identity (message/parentage/scope) alone doesn't
+      # prove main's current tip still reflects a commit - a `git
+      # revert` of it leaves all of that untouched while silently
+      # invalidating it. Confirmed live: reverting a real pin commit
+      # used to still let it resolve and get promoted/tagged/released.
       - name: Commit updated pins
         id: commit-pins
+        env:
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
+          VERSION: ${{ needs.version.outputs.value }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          source scripts/lib/resolve-release-pin-commit.sh
           if git diff --quiet -- compose.release.yaml .env.release.example site/; then
             echo "compose.release.yaml, .env.release.example, and site/*.html already reflect the published release, nothing to commit"
             exit 0
           fi
-          git add compose.release.yaml .env.release.example site/
-          git commit -m "ci: pin compose.release.yaml, .env.release.example, and site/*.html to ${{ needs.version.outputs.value }} [skip ci]"
+
           git fetch origin main
-          git rebase origin/main
+          pin_commit="$(resolve_release_pin_commit "$SOURCE_REF" "$VERSION" origin/main)"
+          if [ -n "$pin_commit" ]; then
+            # resolve_release_pin_commit only verifies structure (message,
+            # parentage, scope, and that main's tip still matches it) - it
+            # has no way to know what the *correct* pin content actually
+            # is, since that depends on this run's own digests, which
+            # aren't git-visible. This is the one place that can check it:
+            # compare against what "Update digest pins" just regenerated.
+            # Defense in depth against a forged or hand-crafted commit
+            # that happens to pass every structural check above.
+            if ! git diff --quiet "$pin_commit" -- compose.release.yaml .env.release.example site/; then
+              echo "::error::${pin_commit} is verified as this exact release's own pin commit by message, parentage, and scope, but its content doesn't match what this run just regenerated for compose.release.yaml/.env.release.example/site/ - refusing to reuse it. Abort this release and start a fresh one instead." >&2
+              exit 1
+            fi
+            echo "${pin_commit} is verified as this exact release's own earlier pin commit, still current on origin/main, with matching content - nothing to commit"
+            echo "pin_commit=${pin_commit}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # An empty result means origin/main is still exactly SOURCE_REF
+          # (resolve_release_pin_commit's own first check) - re-derive
+          # that here too rather than assume it, since this run's git
+          # state may have moved on between the fetch above and now.
+          #
+          # Found in review: this used to commit locally and then
+          # `git fetch origin main && git rebase origin/main` before
+          # pushing - rebasing means whatever had landed on main in the
+          # meantime became an ancestor of this release's own pin commit,
+          # so a later re-verification could only ever check "is
+          # SOURCE_REF still an ancestor", which it always trivially is
+          # after a rebase onto it. The commits that landed in between were
+          # never built, tested, or security-scanned by this run, yet
+          # ended up folded into the tag it produces - confirmed live: a
+          # real RC's tag and its own Core image's OCI revision label
+          # pointed at two different commits because of exactly this.
+          #
+          # Refuse instead of rebasing: this release was tested against
+          # SOURCE_REF specifically, so the pin commit must land as a
+          # direct, single-parent child of exactly that commit or not at
+          # all. If main has moved on, a plain `git push` below (no
+          # rebase, no --force) is rejected as non-fast-forward by the
+          # remote on its own - checked explicitly first anyway, so the
+          # failure is a clear, actionable message instead of a raw git
+          # rejection.
+          current_main="$(git rev-parse origin/main)"
+          if [ "$current_main" != "$SOURCE_REF" ]; then
+            echo "::error::origin/main has moved to ${current_main} since this release was tested against ${SOURCE_REF} - refusing to commit the pin update onto commits this run never built, tested, or security-scanned. Abort this release and start a fresh one from the current main instead." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add compose.release.yaml .env.release.example site/
+          git commit -m "$(release_pin_commit_message "$VERSION")"
           git push origin HEAD:main
-          # Recorded so the next step can point the release tag at exactly
-          # this commit, instead of re-fetching origin/main a second time
-          # later and risking a *different* race: something else landing
-          # on main in the window between this push and that later fetch
-          # would otherwise move the tag past a commit this release never
-          # actually built or tested.
+          # Recorded so the next steps can act on exactly this commit,
+          # instead of re-fetching origin/main again later and risking a
+          # *different* race: something else landing on main in the window
+          # after this push would otherwise move the tag past a commit
+          # this release never actually built or tested.
           echo "pin_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # The release tag is created before this job ever runs (by
-      # release-version-bump.yml, or by hand for a workflow_dispatch run),
-      # so without this step it permanently points at a commit whose
-      # compose.release.yaml still pins the *previous* release's images -
-      # confirmed live: v0.1.0-alpha.7's and v0.1.0-alpha.8's own tags both
-      # resolve to a compose.release.yaml pinned one release behind their own
-      # name. Anyone following the documented quick start
-      # ("curl .../v0.1.0-alpha.N/compose.release.yaml") got the wrong images.
-      # Moving the tag here, once, right after the pin commit that
-      # completes *this* release, keeps it self-consistent going forward.
+      # Found in review, round 6: this used to run *before* the pin commit
+      # above, meaning the final VERSION image tags could already be public
+      # by the time that commit's own main-race check ran - an abort there
+      # still burned the version number even though nothing else about the
+      # release had shipped. Promotion is the one genuinely irreversible,
+      # publicly-visible action in this job (a published version tag can
+      # never be moved, see below); everything that can still be safely
+      # aborted - candidate/attestation verification, digest-pin file
+      # edits, the pin commit itself - now happens first. By the time this
+      # step runs, the pin commit already exists on main (or this run
+      # already found an identical one from an earlier attempt, per
+      # "Commit updated pins" above), so nothing here still depends on
+      # main's tip - a promotion failure here is a plain retry, not a race.
+      - name: Promote candidate images to the final release tag
+        env:
+          VERSION: ${{ needs.version.outputs.value }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          for image in rootguard-core rootguard-webapp rootguard-updater rootguard-unbound rootguard-blockpage rootguard-attestation-proxy; do
+            digest="$(cat "/tmp/digests/${image}.digest")"
+            test -n "$digest"
+            source_ref="ghcr.io/${OWNER}/${image}@${digest}"
+            final_ref="ghcr.io/${OWNER}/${image}:${VERSION}"
+
+            # Final tag: create if missing, no-op if it already points at
+            # this exact digest (an idempotent retry of this very step),
+            # hard-abort if it points at a *different* one - a published
+            # version tag must never silently start resolving to different
+            # content. If ${VERSION} was already published pointing
+            # elsewhere, the fix is a new version number, not overwriting
+            # this one.
+            existing_digest="$(docker buildx imagetools inspect "$final_ref" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+            if [ -n "$existing_digest" ]; then
+              if [ "$existing_digest" = "$digest" ]; then
+                echo "${final_ref} already points at ${digest}, nothing to promote"
+                continue
+              fi
+              echo "::error::${image}: ${final_ref} already exists and points at ${existing_digest}, not the candidate's ${digest} - a published version tag must never be moved. Cut a new version instead of reusing ${VERSION}." >&2
+              exit 1
+            fi
+
+            # imagetools create republishes the already-verified candidate
+            # manifest under the final tag without rebuilding anything - so
+            # the final tag ends up byte-for-byte the same multi-arch
+            # manifest (same digest, same attestation, same
+            # org.opencontainers.image.revision label) that "Verify
+            # candidate images and attestations" above actually checked.
+            docker buildx imagetools create -t "$final_ref" "$source_ref"
+            promoted_digest="$(docker buildx imagetools inspect "$final_ref" --format '{{.Manifest.Digest}}')"
+            if [ "$promoted_digest" != "$digest" ]; then
+              echo "::error::${image}: promoted tag ${final_ref} resolved to ${promoted_digest}, expected ${digest}"
+              exit 1
+            fi
+          done
+
+      # This step is the only place the release tag is ever created -
+      # found in review: it used to be pre-created by release-version-bump.yml
+      # (or by hand for a manual workflow_dispatch) right at the start,
+      # before any test/security/smoke-test/upgrade-test gate had run,
+      # then *moved* here once the pin commit landed. Two real problems
+      # with that: a tag existing (even briefly, pointing at an untested
+      # commit) before this release had actually passed anything, and
+      # moving a tag at all being indistinguishable, from the outside,
+      # between "the legitimate first pin" and "something silently
+      # redirected a published reference" - confirmed live:
+      # v0.1.0-alpha.7's and v0.1.0-alpha.8's own tags both resolved to a
+      # compose.release.yaml pinned one release behind their own name, and
+      # a real RC's tag ended up pointing past commits this run never
+      # tested at all (see "Commit updated pins" above). Now the tag is
+      # created here, once, after every gate has passed, directly on the
+      # pin commit, and is never force-moved again afterward - see below.
       # Idempotent: a no-op if the tag already points at the pinned commit.
       - name: Point the release tag at the pin-update commit
         id: point-tag
         env:
           # Set only when "Commit updated pins" actually pushed a new
           # commit - the exact one to point the tag at, no re-fetch
-          # needed. Empty on its idempotent "nothing to commit" path
-          # (pins already matched), where re-fetching origin/main's
-          # current tip below is the correct, pre-existing fallback:
-          # nothing this release itself needs to add is missing from it.
+          # needed. Empty on its idempotent "nothing to commit" path (pins
+          # already matched in the checkout at needs.version.outputs.source_ref
+          # itself). Found in review: this used to fall back to
+          # origin/main's *current* tip in that case, on the reasoning
+          # that "nothing this release itself needs to add is missing from
+          # it" - true only if main hasn't moved since this release's
+          # source_ref was fixed. A retried/re-run workflow (this job can
+          # legitimately re-run after e.g. a later job failed) checks that
+          # reasoning again with whatever *now* happens to be on main,
+          # which may by then include unrelated commits this specific
+          # release run never built, tested, or security-scanned -
+          # confirmed live: a real RC's tag and its own Core image's
+          # OCI revision label pointed at two different commits because of
+          # exactly this. SOURCE_REF is the one thing every job in this
+          # run actually agrees on (see the "version" job's own comment on
+          # why it exists) - use it instead, and verify it's still part of
+          # main's history rather than trusting it blindly.
           PIN_COMMIT: ${{ steps.commit-pins.outputs.pin_commit }}
+          SOURCE_REF: ${{ needs.version.outputs.source_ref }}
         run: |
           set -euo pipefail
           tag="v${{ needs.version.outputs.value }}"
+          git fetch origin main
           if [ -n "$PIN_COMMIT" ]; then
             target="$PIN_COMMIT"
           else
-            git fetch origin main
-            target="$(git rev-parse origin/main)"
+            target="$(git rev-parse "${SOURCE_REF}")"
+            if ! git merge-base --is-ancestor "${target}" origin/main; then
+              echo "::error::Release ${{ needs.version.outputs.value }} was built and tested from ${target}, which is no longer part of origin/main - main has moved on since this release run started. Refusing to tag a commit this release never actually built/tested/security-scanned. Abort this release and start a fresh one instead." >&2
+              exit 1
+            fi
           fi
           # Recorded as a step output either way (before the idempotent
           # early-exit below) - the release notes' "Build provenance"
           # section needs it regardless of whether this run actually moved
           # the tag or found it already correct.
           echo "pin_commit=${target}" >> "$GITHUB_OUTPUT"
-          if git rev-parse "refs/tags/${tag}" >/dev/null 2>&1 && \
-             [ "$(git rev-parse "refs/tags/${tag}")" = "${target}" ]; then
-            echo "Tag ${tag} already points at the correctly pinned commit"
-            exit 0
+          # "refs/tags/${tag}" alone resolves an *annotated* tag (which
+          # `git tag -a` below always creates) to the tag object's own
+          # hash, not the commit it points at - found in review: that made
+          # this comparison fail on every single run, so this step force-
+          # moved the tag every time regardless of whether it actually
+          # needed to, and any accidental extra run (a retry, a re-dispatch
+          # for the same version) could silently force-push it onto a
+          # different commit. "^{}" dereferences through the tag object to
+          # the commit it points at, same as `git rev-parse` does for every
+          # other object type already.
+          if git rev-parse "refs/tags/${tag}^{}" >/dev/null 2>&1; then
+            existing="$(git rev-parse "refs/tags/${tag}^{}")"
+            if [ "$existing" = "${target}" ]; then
+              echo "Tag ${tag} already points at the correctly pinned commit"
+              exit 0
+            fi
+            # Found in review: this used to force-move the tag onto
+            # ${target} unconditionally whenever it didn't already match -
+            # legitimate the very first time a release's tag gets pinned
+            # (release-version-bump.yml no longer pre-creates it, so this
+            # step is now the only place the tag is ever created at all),
+            # but indistinguishable from a genuinely published tag being
+            # silently redirected onto different content on any later,
+            # unexpected mismatch. A published tag must never move once
+            # created - never --force here, under any circumstance; if
+            # ${tag} is wrong, that needs a real fix (a new version, or a
+            # deliberate by-hand correction), not this workflow silently
+            # papering over it.
+            echo "::error::Tag ${tag} already exists and points at ${existing}, not the expected ${target} - refusing to move a published tag. If this is a genuine correction, fix it by hand and re-run; this workflow will never force-move a tag." >&2
+            exit 1
           fi
-          git tag -f -a "${tag}" -m "${{ needs.version.outputs.value }}" "${target}"
-          git push --force origin "refs/tags/${tag}"
+          git tag -a "${tag}" -m "${{ needs.version.outputs.value }}" "${target}"
+          git push origin "refs/tags/${tag}"
 
       # The GitHub Release is created here, not by release-version-bump.yml
       # (which used to create it immediately after tagging, before this
@@ -513,8 +945,9 @@ jobs:
         id: previous-tag
         run: |
           set -euo pipefail
+          source scripts/lib/semver-validate.sh
           previous="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' \
+            | grep -E "^v${SEMVER_PATTERN#^}" \
             | grep -v "^v${{ needs.version.outputs.value }}\$" \
             | head -1 || true)"
           echo "value=${previous}" >> "$GITHUB_OUTPUT"
@@ -610,7 +1043,7 @@ jobs:
         run: gh workflow run pages.yml --repo "${{ github.repository }}" --ref main
 
   smoke-test:
-    needs: [version, publish]
+    needs: [version, publish, image-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -626,6 +1059,18 @@ jobs:
       ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.candidate_tag }}
       ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.candidate_tag }}
       ROOTGUARD_UNBOUND_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-unbound:${{ needs.version.outputs.candidate_tag }}
+      # Found in review: missing entirely, so this job's deploy below ran
+      # with BlockpageEnabled left off (see the deploy config right below)
+      # and the blockpage image - built and published by the very same
+      # publish job as everything else here - was never actually deployed,
+      # attested, or smoke-tested by any release. A broken blockpage image
+      # could ship undetected.
+      ROOTGUARD_BLOCKPAGE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-blockpage:${{ needs.version.outputs.candidate_tag }}
+      # Also new this round: without this, the deploy below would fall
+      # back to compose.release.yaml's own placeholder default pin (not
+      # a real, pullable image yet at this point) instead of the
+      # candidate publish just built.
+      ROOTGUARD_ATTESTATION_PROXY_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-attestation-proxy:${{ needs.version.outputs.candidate_tag }}
       ROOTGUARD_API_TOKEN: alpha-smoke-test-token-not-a-real-secret-32
       ROOTGUARD_ADMIN_USER: admin
       ROOTGUARD_ADMIN_PASSWORD: alpha-smoke-test-password
@@ -641,6 +1086,16 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Found in review: the dig checks below used to query real internet
+      # domains (example.com, dnssec-failed.org) directly - a transient
+      # DNS/network hiccup on the runner's own connection then fails a
+      # release for reasons that have nothing to do with the code under
+      # test. Confirmed live: main's own independent, scheduled CI failed
+      # this way. setup.sh signs a small throwaway zone fresh every run
+      # and serves it locally; inject.sh (below, after Unbound is deployed
+      # and running) is what wires it up.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
       - name: Start published control plane
         run: docker compose -f compose.release.yaml up -d
       - name: Install and verify the DNS stack
@@ -655,7 +1110,10 @@ jobs:
             sleep 2
           done
           test "$code" = 200
-          config='{"dns_bind_address":"127.0.0.1","dns_port":1053}'
+          # blockpage_enabled: true - see the env block's own comment on
+          # ROOTGUARD_BLOCKPAGE_IMAGE above for why this must actually be
+          # turned on here, not left at its default off.
+          config='{"dns_bind_address":"127.0.0.1","dns_port":1053,"blockpage_enabled":true}'
           test "$(curl --fail --silent --cookie /tmp/rootguard-alpha-cookies.txt \
             --header 'Content-Type: application/json' --data "$config" \
             http://127.0.0.1:18080/api/installation/preflight | jq -r .ready)" = true
@@ -672,10 +1130,38 @@ jobs:
             sleep 2
           done
           test "$state" = installed
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
+          ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 good.rgtest-ci.internal A)"
           test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 \
-            dnssec-failed.org A | sed -n \
+            bad.rgtest-ci.internal A | sed -n \
             's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
+          # Blockpage binds on config.DNSBindAddress:80 once
+          # blockpage_enabled deploys it (see installer.Manager's
+          # blockpagePort) - confirms the published blockpage candidate
+          # image actually starts and serves its real page, not just that
+          # it built.
+          test "$(curl --fail --silent http://127.0.0.1:80/ | grep -c 'RootGuard')" -gt 0
+          # Found in review: the check above only ever proved the static
+          # HTML page loads - /api/reason (the actual live-data endpoint,
+          # proxying through Core with the shared BLOCKPAGE_SERVICE_TOKEN
+          # - see blockpage.conf.template's own comment) was published and
+          # deployed but never exercised by this smoke test. A broken
+          # token hand-off, a broken proxy_pass, or a broken Core-side
+          # /api/blockpage/reason route could all have shipped undetected.
+          # nginx's @reason_unavailable fallback (any upstream failure)
+          # returns {"available":false} with no "reason" key - asserting a
+          # real, non-empty "reason" for a plain, unblocked domain proves
+          # the whole chain (nginx auth -> Core auth -> AdGuard query)
+          # actually works end to end, not just that each piece deployed.
+          reason_response="$(curl --fail --silent -H 'Host: example.com' http://127.0.0.1:80/api/reason)"
+          test -n "$(jq -r '.reason // empty' <<<"$reason_response")"
       - name: Show logs after failure
         if: failure()
         run: docker compose -f compose.release.yaml logs --no-color
@@ -692,7 +1178,7 @@ jobs:
   # release directly before this one - RootGuard is pre-1.0 alpha and
   # doesn't yet promise compatibility further back than that.
   upgrade-test:
-    needs: [version, publish]
+    needs: [version, publish, image-scan]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -703,10 +1189,17 @@ jobs:
           ref: ${{ needs.version.outputs.source_ref }}
           fetch-depth: 0
 
+      # See smoke-test's own comment on this exact step - the dig checks
+      # below have the same real-internet-dependency problem, confirmed
+      # live the same way.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Determine the previous published release
         id: previous
         run: |
           set -euo pipefail
+          source scripts/lib/semver-validate.sh
           # Sort by actual tag creation date across every release tag
           # (any scheme, not just today's v0.1.0-(alpha|beta).N) rather
           # than a trailing-number sort - the latter always resolved to
@@ -714,9 +1207,19 @@ jobs:
           # silently testing an upgrade from a much older release than the
           # one directly before this one, and wouldn't survive a future
           # base-version change at all.
+          #
+          # Found in review: this filter used to hand-write its own copy
+          # of the SemVer-tag regex, missing the hyphen SemVer allows
+          # inside a prerelease identifier - a real tag like
+          # v1.2.3-rc-hotfix.1 was invisible to it, silently testing an
+          # upgrade from (or skipping the upgrade test entirely in favor
+          # of) an older release than the one actually directly before
+          # this one. Reusing $SEMVER_PATTERN (sourced above, the same
+          # grammar require_semver enforces on every version this
+          # pipeline ever creates) instead of a second hand-written copy.
           previous_version="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate \
             --format='%(refname:short)' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$' \
+            | grep -E "^v${SEMVER_PATTERN#^}" \
             | grep -v "^v${{ needs.version.outputs.value }}\$" \
             | head -1 | sed 's/^v//' || true)"
           if [ -z "${previous_version}" ]; then
@@ -837,7 +1340,15 @@ jobs:
             sleep 2
           done
           test "$state" = installed
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 example.com A)"
+          ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
+              break
+            fi
+            sleep 1
+          done
+          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 good.rgtest-ci.internal A)"
 
       - name: Upgrade in place through the real control-plane updater
         if: steps.previous.outputs.skip != 'true'
@@ -958,10 +1469,36 @@ jobs:
         if: steps.previous.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 example.com A)"
+          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 good.rgtest-ci.internal A)"
           test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1055 \
-            dnssec-failed.org A | sed -n \
+            bad.rgtest-ci.internal A | sed -n \
             's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')" = SERVFAIL
+
+      # Found in review: self-update never re-fetches compose.release.yaml
+      # (docs/release-process.md, "Self-update can never deliver a
+      # compose-topology change") - the core/updater containers this job
+      # just upgraded to already run the new, attestation-gated code, but
+      # on the *previous* release's own topology (no
+      # rootguard-attestation-proxy service, no `egress` network, no
+      # ROOTGUARD_ATTESTATION_PROXY_URL). This is exactly that scenario,
+      # for real, not simulated - logged explicitly so it stays visible
+      # on every release cut rather than silently relying on the unit
+      # tests covering RequireAttestation's/verifyAttestation's own
+      # proxy pre-check (rootguard-core/internal/stack/attestation_test.go,
+      # rootguard-updater/attestation_test.go) to be the only place this
+      # is ever exercised. Informational, not a failing assertion - the
+      # gap itself is known and accepted (see docs/release-process.md),
+      # not something this job is meant to catch as a regression.
+      - name: Log the known post-upgrade topology gap
+        if: steps.previous.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          proxy_url="$(docker exec rootguard-core printenv ROOTGUARD_ATTESTATION_PROXY_URL 2>/dev/null || true)"
+          if [ -z "$proxy_url" ]; then
+            echo "::notice::Known, accepted gap (docs/release-process.md): the just-upgraded rootguard-core has no ROOTGUARD_ATTESTATION_PROXY_URL, because self-update never delivers a compose-topology change - any further attestation-gated update from here would fail with a clear, specific error (see RequireAttestation's own proxy pre-check) rather than a silent success or an opaque hang."
+          else
+            echo "::notice::rootguard-core now reports ROOTGUARD_ATTESTATION_PROXY_URL=${proxy_url} after the upgrade - the topology gap this step exists to surface may have closed; consider whether docs/release-process.md's own note is still accurate."
+          fi
 
       - name: Show logs after failure
         if: failure() && steps.previous.outputs.skip != 'true'

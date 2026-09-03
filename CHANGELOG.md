@@ -3,6 +3,145 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.0-rc.2] - 2026-09-01
+
+### Added
+
+- Local DNSSEC test zone for CI/release gates instead of real internet ([#442](https://github.com/foxly-it/rootguard/pull/442))
+
+### CI
+
+- Pin compose.release.yaml, .env.release.example, and site/*.html to 1.0.0-rc.1 [skip ci]
+- Always bypass Core's live resolution in upgrade-test, not per-version
+
+### Changed
+
+- Consolidate atomic-file-write duplication into a shared package ([#385](https://github.com/foxly-it/rootguard/pull/385))
+- Split rootguard-updater/main.go (851 lines) into files by concern ([#386](https://github.com/foxly-it/rootguard/pull/386))
+- Share SemVer validation between the two release workflows ([#387](https://github.com/foxly-it/rootguard/pull/387))
+- Close the atomic-write duplication gap, revisiting round 1's shared-module call ([#404](https://github.com/foxly-it/rootguard/pull/404))
+
+### Documentation
+
+- Record the v1.0.0-rc.1 cut and the upgrade-test bootstrap fix
+- Warn beta.14-or-earlier installations they need a manual RC update
+- Cross-reference the digest-resolution duplication between the two updaters ([#388](https://github.com/foxly-it/rootguard/pull/388))
+- Add docs/release-process.md, an architecture-level map of release-alpha.yml ([#406](https://github.com/foxly-it/rootguard/pull/406))
+- Trim rootguard-webapp/Dockerfile from 123 to 60 lines ([#405](https://github.com/foxly-it/rootguard/pull/405))
+- Split docs/project-state.md into current-state, release-history, and security-audit-log ([#407](https://github.com/foxly-it/rootguard/pull/407))
+- README/SECURITY/release-history/site still described an old alpha/beta series ([#416](https://github.com/foxly-it/rootguard/pull/416))
+- Stale component lifecycle wording + delete dead per-component SECURITY.md files ([#423](https://github.com/foxly-it/rootguard/pull/423))
+- Fix eight broken SECURITY.md links left by round 4's deletion; add repo-wide markdown link check ([#427](https://github.com/foxly-it/rootguard/pull/427))
+- Record round 6's two repo-settings findings (one fixed, one open) ([#435](https://github.com/foxly-it/rootguard/pull/435))
+- Document the correct shellcheck invocation for semver-compare.test.sh ([#437](https://github.com/foxly-it/rootguard/pull/437))
+- Audit log was missing the ci.yml AdGuard-check real-domain fix ([#444](https://github.com/foxly-it/rootguard/pull/444))
+- Document docker_engine_cp_cve_unknown preflight advisory (round 15 small item) ([#472](https://github.com/foxly-it/rootguard/pull/472))
+
+### Fixed
+
+- Enforce release attestation before activation, not just display
+- Unblock ci-updater.yml's real E2E integration test after the attestation gate
+- Gate the release pipeline on smoke-test/upgrade-test, not the other way around
+- Pin and verify the dockerinstall.sh download in install.sh
+- Pin and digest-verify the blockpage image like every other component
+- Block domain-insecure and harden-dnssec-stripped: no in expert config
+- Logout clears the session cookie even when persistence fails ([#370](https://github.com/foxly-it/rootguard/pull/370))
+- Reject corrupt credentials.json instead of silently reverting to the env password ([#373](https://github.com/foxly-it/rootguard/pull/373))
+- Destructive rate limit is per-session and closes the TOCTOU race ([#374](https://github.com/foxly-it/rootguard/pull/374))
+- Preflight now checks the blockpage's port 80, not just DNS ([#375](https://github.com/foxly-it/rootguard/pull/375))
+- WebApp now sends browser security headers (CSP, nosniff, frame-options, referrer-policy, permissions-policy) ([#376](https://github.com/foxly-it/rootguard/pull/376))
+- Router-import client refuses redirects and restricts targets to private ranges ([#377](https://github.com/foxly-it/rootguard/pull/377))
+- Pin GitHub Actions to commit SHAs, scope elevated permissions, checksum tool installs ([#378](https://github.com/foxly-it/rootguard/pull/378))
+- Backup-restore's entry-limit message no longer overclaims what was found ([#379](https://github.com/foxly-it/rootguard/pull/379))
+- AdGuard UI proxy's Set-Cookie rewrite parses cookies instead of string-matching ([#380](https://github.com/foxly-it/rootguard/pull/380))
+- Blockpage builds the block-reason lead via DOM APIs instead of innerHTML ([#381](https://github.com/foxly-it/rootguard/pull/381))
+- Install.sh quotes .env values and rejects newlines in the admin username/password ([#382](https://github.com/foxly-it/rootguard/pull/382))
+- Persistence errors are no longer silently swallowed ([#383](https://github.com/foxly-it/rootguard/pull/383))
+- Release notes record which commit published images were actually built from ([#384](https://github.com/foxly-it/rootguard/pull/384))
+- Guided setup's first DNS stack deploy is now attestation-gated ([#389](https://github.com/foxly-it/rootguard/pull/389))
+- Digest-pin builder-stage base images (golang, docker:29-cli, node) ([#390](https://github.com/foxly-it/rootguard/pull/390))
+- Release pipeline no longer builds/tags/attributes provenance from a racy ref ([#391](https://github.com/foxly-it/rootguard/pull/391))
+- Install.sh single-quotes .env values, closing a Compose $-expansion gap ([#393](https://github.com/foxly-it/rootguard/pull/393))
+- SSRF check in FritzBox client now runs before connect(), not after ([#394](https://github.com/foxly-it/rootguard/pull/394))
+- Publish to a candidate tag first, promote to the final release tag only after E2E tests pass ([#395](https://github.com/foxly-it/rootguard/pull/395))
+- Blockpage no longer holds any AdGuard credential ([#396](https://github.com/foxly-it/rootguard/pull/396))
+- Atomicfile.WriteFile uses os.CreateTemp instead of a fixed temp name ([#397](https://github.com/foxly-it/rootguard/pull/397))
+- DNSSEC-bypass check parses the directive value, not a raw-line suffix ([#392](https://github.com/foxly-it/rootguard/pull/392))
+- Backup archive now accepts exactly MaxFiles entries, not just fewer ([#399](https://github.com/foxly-it/rootguard/pull/399))
+- AdGuard UI cookie rewrite no longer drops unknown Set-Cookie attributes ([#400](https://github.com/foxly-it/rootguard/pull/400))
+- Blockpage theme.js no longer uses innerHTML ([#402](https://github.com/foxly-it/rootguard/pull/402))
+- WebApp audit log and session inventory no longer trust X-Forwarded-For ([#401](https://github.com/foxly-it/rootguard/pull/401))
+- Persist errors now surface in Status(), not just logs ([#398](https://github.com/foxly-it/rootguard/pull/398))
+- Local dev compose files never forwarded ROOTGUARD_SKIP_ATTESTATION ([#408](https://github.com/foxly-it/rootguard/pull/408))
+- Harden-dnssec-stripped bypass via quoted "no"/'no' ([#410](https://github.com/foxly-it/rootguard/pull/410))
+- Installer never resolved unbound/blockpage image to a digest before attestation ([#411](https://github.com/foxly-it/rootguard/pull/411))
+- Release tag could move onto untested commits; promotion trusted candidates blindly ([#412](https://github.com/foxly-it/rootguard/pull/412))
+- Release-alpha.yml smoke test never deployed or verified the blockpage image ([#413](https://github.com/foxly-it/rootguard/pull/413))
+- Updater.Manager's status.json/images.json/updates.yaml were only atomic per file ([#415](https://github.com/foxly-it/rootguard/pull/415))
+- Blockpage /api/reason comment claimed $host isn't client-supplied ([#417](https://github.com/foxly-it/rootguard/pull/417))
+- Surface PersistError/PersistErrorAt in the web UI ([#414](https://github.com/foxly-it/rootguard/pull/414))
+- Invalid stored theme value permanently broke the blockpage toggle ([#418](https://github.com/foxly-it/rootguard/pull/418))
+- FritzBox dial guard rejected zone-qualified IPv6 link-local addresses ([#419](https://github.com/foxly-it/rootguard/pull/419))
+- Remove redundant unpinned apk installs from Core/Updater Dockerfiles ([#420](https://github.com/foxly-it/rootguard/pull/420))
+- Release pipeline could fold untested commits into a tag; installer could pin a stale digest ([#421](https://github.com/foxly-it/rootguard/pull/421))
+- Updater.Manager's status.json/images.json still had a residual multi-file window ([#422](https://github.com/foxly-it/rootguard/pull/422))
+- Small round-4 cleanup items (gofmt gate, shellcheck, Dockerfile comment, blockpage smoke test, theme.js drift check) ([#424](https://github.com/foxly-it/rootguard/pull/424))
+- Tag-push trigger incompatible with new model; images promoted before main-race check; no version-ordering guard ([#425](https://github.com/foxly-it/rootguard/pull/425))
+- SelectImage left the new image selected even when its own persist failed ([#426](https://github.com/foxly-it/rootguard/pull/426))
+- Ci-unbound.yml still used setup-go v5 without a go.sum cache path ([#428](https://github.com/foxly-it/rootguard/pull/428))
+- Semver-compare.sh overflowed bash's 64-bit integer range on large versions ([#431](https://github.com/foxly-it/rootguard/pull/431))
+- Image promotion still happened before the last main-race check ([#434](https://github.com/foxly-it/rootguard/pull/434))
+- SelectImage's persist-failure revert left a stray empty-string map entry ([#432](https://github.com/foxly-it/rootguard/pull/432))
+- Release pin-commit retry detection was unreachable, and could resolve to the wrong commit ([#436](https://github.com/foxly-it/rootguard/pull/436))
+- Applying Unbound settings could return success before Unbound was ready ([#439](https://github.com/foxly-it/rootguard/pull/439))
+- A reverted pin commit still resolved as a safe retry ([#438](https://github.com/foxly-it/rootguard/pull/438))
+- Release-alpha.yml's SemVer tag filter had drifted, and the resolver compared SOURCE_REF as a raw string ([#441](https://github.com/foxly-it/rootguard/pull/441))
+- Unbound settings rollback could fail silently under a canceled context ([#440](https://github.com/foxly-it/rootguard/pull/440))
+- Real-internet DNS still leaked into blocking CI in two spots round 9 missed ([#445](https://github.com/foxly-it/rootguard/pull/445))
+- Release-alpha.yml's own source_ref was the raw, possibly-abbreviated dispatch input ([#446](https://github.com/foxly-it/rootguard/pull/446))
+- Six job-name collisions across unrelated workflows ([#449](https://github.com/foxly-it/rootguard/pull/449))
+- Inject.sh has no Docker Desktop escape hatch; waitReady slept once too many times ([#448](https://github.com/foxly-it/rootguard/pull/448))
+- Required status checks contradicted their own pull_request.paths filter ([#450](https://github.com/foxly-it/rootguard/pull/450))
+- Setup.sh's split-DNS authority readiness check unreachable from Docker Desktop; container reproducibility gaps ([#452](https://github.com/foxly-it/rootguard/pull/452))
+- Scenario_integration_test.go ignored DNSSEC_TEST_ZONE_DIR; drop stale TestMain ([#451](https://github.com/foxly-it/rootguard/pull/451))
+- Frontend had no declared minimum Node version ([#453](https://github.com/foxly-it/rootguard/pull/453))
+- Close round 10 finding 9 (Backup/Restore, Unbound, rollback checks not required) ([#454](https://github.com/foxly-it/rootguard/pull/454))
+- Repin CI/test fixture base images off their EOL/unpinned tags (round 12 finding 1) ([#455](https://github.com/foxly-it/rootguard/pull/455))
+- Sync package-lock.json engines field, tighten .nvmrc to 22.22.0 (round 12 finding 2) ([#456](https://github.com/foxly-it/rootguard/pull/456))
+- Preserve dig error details in real-DNS-upstream diagnostics (round 12 finding 3) ([#457](https://github.com/foxly-it/rootguard/pull/457))
+- Warn on unpatched Docker Engine docker-cp CVEs in preflight (round 13 finding 3) ([#458](https://github.com/foxly-it/rootguard/pull/458))
+- Patch runtime image OpenSSL CVE, remove unused buildx plugin (round 13 finding 2) ([#459](https://github.com/foxly-it/rootguard/pull/459))
+- Bump pinned cosign to v3.1.3, found via new image scan (round 13 finding 1 follow-up) ([#461](https://github.com/foxly-it/rootguard/pull/461))
+- Add real container image vulnerability scanning to CI ([#460](https://github.com/foxly-it/rootguard/pull/460))
+- Patch Blockpage's nginx base image CVEs ([#462](https://github.com/foxly-it/rootguard/pull/462))
+- Patch Unbound's util-linux CVEs, scope+justify the rest ([#463](https://github.com/foxly-it/rootguard/pull/463))
+- Scope trivy ignores with purls, correct 3 wrong CVE attributions ([#464](https://github.com/foxly-it/rootguard/pull/464))
+- Add missing third docker-cp CVE (CVE-2026-41568) to preflight advisory ([#465](https://github.com/foxly-it/rootguard/pull/465))
+- Four small round-14 improvements (push.paths, unknown-version advisory, ternary, frontend test) ([#466](https://github.com/foxly-it/rootguard/pull/466))
+- Patch openssh CVEs, ignore new x/crypto and libevent CVEs (unblocks round 15 CI) ([#469](https://github.com/foxly-it/rootguard/pull/469))
+- Patch newly-surfaced libexpat CVE in docker:29-cli base ([#470](https://github.com/foxly-it/rootguard/pull/470))
+- Scan release-candidate images before promotion (round 15 finding 1) ([#467](https://github.com/foxly-it/rootguard/pull/467))
+- Make Blockpage's image scan a required check (round 15 finding 2) ([#468](https://github.com/foxly-it/rootguard/pull/468))
+- Bump Blockpage's libexpat pin to match what Alpine's mirror carries (unblocks CI) ([#473](https://github.com/foxly-it/rootguard/pull/473))
+- Pin exact versions and paths in trivy ignore purls (round 15 finding 3) ([#471](https://github.com/foxly-it/rootguard/pull/471))
+- Harden image scans and pin refresh automation ([#474](https://github.com/foxly-it/rootguard/pull/474))
+
+### Maintenance
+
+- Refresh drifted Debian package pins ([#430](https://github.com/foxly-it/rootguard/pull/430))
+- Replace the hand-rolled markdown-link regex checker with lychee ([#433](https://github.com/foxly-it/rootguard/pull/433))
+- Hardcoded dev-proxy LAN IP and unused vite/react scaffold assets ([#447](https://github.com/foxly-it/rootguard/pull/447))
+
+### Other
+
+- Homepage layout, RC messaging, and Unbound docs gaps
+- Fold wiki.html into docs.html, remove the Wiki page
+- Redirect stub, 404 page, sitemap/robots, canonical+favicon, stale-data guard
+
+### Performance
+
+- Lazy-load frontend authenticated pages, closing Vite's >500kB chunk warning ([#403](https://github.com/foxly-it/rootguard/pull/403))
+
 ## [1.0.0-rc.1] - 2026-08-26
 
 ### Added

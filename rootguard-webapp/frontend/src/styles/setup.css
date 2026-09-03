@@ -605,6 +605,11 @@
   background: var(--success-soft);
 }
 
+.check-row.warning > span {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
 .check-row.failed > span {
   color: var(--danger);
   background: var(--danger-soft);
@@ -619,6 +624,10 @@
 
 .check-row > div {
   min-width: 0;
+}
+
+.check-row.warning small {
+  color: var(--warning);
 }
 
 .check-row small {

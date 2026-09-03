@@ -52,6 +52,13 @@ type Check struct {
 	Message string `json:"message"`
 	Detail  string `json:"detail,omitempty"`
 	Action  string `json:"action,omitempty"`
+	// Level distinguishes an advisory check (OK is still true - it never
+	// gates Preflight.Ready) from the pass/fail checks above: empty for
+	// all of those, "warning" for a check like dockerCPPatchWarning below
+	// that has a real Action worth surfacing but isn't confident enough to
+	// block installation on. omitempty keeps every existing check's JSON
+	// unchanged.
+	Level string `json:"level,omitempty"`
 }
 
 type Preflight struct {
@@ -250,7 +257,7 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 	checks := validateConfig(config)
 
 	dockerOK := true
-	if _, err := m.run(ctx, "version", "--format", "{{.Server.Version}}"); err != nil {
+	if serverVersion, err := m.run(ctx, "version", "--format", "{{.Server.Version}}"); err != nil {
 		dockerOK = false
 		checks = append(checks, Check{
 			ID: "docker", Code: "docker_unreachable", OK: false,
@@ -262,6 +269,9 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 			ID: "docker", Code: "docker_reachable", OK: true,
 			Message: "Docker Engine is reachable.",
 		})
+		if warning, ok := dockerCPPatchWarning(strings.TrimSpace(string(serverVersion))); ok {
+			checks = append(checks, warning)
+		}
 	}
 
 	if _, err := m.run(ctx, "compose", "version", "--short"); err != nil {
@@ -351,6 +361,92 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 		}
 	}
 	return Preflight{Ready: ready, Config: config, Checks: checks}
+}
+
+// dockerCPFixedVersion is Docker Engine 29.5.1, the first upstream release
+// with all three `docker cp` CVEs fixed: CVE-2026-41567 (arbitrary
+// host-binary execution via PATH resolution during archive decompression),
+// CVE-2026-41568 (a second, separate TOCTOU race letting a container
+// create empty files/directories at an arbitrary host path - found in
+// review: missing from this file's own original two-CVE list even though
+// Docker's own 29.5.1 release notes cover all three together), and
+// CVE-2026-42306 (a TOCTOU race that can redirect a bind-mount target to
+// an arbitrary host path). Found in review: RootGuard itself calls
+// `docker cp` in three places - backupexport, backuprestore, and
+// updater's rollback path - so an unpatched host Docker Engine is a real
+// exposure, not a theoretical one.
+var dockerCPFixedVersion = [3]int{29, 5, 1}
+
+// cleanDockerVersion matches only a plain upstream MAJOR.MINOR.PATCH
+// version string (e.g. "29.4.0") - not one carrying a distro-packaging
+// suffix (Debian/Ubuntu's docker.io package reports things like
+// "24.0.7-1ubuntu1", e.g.). That distinction is deliberate: a distro can
+// (and, per review, sometimes does) backport a security fix onto a
+// package while keeping the same upstream-looking version number in its
+// own suffixed form, which makes a suffixed version string just as
+// uninformative about patch status as no version string at all. Only the
+// unsuffixed, unambiguous case is one this function can respond to with
+// any confidence.
+var cleanDockerVersion = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)$`)
+
+// dockerVersionLike loosely matches anything that at least attempts to
+// look like a version string ("digits.digits...") without requiring
+// cleanDockerVersion's strict unsuffixed form. Used only to decide
+// whether an unparseable version is worth a distinct "patch level
+// unknown" advisory (a real distro-suffixed version, e.g. - see
+// cleanDockerVersion's own comment) versus staying fully silent for a
+// value that plainly isn't a version string at all. Found in review:
+// this repo's own test suite's fake CommandRunner stubs return a
+// generic "ok" placeholder for any command they don't specifically
+// care about, `docker version` included - that string not matching
+// this looser pattern either is exactly why none of those tests needed
+// updating for the new advisory below.
+var dockerVersionLike = regexp.MustCompile(`^\d+\.\d+`)
+
+// dockerCPPatchWarning reports an advisory (Check.OK stays true - see
+// Check.Level's own doc comment) about the Docker Engine version
+// Preflight just observed, relative to dockerCPFixedVersion. ok is false
+// only when the version reads as confidently already patched - silence
+// is the correct outcome there. Otherwise this returns one of two
+// distinct advisories: a real warning when the version unambiguously
+// predates the fix, or a lower-confidence "patch level unknown" notice
+// when the version merely looks version-shaped but couldn't be read with
+// that confidence at all (found in review: previously indistinguishable
+// from "confirmed patched" - both produced total silence, even though
+// "we genuinely can't tell" is worth surfacing differently from "we
+// checked, it's fine"). Neither ever fails Ready - this can only ever
+// warn, precisely because a false positive here has no real cost while a
+// false negative only means the same information the CVEs are already
+// public with.
+func dockerCPPatchWarning(version string) (Check, bool) {
+	m := cleanDockerVersion.FindStringSubmatch(version)
+	if m == nil {
+		if !dockerVersionLike.MatchString(version) {
+			return Check{}, false
+		}
+		return Check{
+			ID: "docker_engine_patch_level", Code: "docker_engine_cp_cve_unknown", OK: true, Level: "warning",
+			Message: "Docker Engine's reported version couldn't be read with confidence, so whether it has the docker cp fixes (CVE-2026-41567, CVE-2026-41568, CVE-2026-42306, all fixed in 29.5.1) is unknown",
+			Detail:  version,
+			Action:  "Confirm your Docker Engine is 29.5.1 or later, or that your distribution has backported these fixes.",
+		}, true
+	}
+	major, _ := strconv.Atoi(m[1])
+	minor, _ := strconv.Atoi(m[2])
+	patch, _ := strconv.Atoi(m[3])
+	fixedMajor, fixedMinor, fixedPatch := dockerCPFixedVersion[0], dockerCPFixedVersion[1], dockerCPFixedVersion[2]
+	patched := major > fixedMajor ||
+		(major == fixedMajor && minor > fixedMinor) ||
+		(major == fixedMajor && minor == fixedMinor && patch >= fixedPatch)
+	if patched {
+		return Check{}, false
+	}
+	return Check{
+		ID: "docker_engine_patch_level", Code: "docker_engine_cp_cve", OK: true, Level: "warning",
+		Message: "Docker Engine predates 29.5.1, which fixed three docker cp vulnerabilities (CVE-2026-41567, CVE-2026-41568, CVE-2026-42306) that RootGuard's backup, restore, and update-rollback paths rely on",
+		Detail:  version,
+		Action:  "Upgrade Docker Engine to 29.5.1 or later, or confirm your distribution has already backported these fixes independently of its reported version number.",
+	}, true
 }
 
 func (m *Manager) Start(ctx context.Context, config Config) (Status, error) {
@@ -457,7 +553,7 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 	}
 	_ = m.setStep("prepare", "running", "Writing the versioned RootGuard stack definition")
 	var err error
-	composePath, err = m.writeCompose(config)
+	composePath, err = m.writeCompose(config, m.unboundImage, m.blockpageImage)
 	if err != nil {
 		return fail("prepare", err)
 	}
@@ -467,6 +563,11 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 		return fail("pull", err)
 	}
 	_ = m.setStep("pull", "done", "Service images are available")
+	var unboundImage, blockpageImage string
+	composePath, unboundImage, blockpageImage, err = m.resolveAndPinDigests(ctx, config)
+	if err != nil {
+		return fail("create", err)
+	}
 	_ = m.setStep("create", "running", "Creating stopped containers and empty service volumes")
 	if _, err = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "create"); err != nil {
 		return fail("create", err)
@@ -478,7 +579,7 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 		return fail("restore", err)
 	}
 	_ = m.setStep("restore", "done", "Verified backup data is restored")
-	if err := m.verifyStackAttestation(ctx, config); err != nil {
+	if err := m.verifyStackAttestation(ctx, config, unboundImage, blockpageImage); err != nil {
 		return fail("start", err)
 	}
 	_ = m.setStep("start", "running", "Starting restored Unbound and AdGuard Home")
@@ -530,7 +631,7 @@ func (m *Manager) deploy(config Config) {
 		m.fail("prepare", err)
 		return
 	}
-	composePath, err := m.writeCompose(config)
+	composePath, err := m.writeCompose(config, m.unboundImage, m.blockpageImage)
 	if err != nil {
 		m.fail("prepare", err)
 		return
@@ -544,7 +645,12 @@ func (m *Manager) deploy(config Config) {
 	}
 	_ = m.setStep("pull", "done", "Service images are available")
 
-	if err := m.verifyStackAttestation(ctx, config); err != nil {
+	composePath, unboundImage, blockpageImage, err := m.resolveAndPinDigests(ctx, config)
+	if err != nil {
+		m.fail("start", err)
+		return
+	}
+	if err := m.verifyStackAttestation(ctx, config, unboundImage, blockpageImage); err != nil {
 		m.fail("start", err)
 		return
 	}
@@ -624,7 +730,7 @@ func (m *Manager) waitForUnbound(ctx context.Context) error {
 	}
 }
 
-func (m *Manager) writeCompose(config Config) (string, error) {
+func (m *Manager) writeCompose(config Config, unboundImage, blockpageImage string) (string, error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return "", fmt.Errorf("create installation data directory: %w", err)
 	}
@@ -632,7 +738,7 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 	if config.AdGuardChannel == "beta" {
 		adGuardImage = m.adGuardBetaImage
 	}
-	content, err := renderCompose(config, m.unboundImage, adGuardImage, m.blockpageImage, m.dnsNetworkCIDR)
+	content, err := renderCompose(config, unboundImage, adGuardImage, blockpageImage, m.dnsNetworkCIDR)
 	if err != nil {
 		return "", err
 	}
@@ -641,6 +747,134 @@ func (m *Manager) writeCompose(config Config) (string, error) {
 		return "", fmt.Errorf("write stack definition: %w", err)
 	}
 	return path, nil
+}
+
+// resolveDigest turns a possibly-mutable "repo:tag" image reference into an
+// immutable "repo@sha256:..." one, using the digest of the image that was
+// just pulled locally. Found in review: verifyStackAttestation used to be
+// called with the plain, mutable image references from Options
+// (m.unboundImage/m.blockpageImage) - stack.RequireAttestation reports
+// "not_applicable" (and therefore refuses to activate) for anything
+// without an explicit "@sha256:" reference, so the very first deploy of a
+// real, correctly-signed release always failed here, since a release only
+// ever hands the installer a tag (or, for a release candidate, a
+// commit-scoped tag - see release-alpha.yml). Mirrors
+// rootguard-updater's own resolveTargetImage/digestQualify pattern for the
+// exact same reason - this is a third by-hand copy of that ~15-line
+// lookup (see internal/updater/github_release.go's digestQualify for the
+// first two and why a shared module wasn't judged worth it), now needed
+// here too since installer and updater are separate managers with their
+// own CommandRunner wiring.
+func (m *Manager) resolveDigest(ctx context.Context, image string) string {
+	if strings.Contains(image, "@sha256:") {
+		return image
+	}
+	repo, ok := imageRepo(image)
+	if !ok {
+		return image
+	}
+	// docker pull, not docker image inspect .RepoDigests - found in a
+	// follow-up review: the old implementation inspected the local image
+	// object's full .RepoDigests list and took the *first* entry matching
+	// this repo. That list belongs to the local image as a whole, not to
+	// this specific pull - if the same image ID has ever been associated
+	// with more than one digest for this repo (a real, previously-hit
+	// failure mode already documented on digestFromPullOutput below, the
+	// exact pattern this now mirrors), the first match can silently be a
+	// stale one instead of the digest actually pulled just now, letting a
+	// correctly-attested but outdated image get pinned into the stack
+	// definition. `docker pull` itself reports the digest of exactly what
+	// it just pulled ("Digest: sha256:...", once pulling finishes) -
+	// authoritative in a way a post-hoc inspect isn't. A second pull here
+	// (compose already pulled everything as part of the "pull" step) is
+	// deliberate, not redundant: it's the only way to get that
+	// authoritative per-image answer, and Docker's own pull is a fast,
+	// mostly no-op manifest check when the image is already present and
+	// unchanged - the same cost internal/updater's own update() already
+	// pays on every update via the identical pattern.
+	output, err := m.run(ctx, "pull", image)
+	if err == nil {
+		if digestRef, ok := digestFromPullOutput(repo, output); ok {
+			return digestRef
+		}
+	}
+	// Fallback for an unexpected pull-output format (or the pull call
+	// itself failing, e.g. a transient registry hiccup after compose's own
+	// pull already succeeded) - the same best-effort inspect this function
+	// used to always rely on, now demoted to a last resort rather than the
+	// primary path.
+	inspected, err := m.run(ctx, "image", "inspect", "--format", "{{range .RepoDigests}}{{.}}|{{end}}", image)
+	if err != nil {
+		return image
+	}
+	for _, digestRef := range strings.Split(strings.TrimSpace(string(inspected)), "|") {
+		if strings.HasPrefix(digestRef, repo+"@") {
+			return digestRef
+		}
+	}
+	return image
+}
+
+// imageRepo returns the repository portion of a "repo:tag" reference,
+// correctly handling a registry host:port prefix - e.g.
+// "registry.example:5000/rootguard-unbound:tag" - which the previous
+// strings.Cut(image, ":") (first colon) implementation mis-split into
+// "registry.example" and "5000/rootguard-unbound:tag", silently breaking
+// every digest lookup for any image reference naming a non-default
+// registry with an explicit port. A colon only separates the tag if it
+// appears after the last "/"; any colon before that (or without a
+// following "/" at all) is part of the registry host:port, not a tag
+// separator - the same rule Docker's own reference parser
+// (distribution/reference) uses. ok is false only when there's no colon
+// after the repository path at all (an already-bare, tagless reference),
+// matching the previous strings.Cut behavior's own "not found" case.
+func imageRepo(image string) (repo string, ok bool) {
+	lastSlash := strings.LastIndex(image, "/")
+	lastColon := strings.LastIndex(image, ":")
+	if lastColon <= lastSlash {
+		return "", false
+	}
+	return image[:lastColon], true
+}
+
+// digestFromPullOutput extracts the digest `docker pull` itself reports
+// for the image it just pulled - see resolveDigest's own comment on why
+// this is preferred over inspecting the local image object's
+// .RepoDigests. repo must already be split from any tag (imageRepo
+// above) - the registry:port mis-split this fixes here also affected the
+// identical repo-splitting logic in rootguard-updater's and
+// internal/updater's own copies of this function; fixed there too in
+// this same change (see those files' own updated comments).
+func digestFromPullOutput(repo string, output []byte) (string, bool) {
+	for _, line := range strings.Split(string(output), "\n") {
+		digest, ok := strings.CutPrefix(strings.TrimSpace(line), "Digest: ")
+		if ok && strings.HasPrefix(digest, "sha256:") {
+			return repo + "@" + digest, true
+		}
+	}
+	return "", false
+}
+
+// resolveAndPinDigests resolves unbound's (and, when enabled, blockpage's)
+// just-pulled image to its immutable digest and rewrites the stack
+// definition to reference that digest instead of the original mutable
+// tag - so every step from here on (attestation, create/up) is anchored to
+// exactly the image that was inspected, not whatever the tag happens to
+// point at if it moves in between. Must be called after the "pull" step
+// succeeds (the digest lookup needs the image present locally) and before
+// "create"/"start" so containers are actually built from the pinned
+// reference, not the original tag-based compose file.
+func (m *Manager) resolveAndPinDigests(ctx context.Context, config Config) (composePath, unboundImage, blockpageImage string, err error) {
+	unboundImage = m.resolveDigest(ctx, m.unboundImage)
+	blockpageImage = m.blockpageImage
+	if config.BlockpageEnabled {
+		blockpageImage = m.resolveDigest(ctx, m.blockpageImage)
+	}
+	composePath, err = m.writeCompose(config, unboundImage, blockpageImage)
+	if err != nil {
+		return "", "", "", fmt.Errorf("pin attested image digests into the stack definition: %w", err)
+	}
+	return composePath, unboundImage, blockpageImage, nil
 }
 
 func renderCompose(config Config, unboundImage, adGuardImage, blockpageImage, networkCIDR string) (string, error) {
@@ -858,12 +1092,12 @@ func validateConfig(config Config) []Check {
 // RequireAttestation's own no-op behavior for it; Blockpage is only
 // checked when config.BlockpageEnabled, since it isn't part of the
 // stack at all otherwise.
-func (m *Manager) verifyStackAttestation(ctx context.Context, config Config) error {
-	if err := m.attestationVerifier(ctx, "unbound", m.unboundImage); err != nil {
+func (m *Manager) verifyStackAttestation(ctx context.Context, config Config, unboundImage, blockpageImage string) error {
+	if err := m.attestationVerifier(ctx, "unbound", unboundImage); err != nil {
 		return fmt.Errorf("attestation: %w", err)
 	}
 	if config.BlockpageEnabled {
-		if err := m.attestationVerifier(ctx, "blockpage", m.blockpageImage); err != nil {
+		if err := m.attestationVerifier(ctx, "blockpage", blockpageImage); err != nil {
 			return fmt.Errorf("attestation: %w", err)
 		}
 	}

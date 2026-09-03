@@ -94,6 +94,16 @@ services:
       UNBOUND_CONFIG_DIR: /var/lib/rootguard/unbound
       UNBOUND_CONTAINER_CONFIG_DIR: /etc/unbound/unbound.d
       UNBOUND_CONTAINER_NAME: rootguard-unbound
+      # Empty by default - Diagnose keeps querying the real internet
+      # (example.com/dnssec-failed.org), correct for an actual
+      # deployment. ci.yml sets both to a local, throwaway DNSSEC test
+      # zone (scripts/ci/dnssec-test-zone) so its own integration test of
+      # this exact endpoint doesn't depend on the runner's own network -
+      # found in review, confirmed live: main's own scheduled run of that
+      # check failed on a transient DNS hiccup unrelated to any code
+      # change.
+      ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN: "${ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN:-}"
+      ROOTGUARD_UNBOUND_DIAGNOSTIC_DNSSEC_DOMAIN: "${ROOTGUARD_UNBOUND_DIAGNOSTIC_DNSSEC_DOMAIN:-}"
       ADGUARD_INSTALLER_URL: http://rootguard-adguard:3000
       ADGUARD_API_URL: http://rootguard-adguard:80
       ADGUARD_DATA_DIR: /var/lib/rootguard/adguard

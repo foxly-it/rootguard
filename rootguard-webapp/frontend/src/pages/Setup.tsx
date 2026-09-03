@@ -262,17 +262,20 @@ export default function Setup() {
             </div>
           </div>
           <div className="check-list">
-            {preflight.checks.map((check) => (
-              <div className={`check-row ${check.ok ? "ok" : "failed"}`} key={check.id}>
-                <span aria-hidden="true">{check.ok ? "✓" : "!"}</span>
-                <div>
-                  <p>{diagnosticText(t, check.code, "message", check.message, check.detail)}</p>
-                  {!check.ok && check.action && (
-                    <small>{diagnosticText(t, check.code, "action", check.action, check.detail)}</small>
-                  )}
+            {preflight.checks.map((check) => {
+              const status = check.ok ? (check.level === "warning" ? "warning" : "ok") : "failed";
+              return (
+                <div className={`check-row ${status}`} key={check.id}>
+                  <span aria-hidden="true">{status === "ok" ? "✓" : "!"}</span>
+                  <div>
+                    <p>{diagnosticText(t, check.code, "message", check.message, check.detail)}</p>
+                    {status !== "ok" && check.action && (
+                      <small>{diagnosticText(t, check.code, "action", check.action, check.detail)}</small>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="setup-actions">
             <button

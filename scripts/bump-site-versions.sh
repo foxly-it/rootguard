@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Mechanically refreshes site/*.html's version references to the latest
-# release tag - the exact thing scripts/check-site-facts.sh checks for,
-# and the thing that went stale unnoticed for two days after both
-# v0.1.0-beta.2 and v0.1.0-beta.3 shipped, because the release pipeline
+# Mechanically refreshes site/*.html's (and README.md's) version references
+# to the latest release tag - the exact thing scripts/check-site-facts.sh
+# checks for, and the thing that went stale unnoticed for two days after
+# both v0.1.0-beta.2 and v0.1.0-beta.3 shipped, because the release pipeline
 # updates compose.release.yaml/.env.release.example automatically but never
 # touched the site. Meant to run as an automated step right after a
 # release tag is cut (see release-alpha.yml's update-alpha-pins job),
 # committed alongside the compose/.env pin update.
+#
+# README.md joined the site/*.html set here after a follow-up review found
+# it silently stale for far longer than two days - see
+# check-site-facts.sh's own comment on why it joined that check too.
 #
 # Idempotent: running it again with nothing stale is a silent no-op.
 
@@ -18,34 +22,23 @@ cd "${repository_dir}"
 # shellcheck source=version-pattern.sh
 . "${repository_dir}/scripts/version-pattern.sh"
 
-latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E "^v${rootguard_version_pattern}\$" | head -1 || true)"
-if [[ -z "${latest_tag}" ]]; then
-  echo "No release tag found - cannot determine the current version" >&2
-  exit 1
-fi
-latest_version="${latest_tag#v}"
+latest_version="$(rootguard_current_version)"
 
 # Same exclusion as check-site-facts.sh: a line naming a version boundary
 # ("Starting with 0.1.0-beta.1, ..." or "bis einschließlich 0.1.0-beta.14
 # ...") is a historical fact, not a current-version claim, and must never
 # be bumped.
 historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
-# The two docs.html .env-example lines carry a version *and* a digest -
-# a plain version-string substitution would leave the old digest in
-# place, so they're excluded here and handled explicitly below instead.
-update_image_line_pattern='ROOTGUARD_(CORE|WEBAPP)_UPDATE_IMAGE='
-
 changed_files=()
-for file in site/*.html; do
+for file in site/*.html README.md; do
   stale_versions="$(grep -vE "${historical_reference_pattern}" "${file}" \
-    | grep -vE "${update_image_line_pattern}" \
+    | grep -vE "${rootguard_update_image_line_pattern}" \
     | rootguard_extract_versions | sort -u || true)"
   file_changed=0
   for stale in ${stale_versions}; do
     [[ "${stale}" == "${latest_version}" ]] && continue
     awk -v old="${stale}" -v new="${latest_version}" \
-        -v hist="${historical_reference_pattern}" -v img="${update_image_line_pattern}" '
+        -v hist="${historical_reference_pattern}" -v img="${rootguard_update_image_line_pattern}" '
       $0 !~ hist && $0 !~ img { gsub(old, new) }
       { print }
     ' "${file}" > "${file}.tmp"
@@ -77,7 +70,7 @@ if [[ -f "${docs_file}" ]]; then
 fi
 
 if [[ "${#changed_files[@]}" -eq 0 ]]; then
-  echo "site/*.html already reflects ${latest_version} - nothing to do"
+  echo "site/*.html and README.md already reflect ${latest_version} - nothing to do"
 else
   echo "Updated: $(printf '%s ' "${changed_files[@]}" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
 fi

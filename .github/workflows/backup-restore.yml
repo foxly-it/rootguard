@@ -1,15 +1,17 @@
 name: Backup and restore
 
 on:
-  pull_request:
-    paths:
-      - "compose.release.yaml"
-      - ".env.release.example"
-      - "scripts/verify-backup-restore.sh"
-      - "scripts/verification-common.sh"
-      - ".github/workflows/backup-restore.yml"
-      - "rootguard-core/**"
-      - "rootguard-webapp/**"
+  # No paths filter on pull_request - found in review: round 9's branch
+  # protection deliberately left this workflow's checks out of the
+  # required set specifically because this filter meant they wouldn't
+  # trigger on every PR (see round 10 finding 9). Confirmed live, round
+  # 11: dropping the equivalent filter on ci-core.yml/ci-updater.yml/
+  # ci-webapp.yml is what actually fixed the recurring
+  # mergeable_state: blocked admin-bypasses - the same fix applies here,
+  # closing finding 9 for backup/restore coverage specifically. Runs in
+  # ~3-4 minutes (both arches in parallel), cheap enough to run
+  # unconditionally.
+  pull_request: {}
   push:
     branches: [main]
     paths:
@@ -30,8 +32,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Found in review: this job id/name pair ("linux" / "Linux
+  # ${{ matrix.arch }}") is identical to clean-install.yml's own job -
+  # both produce a check literally named "Linux amd64"/"Linux arm64",
+  # indistinguishable from each other in the Checks UI, in gh pr checks
+  # output, or as a required-status-check entry.
   linux:
-    name: Linux ${{ matrix.arch }}
+    name: Backup and restore, Linux ${{ matrix.arch }}
     strategy:
       fail-fast: false
       matrix:
@@ -62,11 +69,19 @@ jobs:
       - name: Build rootguard-webapp from this checkout
         run: docker build -t rootguard-webapp:e2e ./rootguard-webapp
 
+      # See verification-common.sh's own comment on verify_dns - a real
+      # internet domain here would fail this job on a transient DNS
+      # hiccup unrelated to the code under test.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Verify backup export and restore
         env:
           ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
           ROOTGUARD_CORE_IMAGE: rootguard-core:e2e
           ROOTGUARD_WEBAPP_IMAGE: rootguard-webapp:e2e
+          ROOTGUARD_VERIFY_DNS_DOMAIN: good.rgtest-ci.internal
+          ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN: bad.rgtest-ci.internal
           # This job builds rootguard-core (and, when BlockpageEnabled,
           # would deploy Unbound/Blockpage) from this checkout - none of
           # that carries a real cosign attestation, so the installer's

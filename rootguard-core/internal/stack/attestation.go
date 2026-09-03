@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -92,11 +94,58 @@ func RequireAttestation(ctx context.Context, service, image string) error {
 	if _, supported := attestationPolicies[service]; !supported {
 		return nil
 	}
+	// Checked directly here, not folded into the cached dashboard status
+	// below (which stays exactly the existing five-value enum the
+	// frontend already type-checks against - see
+	// rootguard-webapp/frontend/src/api/client.ts) - a distinct,
+	// specific error for exactly this one condition, surfaced only on
+	// the activation-gating path an update actually fails on, not on
+	// the dashboard's own read-only attestation display.
+	if err := checkAttestationProxyReachable(); err != nil {
+		return fmt.Errorf("release attestation for %s (%s): %w", service, image, err)
+	}
 	status, _ := verifyReleaseAttestation(ctx, service, image)
 	if status == "verified" {
 		return nil
 	}
 	return fmt.Errorf("release attestation for %s (%s) is %s, refusing to activate", service, image, status)
+}
+
+// dialProxy is swapped out in tests so
+// checkAttestationProxyReachable's own logic can be verified without a
+// real TCP dial.
+var dialProxy = func(network, addr string) (net.Conn, error) {
+	return net.DialTimeout(network, addr, 3*time.Second)
+}
+
+// checkAttestationProxyReachable gives operators a specific, actionable
+// diagnosis instead of cosign's own generic network-error text for the
+// single most likely cause of an attestation failure on this network:
+// found live, cutting 1.0.0-rc.2, that self-update can never deliver a
+// compose-topology change (a new service, a new network, a new env
+// var) to an existing installation - it only ever swaps container
+// images in place (docs/release-process.md, "Self-update can never
+// deliver a compose-topology change"). An operator who updated via the
+// WebGUI alone from a release that predates rootguard-attestation-proxy
+// ends up running the new attestation-gating code with the old
+// topology: no proxy service, no `egress` network, no
+// ROOTGUARD_ATTESTATION_PROXY_URL. Checked *before* invoking cosign at
+// all - a bare "unavailable" from cosign's own network error doesn't
+// tell an operator this is a known, structural gap with a known fix
+// (reinstall or a manual compose.release.yaml refresh), not a transient
+// hiccup worth simply retrying.
+func checkAttestationProxyReachable() error {
+	proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL")
+	if proxyURL == "" {
+		return errors.New("no attestation proxy configured (ROOTGUARD_ATTESTATION_PROXY_URL is unset) - this installation's compose topology likely predates rootguard-attestation-proxy; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md")
+	}
+	target := strings.TrimPrefix(strings.TrimPrefix(proxyURL, "https://"), "http://")
+	conn, err := dialProxy("tcp", target)
+	if err != nil {
+		return fmt.Errorf("attestation proxy configured (%s) but unreachable: %w - this installation's compose topology may be missing the rootguard-attestation-proxy service or its egress network; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md", proxyURL, err)
+	}
+	_ = conn.Close()
+	return nil
 }
 
 func verifyReleaseAttestationWith(ctx context.Context, service, image string, run attestationRunner, now func() time.Time) (string, string) {
@@ -148,6 +197,26 @@ func classifyAttestationResult(output []byte, err error) string {
 	return "failed"
 }
 
+// runAttestationCommand's own subprocess environment is the one place
+// this repository ever routes traffic through
+// rootguard-attestation-proxy - found live, cutting 1.0.0-rc.2: Core
+// runs only on the `control` Docker network, deliberately
+// `internal: true` (no route to the internet at all), so cosign's own
+// outbound calls to GHCR/Sigstore can never succeed unmodified. Setting
+// HTTPS_PROXY/HTTP_PROXY only on this exec.Cmd's own Env (never on the
+// container's ambient environment) scopes the proxy to exactly this one
+// subprocess - Core's other outbound HTTP calls (e.g.
+// internal/updater/github_release.go's GitHub Releases self-update
+// check) are a separate, already-known, pre-existing gap on the same
+// isolated network and must not be silently routed through the same
+// narrow 3-host allowlist, which they don't fit.
+// ROOTGUARD_ATTESTATION_PROXY_URL unset/empty (local dev's compose.yaml
+// without the proxy service, unit tests, the integration/E2E fixtures)
+// means no proxy env is set at all - unchanged, pre-proxy behavior.
 func runAttestationCommand(ctx context.Context, name string, arguments ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, arguments...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, name, arguments...)
+	if proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL"); proxyURL != "" {
+		cmd.Env = append(os.Environ(), "HTTPS_PROXY="+proxyURL, "HTTP_PROXY="+proxyURL)
+	}
+	return cmd.CombinedOutput()
 }

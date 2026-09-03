@@ -6,16 +6,42 @@ on:
     paths:
       - "rootguard-core/**"
       - ".github/workflows/ci-core.yml"
-  pull_request:
-    paths:
-      - "rootguard-core/**"
-      - ".github/workflows/ci-core.yml"
+      # Found in review, round 14: a push touching only the image-scan
+      # tooling (not rootguard-core/** itself) used to not trigger this
+      # workflow at all on push - pull_request already runs
+      # unconditionally (see the comment below), this only closes the
+      # same gap for a direct push to main.
+      - "scripts/ci/trivy-image-scan.sh"
+      - "scripts/ci/trivy-version.env"
+      - ".trivyignore.yaml"
+  # No paths filter on pull_request, unlike push above - found in review:
+  # this job ("Core unit tests") is a required branch-protection status
+  # check. A PR that never touches rootguard-core/** used to never
+  # trigger this workflow at all, so GitHub waited forever for a check
+  # that was never going to report - confirmed live: PR #446
+  # (release-alpha.yml only) came back mergeable: true but
+  # mergeable_state: blocked for exactly this reason, needing an
+  # explicit admin-bypass merge. This job is fast (well under a minute)
+  # - running it unconditionally on every PR is cheap insurance against
+  # every PR needing that same bypass, until docs/security-audit-log.md's
+  # round 10 finding 9 (a single aggregating merge-gate job) replaces
+  # this entirely.
+  pull_request: {}
 
 permissions:
   contents: read
 
 jobs:
+  # Found in review: this job id ("test") is identical across ci-core.yml,
+  # ci-webapp.yml, and ci-updater.yml, each producing an unnamed check
+  # run literally called "test" - GitHub identifies required status
+  # checks by check name (plus reporting app), so three unrelated,
+  # identically-named checks is at best confusing and at worst
+  # ambiguous for branch protection. Named explicitly so each is
+  # unambiguous both in the Checks UI and as a required-status-check
+  # entry.
   test:
+    name: Core unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -27,8 +53,26 @@ jobs:
         run: go test ./...
       - working-directory: rootguard-core
         run: go vet ./...
+      # Found in review: nothing ever caught a non-gofmt-formatted file
+      # (go test/go vet don't check formatting at all) - one landed and
+      # stayed unnoticed until a later, unrelated review happened to spot
+      # it. gofmt -l lists any file whose formatting would change; a
+      # non-empty list fails the build instead of relying on a human to
+      # notice.
+      - working-directory: rootguard-core
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "::error::Not gofmt-formatted (run 'gofmt -w' on these):"
+            echo "$unformatted"
+            exit 1
+          fi
       - working-directory: rootguard-core
         run: docker build -t rootguard-core:test .
+      # Found in review: nothing ever scanned the image this step just
+      # built - see trivy-image-scan.sh's own header comment for the full
+      # gap this closes.
+      - run: ./scripts/ci/trivy-image-scan.sh rootguard-core:test
 
   # Exercises the pre-update snapshot/rollback path (Manager.backup,
   # Manager.rollback, and the SHA-256 checksum verification guarding it) and

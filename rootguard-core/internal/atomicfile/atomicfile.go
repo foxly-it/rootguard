@@ -56,19 +56,7 @@ func WriteFile(path string, data []byte, mode os.FileMode) error {
 	tempPath := temp.Name()
 	defer os.Remove(tempPath) // no-op once the rename below has succeeded
 
-	if err := temp.Chmod(mode); err != nil {
-		temp.Close()
-		return err
-	}
-	if _, err := temp.Write(data); err != nil {
-		temp.Close()
-		return err
-	}
-	if err := temp.Sync(); err != nil {
-		temp.Close()
-		return err
-	}
-	if err := temp.Close(); err != nil {
+	if err := stageFile(temp, data, mode); err != nil {
 		return err
 	}
 	if err := os.Rename(tempPath, path); err != nil {
@@ -96,4 +84,125 @@ func WriteJSON(path string, value any) error {
 		return err
 	}
 	return WriteFile(path, data, 0600)
+}
+
+// File is one entry for WriteFiles: a target path, its new content, and
+// the mode to create it with.
+type File struct {
+	Path string
+	Data []byte
+	Mode os.FileMode
+}
+
+// WriteFiles atomically replaces the contents of multiple, independent
+// files as a single unit. Found in review: a caller with related state
+// split across more than one file used to call WriteFile once per file -
+// each individually atomic, but a failure partway through (e.g. the
+// second file's write failing for any of the usual reasons: disk full,
+// permissions, an I/O error) left the first file's already-committed new
+// content and the remaining files' untouched old content in two
+// different "generations" of the same logical state, silently
+// inconsistent with each other on the very next read.
+//
+// Every file is staged first - written to its own fresh temp file in its
+// target's directory and fsynced - before any of them is renamed into
+// place, and none are renamed unless every single stage succeeded: a
+// staging failure leaves every target file completely untouched, the
+// same guarantee a single WriteFile call already gives for one file.
+//
+// Renaming several files can never be one atomic operation on POSIX -
+// each rename(2) is its own syscall - so this cannot close the window
+// entirely: what it does is narrow it from "an arbitrarily slow write
+// and fsync of a later file, which can fail for many mundane reasons"
+// down to "the brief moment between two rename syscalls, both of which
+// only run after every write in the batch has already durably
+// succeeded". A follow-up review correctly called that residual window
+// out as still a real gap for updater.Manager's own original motivating
+// case - status.json and images.json, both plain internal JSON with no
+// external reader, had no real reason to be two files at all. They're
+// one file now (state.json), which closes the window for that pair
+// completely: a single file's write-temp-then-rename is unconditionally
+// atomic. WriteFiles stays the right tool where combining genuinely
+// isn't practical - updater.Manager still uses it for state.json
+// alongside updates.yaml, a different format entirely and read by an
+// external tool (docker compose's own -f flag) that can't consume JSON -
+// so pick WriteFiles for that shape of problem, and prefer actually
+// combining the files instead whenever every one of them is this
+// process's own internal format with no external reader forcing them
+// apart.
+func WriteFiles(files []File) error {
+	type staged struct {
+		tempPath string
+		path     string
+		dir      string
+	}
+	commits := make([]staged, 0, len(files))
+	cleanup := func() {
+		for _, s := range commits {
+			os.Remove(s.tempPath)
+		}
+	}
+	for _, file := range files {
+		dir := filepath.Dir(file.Path)
+		temp, err := os.CreateTemp(dir, "."+filepath.Base(file.Path)+".*.tmp")
+		if err != nil {
+			cleanup()
+			return err
+		}
+		tempPath := temp.Name()
+		if err := stageFile(temp, file.Data, file.Mode); err != nil {
+			os.Remove(tempPath)
+			cleanup()
+			return err
+		}
+		commits = append(commits, staged{tempPath: tempPath, path: file.Path, dir: dir})
+	}
+	dirsSynced := make(map[string]bool, len(commits))
+	for _, s := range commits {
+		if err := os.Rename(s.tempPath, s.path); err != nil {
+			// Every remaining temp file (this one's rename failed, so it's
+			// still there; any not yet reached in this loop) is cleaned up
+			// below - only files already renamed in a prior loop iteration
+			// are left in their new state, which is the same
+			// already-committed, can't-safely-undo situation a single
+			// WriteFile's own rename failure leaves its one file in.
+			for _, remaining := range commits {
+				os.Remove(remaining.tempPath)
+			}
+			return err
+		}
+		dirsSynced[s.dir] = true
+	}
+	for dir := range dirsSynced {
+		if err := syncDir(dir); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// JSONFile marshals value as indented JSON (mode 0600, matching
+// WriteJSON) into a File entry for WriteFiles.
+func JSONFile(path string, value any) (File, error) {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return File{}, err
+	}
+	return File{Path: path, Data: data, Mode: 0600}, nil
+}
+
+func stageFile(temp *os.File, data []byte, mode os.FileMode) error {
+	if err := temp.Chmod(mode); err != nil {
+		temp.Close()
+		return err
+	}
+	if _, err := temp.Write(data); err != nil {
+		temp.Close()
+		return err
+	}
+	if err := temp.Sync(); err != nil {
+		temp.Close()
+		return err
+	}
+	return temp.Close()
 }

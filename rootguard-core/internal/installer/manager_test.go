@@ -54,7 +54,7 @@ func TestWriteComposeSelectsBetaImage(t *testing.T) {
 		DataDir: t.TempDir(), UnboundImage: "unbound:test", AdGuardImage: "adguard:stable",
 		AdGuardBetaImage: "adguard:beta", DNSNetworkCIDR: "172.29.53.0/24",
 	})
-	path, err := manager.writeCompose(Config{DNSBindAddress: "0.0.0.0", DNSPort: 53, AdGuardChannel: "beta"})
+	path, err := manager.writeCompose(Config{DNSBindAddress: "0.0.0.0", DNSPort: 53, AdGuardChannel: "beta"}, manager.unboundImage, manager.blockpageImage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,6 +108,121 @@ func TestPreflightRequiresDockerAndCompose(t *testing.T) {
 
 	if report.Ready {
 		t.Fatal("expected missing compose plugin to fail preflight")
+	}
+}
+
+// TestPreflightWarnsAboutUnpatchedDockerCPVersion covers the advisory
+// added in review: RootGuard calls `docker cp` in three places
+// (backupexport, backuprestore, updater rollback), so an Engine predating
+// 29.5.1 - which fixed CVE-2026-41567, CVE-2026-41568, and
+// CVE-2026-42306, all three docker cp vulnerabilities - is a real
+// exposure. Deliberately never fails Preflight (see dockerCPPatchWarning's
+// own doc comment on why).
+func TestPreflightWarnsAboutUnpatchedDockerCPVersion(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "version" {
+				return []byte("29.4.0\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress: "192.168.1.2",
+		DNSPort:        53,
+	})
+
+	if !report.Ready {
+		t.Fatal("an unpatched-looking Docker Engine version must not fail preflight")
+	}
+	var warning *Check
+	for i := range report.Checks {
+		if report.Checks[i].Code == "docker_engine_cp_cve" {
+			warning = &report.Checks[i]
+		}
+	}
+	if warning == nil {
+		t.Fatal("expected a docker_engine_cp_cve advisory check for Docker Engine 29.4.0")
+	}
+	if !warning.OK || warning.Level != "warning" || warning.Detail != "29.4.0" {
+		t.Fatalf("unexpected advisory check: %#v", warning)
+	}
+}
+
+// TestPreflightSkipsDockerCPAdvisoryForPatchedOrNonVersionValues covers
+// the two genuinely silent cases: a Docker Engine already at or past
+// 29.5.1 (nothing to report), and a value that isn't version-shaped at
+// all (this package's own test suite's generic "ok" CommandRunner
+// stand-in included - see dockerVersionLike's own doc comment on why
+// that specifically must never gain an advisory of its own, or most of
+// this file's other Preflight tests would need updating for an advisory
+// they have nothing to do with).
+func TestPreflightSkipsDockerCPAdvisoryForPatchedOrNonVersionValues(t *testing.T) {
+	for _, version := range []string{"29.5.1", "29.6.0", "30.0.0", "ok"} {
+		t.Run(version, func(t *testing.T) {
+			manager := NewManager(Options{
+				DataDir: t.TempDir(),
+				Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+					if arguments[0] == "version" {
+						return []byte(version + "\n"), nil
+					}
+					return []byte("ok"), nil
+				},
+			})
+
+			report := manager.Preflight(context.Background(), Config{
+				DNSBindAddress: "192.168.1.2",
+				DNSPort:        53,
+			})
+
+			for _, check := range report.Checks {
+				if check.Code == "docker_engine_cp_cve" || check.Code == "docker_engine_cp_cve_unknown" {
+					t.Fatalf("did not expect a docker-cp advisory for version %q, got %#v", version, check)
+				}
+			}
+		})
+	}
+}
+
+// TestPreflightWarnsWhenDockerCPPatchLevelIsUnknown covers the case
+// found in review: a version string that looks like a real attempt at a
+// version (a distro-packaging suffix, e.g.) but that dockerCPPatchWarning
+// can't read with the confidence dockerCPFixedVersion comparison needs -
+// previously indistinguishable from "confirmed patched" (both produced
+// total silence); now a distinct, lower-confidence advisory instead,
+// still never failing Ready.
+func TestPreflightWarnsWhenDockerCPPatchLevelIsUnknown(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "version" {
+				return []byte("24.0.7-1ubuntu1\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	report := manager.Preflight(context.Background(), Config{
+		DNSBindAddress: "192.168.1.2",
+		DNSPort:        53,
+	})
+
+	if !report.Ready {
+		t.Fatal("an unreadable Docker Engine version must not fail preflight")
+	}
+	var warning *Check
+	for i := range report.Checks {
+		if report.Checks[i].Code == "docker_engine_cp_cve_unknown" {
+			warning = &report.Checks[i]
+		}
+	}
+	if warning == nil {
+		t.Fatal("expected a docker_engine_cp_cve_unknown advisory check for an unreadable version")
+	}
+	if !warning.OK || warning.Level != "warning" || warning.Detail != "24.0.7-1ubuntu1" {
+		t.Fatalf("unexpected advisory check: %#v", warning)
 	}
 }
 
@@ -698,6 +813,170 @@ func TestDeployRefusesActivationWhenAttestationFails(t *testing.T) {
 	}
 	if !strings.Contains(status.Error, "attestation") {
 		t.Fatalf("expected the failure to mention attestation, got %q", status.Error)
+	}
+}
+
+// TestDeployResolvesDigestBeforeAttestation is the regression test for a
+// follow-up review finding: TestDeployRefusesActivationWhenAttestationFails
+// above uses a fake AttestationVerifier, which happily accepts whatever
+// image string it's handed - it can't catch a bug in what deploy() actually
+// hands the real verifier. In production, deploy() passed
+// Options.UnboundImage straight through unchanged: a plain "repo:tag"
+// reference. stack.RequireAttestation (the real, default verifier) requires
+// an explicit "repo@sha256:..." reference and short-circuits to
+// "not_applicable" - itself a hard refusal, see RequireAttestation's own
+// doc comment - for anything else, without ever invoking cosign at all. So
+// every real deploy, even of a correctly signed release, failed here
+// exactly the same way a forged one would have, just for a different
+// reason. This test leaves AttestationVerifier unset (defaults to the real
+// stack.RequireAttestation) and gives Run a "docker pull" stub that
+// reports a digest the same way the real docker CLI does ("Digest:
+// sha256:...", once pulling finishes) - deploy() must resolve that
+// digest and hand stack.RequireAttestation a "@sha256:"-qualified
+// reference, so the
+// resulting failure comes from an actual (failing, since no real cosign
+// binary or signed image exists in this test) attestation attempt, not
+// from the short-circuit that made every deploy fail closed regardless of
+// whether the image was ever really attested.
+func TestDeployResolvesDigestBeforeAttestation(t *testing.T) {
+	dataDir := t.TempDir()
+	const digest = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	manager := NewManager(Options{
+		DataDir:        dataDir,
+		CoreContainer:  "rootguard-core",
+		UnboundImage:   "rootguard-unbound:test",
+		AdGuardImage:   "adguard:test",
+		DNSNetworkCIDR: "172.29.53.0/24",
+		// AttestationVerifier intentionally left unset: NewManager defaults
+		// it to the real stack.RequireAttestation, not a fake.
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if len(arguments) >= 2 && arguments[0] == "pull" && arguments[1] == "rootguard-unbound:test" {
+				return []byte("Status: Downloaded newer image\nDigest: " + digest + "\n"), nil
+			}
+			if arguments[0] == "inspect" {
+				return []byte("healthy\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	if _, err := manager.Start(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	status := manager.Status()
+	if status.State != StateFailed {
+		t.Fatalf("expected deployment to fail closed (no real cosign attestation available in tests), got %#v", status)
+	}
+	if !strings.Contains(status.Error, "attestation") {
+		t.Fatalf("expected the failure to mention attestation, got %q", status.Error)
+	}
+	if strings.Contains(status.Error, "not_applicable") {
+		t.Fatalf("attestation must have been checked against a digest-qualified image, not short-circuited as not_applicable: %q", status.Error)
+	}
+	written, err := os.ReadFile(filepath.Join(dataDir, "compose.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(written), "rootguard-unbound@"+digest) {
+		t.Fatalf("expected the stack definition to be pinned to the resolved digest, got:\n%s", written)
+	}
+	if strings.Contains(string(written), "rootguard-unbound:test") {
+		t.Fatalf("expected the mutable tag reference to be replaced, got:\n%s", written)
+	}
+}
+
+// TestResolveDigestPrefersPullOutputOverStaleRepoDigests is the
+// regression test for a follow-up review finding: resolveDigest used to
+// inspect the local image object's full .RepoDigests list and take the
+// *first* entry matching this repo - a real, previously-hit failure mode
+// (see digestFromPullOutput's own doc comment) if that list ever
+// contains more than one digest for the same repo, since a local image
+// object isn't scoped to "what was just pulled". Gives the pull mock the
+// *correct*, freshly-pulled digest and the image-inspect fallback mock a
+// deliberately different, stale one - resolveDigest must return the
+// pull-reported digest, proving the primary path is actually used
+// instead of silently falling through to the stale fallback.
+func TestResolveDigestPrefersPullOutputOverStaleRepoDigests(t *testing.T) {
+	const freshDigest = "sha256:2222222222222222222222222222222222222222222222222222222222222222"
+	const staleDigest = "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if len(arguments) >= 2 && arguments[0] == "pull" {
+				return []byte("Digest: " + freshDigest + "\n"), nil
+			}
+			if len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" {
+				// Simulates a local image object carrying more than one
+				// RepoDigest for this repo - the stale one deliberately
+				// listed first, matching the exact shape that used to
+				// fool the old first-match loop.
+				return []byte("rootguard-unbound@" + staleDigest + "|rootguard-unbound@" + freshDigest + "|\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	got := manager.resolveDigest(context.Background(), "rootguard-unbound:test")
+	want := "rootguard-unbound@" + freshDigest
+	if got != want {
+		t.Fatalf("resolveDigest() = %q, want %q (must prefer the freshly-pulled digest over a stale .RepoDigests entry)", got, want)
+	}
+}
+
+// TestResolveDigestFallsBackToRepoDigestsWhenPullOutputIsUnparsable
+// covers the deliberate fallback path: an unexpected pull-output shape
+// (or a failed pull) must not leave resolveDigest returning the original
+// mutable tag when the local image-inspect fallback can still answer.
+func TestResolveDigestFallsBackToRepoDigestsWhenPullOutputIsUnparsable(t *testing.T) {
+	const digest = "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+	manager := NewManager(Options{
+		DataDir: t.TempDir(),
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if len(arguments) >= 2 && arguments[0] == "pull" {
+				return []byte("Status: Image is up to date\n"), nil // no "Digest:" line
+			}
+			if len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" {
+				return []byte("rootguard-unbound@" + digest + "|\n"), nil
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	got := manager.resolveDigest(context.Background(), "rootguard-unbound:test")
+	want := "rootguard-unbound@" + digest
+	if got != want {
+		t.Fatalf("resolveDigest() = %q, want %q (must fall back to the RepoDigests lookup)", got, want)
+	}
+}
+
+// TestImageRepoHandlesRegistryPort is the regression test for a follow-up
+// review finding: the previous strings.Cut(image, ":") (first colon)
+// mis-split any image reference naming a registry host:port, e.g.
+// "registry.example:5000/rootguard-unbound:tag" became repo=
+// "registry.example" - silently breaking the digest lookup for that
+// entire class of reference. imageRepo instead only treats a colon after
+// the last "/" as the tag separator.
+func TestImageRepoHandlesRegistryPort(t *testing.T) {
+	tests := map[string]struct {
+		wantRepo string
+		wantOK   bool
+	}{
+		"rootguard-unbound:test":                         {"rootguard-unbound", true},
+		"registry.example:5000/rootguard-unbound:tag":    {"registry.example:5000/rootguard-unbound", true},
+		"registry.example:5000/ns/rootguard-unbound:tag": {"registry.example:5000/ns/rootguard-unbound", true},
+		"ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.1":  {"ghcr.io/foxly-it/rootguard-unbound", true},
+		"registry.example:5000/rootguard-unbound":        {"", false}, // registry:port, no tag
+		"rootguard-unbound":                              {"", false}, // no tag at all
+	}
+	for image, want := range tests {
+		repo, ok := imageRepo(image)
+		if repo != want.wantRepo || ok != want.wantOK {
+			t.Errorf("imageRepo(%q) = (%q, %v), want (%q, %v)", image, repo, ok, want.wantRepo, want.wantOK)
+		}
 	}
 }
 

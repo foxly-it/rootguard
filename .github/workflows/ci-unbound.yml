@@ -9,13 +9,19 @@ on:
       - "rootguard-core/go.mod"
       - "rootguard-core/go.sum"
       - ".github/workflows/ci-unbound.yml"
-  pull_request:
-    paths:
-      - "rootguard-unbound/**"
-      - "rootguard-core/internal/unbound/**"
-      - "rootguard-core/go.mod"
-      - "rootguard-core/go.sum"
-      - ".github/workflows/ci-unbound.yml"
+      # See ci-core.yml's identical comment for why.
+      - "scripts/ci/trivy-image-scan.sh"
+      - "scripts/ci/trivy-version.env"
+      - ".trivyignore.yaml"
+  # No paths filter here, unlike push above - found in review: "Test
+  # amd64"/"Test arm64"/"Guided-settings scenario tests" are required
+  # branch-protection status checks (round 11), and a path filter meant
+  # they wouldn't trigger on every PR (round 10 finding 9). The
+  # expensive multi-arch build below stays path-gated on its own
+  # (detect-unbound-changes) rather than also running unconditionally -
+  # it was never required and there's no reason to build+publish-check
+  # unbound images for a PR that never touched them.
+  pull_request: {}
   workflow_dispatch:
     inputs:
       release_tag:
@@ -48,6 +54,14 @@ jobs:
       - name: Build validation image
         working-directory: rootguard-unbound
         run: docker build -t rootguard-unbound:test .
+
+      # Found in review, round 14: this is one of the two published
+      # images (Blockpage is the other, see ci-blockpage.yml) that
+      # trivy-image-scan.sh (round 13) never covered - see
+      # trivy-image-scan.sh's own header comment for the full gap this
+      # closes.
+      - name: Scan image for vulnerabilities
+        run: ./scripts/ci/trivy-image-scan.sh rootguard-unbound:test
 
       - name: Validate Unbound configuration
         run: >-
@@ -91,8 +105,23 @@ jobs:
             rootguard-unbound:test \
             -c 'test -w /var/lib/unbound/root.key && touch /var/lib/unbound/root.key.compat'
 
+      # Found in review: the DNSSEC checks below used to query real
+      # internet domains (example.com, dnssec-failed.org) directly - a
+      # transient DNS/network hiccup on the runner's own connection then
+      # fails this job for reasons that have nothing to do with the code
+      # under test. Confirmed live: main's own independent, scheduled run
+      # of this exact job failed this way multiple times in a row.
+      # setup.sh signs a small throwaway zone fresh every run and serves
+      # it locally; inject.sh (below) reaches it via the container's own
+      # network gateway - no --add-host needed here.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Start resolver smoke-test container
         run: docker run --rm --detach --name rootguard-unbound-ci rootguard-unbound:test
+
+      - name: Wire the resolver up to the local DNSSEC test zone
+        run: ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound-ci
 
       - name: Verify recursive DNS and DNSSEC
         run: |
@@ -103,9 +132,9 @@ jobs:
             sleep 1
           done
           test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-ci)" = "healthy"
-          valid="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 example.com A +dnssec +time=3 +tries=1)"
+          valid="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 good.rgtest-ci.internal A +dnssec +time=3 +tries=1)"
           grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
-          broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 dnssec-failed.org A +time=3 +tries=1)"
+          broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 bad.rgtest-ci.internal A +time=3 +tries=1)"
           grep -q 'status: SERVFAIL' <<<"$broken"
           # hide-identity/hide-version: these CHAOS-class probes are how a
           # scanner fingerprints the resolver software/version to target
@@ -154,14 +183,54 @@ jobs:
         working-directory: rootguard-unbound
         run: docker build -t rootguard-unbound:test .
 
+      # Found in review: this was still on setup-go v5 (GitHub already
+      # warns about its Node.js 20 runtime, soon to be enforced as
+      # Node.js 24) and missing cache-dependency-path (a cache-miss
+      # warning on every run) - every other workflow in this repo
+      # already uses this exact pinned v7 + cache-dependency-path
+      # combination; this was simply never updated to match.
       - name: Setup Go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: rootguard-core/go.mod
+          cache-dependency-path: rootguard-core/go.sum
+
+      # See the `test` job's own "Start local DNSSEC test authority"
+      # comment above - TestScenarioDNSSECFailures used to dig real
+      # internet domains directly and lost the same external-network race.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
 
       - name: Run scenario tests
         working-directory: rootguard-core
         run: go test -tags integration ./internal/unbound/... -run TestScenario -v
+
+  # Only meaningful for a pull_request run - now that this workflow
+  # triggers unconditionally on PRs (see the "on:" block's own comment),
+  # build-push itself stays gated on whether the PR actually touched
+  # anything unbound-related, same scope the old pull_request.paths
+  # filter used to cover. push/workflow_dispatch/schedule runs always
+  # want the real build regardless, so this job is a no-op skip for
+  # those (build-push's own "needs" tolerates a skipped dependency - see
+  # its own condition below).
+  detect-unbound-changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          git fetch --quiet origin "${{ github.event.pull_request.base.sha }}"
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" HEAD \
+             | grep -qE '^(rootguard-unbound/|rootguard-core/internal/unbound/|rootguard-core/go\.(mod|sum)$|\.github/workflows/ci-unbound\.yml$)'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
   # Runs only after both native amd64 and arm64 legs of `test` pass, plus
   # the guided-settings scenario tests - the multi-arch image built and
@@ -172,7 +241,8 @@ jobs:
   # guided-settings regression as a publish blocker too.
   build-push:
     name: Build and push multi-arch image
-    needs: [test, scenario-tests]
+    needs: [test, scenario-tests, detect-unbound-changes]
+    if: always() && needs.test.result == 'success' && needs.scenario-tests.result == 'success' && (github.event_name != 'pull_request' || needs.detect-unbound-changes.outputs.changed == 'true')
     runs-on: ubuntu-latest
     permissions:
       contents: read

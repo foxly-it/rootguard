@@ -37,9 +37,10 @@ DNS-Filterung, rekursive DNS-Auflösung und DNSSEC-Validierung.
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
 > [!IMPORTANT]
-> RootGuard befindet sich in einer öffentlichen Beta. Die Version ist zum
-> Ausprobieren und für reproduzierbare Rückmeldungen gedacht. Sie ist noch nicht
-> für den Einsatz als einziger DNS-Dienst in einer Produktivumgebung vorgesehen.
+> RootGuard befindet sich in der öffentlichen Release-Candidate-Phase vor 1.0.
+> Die Version ist zum Ausprobieren und für reproduzierbare Rückmeldungen
+> gedacht. Sie ist noch nicht für den Einsatz als einziger DNS-Dienst in einer
+> Produktivumgebung vorgesehen.
 
 ## Warum RootGuard?
 
@@ -66,14 +67,14 @@ Geräte im Netzwerk → AdGuard Home → Unbound → DNS-Hierarchie
 
 ## Quick Start
 
-Voraussetzung ist ein Rechner mit Docker Compose v2. Die öffentliche Beta
-verwendet fertige Images für `amd64` und `arm64`; ein lokaler Build ist nicht
-notwendig.
+Voraussetzung ist ein Rechner mit Docker Compose v2. Die öffentliche
+Release-Candidate-Phase verwendet fertige Images für `amd64` und `arm64`; ein
+lokaler Build ist nicht notwendig.
 
 ```sh
 mkdir rootguard && cd rootguard
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/.env.release.example
 ```
 
 Erzeuge zwei voneinander unabhängige Sicherheitsschlüssel:
@@ -88,7 +89,7 @@ Werte getrennt als `ROOTGUARD_API_TOKEN` und `ROOTGUARD_RECOVERY_TOKEN` ein.
 Starte anschließend den Stack:
 
 ```sh
-docker compose -f compose.alpha.yaml up -d
+docker compose -f compose.release.yaml up -d
 ```
 
 Öffne `http://<IP-des-Docker-Hosts>:8080/login` und folge dem geführten Setup.
@@ -186,9 +187,9 @@ and DNSSEC validation.
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
 > [!IMPORTANT]
-> RootGuard is a public beta intended for evaluation and reproducible
-> feedback. It is not yet recommended as the only DNS service for a production
-> network.
+> RootGuard is in public release-candidate testing ahead of 1.0, intended for
+> evaluation and reproducible feedback. It is not yet recommended as the only
+> DNS service for a production network.
 
 ### Why RootGuard?
 
@@ -215,13 +216,14 @@ Network devices → AdGuard Home → Unbound → DNS hierarchy
 
 ### Quick start
 
-RootGuard requires Docker Compose v2. The public beta provides ready-made
-`amd64` and `arm64` container images, so no local build is required.
+RootGuard requires Docker Compose v2. The public release-candidate phase
+provides ready-made `amd64` and `arm64` container images, so no local build is
+required.
 
 ```sh
 mkdir rootguard && cd rootguard
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/compose.alpha.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v0.1.0-beta.1/.env.alpha.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/.env.release.example
 ```
 
 Generate two independent random security tokens:
@@ -236,7 +238,7 @@ separately for `ROOTGUARD_API_TOKEN` and `ROOTGUARD_RECOVERY_TOKEN`. Then start
 the stack:
 
 ```sh
-docker compose -f compose.alpha.yaml up -d
+docker compose -f compose.release.yaml up -d
 ```
 
 Open `http://<docker-host-ip>:8080/login` and follow the guided setup. The setup

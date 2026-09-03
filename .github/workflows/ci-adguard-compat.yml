@@ -47,6 +47,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Found in review: "Verify DNS through AdGuard and Unbound" below
+      # used to dig real internet domains directly - a transient DNS/
+      # network hiccup on the runner's own connection then fails this job
+      # for reasons that have nothing to do with the code under test.
+      # Confirmed live: main's own independent, scheduled CI failed this
+      # way. setup.sh signs a small throwaway zone fresh every run and
+      # serves it locally; compose.integration.yaml's own extra_hosts on
+      # the unbound service is what makes it reachable from inside the
+      # container that's about to be wired up to it below.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Build RootGuard stack
         run: docker compose -f compose.integration.yaml build
 
@@ -88,11 +100,23 @@ jobs:
           test "$(jq -r .filtering_enabled <<<"$status")" = "true" || { echo "Expected filtering to be enabled by default"; exit 1; }
           test "$(jq -r '.total_filter_lists >= 1' <<<"$status")" = "true" || { echo "Expected at least one filter list"; exit 1; }
 
+      - name: Wire the resolver up to the local DNSSEC test zone
+        run: |
+          ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::rootguard-unbound never became healthy again after being wired up to the local DNSSEC test zone" >&2
+          exit 1
+
       - name: Verify DNS through AdGuard and Unbound
         run: |
-          answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
+          answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 good.rgtest-ci.internal A)"
           test -n "$answer"
-          dnssec_status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 dnssec-failed.org A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
+          dnssec_status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 bad.rgtest-ci.internal A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
           test "$dnssec_status" = "SERVFAIL"
 
       - name: Verify filtering toggle round-trip

@@ -357,11 +357,29 @@ func (m *Manager) update(service string) {
 		m.fail(service, fmt.Errorf("backup %s: %w", service, err))
 		return
 	}
-	defer m.enforceBackupRetention()
+	// Found in review: a plain `defer m.enforceBackupRetention()` here
+	// used to run *after* this function's own fail()/finish() call had
+	// already unlocked m.mu with a terminal state (Idle/Failed) visible
+	// - a BackupStatus() call landing in that exact window saw the
+	// pre-pruning backup count, confirmed live by a real, reproducible
+	// test failure (retention count off by one, only under CI's own
+	// timing). enforceBackupRetention() must complete before the
+	// terminal state becomes observable, on every exit path below
+	// (success, every failure, rollback, no_change alike) - these two
+	// wrappers guarantee that ordering uniformly instead of repeating
+	// the call at each of the nine return points individually.
+	fail := func(err error) {
+		m.enforceBackupRetention()
+		m.fail(service, err)
+	}
+	finish := func(image, currentID, candidateID string, available bool, message string) {
+		m.enforceBackupRetention()
+		m.finish(service, image, currentID, candidateID, available, message)
+	}
 	m.setProgress(service, "Lade das freigegebene Ziel-Image.")
 	pullOutput, err := m.run(ctx, "pull", targetImage)
 	if err != nil {
-		m.fail(service, fmt.Errorf("pull target image: %w", err))
+		fail(fmt.Errorf("pull target image: %w", err))
 		return
 	}
 	if qualified, ok := digestFromPullOutput(targetImage, pullOutput); ok {
@@ -371,7 +389,7 @@ func (m *Manager) update(service string) {
 	}
 	candidateID, err := m.inspectImage(ctx, targetImage)
 	if err != nil {
-		m.fail(service, err)
+		fail(err)
 		return
 	}
 	if candidateID == oldID {
@@ -379,20 +397,20 @@ func (m *Manager) update(service string) {
 			Service: service, Outcome: "no_change", FromID: oldID, ToID: candidateID,
 			Message: "Der Dienst verwendet bereits das aktuelle Image.", CreatedAt: time.Now().UTC(),
 		})
-		m.finish(service, currentImage, oldID, candidateID, false, "Der Dienst verwendet bereits das aktuelle Image.")
+		finish(currentImage, oldID, candidateID, false, "Der Dienst verwendet bereits das aktuelle Image.")
 		return
 	}
 
 	m.setProgress(service, "Prüfe die Release-Attestierung des Ziel-Images.")
 	if err := m.attestationVerifier(ctx, service, targetImage); err != nil {
-		m.fail(service, fmt.Errorf("attestation: %w", err))
+		fail(fmt.Errorf("attestation: %w", err))
 		return
 	}
 
 	m.setProgress(service, "Migriere persistente Volume-Berechtigungen für das Ziel-Image.")
 	previousOwnership, err := m.migrateVolumeOwnership(ctx, spec, oldID, candidateID)
 	if err != nil {
-		m.fail(service, fmt.Errorf("migrate persistent volume ownership: %w", err))
+		fail(fmt.Errorf("migrate persistent volume ownership: %w", err))
 		return
 	}
 
@@ -401,7 +419,7 @@ func (m *Manager) update(service string) {
 		if restoreErr := m.restoreVolumeOwnership(ctx, previousOwnership, oldID); restoreErr != nil {
 			err = fmt.Errorf("%v; restore volume ownership: %w", err, restoreErr)
 		}
-		m.fail(service, err)
+		fail(err)
 		return
 	}
 	err = m.composeUp(ctx, service)
@@ -417,14 +435,14 @@ func (m *Manager) update(service string) {
 				Service: service, Outcome: "failed", FromID: oldID, ToID: candidateID,
 				Message: fmt.Sprintf("Update und Rollback fehlgeschlagen: %v", rollbackErr), CreatedAt: time.Now().UTC(),
 			})
-			m.fail(service, fmt.Errorf("update failed: %v; rollback failed: %w", updateErr, rollbackErr))
+			fail(fmt.Errorf("update failed: %v; rollback failed: %w", updateErr, rollbackErr))
 			return
 		}
 		m.recordHistory(HistoryEntry{
 			Service: service, Outcome: "rolled_back", FromID: oldID, ToID: candidateID,
 			Message: "Das fehlerhafte Update wurde sicher zurückgesetzt.", CreatedAt: time.Now().UTC(),
 		})
-		m.fail(service, fmt.Errorf("update failed and was rolled back safely: %w", updateErr))
+		fail(fmt.Errorf("update failed and was rolled back safely: %w", updateErr))
 		return
 	}
 	entry := HistoryEntry{
@@ -434,7 +452,7 @@ func (m *Manager) update(service string) {
 	m.recordHistory(entry)
 	cleanup := m.cleanupAfterSuccess(ctx, service)
 	m.attachCleanup(cleanup)
-	m.finish(service, targetImage, candidateID, candidateID, false, spec.DisplayName+" wurde aktualisiert und erfolgreich geprüft.")
+	finish(targetImage, candidateID, candidateID, false, spec.DisplayName+" wurde aktualisiert und erfolgreich geprüft.")
 }
 
 func (m *Manager) recordHistory(entry HistoryEntry) {
@@ -643,11 +661,51 @@ func (m *Manager) composeUp(ctx context.Context, service string) error {
 	return err
 }
 
+// selectImage records image as service's selected image and persists it.
+// Found in review: a failed persist here used to leave the new image
+// selected in memory (and, whenever state.json's own write inside that
+// persist attempt happened to succeed while a later file in the same
+// batch - updates.yaml - failed, on disk too) even though every caller
+// treats a selectImage failure as the whole operation failing and rolls
+// back everything else it already did (volume ownership migration, the
+// container swap that never happens). A later, unrelated successful
+// persist would then self-heal updates.yaml to an image this process
+// itself just finished rolling back away from - state.json's canonical
+// "selected" would have quietly advanced past a change that was never
+// actually applied. Reverting the selection (and re-persisting that
+// reversion) before returning the error keeps the canonical state
+// honest: a failed selectImage means nothing changed, full stop, not
+// just "the container swap didn't happen but the record of it selecting
+// this image did".
 func (m *Manager) selectImage(service, image string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	previous, existed := m.selected[service]
 	m.selected[service] = image
-	return m.persistLocked()
+	if err := m.persistLocked(); err != nil {
+		// Found in review, round 6: this used to unconditionally write
+		// m.selected[service] = previous, which left behind an explicit
+		// service: "" entry for a service that had never been selected
+		// before (previous is Go's zero value for a missing key) instead
+		// of restoring "no entry at all" - overrideContentLocked's own
+		// TargetImage fallback treats both the same today, so this never
+		// actually surfaced, but a reverted selectImage should leave the
+		// exact state it found, not a lookalike.
+		if existed {
+			m.selected[service] = previous
+		} else {
+			delete(m.selected, service)
+		}
+		// Best-effort: WriteFiles renames state.json before updates.yaml
+		// (see persistLocked's own comment), so this still corrects
+		// state.json back to the previous selection even if whatever
+		// blocked updates.yaml the first time blocks it again here - and
+		// persistLocked already records any failure via
+		// Status().PersistError regardless of what this call returns.
+		_ = m.persistLocked()
+		return err
+	}
+	return nil
 }
 
 func (m *Manager) verifyWithRetry(ctx context.Context, service string) error {
@@ -748,17 +806,44 @@ func (m *Manager) serviceNames() []string {
 	return names
 }
 
+// persistedState is the canonical, single-file on-disk representation of
+// everything persistLocked writes - see its own doc comment for why this
+// replaced the previous status.json/images.json split.
+type persistedState struct {
+	Status   Status            `json:"status"`
+	Selected map[string]string `json:"selected"`
+}
+
 func (m *Manager) load() {
-	data, err := os.ReadFile(filepath.Join(m.dataDir, "status.json"))
-	if err == nil {
+	if data, err := os.ReadFile(filepath.Join(m.dataDir, "state.json")); err == nil {
+		var state persistedState
+		if json.Unmarshal(data, &state) == nil && state.Status.State != "" {
+			m.status = state.Status
+			m.selected = state.Selected
+			return
+		}
+	}
+	// Migration path for a data directory written by a version before
+	// state.json existed (every real installation up to and including
+	// 1.0.0-rc.1) - read the old split files once, then let the normal
+	// persistLocked path (triggered by the caller of NewManager, same as
+	// any other status change) fold them into state.json on the next
+	// write. The old files are deliberately left in place rather than
+	// deleted - harmless, inert leftovers once state.json exists, not
+	// worth the extra failure mode of trying to remove them.
+	loadedLegacyStatus := false
+	if data, err := os.ReadFile(filepath.Join(m.dataDir, "status.json")); err == nil {
 		var status Status
 		if json.Unmarshal(data, &status) == nil && status.State != "" {
 			m.status = status
+			loadedLegacyStatus = true
 		}
 	}
-	data, err = os.ReadFile(filepath.Join(m.dataDir, "images.json"))
-	if err == nil {
+	if data, err := os.ReadFile(filepath.Join(m.dataDir, "images.json")); err == nil {
 		_ = json.Unmarshal(data, &m.selected)
+	}
+	if loadedLegacyStatus {
+		_ = m.persistLocked()
 	}
 }
 
@@ -803,16 +888,48 @@ func (m *Manager) persistLocked() (returnErr error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return err
 	}
-	if err := atomicfile.WriteJSON(filepath.Join(m.dataDir, "status.json"), m.status); err != nil {
+	// Found in a follow-up review: the previous status.json/images.json
+	// split, even after atomicfile.WriteFiles started staging both before
+	// renaming either (see that function's own doc comment), still had a
+	// real residual gap - renaming N files can never be one atomic
+	// operation on POSIX, so a rename failing (or the process dying)
+	// between the two renames still left them in two different
+	// generations, exactly the scenario this whole fix exists to close.
+	// The atomicfile_test.go regression test for that residual window
+	// demonstrates it deliberately, as its own doc comment says.
+	//
+	// Closing it for real: m.status and m.selected are now one canonical
+	// file (state.json, persistedState below), written with a single
+	// atomicfile.WriteJSON call - one rename is *always* atomic on POSIX,
+	// so there is no longer a multi-file window here at all, residual or
+	// otherwise. updates.yaml is not part of that canonical state - it's
+	// a pure function of m.selected, regenerated fresh on every persist
+	// (and, via the migration path in load() plus the same regeneration
+	// here, self-healing on the very next persist if it's ever missing or
+	// stale relative to state.json) for docker compose to read, not a
+	// second source of truth this process itself depends on. Still
+	// written via WriteFiles alongside state.json (best-effort, narrows
+	// the window in the common case) rather than a separate call, purely
+	// so a normal successful persist keeps them in lockstep without an
+	// extra fsync round-trip - not because updates.yaml being briefly
+	// behind is a split-brain risk the way the old two-JSON-file split
+	// was.
+	stateFile, err := atomicfile.JSONFile(filepath.Join(m.dataDir, "state.json"), persistedState{
+		Status:   m.status,
+		Selected: m.selected,
+	})
+	if err != nil {
 		return err
 	}
-	if err := atomicfile.WriteJSON(filepath.Join(m.dataDir, "images.json"), m.selected); err != nil {
-		return err
+	overrideFile := atomicfile.File{
+		Path: filepath.Join(m.dataDir, "updates.yaml"),
+		Data: []byte(m.overrideContentLocked()),
+		Mode: 0600,
 	}
-	return m.writeOverrideLocked()
+	return atomicfile.WriteFiles([]atomicfile.File{stateFile, overrideFile})
 }
 
-func (m *Manager) writeOverrideLocked() error {
+func (m *Manager) overrideContentLocked() string {
 	var content strings.Builder
 	content.WriteString("services:\n")
 	for _, service := range m.serviceNames() {
@@ -822,7 +939,7 @@ func (m *Manager) writeOverrideLocked() error {
 		}
 		content.WriteString("  " + service + ":\n    image: " + strconv.Quote(image) + "\n")
 	}
-	return atomicfile.WriteFile(filepath.Join(m.dataDir, "updates.yaml"), []byte(content.String()), 0600)
+	return content.String()
 }
 
 func cloneStatus(status Status) Status {

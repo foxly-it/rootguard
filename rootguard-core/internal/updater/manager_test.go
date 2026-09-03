@@ -589,3 +589,258 @@ func TestStatusSurfacesPersistFailureAndSelfHeals(t *testing.T) {
 		t.Fatalf("expected PersistErrorAt to clear after a successful persist, got %v", status.PersistErrorAt)
 	}
 }
+
+// TestPersistLockedStateJSONIsSingleFileAtomic is the regression test for
+// a follow-up review finding: even after persistLocked started staging
+// status.json/images.json/updates.yaml through one atomicfile.WriteFiles
+// call (round 3's own fix), renaming several files can never be one
+// atomic operation on POSIX - a rename failing (or the process dying)
+// between two renames still left status.json and images.json in two
+// different generations, the exact scenario the fix was supposed to
+// close. This test's own predecessor (of the same name pattern)
+// demonstrated that residual window deliberately.
+//
+// Closed for real now: m.status and m.selected are one canonical file,
+// state.json, written with a single atomicfile.WriteJSON call - and a
+// single file's write-temp-then-rename is unconditionally atomic, no
+// residual window at all. Proven here by sabotaging updates.yaml (now a
+// separate, purely derived, self-healing artifact - see
+// TestUpdatesYAMLSelfHealsAfterAFailedPersist below) so its own rename
+// fails, and confirming state.json still updates correctly regardless -
+// a failure in the derived artifact must never block the canonical state
+// from advancing.
+//
+// Exercises persistLocked directly, not through selectImage - found in a
+// later review round that selectImage itself now reverts m.selected (and
+// re-persists that reversion) on any persist failure, specifically so a
+// failed *operation* never leaves the canonical state claiming an image
+// selection that was never actually applied (see
+// TestSelectImageRevertsSelectionOnPersistFailure below). That's a
+// property of selectImage as a whole, orthogonal to what this test
+// actually verifies about persistLocked's own single-call behavior -
+// testing through selectImage here would just be asserting selectImage's
+// revert logic a second time under a name that says something else.
+func TestPersistLockedStateJSONIsSingleFileAtomic(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir: dataDir,
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "Core", TargetImage: "rootguard-core:latest",
+		}},
+	})
+
+	manager.selected["core"] = "rootguard-core:gen1"
+	if err := manager.persist(); err != nil {
+		t.Fatal(err)
+	}
+	statePath := filepath.Join(dataDir, "state.json")
+	overridePath := filepath.Join(dataDir, "updates.yaml")
+
+	// Replace updates.yaml with a directory - os.Rename(tempFile,
+	// overridePath) reliably fails against this on every OS. state.json
+	// is first in persistLocked's WriteFiles call, so this leaves its own
+	// rename already committed regardless of what happens to updates.yaml
+	// next.
+	if err := os.Remove(overridePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(overridePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	manager.selected["core"] = "rootguard-core:gen2"
+	if err := manager.persist(); err == nil {
+		t.Fatal("expected the persist to fail (updates.yaml's rename can't succeed against a directory)")
+	}
+
+	stateAfter, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(stateAfter), "rootguard-core:gen2") {
+		t.Fatalf("expected state.json to still advance to gen2 despite updates.yaml's own failure, got:\n%s", stateAfter)
+	}
+}
+
+// TestUpdatesYAMLSelfHealsAfterAFailedPersist is
+// TestPersistLockedStateJSONIsSingleFileAtomic's other half: updates.yaml
+// is a pure function of m.selected (part of state.json's own canonical
+// content), not a second source of truth - so once whatever blocked its
+// own write is gone, the very next successful persist must bring it back
+// in sync with whatever the canonical state actually is at that point.
+// Exercises persistLocked directly, not selectImage - see the sibling
+// test's own comment on why.
+func TestUpdatesYAMLSelfHealsAfterAFailedPersist(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir: dataDir,
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "Core", TargetImage: "rootguard-core:latest",
+		}},
+	})
+	overridePath := filepath.Join(dataDir, "updates.yaml")
+
+	manager.selected["core"] = "rootguard-core:gen1"
+	if err := manager.persist(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(overridePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(overridePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manager.selected["core"] = "rootguard-core:gen2"
+	if err := manager.persist(); err == nil {
+		t.Fatal("expected this persist to fail while updates.yaml is blocked")
+	}
+
+	// Whatever blocked updates.yaml is gone now - the very next persist
+	// must self-heal it to match the current (gen2) canonical state.
+	if err := os.Remove(overridePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.persist(); err != nil {
+		t.Fatal(err)
+	}
+	healed, err := os.ReadFile(overridePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(healed), "rootguard-core:gen2") {
+		t.Fatalf("expected updates.yaml to self-heal to the gen2 image, got:\n%s", healed)
+	}
+}
+
+// TestSelectImageRevertsSelectionOnPersistFailure is the regression test
+// for a follow-up review finding: selectImage set m.selected to the new
+// image *before* persisting, and a persist failure (e.g. updates.yaml's
+// own write failing, as sabotaged below) still left that new image
+// selected - both in memory and, whenever state.json's own write inside
+// that same failed attempt happened to succeed anyway (see
+// TestPersistLockedStateJSONIsSingleFileAtomic above - it does), on disk
+// too. Every real caller (update()) treats a selectImage failure as the
+// whole operation failing and rolls back everything else it already did
+// (volume ownership migration, the container swap that never happens) -
+// so the canonical selection quietly advancing past a change that was
+// never actually applied was a real, if narrow, inconsistency: a later,
+// unrelated successful persist would self-heal updates.yaml to an image
+// this process itself had already finished rolling back away from.
+func TestSelectImageRevertsSelectionOnPersistFailure(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir: dataDir,
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "Core", TargetImage: "rootguard-core:latest",
+		}},
+	})
+	statePath := filepath.Join(dataDir, "state.json")
+	overridePath := filepath.Join(dataDir, "updates.yaml")
+
+	if err := manager.selectImage("core", "rootguard-core:gen1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(overridePath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(overridePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.selectImage("core", "rootguard-core:gen2"); err == nil {
+		t.Fatal("expected selectImage to fail while updates.yaml is blocked")
+	}
+
+	if got := manager.selected["core"]; got != "rootguard-core:gen1" {
+		t.Fatalf("expected the in-memory selection to revert to gen1 after the failed selectImage, got %q", got)
+	}
+	stateAfter, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(stateAfter), "rootguard-core:gen2") {
+		t.Fatalf("expected state.json to have reverted to gen1, not still claim gen2 was selected, got:\n%s", stateAfter)
+	}
+	if !strings.Contains(string(stateAfter), "rootguard-core:gen1") {
+		t.Fatalf("expected state.json to still show the reverted gen1 selection, got:\n%s", stateAfter)
+	}
+}
+
+// TestSelectImageRevertsToNoSelectionOnFirstPersistFailure is the sibling
+// of TestSelectImageRevertsSelectionOnPersistFailure above for a service
+// that had never been selected before - found in review, round 6: the
+// revert used to unconditionally write m.selected[service] = previous,
+// which for a never-selected service (previous is Go's zero value "" for
+// a missing key) left behind an explicit service: "" map entry instead of
+// no entry at all. overrideContentLocked's own TargetImage fallback
+// treats both the same, so this never actually surfaced - but a reverted
+// selectImage should leave the exact state it found, not a lookalike.
+func TestSelectImageRevertsToNoSelectionOnFirstPersistFailure(t *testing.T) {
+	dataDir := t.TempDir()
+	manager := NewManager(Options{
+		DataDir: dataDir,
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "Core", TargetImage: "rootguard-core:latest",
+		}},
+	})
+	overridePath := filepath.Join(dataDir, "updates.yaml")
+
+	if err := os.Mkdir(overridePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := manager.selectImage("core", "rootguard-core:gen1"); err == nil {
+		t.Fatal("expected selectImage to fail while updates.yaml is blocked")
+	}
+
+	if _, existed := manager.selected["core"]; existed {
+		t.Fatalf("expected no map entry for a never-selected service after the failed selectImage, got %q", manager.selected["core"])
+	}
+}
+
+// TestLoadMigratesLegacyStatusAndImagesJSON is the regression test for
+// the migration path load() needs now that status.json/images.json were
+// consolidated into state.json: every real installation up to and
+// including 1.0.0-rc.1 has data directories in the old split-file shape
+// on disk, and must not lose their update history/selected-image state
+// the first time they run a Core build with this change.
+func TestLoadMigratesLegacyStatusAndImagesJSON(t *testing.T) {
+	dataDir := t.TempDir()
+	legacyStatus := `{"state":"idle","message":"legacy state","services":[],"updated_at":"2026-08-29T00:00:00Z"}`
+	legacyImages := `{"core":"rootguard-core:legacy-pin"}`
+	if err := os.WriteFile(filepath.Join(dataDir, "status.json"), []byte(legacyStatus), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "images.json"), []byte(legacyImages), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := NewManager(Options{DataDir: dataDir})
+
+	status := manager.Status()
+	if status.Message != "legacy state" {
+		t.Fatalf("expected the legacy status.json content to be loaded, got %+v", status)
+	}
+	if manager.selected["core"] != "rootguard-core:legacy-pin" {
+		t.Fatalf("expected the legacy images.json content to be loaded, got %+v", manager.selected)
+	}
+
+	// Migrated to state.json immediately (load() re-persists once after a
+	// successful legacy read), not deferred until the next unrelated
+	// status change.
+	stateData, err := os.ReadFile(filepath.Join(dataDir, "state.json"))
+	if err != nil {
+		t.Fatalf("expected state.json to exist after migration, got: %v", err)
+	}
+	if !strings.Contains(string(stateData), "legacy state") || !strings.Contains(string(stateData), "rootguard-core:legacy-pin") {
+		t.Fatalf("expected state.json to contain the migrated legacy content, got:\n%s", stateData)
+	}
+
+	// A second Manager pointed at the same, now-migrated directory must
+	// load from state.json directly - the legacy files are stale
+	// leftovers from here on, never read again.
+	reloaded := NewManager(Options{DataDir: dataDir})
+	if reloaded.Status().Message != "legacy state" {
+		t.Fatalf("expected the reloaded manager to read the migrated state.json, got %+v", reloaded.Status())
+	}
+}

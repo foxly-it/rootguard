@@ -1361,3 +1361,2393 @@ tests" job is a Go-level test (`go test -tags integration
 this fix touches was never actually exercised by CI at all. Fixed by
 adding the same `ROOTGUARD_SKIP_ATTESTATION: "${ROOTGUARD_SKIP_ATTESTATION:-false}"`
 passthrough compose.release.yaml already had, to both files.
+
+## Follow-up review, round 3 (2026-08-29)
+
+A third independent review, focused specifically on the release pipeline
+and DNSSEC enforcement ahead of the RC. Same discipline as rounds 1 and
+2: verify directly in code, scope the fix, test with real teeth,
+document, PR, merge - one item at a time.
+
+**Critical, fixed: `harden-dnssec-stripped` bypass via a quoted `"no"` or
+`'no'`.** Round 2 fixed the literal-suffix-match gap for
+`harden-dnssec-stripped: no` (extra whitespace, trailing comments, no
+space after the colon) by comparing a properly parsed, comment-stripped,
+trimmed value instead of matching the raw line. It still compared that
+value's raw text, though - Unbound's own config lexer strips one layer of
+matching double or single quotes from a directive value before its
+parser ever sees it, so `harden-dnssec-stripped: "no"` and
+`harden-dnssec-stripped: 'no'` are both ordinary, spec-legal ways to
+write exactly the same disabling value that never equal-folded to the
+bare `no` the round-2 check looked for.
+
+Fixed in `rootguard-core/internal/unbound/custom.go`: `directiveValue`
+now strips one matching layer of quotes, mirroring Unbound's lexer, before
+any comparison happens. The `harden-dnssec-stripped` check itself was
+also flipped from a blacklist (`value != "no"`) to a whitelist
+(`value == "yes"`) - for this one directive specifically, refusing
+anything that isn't unambiguously the safe value is judged safer than
+continuing to enumerate every spelling of the unsafe one a future
+Unbound-accepted quoting or aliasing might produce. `custom_test.go`
+gained regression cases for both quoted-`no` spellings, an ambiguous
+non-yes/no value, and quoted-`yes` acceptance (must still be allowed).
+
+**Critical, fixed: the guided setup's first-ever deploy would refuse
+activation of a real, correctly signed release image.** Round 2 wired
+`stack.RequireAttestation` into `installer.Manager`, gating both
+`deploy()` and `restoreDeploy()` right before `compose up`. It called
+that gate with `Options.UnboundImage`/`Options.BlockpageImage`
+unchanged, though - plain `repo:tag` references, exactly what a release
+hands the installer (see `release-alpha.yml`). `RequireAttestation`
+requires an explicit `repo@sha256:...` reference and short-circuits to
+`not_applicable` - itself a hard refusal, not a skip - for anything else,
+without ever invoking cosign. So every real deploy, correctly signed
+release included, failed here the same way a forged one would have, just
+for an unrelated reason: this would have surfaced as soon as a genuine
+end user ran the actual guided setup against a real release, not just in
+this review.
+
+Root cause was purely a missing digest-resolution step: `rootguard-updater`
+and `internal/updater` both already resolve a freshly pulled image to its
+digest before their own attestation check (`digestFromPullOutput`/
+`digestQualify`), but `installer.Manager` never had the equivalent.
+Fixed with a `resolveDigest`/`resolveAndPinDigests` pair in
+`internal/installer/manager.go` - a third by-hand copy of the same
+~15-line `docker image inspect` lookup (separate Go modules, and here
+also a separate manager with its own `CommandRunner` wiring, can't share
+an `internal/` package for it; see `digestQualify`'s own comment for why
+a shared module wasn't judged worth it). Called right after `pull`
+succeeds and before `create`/`start`: resolves Unbound's (and, when
+enabled, Blockpage's) pulled image to its digest, then rewrites the
+stack definition to reference that digest instead of the original tag -
+so `create`/`up` actually starts the exact image that was attested, not
+whatever the tag points at if it moves in between attestation and
+activation.
+
+New regression test `TestDeployResolvesDigestBeforeAttestation`
+deliberately leaves `AttestationVerifier` unset (defaults to the real
+`stack.RequireAttestation`, unlike every existing attestation test here,
+which uses a fake verifier that can't catch a bug in what's actually
+passed to it) and asserts the resulting failure is a real, failed
+attestation attempt - not the `not_applicable` short-circuit that made
+every deploy fail closed regardless of whether the image was ever really
+signed - plus that the written `compose.yaml` references the resolved
+digest, not the original mutable tag. Also updated the existing
+`TestWriteComposeSelectsBetaImage` and both call sites in `deploy()`/
+`restoreDeploy()` for `writeCompose`'s new explicit
+`(unboundImage, blockpageImage string)` parameters (previously read
+`m.unboundImage`/`m.blockpageImage` directly, which the digest-resolved
+rewrite now needs to override).
+
+**Critical, fixed: a re-run of `release-alpha.yml` could move an
+already-published release tag onto untested commits, and always
+force-pushed it regardless.** Two compounding bugs in the "Point the
+release tag at the pin-update commit" step:
+
+1. `git rev-parse "refs/tags/${tag}"` resolves an *annotated* tag (which
+   `git tag -a` always creates here) to the tag object's own hash, not
+   the commit it points at - so the step's own "already correct, nothing
+   to do" comparison against a target commit hash could never match,
+   on any run, ever. Every single run force-moved the tag, whether it
+   actually needed to or not. Fixed with `refs/tags/${tag}^{}`, which
+   dereferences through the tag object the same way `git rev-parse`
+   already does for every other object type.
+2. Whenever this run's "Commit updated pins" step found nothing to
+   commit (the pins in the checked-out `source_ref` already matched),
+   the tag target fell back to `origin/main`'s *current* tip - reasoning
+   that held only if main hadn't moved since `source_ref` was fixed. A
+   legitimately retried run (e.g. after a later job failed and the whole
+   workflow re-ran) re-checks that reasoning against whatever now
+   happens to be on main, which can by then include unrelated commits
+   this specific release run never built, tested, or security-scanned.
+   Confirmed live: a real RC's tag and its own Core image's OCI revision
+   label pointed at two different commits because of exactly this.
+   Fixed by using `needs.version.outputs.source_ref` (the one commit
+   every job in the run actually agrees on) instead, with an explicit
+   `git merge-base --is-ancestor` check that aborts the release loudly
+   if `source_ref` is no longer reachable from `origin/main`, rather than
+   silently tagging whatever main currently points at.
+
+Verified the YAML still parses and every embedded `run:` block in the
+whole workflow file still passes `bash -n` (no dedicated shellcheck job
+exists in this repo to run instead).
+
+**Critical, fixed: candidate-image promotion trusted the candidate
+blindly and could silently overwrite an already-published version
+tag.** `update-alpha-pins`'s "Promote candidate images to the final
+release tag" step called `docker buildx imagetools create` for every
+image unconditionally, using a digest that - on a retried run where
+`publish`'s build/attest steps were skipped because the candidate
+already existed - was never re-verified against anything: not that it
+was actually built from the commit this release run tested (the
+candidate tag only encodes a 12-char commit prefix), not that it
+actually carries a valid release attestation, and not whether the final
+tag it was about to (re)create already pointed at something else
+entirely.
+
+Fixed with three checks added before promotion, run unconditionally for
+every image on every run (so "even when the build was skipped" is
+automatically covered, not a separate code path to keep in sync):
+
+1. The candidate's `org.opencontainers.image.revision` label (read via
+   `docker buildx imagetools inspect --format '{{json .Image}}'`, which
+   this session verified live against a real published RootGuard image
+   on ghcr.io to confirm the exact field path) must equal the *full*
+   `source_ref` commit SHA, not just its 12-char prefix.
+2. `cosign verify-attestation` must succeed against the candidate,
+   using the identical policy `stack.RequireAttestation` enforces at
+   deploy time (`internal/stack/attestation.go`) - added a
+   `sigstore/cosign-installer` step (pinned to the same `v3.0.6` cosign
+   release `rootguard-core`'s own Dockerfile uses) to make the binary
+   available on the runner.
+3. The final tag's existing digest (if any) is inspected first: missing
+   → create; already the candidate's own digest → no-op (an idempotent
+   retry); anything else → hard abort. A published version tag must
+   never start silently resolving to different content - if `${VERSION}`
+   was already published pointing elsewhere, that needs a new version
+   number, not a forced overwrite of this one.
+
+**Medium, fixed: the release smoke test never actually deployed or
+verified the blockpage image it just published.** `smoke-test` never set
+`ROOTGUARD_BLOCKPAGE_IMAGE` (every other RootGuard-built image had its
+own env var pointing the deploy at this run's candidate), and its deploy
+config never set `blockpage_enabled: true` (default off) - so the
+blockpage image, built and published by the exact same `publish` job as
+everything else in the run, was never actually started, never
+attestation-checked, and never smoke-tested by any release run. A broken
+blockpage image (bad nginx config, a broken entrypoint script, anything
+short of the build itself failing) could have shipped fully undetected.
+
+Fixed by adding `ROOTGUARD_BLOCKPAGE_IMAGE` to the job's env (same
+`candidate_tag`-scoped reference every other image already uses),
+turning `blockpage_enabled: true` on in the deploy config, and adding a
+real reachability/content check after the existing DNS/DNSSEC checks:
+`curl`s the blockpage's own root page (it binds on
+`config.DNSBindAddress:80` once enabled, per `installer.Manager`'s
+`blockpagePort`) and asserts the response actually contains the real
+page's content, not just that the container started.
+
+**Medium, fixed: `updater.Manager`'s multi-file persistence
+(`status.json`/`images.json`/`updates.yaml`) was only atomic per file,
+not as a group.** All three files derive from the same in-memory state
+(`m.status`/`m.selected`) and are read back together on startup
+(`load()`), but `persistLocked` called `atomicfile.WriteJSON`/`WriteFile`
+once per file in sequence - a failure partway through (the review's own
+example: `images.json` failing to write after `status.json` had already
+been committed) left them silently inconsistent with each other, visible
+on the very next `load()`.
+
+Fixed with a new `atomicfile.WriteFiles`/`atomicfile.JSONFile` pair: every
+file in a batch is staged (written to its own temp file, fsynced) before
+any of them is renamed into place, and none are renamed unless every
+single one staged successfully - a staging failure (the dominant real
+cause: disk full, permissions, an I/O error) now leaves every file in the
+batch completely untouched, not just the one that actually failed.
+Renaming several files still can't be one atomic operation on POSIX, so
+a residual window remains if a rename itself fails after every file
+already staged - narrowed from "an arbitrarily slow write of a later
+file" down to "the moment between two already-guaranteed-to-succeed
+renames", documented explicitly in `WriteFiles`' own doc comment as the
+best available guarantee without a write-ahead log or combining the
+files into one. `persistLocked` now builds all three as one batch and
+calls `WriteFiles` once.
+
+New tests at both layers: `atomicfile_test.go` gained
+`TestWriteFilesLeavesEveryFileUntouchedWhenAnyStagingFails` (a staging
+failure changes nothing) and
+`TestWriteFilesCleansUpRemainingTempFilesOnRenameFailure` (the documented
+residual window, with no leaked temp files); `updater`'s own
+`manager_test.go` gained
+`TestPersistLockedKeepsMultiFileStateConsistentOnFailure`, which
+reproduces the review's exact scenario end-to-end through the real
+`Manager` (not just the `atomicfile` primitive) and proves the strongest
+available claim - sabotaging the first file in commit order so its own
+rename fails leaves all three files, including the two after it, at
+their previous generation with zero partial commits.
+`rootguard-webapp/backend`'s own three atomic-write call sites
+(credentials/sessions/audit log) and `rootguard-updater`'s
+`control-plane-images.yaml` were checked too: neither has this
+tightly-coupled, read-back-together shape (each is either independent or
+never re-read into memory at startup), so neither needed the same fix.
+
+**Medium, fixed: `README.md`, `SECURITY.md`/`SECURITY.de.md`, and
+`docs/release-history.md` still described RootGuard as an old-series
+alpha/beta - `README.md`'s Quick Start pointed new users at
+`v0.1.0-beta.1`'s `compose.alpha.yaml`/`.env.alpha.example` under the
+`compose.alpha.yaml` name that release ever used, while every other
+release artifact had long since moved to `v1.0.0-rc.1` and
+`compose.release.yaml`. `site/index.html`/`site/docs.html` already
+showed the correct `1.0.0-rc.1` version number in most places but still
+called RootGuard "the [public] beta" in three prose spots -
+`scripts/check-site-facts.sh`'s version check doesn't judge prose,
+only version-string currency, so a stale word next to a correct version
+number was invisible to it.
+
+Nothing checked `README.md` at all: `scripts/check-site-facts.sh`/
+`bump-site-versions.sh` only ever scoped themselves to `site/*.html`, so
+README could (and did) drift indefinitely with no CI signal. Verified
+directly: `source scripts/version-pattern.sh && rootguard_extract_versions
+< README.md` cleanly extracted exactly the one stale version string with
+no false positives (confirmed the AGPL-3.0-or-later license mention
+doesn't accidentally match - it's only two dot-separated groups, the
+extractor requires three).
+
+Fixed: manually corrected `README.md` (both `curl` URLs' tag and
+filenames, the `docker compose -f` command, and the "public beta"
+callout in both language sections), `SECURITY.md`/`SECURITY.de.md`
+("public alpha" -> "public release-candidate testing ahead of 1.0"),
+`docs/release-history.md`'s "current public release" line, and the
+three stale `site/*.html` prose spots. Then, rather than leave this to
+drift stale again next release, extended both scripts' `for file in
+site/*.html` loops to also cover `README.md` - the same version-string
+substitution/check logic already handles it cleanly (verified: reverting
+just `README.md`'s fix and re-running `check-site-facts.sh` correctly
+reports 4 stale matches; the real fixed version passes clean). Left the
+scripts' local link/asset check site/*.html-only - README's relative
+links resolve against a different base and it has none of the broken-
+local-asset kind that check exists for.
+
+**Medium, fixed: the blockpage's `/api/reason` comment claimed `$host`
+"is never a client-supplied parameter", which isn't accurate.** `$host`
+resolves from the request's `Host` header (no real `server_name` to fall
+back to - the block is `server_name _`), and the `Host` header is
+exactly as client-controlled as any other request header: nothing stops
+a client on the DNS bind network from sending an arbitrary `Host` to
+this endpoint directly, without ever going through a real
+AdGuard-triggered sinkhole for that domain. That makes it a real, if
+narrow, "is domain X currently blocked" oracle against the household's
+own AdGuard instance - not a made-up concern, but also not something a
+DNS-sinkhole architecture using a custom blocking IP (RootGuard's or any
+other's, e.g. Pi-hole's own equivalent) has a real channel to prevent
+entirely: there's no way to prove "this request came from a genuine DNS
+block" beyond the `Host` header itself.
+
+Fixed the comment to state this accurately - what's actually true
+($host reflects genuine client intent in the *legitimate* flow, simply
+because that's how HTTP virtual hosting works, but this endpoint can't
+distinguish that from a hand-crafted probe), what's scoped (whoever can
+already reach the container - the same audience every legitimately
+sinkholed client also reaches it from), and what's revealed (only a
+blocked/not-blocked verdict, no browsing history). Also tightened the
+real, cheap mitigation available: `limit_req_zone` from `5r/s` to `1r/s`
+and the endpoint's own `burst` from `10` to `3` - the single legitimate
+client (`web/meta.js`, one `fetch` per page load) never needs more than
+an occasional quick reload's worth of requests, so this comfortably
+covers real usage while cutting bulk domain-enumeration throughput
+roughly 15x.
+
+**Medium, fixed: `PersistError`/`PersistErrorAt` reached the frontend's
+API types but were never actually rendered anywhere.** Round 2 made
+`installer.Manager`/`updater.Manager` clear and re-set these fields
+truthfully around every persist attempt, and the corresponding TS types
+in `api/client.ts` gained the matching optional fields - but nothing in
+the React UI ever read them. A user had no way to see that the state
+shown was live-accurate but not durably saved, and could silently
+regress on the next restart of RootGuard Core.
+
+Fixed with a warning banner (amber `--warning`/`--warning-soft` tokens,
+distinct from the existing red error banners - the live state itself is
+still correct, only its durability is in question) in the two places
+that already render the status objects carrying these fields: the
+dashboard (`Overview.tsx`, for `InstallationStatus.persist_error`) and
+the Stack page (`Stack.tsx`, for `UpdateStatus.persist_error`). Both
+show the error message and a localized timestamp, in both `en`/`de`
+locales. Frontend lint, all 26 tests, and the production build
+(`tsc -b && vite build`) all pass.
+
+**Low, fixed: an invalid stored `theme` value permanently broke the
+blockpage's theme toggle button.** `web/theme.js`'s `applyTheme` did
+`btn.appendChild(icons[mode])` - if `localStorage.getItem(...)` returned
+anything other than the three real modes (a leftover from an older
+schema, hand-edited/corrupted storage, nothing actually enforces the
+stored value's shape), `icons[mode]` was `undefined` and
+`appendChild(undefined)` throws, crashing the whole IIFE during its very
+first `applyTheme` call at page load - before the click listener was
+even registered, so the toggle button stayed permanently dead until the
+stale value was manually cleared from the browser.
+
+Fixed with a `storedMode()` helper that falls back to `"system"` for
+anything not one of the three real modes, used at both the initial load
+and the click handler. Verified live with Playwright against the real
+`web/index.html` (served locally, not simulated): with
+`localStorage.rootguard.blockpage.theme` deliberately set to a garbage
+value, the unfixed version reliably threw the exact `TypeError` and left
+the button completely unresponsive to clicks (`data-theme` never
+changed); the fixed version threw nothing, correctly fell back to system
+theme, and the button worked normally on the very first click. Applied
+identically to `rootguard-webapp/frontend/public/blockpage-preview/theme.js`,
+kept byte-for-byte in sync with the real one per existing convention.
+
+**Low, fixed: the FritzBox router-discovery dial guard rejected
+zone-qualified IPv6 link-local addresses outright.**
+`rejectNonPrivateControl` used `net.ParseIP` on the dialer's resolved
+`ip:port`, but link-local IPv6 addresses are ambiguous without a zone
+identifier (the same address can exist on multiple interfaces) - a real
+dial to one resolves to exactly the `fe80::1%en0` shape, and
+`net.ParseIP` has never supported the `%zone` suffix at all, returning
+`nil` unconditionally for it. Every zone-qualified link-local address
+was refused regardless of actually being private, even though
+`isRouterReachable` explicitly accepts link-local addresses.
+
+Fixed by switching to `net/netip.ParseAddr`, which parses the zone
+correctly and exposes the identical `IsPrivate`/`IsLinkLocalUnicast`/
+`IsLoopback` methods `net.IP` has - `isRouterReachable` now takes a
+`netip.Addr`. Verified the old failure mode directly (`net.ParseIP`
+returns `nil` for `"fe80::1%en0"`) and added the regression case to both
+`TestRejectNonPrivateControlRejectsPublicAddresses` (via the dialer's
+bracketed `[fe80::1%en0]:80` shape) and `TestIsRouterReachable`.
+
+**Low, fixed: Core's and Updater's Dockerfiles `apk add`-installed
+packages unpinned, redundantly.** Both installed `docker-cli-compose`
+(Updater also `ca-certificates`) via a plain `apk add --no-cache` with
+no version pin - a real reproducible-builds gap, the exact package
+version fetched could drift between two builds of the same commit even
+though the base image digest itself is pinned. Checked whether pinning
+was even the right fix first: fetched the upstream
+`docker-library/docker` source for the exact `docker:29-cli` digest both
+Dockerfiles already pin, and confirmed it already bundles `docker
+compose` (currently v5.5.0) as a CLI plugin at
+`/usr/local/libexec/docker/cli-plugins/docker-compose` - one of Docker
+CLI's standard plugin search paths, and exactly the subcommand form this
+codebase actually invokes (`docker compose ...`, not the legacy
+hyphenated standalone binary) - and `ca-certificates` from that same
+base image's own upstream Dockerfile. Both installs were purely
+redundant, not filling a real gap.
+
+Removed both `apk add` lines entirely rather than pinning packages that
+were never needed - closes the reproducibility gap outright (nothing
+left to fetch at build time at all) instead of just narrowing it.
+
+## Follow-up review, round 4 (2026-08-29)
+
+A fourth independent review of round 3's own fixes - two of them turned
+out to be incomplete rather than wrong outright. Same discipline as every
+round before: verify directly in code (and, for the release pipeline,
+against the actual published `1.0.0-rc.1` artifacts on ghcr.io), scope
+the fix, test with real teeth, document, PR, merge.
+
+**Critical, fixed: a release re-run could still fold untested commits
+into the tag, and still force-moved it on any mismatch.** Round 3 fixed
+the annotated-tag dereference bug and added a `merge-base --is-ancestor`
+check to the tag-pointing step's fallback path, but two gaps remained,
+both confirmed live against the actual `1.0.0-rc.1` release: its Core
+image's `org.opencontainers.image.revision` label (`76c178a1...`) and its
+git tag's target commit (`a51602c8...`) differ by three commits, not the
+one documented pin commit.
+
+Root cause: `release-version-bump.yml` still pre-created the release tag
+right after the changelog commit, before `release-alpha.yml` (dispatched
+next) had run a single test against it. `release-alpha.yml`'s
+`update-alpha-pins` job then had to *move* that pre-existing tag onto its
+own, later pin commit once everything passed - and to build that pin
+commit, it `git fetch`ed and `git rebase`d onto `origin/main`'s current
+tip before pushing, so any commit that had landed on `main` in the
+window between the changelog push and the pin push became an ancestor of
+the pin commit, and therefore part of the tag, without this release ever
+having built, tested, or security-scanned it. Separately, whenever an
+existing tag didn't match the freshly computed target, the tag-pointing
+step still force-moved it unconditionally (`git tag -f -a` +
+`git push --force`) rather than treating any mismatch as suspicious.
+
+Fixed with a real redesign, not another patch on the same shape:
+
+- `release-version-bump.yml` no longer creates the tag at all - just the
+  changelog commit, pushed straight to `main`.
+- `release-alpha.yml`'s pin-commit step no longer rebases: it checks
+  `origin/main == SOURCE_REF` first and hard-aborts the whole release if
+  main has moved, with an explicit message to start a fresh release
+  instead - never silently folding in commits this run never tested.
+- The tag is now created in exactly one place, once, after every gate
+  (test, security, smoke-test, upgrade-test) has actually passed,
+  directly on the pin commit - and is *never* force-moved again
+  afterward: an existing tag that already matches is a no-op, one that
+  doesn't is a hard error demanding a by-hand fix, not a silent
+  overwrite.
+- New guard in the `version` job: `SOURCE_REF` must have the currently
+  published latest release's own commit as an ancestor (or be that exact
+  commit again, the legitimate same-version-retry case) before anything
+  else runs - a stale re-dispatch or a version override against the
+  wrong commit is rejected immediately, before wasting a full
+  test/publish/smoke-test/upgrade-test cycle on a release that can't
+  land cleanly anyway. This is commit-ancestry, not a version-number
+  comparison, so it also catches a deliberately-higher version string
+  typed against an old commit, not just a numerically-lower one.
+
+The existing, already-published `1.0.0-rc.1` was deliberately left
+untouched - the next real release (whichever version that turns out to
+be) will be the first cut under the corrected pipeline.
+
+**Critical, fixed: the installer could still pin a stale image digest,
+and mis-split any registry:port image reference.** Round 2's
+`resolveDigest` (`internal/installer/manager.go`) inspected the local
+image object's full `.RepoDigests` list and took the *first* entry
+matching the repo - already documented, on `digestFromPullOutput` in
+`internal/updater/github_release.go`, as unreliable: a local image
+object isn't scoped to "what was just pulled", so if it's ever
+associated with more than one digest for the same repo (a real,
+previously-hit failure mode in this exact codebase), the first match can
+silently be a stale one. `resolveDigest` reused exactly that unreliable
+shape instead of the more authoritative pattern already established
+right next to it. Separately, its `strings.Cut(image, ":")` repo/tag
+split mis-parses any reference naming a registry host:port (e.g.
+`registry.example:5000/rootguard-unbound:tag` split into
+`registry.example` and `5000/rootguard-unbound:tag`), silently breaking
+the digest lookup for that entire class of reference.
+
+Fixed by switching `resolveDigest`'s primary path to `docker pull`'s own
+reported digest (`digestFromPullOutput`'s pattern - authoritative for
+"what was just pulled" in a way a post-hoc inspect isn't), with the old
+`.RepoDigests` inspect kept only as a last-resort fallback for an
+unexpected pull-output shape; and a new `imageRepo` helper that only
+treats a colon after the last `/` as the tag separator, the same rule
+Docker's own reference parser uses.
+
+While fixing this, found the identical `strings.Cut(image, ":")` bug
+already live - not just as a pattern to copy, but in actual production
+code paths - in both `digestQualify`/`digestFromPullOutput` copies this
+installer function was modeled on:
+`rootguard-core/internal/updater/github_release.go` and
+`rootguard-updater/image.go`. Fixed all three with the same `imageRepo`
+helper (kept in sync by hand across all three files, matching this
+codebase's existing convention for this exact ~15-line lookup, and
+noted as such in each copy's own comment) rather than leaving two of
+them silently broken for the same reference shape.
+
+New regression tests: `TestResolveDigestPrefersPullOutputOverStaleRepoDigests`
+(a stale-first-match `.RepoDigests` fixture next to the correct
+pull-reported digest - must prefer the latter),
+`TestResolveDigestFallsBackToRepoDigestsWhenPullOutputIsUnparsable` (the
+deliberate fallback path still works), and `TestImageRepoHandlesRegistryPort`
+in all three affected files (installer, `internal/updater`,
+`rootguard-updater`), covering a registry:port reference, a nested
+namespace under one, a plain Docker Hub-style reference, and both
+tagless-input shapes.
+
+**Medium, fixed: candidate-image promotion only checked the first
+platform's revision label, not all of them.** `release-alpha.yml`'s
+promotion step read every platform's `org.opencontainers.image.revision`
+label but then took only the *first* non-null one
+(`... | map(select(. != null)) | first`) - a multi-arch manifest with a
+correct `amd64` label and a wrong or entirely missing `arm64` one still
+passed. Fixed to require exactly the two platforms the publish job's own
+build matrix always produces (`linux/amd64`, `linux/arm64`) and every
+one of them carrying the correct label - verified live with `jq` against
+the real published `1.0.0-rc.1` Core image, both for the passing case
+and a deliberately wrong expected revision.
+
+A fourth independent review of round 3's own fixes - some turned out to
+be incomplete rather than wrong outright. Same discipline as every round
+before: verify directly in code, scope the fix, test with real teeth,
+document, PR, merge.
+
+**Medium, fixed: `updater.Manager`'s multi-file persistence still had a
+residual split-brain window after round 3's own fix.** Round 3 made
+`persistLocked` stage `status.json`/`images.json`/`updates.yaml` through
+a single `atomicfile.WriteFiles` call rather than three separate
+`WriteFile`/`WriteJSON` calls, closing the dominant failure mode (a
+staging failure now leaves every file untouched) - but correctly flagged
+by this review as still incomplete: renaming multiple files can never be
+one atomic operation on POSIX, so a rename failing (or the process dying)
+between two renames still left `status.json` and `images.json` in two
+different generations, exactly the scenario the fix was supposed to
+close. `atomicfile_test.go`'s own
+`TestWriteFilesCleansUpRemainingTempFilesOnRenameFailure` demonstrates
+that residual window deliberately, as its own doc comment already said.
+
+Closed for real this time, not narrowed further: `m.status` and
+`m.selected` were only ever two separate files because nobody had asked
+whether they needed to be - both are plain internal JSON with no
+external reader forcing them apart, unlike `updates.yaml` (a different
+format, read by `docker compose -f`). Consolidated them into one
+canonical file, `state.json`, written with a single
+`atomicfile.WriteJSON`/`WriteFiles` call - a single file's
+write-temp-then-rename is unconditionally atomic, so there is no longer
+a multi-file window for the canonical state at all, residual or
+otherwise. `updates.yaml` stays a separate file (still batched together
+with `state.json` via `WriteFiles` for the common case), but is now
+understood explicitly as a pure function of `m.selected` - a derived
+artifact for `docker compose` to read, not a second source of truth this
+process itself depends on, so a failure isolated to its own write no
+longer blocks the canonical state from advancing, and self-heals on the
+very next successful persist.
+
+Added a migration path in `load()` for the many real installations
+(every one up to and including `1.0.0-rc.1`) whose data directories are
+still in the old split-file shape on disk: read the legacy
+`status.json`/`images.json` once if `state.json` doesn't exist yet, then
+immediately re-persist into the new combined format - a silent,
+one-time, automatic migration on first boot with the fix, not a manual
+step or a loss of update history. The old files are left in place as
+harmless, never-read-again leftovers rather than deleted.
+
+New/replaced tests: `TestPersistLockedStateJSONIsSingleFileAtomic`
+(sabotages `updates.yaml` specifically and confirms `state.json` still
+advances correctly - a derived-artifact failure must never block the
+canonical state), `TestUpdatesYAMLSelfHealsAfterAFailedPersist` (proves
+the self-healing claim: `updates.yaml` catches back up to the canonical
+state on the next successful persist once whatever blocked it clears),
+and `TestLoadMigratesLegacyStatusAndImagesJSON` (writes old-format
+fixtures, constructs a real `Manager`, and confirms both the in-memory
+state and the newly-migrated `state.json` on disk are correct, then
+confirms a second `Manager` against the same now-migrated directory
+reads `state.json` directly). Also corrected `atomicfile.go`'s own
+`WriteFiles` doc comment, which had claimed combining files "existing
+on-disk formats and external readers... make impractical here" - true
+for `updates.yaml`, not true for the `status.json`/`images.json` pair
+this fix just combined; the comment now says so and recommends
+combining over `WriteFiles` whenever every file in question really is
+this process's own internal format with no external reader forcing them
+apart.
+
+**Small items, fixed:**
+
+- `internal/routerimport/fritzbox_test.go` wasn't `gofmt`-formatted
+  (drifted after a hand-aligned map literal picked up a new entry in an
+  earlier round) - `gofmt -w`'d, and added a `gofmt -l` gate to
+  `ci-core.yml`/`ci-updater.yml`/`ci-webapp.yml` (none of `go test`/
+  `go vet` check formatting at all) so this specific class of drift
+  fails CI instead of waiting for a human to notice.
+- `scripts/lib/semver-validate.sh` had no shebang, so `shellcheck`
+  couldn't determine its dialect (`SC2148`) and skipped real analysis of
+  a file using bash-specific syntax (`[[ ... =~ ... ]]`, `local`).
+  Added `#!/usr/bin/env bash`, matching the sibling `version-pattern.sh`
+  file's own existing convention for a sourced-only script. Swept the
+  rest of `scripts/*.sh` with `shellcheck` too - every remaining
+  finding is a genuine false positive (`SC2154` for a variable set by
+  whatever sources the file, `SC2329` for a test-harness function
+  invoked indirectly), confirmed one by one, not just assumed.
+- `rootguard-core/Dockerfile`'s comment claimed the pinned `docker:29-cli`
+  digest bundles Docker Compose v5.5.0 - correct for
+  `docker-library/docker`'s current upstream source, but that source
+  had moved on since this exact digest was built. Correlated the
+  digest's own build timestamp (`docker buildx imagetools inspect`,
+  2026-08-10) against upstream's commit history for that date instead of
+  trusting its current `HEAD` - the digest actually bundles v5.4.0.
+  Comment corrected; the underlying fix (removing the redundant `apk
+  add`) was already correct regardless of the exact version claimed.
+- The release smoke test's blockpage check only ever proved the static
+  HTML page loads - `/api/reason` (the live-data endpoint, proxying
+  through Core with the shared service token) was deployed but never
+  exercised, so a broken token hand-off or a broken Core-side route
+  could have shipped undetected. Added a real check: queries `/api/reason`
+  for a plain, unblocked domain and asserts a real, non-empty `"reason"`
+  came back - nginx's own upstream-failure fallback returns
+  `{"available":false}` with no `"reason"` key, so this fails if any
+  link in the chain (nginx auth, the proxy, Core's own route, AdGuard)
+  is broken.
+- `rootguard-blockpage/web/theme.js` and its webapp in-app preview copy
+  (`rootguard-webapp/frontend/public/blockpage-preview/theme.js`) are
+  deliberately duplicated byte-for-byte rather than built from one
+  shared source - flagged as a low-priority drift risk, not a bug (both
+  copies were, and still are, correct). Rather than restructure either
+  component's build right before the RC, added a plain `diff` check to
+  both `ci-blockpage.yml` and `ci-webapp.yml` - a future edit to one
+  side without the other now fails CI immediately instead of silently
+  drifting unnoticed.
+
+**Medium, fixed: component-level documentation still described an old
+alpha/beta lifecycle phase, and five per-component `SECURITY.md` files
+were dead monorepo-migration leftovers.** `docs/platform-support.md`
+and `site/roadmap.html` still said "public beta" in their framing
+copy (their actual content - the `0.9`/release-candidate milestone
+status, the support-policy version pattern - was already accurate,
+just the surrounding lifecycle wording wasn't). `ROADMAP.md`'s own
+"Status and scope" section still said "pre-release beta development"
+with a "Last reviewed" date three weeks stale relative to its own
+later, accurate `0.9 RC` section.
+
+The five `rootguard-*/SECURITY.md` files turned out to be worse than
+stale wording: leftovers from before the monorepo migration, each
+pointing at its own now-archived, read-only per-component repo's
+vulnerability-reporting page (e.g.
+`github.com/foxly-it/rootguard-core/security/advisories/new`) - a dead
+reporting channel, not just an outdated one. GitHub's own repository
+Security tab only ever surfaces the *root* `SECURITY.md`
+(already corrected to "release-candidate testing" in round 3); these
+subdirectory copies have no special standing in a monorepo and nothing
+in the codebase links to them (`grep`-verified). Deleted all five rather
+than updating their wording - the root `SECURITY.md`/`SECURITY.de.md`
+is the single canonical policy for the whole monorepo.
+
+Fixed the genuinely current-state lifecycle claims in
+`docs/platform-support.md`, `site/roadmap.html` (the page's own `<meta
+description>`/`data-description-*` attributes; its milestone-history
+labels like "0.1 ALPHA" are correctly left alone - those name what a
+past milestone *was called*, not a claim about today), and
+`ROADMAP.md`'s top summary - left every genuinely historical reference
+(a specific past release's own state, a milestone's own name,
+`CHANGELOG.md`'s generated entries, this very audit log's own record of
+what used to say what) untouched throughout, the same
+historical-vs-current distinction `check-site-facts.sh`'s own exclusion
+pattern already draws.
+
+## Follow-up review, round 5 (2026-08-29)
+
+A fifth independent review of round 4's own fixes - three of them turned
+out to be genuinely incomplete rather than wrong outright, confirmed live
+against the actual repository and, where relevant, the real published
+`1.0.0-rc.1` artifacts. Same discipline as every round before.
+
+**Critical, fixed: the tag-push trigger was now structurally
+incompatible with the never-move-a-tag design round 4 built.**
+`release-alpha.yml` still also triggered on a pushed `v*.*.*` tag - but
+that design now requires the tag to not exist yet when the workflow
+starts, created exactly once at the very end, on the pin commit, and
+never moved again under any circumstance. A manually pushed tag violates
+that from the first step (it already exists, on the pre-pin source
+commit, before a single test has run) and round 4's own "never move a
+published tag" guard would then correctly, but unhelpfully, refuse to
+ever finish that release. Removed the trigger entirely -
+`release-version-bump.yml`'s own `workflow_dispatch` is the one
+supported way to cut a release (see `docs/release-process.md`, also
+corrected in this round - it still described the old atomic
+commit-and-tag push and a tag that gets "moved" rather than created
+once). The now-dead `GITHUB_REF_NAME`-derived version fallback that
+trigger needed went with it, not left behind as unreachable code.
+
+**Critical, fixed: final image tags were promoted before the
+main-hasn't-moved check that could still reject the whole release.**
+Round 4 added a check that `origin/main` still equals the tested
+`SOURCE_REF`, but only inside the "Commit updated pins" step - by which
+point `update-alpha-pins` had already promoted every component to its
+*final* `VERSION` image tag, irreversibly, several steps earlier. A PR
+merging during the long test/publish/smoke-test/upgrade-test window
+ahead of this job could reach that later check, get correctly rejected,
+and still leave the version number permanently unusable: its final
+image tags already public, with no way to ever create a matching git
+tag, GitHub Release, or pinned compose file for them. Added the
+identical check right after checkout, before anything in the job writes
+anything irreversible - the original check right before the actual pin
+commit stays too, as defense-in-depth against the now much narrower
+remaining window (a handful of setup steps, not the entire E2E phase).
+
+**Critical, fixed: nothing prevented publishing a semantically older,
+merely-unused version number.** Round 4's ancestry guard
+(`git merge-base --is-ancestor`) only verified that the source commit
+descends from the latest published release - never that the *version
+number itself* has higher SemVer precedence. Confirmed live: a manual
+override requesting `0.9.9` against a `HEAD` genuinely descending from
+the real published `1.0.0-rc.1` passed that check cleanly, and could
+have gone on to reset `README.md`/site/compose pins back to it. New
+`scripts/lib/semver-compare.sh` implements real SemVer 2.0 precedence
+(deliberately not `sort -V` - confirmed live it gets this project's own
+imminent rc→stable transition backwards: `1.0.0` sorts *below*
+`1.0.0-rc.1`, when a version with no prerelease suffix must always
+outrank a prerelease of the same core version) and is exercised in both
+`release-version-bump.yml` (guards a hand-typed version override) and
+`release-alpha.yml`'s own `version` job (defense-in-depth, and the only
+gate for a fully manual dispatch). Hand-verified against the full
+canonical SemVer.org precedence chain
+(`1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta <
+1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0`) plus every case from
+`rootguard-updater`'s own `TestIsOlderReleaseVersion` table, and live
+against the real repository reproducing the exact `0.9.9` scenario.
+
+**Medium, fixed: the multi-platform revision check verified platform
+*count*, not platform *names*.** Round 4 fixed "only the first
+platform's label was checked" by requiring exactly two platforms, all
+matching - still not enough, confirmed live with the same `jq`
+expression: a manifest naming `linux/amd64` and `linux/s390x` (two
+platforms, correct label on both) passed cleanly, since nothing checked
+*which* two. Now compares the sorted platform key set against the exact
+pair the publish job's build matrix always produces
+(`["linux/amd64","linux/arm64"]`), not just its length.
+
+**Medium, fixed: a failed `updates.yaml` write still left the new image
+selected in `state.json`.** `selectImage` set `m.selected[service]` to
+the new image *before* persisting - a persist failure (updates.yaml's
+own write failing, while state.json's own write inside the same attempt
+succeeded, exactly what round 4's own fix guarantees) still left that
+new image selected, both in memory and on disk, even though every real
+caller treats a `selectImage` failure as the whole operation failing and
+rolls back everything else it already did (volume ownership migration,
+the container swap that never happens). `manager_test.go`'s own round-4
+test explicitly demonstrated this as the expected behavior. `selectImage`
+now reverts the selection (and re-persists that reversion - state.json's
+own rename still isn't blocked by updates.yaml failing again, per round
+4's design) before returning the error, so a failed operation means
+nothing changed, full stop. The two round-4 tests that asserted the old
+behavior now exercise `persistLocked` directly instead (still correctly
+proving that lower-level, still-true property); a new
+`TestSelectImageRevertsSelectionOnPersistFailure` proves the higher-level
+revert.
+
+**Medium, fixed: eight files linked to the per-component `SECURITY.md`
+files round 4 deleted.** Each component's own `README.md`/
+`CONTRIBUTING.md` linked to its own `SECURITY.md` via a plain,
+unqualified `[SECURITY.md](SECURITY.md)` - correct before round 4's
+deletion (dead monorepo-migration leftovers, confirmed via a narrow grep
+for those specific paths only), broken after it, since nothing checked
+markdown links generally. Repointed all eight at the canonical root
+`SECURITY.md` (`../SECURITY.md`). Added `scripts/check-markdown-links.sh`
+- checks every local link across every tracked markdown file in the repo
+resolves to a real file, wired into `ci.yml`'s existing always-runs
+`validate` job - and verified it live both ways: reports exactly these
+eight breakages against the pre-fix files, reports clean once fixed.
+
+**Small items, fixed:** `ci-unbound.yml` was still on `actions/setup-go`
+v5 (GitHub already warns about its Node.js 20 runtime) and missing
+`cache-dependency-path` (a cache-miss warning every run) - every other
+workflow in this repo already used the same pinned v7 + cache path
+combination; this one was simply never updated to match.
+
+## Follow-up review, round 6 (2026-08-30)
+
+A sixth independent review, covering round 5's own fixes plus live repo
+state (workflow run history, GitHub API settings) rather than only the
+diff. Same discipline as every round before.
+
+**Medium, fixed: `semver-compare.sh`'s numeric-identifier comparison
+overflowed bash's signed 64-bit integer range.** Both
+major/minor/patch and numeric prerelease identifiers were compared via
+`$(( ))` bash arithmetic - SemVer 2.0 doesn't cap numeric identifiers at
+64 bits, bash does. Confirmed live:
+`semver_compare 9223372036854775807.0.0 9223372036854775808.0.0`
+returned `1` (the second value ranked *lower*), because
+`10#9223372036854775808` overflows and wraps negative past
+`9223372036854775807`. Replaced with `_semver_compare_numeric_string`, a
+pure string comparison (SemVer's numeric-identifier grammar already
+forbids leading zeros, so a longer decimal digit string is always
+numerically larger, and two equal-length ones compare correctly
+byte-for-byte) - no arithmetic, no width limit. Also fixed: the
+comparator's own header comment referenced a `semver-compare.test-cases`
+file that was never actually created, so the guard shipped with zero
+automated regression coverage. Added `scripts/lib/semver-compare.test.sh`
+- the canonical SemVer.org precedence chain, build-metadata stripping,
+the live-reproduced `0.9.9`-vs-`1.0.0-rc.1` case, and the overflow case
+above - wired into `ci.yml`. Verified both ways: reverting the fix
+reproduces exactly the three overflow-case failures above; the fixed
+version passes all of them.
+
+**Critical, fixed: promotion to the final release tag still happened
+*before* the last main-race check, not after.** Round 5 added an early
+"has main moved" check at the top of `update-alpha-pins`, but everything
+between it and the actual pin commit - buildx/cosign setup, per-image
+attestation checks, promoting all five images to their final `VERSION`
+tags, digest-pin file edits, compose validation, site refresh - still
+ran *before* the one check that actually gated anything irreversible
+(inside "Commit updated pins", unchanged since round 5). A PR merging
+into a narrower but still-real window between the early check and that
+one could still let this run promote final image tags publicly, then
+correctly abort the pin commit/tag/release - leaving the version number
+unusable (a later attempt at the same version number, from the new
+`main` tip, would hit the "published tag must never move" guard on
+promotion) even though nothing else about the release actually shipped.
+
+Reordered so promotion is the *last* thing that can happen, not one of
+the first: candidate/attestation verification (split into its own
+"Verify candidate images and attestations" step, no promotion) stays
+early since it's read-only and safe to abort before; digest-pin file
+edits, compose validation, and the site refresh stay local (no
+dependency on `main`'s state); the pin commit's own main-race check
+(unchanged) is now the single gate; actual promotion
+("Promote candidate images to the final release tag", moved after the
+pin commit) happens only once that commit already exists on `main` - at
+which point nothing left in the job still depends on `main`'s tip at
+all, so a promotion failure here is a plain retry, not a race. Git tag
+and GitHub Release creation were already last (round 5).
+
+Made the pin commit itself retry-safe for this new ordering: a run that
+fails between the pin commit and promotion needs a subsequent retry to
+recognize that its own earlier attempt already landed the commit
+(`origin/main`'s tip no longer equals `SOURCE_REF` at that point, which
+the existing race check would otherwise reject as a fresh race). "Commit
+updated pins" now checks first whether `origin/main`'s current tip
+already carries identical content for the three paths it writes - if so,
+resumes from that existing commit instead of re-committing or
+misreporting a race.
+
+**Small, fixed: a reverted `selectImage` left behind an explicit
+empty-string map entry instead of no entry at all.** `selectImage`'s
+persist-failure revert unconditionally wrote
+`m.selected[service] = previous` - for a service that had never been
+selected before, `previous` is Go's zero value `""` for a missing map
+key, so the revert left `service: ""` in `m.selected` rather than
+restoring "no entry at all".
+`overrideContentLocked`'s own `TargetImage` fallback treats a missing key
+and an explicit empty string identically, so this never actually
+surfaced in practice - but a reverted operation should leave the exact
+state it found, not a lookalike. Now tracks whether the key existed
+before selecting and either restores the previous value or `delete`s the
+key. New `TestSelectImageRevertsToNoSelectionOnFirstPersistFailure`
+covers the previously-untested first-selection case; verified it fails
+against the old unconditional-write code and passes against the fix.
+
+**Small, fixed: the repo-wide markdown-link check
+(`scripts/check-markdown-links.sh`, added round 5) only ever matched one
+inline-link shape.** A hand-rolled regex over `](target)` missed
+reference-style links (`[text][id]`), link reference definitions
+(`[id]: target`), `<...>` autolink-style targets, optional link titles,
+and non-standard code-fence markers (`~~~`, indented or longer backtick
+fences) - all things a real CommonMark parser handles correctly. No
+broken link of any of those shapes exists in the repo today, but the
+check itself was incomplete. Retired the regex script; `ci.yml`'s
+`validate` job now installs `lychee` (version-pinned and
+checksum-verified, same install pattern `release-alpha.yml` already uses
+for `git-cliff`) and runs it `--offline` against every tracked `*.md`
+file - local file links only, no network requests.
+
+**High, fixed: the Debian package-pin refresh automation had been
+silently failing for four runs in a row.** `debian-pin-freshness.yml`
+detects drifted `apt` package pins in `rootguard-unbound/Dockerfile`,
+commits a fix to `chore/debian-pin-refresh`, and opens a PR - the commit
+and push succeeded every time (confirmed live: the remote branch already
+carried the correct `libssl-dev`/`libssl3t64` bump to
+`3.5.7-1~deb13u2`), but `gh pr create` failed every time with "GitHub
+Actions is not permitted to create or approve pull requests", a
+repository-level setting independent of the workflow's own already-
+correct `pull-requests: write` permission. Confirmed via
+`repos/.../actions/permissions/workflow`:
+`can_approve_pull_request_reviews` was `false`. Opened
+[#430](https://github.com/foxly-it/rootguard/pull/430) manually from the
+already-correct branch to unblock the immediate pin drift; the user then
+enabled the repository setting directly (Settings → Actions → General →
+"Allow GitHub Actions to create and approve pull requests"), verified
+live afterward (`can_approve_pull_request_reviews` now `true`) - the
+automation will open its own PRs again the next time a real pin drifts.
+
+**Medium, open - needs a repository-admin decision: `main` has no branch
+protection or ruleset at all.** Confirmed live: both
+`repos/.../branches/main/protection` (404, "Branch not protected") and
+`repos/.../rulesets` (`[]`) are empty. Nothing technically stops a
+force-push or branch deletion, and green PR checks aren't enforced. Not
+fixed in this round - repository-ruleset mutation is a sandboxed action
+this session isn't permitted to perform, and the right configuration is
+a real product decision the repo owner needs to make, not something to
+guess at via API: `release-alpha.yml`'s "Commit updated pins" step
+pushes directly to `main` using the built-in `GITHUB_TOKEN` (as
+`github-actions[bot]`), so a bare "require pull request before merging"
+rule would also block that push unless it's specifically exempted.
+Recommended path: a repository **ruleset** (not classic branch
+protection, which has no per-actor bypass) targeting `main`, with
+"Block force pushes" and "Restrict deletions" enabled unconditionally
+(these never affect a normal, non-force push, so they need no bypass and
+are safe to enable regardless of the rest), and separately "Require a
+pull request before merging" plus "Require status checks to pass" with
+**GitHub Actions** added to the ruleset's bypass list so the release
+workflow's own direct pin-commit push keeps working. Left open for the
+repo owner to configure via the GitHub UI (Settings → Rules → Rulesets →
+New branch ruleset).
+
+## Follow-up review, round 7 (2026-08-30)
+
+A seventh independent review of round 6's own retry-detection fix -
+found it shipped two real bugs of its own, one of which made the retry
+path it was meant to add practically unreachable. Same discipline as
+every round before.
+
+**Releasekritisch, fixed: the round-6 retry fix was unreachable, and
+its own fallback logic could resolve to the wrong commit.** Two
+compounding bugs in `update-alpha-pins`:
+
+1. The early "Verify main hasn't moved" guard (added round 5, kept
+   round 6) still required `origin/main` to equal `SOURCE_REF`
+   *exactly*. The moment "Commit updated pins" ever successfully
+   pushed a pin commit, `origin/main` became that commit - a child of
+   `SOURCE_REF`, never `SOURCE_REF` itself again. Every subsequent
+   retry hit this early guard and aborted *before* "Commit updated
+   pins" ever got a chance to run its own, round-6 retry-recognition
+   logic - the documented retry path was dead code from the moment it
+   shipped. Confirmed live: reproducible by pushing a same-message pin
+   commit to a scratch `main`, then re-running the same check.
+2. Had the early guard been removed on its own, that round-6
+   retry-recognition logic itself had a separate flaw: it compared the
+   *file content* of `compose.release.yaml`/`.env.release.example`/
+   `site/` at `origin/main`'s current tip against what the run had just
+   regenerated - true for this release's own earlier pin commit, but
+   equally true for any later, unrelated commit that simply never
+   touched those three paths. An unrelated commit landing after a
+   genuine pin commit would have been silently accepted as
+   `pin_commit`, and the release tag would then point at an untested,
+   unrelated commit - exactly the tag/image provenance mismatch bug
+   fixed (repeatedly) in earlier rounds, reintroduced through a new
+   door.
+
+Replaced both checks with one shared, precise resolver:
+`scripts/lib/resolve-release-pin-commit.sh`. Identifies the release's
+own pin commit by its unique commit message (nothing else in the
+system ever produces that exact string) rather than by content, then
+independently verifies its shape - a direct, single-parent child of
+`SOURCE_REF` (rejects merge commits and commits built on other,
+untested content), touching only the three paths the real pin-commit
+step ever writes (rejects a commit that happens to carry the right
+message but touches something else too). A revert's auto-generated
+message, which quotes the original as a substring, is also rejected -
+the check is an exact-subject match, not a substring one.
+
+The early guard now delegates to this resolver (empty result: ordinary
+first attempt, unchanged strict behavior; non-empty: a verified retry,
+proceed) and "Commit updated pins" consumes its result directly instead
+of re-deciding the question a second, looser way. Exercised against
+synthetic git histories covering every scenario the review named -
+first attempt, retry right after the pin commit, retry after main moved
+further still, a foreign commit touching the same paths under a
+different message, a revert's substring-matching message, a merge
+commit with the right message, a right-message commit built on the
+wrong parent, and a right-message-and-parentage commit that also
+touches an out-of-scope path - in
+`scripts/lib/resolve-release-pin-commit.test.sh`, wired into `ci.yml`.
+
+**Open, unchanged: `main` still has no branch protection or ruleset.**
+Confirmed still true; see round 6's writeup above for the recommended
+configuration. Still the repo owner's decision to make.
+
+**Small, fixed: `semver-compare.test.sh`'s `source=` shellcheck
+directive resolved to "does not exist" when linted from the repo root.**
+The directive itself was correct; `shellcheck -x` needs its own
+`-P SCRIPTDIR` flag to resolve a `source=` path relative to the linted
+file's own directory rather than the invoking shell's cwd. Documented in
+the file's own header comment - there is no shellcheck job in CI to fix
+a wiring for.
+
+## Follow-up review, round 8 (2026-08-30)
+
+An eighth independent review of round 7's own fix - found a real
+release-critical edge case round 7 didn't cover: identity is not the
+same as currency. Same discipline as every round before.
+
+**Releasekritisch, fixed: a reverted pin commit still resolved as a
+safe retry.** Round 7's `resolve_release_pin_commit` proved a candidate
+commit *was* genuinely this release's own pin commit - unique message,
+direct single-parent child of `SOURCE_REF`, only the three expected
+paths touched - but never checked whether `main`'s current tip still
+*reflected* it. Git history is immutable: reverting a commit doesn't
+rewrite it, it adds a new one on top, so every one of round 7's checks
+still passed against the original, now-superseded commit. Concrete
+scenario, confirmed live: pin commit P lands, promotion fails, a
+maintainer runs `git revert P` to take the public pins back, a retry of
+the same release run still resolves to P, and the workflow skips
+straight past every content and main-race check on the strength of
+that - publishing images, a git tag, a GitHub Release, and a Pages
+deploy of the reverted site, all under pins `main` had explicitly taken
+back.
+
+Two related gaps closed alongside it, both confirmed live against the
+pre-fix resolver the same way:
+- A same-message `git commit --allow-empty` passed every round-7 check
+  (there's nothing to be "out of scope" in an empty commit) while never
+  actually pinning anything.
+- A valid pin commit whose paths were changed again by any later,
+  normal commit (not necessarily a revert) had the exact same
+  resolve-to-the-superseded-commit problem.
+
+Fixed inside `resolve_release_pin_commit` itself, so every caller gets
+it automatically: after the existing identity checks, the candidate's
+own tree for the three pin paths must still match `main_ref`'s *current*
+tip - a pure git-ref comparison (no working-tree regeneration needed,
+so it's safe to run from the early guard too, before pin files even
+exist yet). Also now rejects a candidate whose diff against `SOURCE_REF`
+touches neither `compose.release.yaml` nor `.env.release.example` at
+all (the empty-commit case) - a genuine pin commit always changes both,
+since `VERSION` (part of every image reference they pin) always differs
+from whatever the previously published release used.
+
+`release-alpha.yml` no longer passes "Resolve main state"'s answer
+downstream - the window between it and "Commit updated pins" (buildx/
+cosign setup, attestation checks, digest-pin edits, compose validation,
+site refresh) is exactly the kind of gap a revert could land in, so
+"Commit updated pins" now resolves fresh instead of trusting a stale
+answer. "Resolve main state" itself is now purely a fail-fast: it still
+aborts a doomed run early, but nothing downstream reads its result
+anymore. "Commit updated pins" also gained one more, narrower check
+`resolve_release_pin_commit` structurally can't make on its own: it has
+no way to know what the *correct* pin content actually is (that depends
+on this run's own digests, invisible to git-only logic) - so once a
+candidate resolves, this step compares it against what "Update digest
+pins" just regenerated, defense in depth against a hand-crafted commit
+that happens to pass every structural check.
+
+Exercised against synthetic git histories for every scenario named in
+review - a real pin commit later `git revert`-ed, an empty
+`--allow-empty` commit with the right message, a valid pin commit whose
+paths were changed again afterward, and (confirming this was already
+safe, not just adding coverage) a pin commit that exists in the repo
+but was force-pushed out of `main`'s history entirely - in
+`scripts/lib/resolve-release-pin-commit.test.sh`. Verified the first
+three fail against the pre-fix resolver and pass against the fix.
+
+**Small, fixed: the exact pin-commit message was defined three
+times by hand** (the resolver, `release-alpha.yml`'s own commit, and
+this file's own test), with a comment saying to keep them in sync by
+hand. Extracted `release_pin_commit_message()` into
+`resolve-release-pin-commit.sh` - one function, called from all three,
+so a future text change can't silently break retry detection instead of
+failing loudly.
+
+**Small, fixed: the test file used fixed paths under `/tmp`**
+(`/tmp/resolve-stderr`, `/tmp/resolve-stdout`) that a parallel test run
+could collide on. Moved under the test's own `mktemp -d` work
+directory, unique per run.
+
+**Open, unchanged: `main` still has no branch protection or ruleset.**
+Confirmed still true; the Actions PR-creation permission fixed in round
+6 is now correctly enabled. See round 6's writeup for the recommended
+ruleset configuration - still the repo owner's decision to make.
+
+## Live CI investigation during round 8 (2026-08-30)
+
+Not from a review pass - `ci.yml`'s "Verify Unbound configuration
+lifecycle" step started failing three times in a row while verifying
+round 8's PR, on a branch that touches nothing near the webapp/core/
+Unbound runtime. Investigated per an explicit "find and fix the root
+cause, don't just retry" instruction rather than dismissed as flake.
+
+**Medium, fixed: applying Unbound settings could return success before
+Unbound was actually ready to be used.** `applyStateLocked` (the shared
+implementation behind `Apply`, `ApplyBundle`, `ApplyCustom`, and
+`Restore`) wrote the new config and ran `docker restart` on the Unbound
+container, then returned as soon as that command exited - `docker
+restart` returning success only means the container *process* started
+again, not that Unbound itself has finished starting (reading the trust
+anchor, opening its `remote-control` socket). Any caller that
+immediately did anything else against the running daemon could lose
+that race. Confirmed exactly this live: `StartDiagnosticLogging`'s own
+`unbound-control verbosity 2` call, issued by the CI test right after a
+settings-apply restart, intermittently failed with a bare, unguarded
+`curl --fail` exit (no error message reached the log at all) because
+the control socket wasn't listening yet - reproducible three times
+running under CI's own load, not a one-off. Fixed by polling
+`unbound-control status` (the same interface every other live check in
+this package already uses) for up to 10 seconds after the restart
+before returning success; a restart that never becomes ready gets the
+same automatic config rollback a `docker restart` failure or a bad
+`unbound-checkconf` already got. Regression tests simulate the control
+socket failing for a few polls then succeeding (must retry through it)
+and never succeeding at all (must roll back, same as the existing
+restart-failure test).
+
+**Separately observed, not fixed: real external DNS resolution was
+unreliable in the CI environment at the time of this investigation.**
+After the fix above, the same `ci.yml` step still failed intermittently
+- but past the point this fix covers, on an unguarded
+`test "$(jq -r .healthy <<<"$diagnostics")" = "true"` whose input comes
+from live `dig` queries to real internet domains (`example.com`,
+`dnssec-failed.org`). Confirmed as external, not a code defect:
+`main`'s own independent, unrelated scheduled `Unbound CI` run failed
+the identical way (`dig ... dnssec-failed.org ...: communications error
+... timed out`) at the same time, on three separate occasions,
+including after a retry. Merged both this fix and round 8's PR with
+this one check still red rather than block correct, independently
+unit-and-race-tested code on a transient external condition also
+affecting `main` itself.
+
+## Follow-up review, round 9 (2026-08-30)
+
+A ninth independent review - no critical security issue and no RC
+blocker in the product code found this round; round 8's pin-commit fix
+holds up completely. Three real, narrower issues remained, plus two
+more found live during this round's own CI verification. Same
+discipline as every round before.
+
+**Medium, fixed: CI and release gates depended on real internet DNS,
+independent of round 8's own investigation of the same class of
+problem.** `ci.yml`, `ci-unbound.yml`, `ci-adguard-compat.yml`, and
+`release-alpha.yml`'s smoke-test/upgrade-test jobs all queried real
+internet domains (`example.com`, `dnssec-failed.org`, and
+`ci-unbound.yml`'s own Docker `HEALTHCHECK` - `cloudflare.com`) directly
+- a transient DNS/network hiccup on the runner's own connection then
+fails a PR or a release for reasons that have nothing to do with the
+code under test, exactly what round 8 already hit independently.
+`/api/unbound/diagnostics` (the product's own diagnostics feature) is
+correct to query the real internet by design - a real deployment
+genuinely wants to know "can my resolver reach and validate the real
+internet" - so the fix has to live in the test infrastructure, not in
+that feature's real-world behavior.
+
+Built a small, throwaway, signed DNS zone
+(`scripts/ci/dnssec-test-zone/setup.sh`) instead: generates a fresh
+DNSSEC keypair and signs `good.rgtest-ci.internal.`/
+`bad.rgtest-ci.internal.` on every CI run (never committed - a checked-in
+signed zone would eventually expire and break CI on its own, and
+committing key material is bad practice regardless of how throwaway),
+deliberately corrupts `bad.`'s own RRSIG afterward, and serves both from
+a local `nsd` authority on the runner itself.
+`scripts/ci/dnssec-test-zone/inject.sh` wires a given Unbound container
+up to it - a forward-zone plus an inline trust-anchor for the zone,
+reaching the runner's own authority via the container's own network
+gateway IP (`docker inspect ... .Networks`, sorted for determinism -
+Go template map iteration is otherwise random order, and every caller
+here has more than one network). Verified end to end against the real
+`rootguard-unbound` image on a scratch host before touching any
+workflow: `good.` validates (the `ad` flag), `bad.` SERVFAILs.
+
+For the one caller that goes through `/api/unbound/diagnostics` itself
+(`ci.yml`, via Core, not a raw `dig`) rather than around it: added
+`Manager.SetDiagnosticDomains` and the
+`ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN`/`_DNSSEC_DOMAIN` test-
+only escape hatches in `main.go` (same shape as the existing
+`ROOTGUARD_SKIP_ATTESTATION`) - empty by default (real domains, a real
+deployment's correct behavior unchanged), set only by `ci.yml`'s own job
+env. `release-alpha.yml`'s smoke-test/upgrade-test never call that
+endpoint at all (bare `dig` against the published DNS port throughout),
+so they needed the local zone but not this override.
+
+Real internet resolution is still exercised, just not as a blocking PR/
+release gate - `ci-real-dns-upstream.yml` (new) runs the same checks
+against the real internet on its own weekly schedule.
+
+**Medium, fixed live during this round's own CI verification:
+`waitReady` (round 8's own fix) checked the control socket, not the
+actual DNS listener - the two don't necessarily finish binding at the
+same moment.** While verifying the local-zone infrastructure above in
+real CI, `ci.yml`'s own diagnostics check failed with the local zone
+correctly wired up - `docker exec ... dig ...` against Unbound's own
+port 5335 got a full "communications error ... timed out", not a slow
+response, immediately after `unbound-control status` had already
+reported the daemon up. `unbound-control status` succeeding is real, but
+it's a weaker guarantee than "the DNS service itself is ready" -
+`waitReady` now also polls a root NS lookup against the DNS port itself
+(answerable straight from Unbound's own built-in root hints, no real
+network round-trip needed, so this check isn't itself hostage to network
+conditions) and only returns once both succeed. New test mirrors the
+existing control-socket-retry test for this second dimension; verified
+it fails against the round-8-only version and passes against the fix.
+Real, but not sufficient on its own - see below.
+
+**Medium, fixed live during this round's own CI verification (second
+finding in the same failure): the original `host.docker.internal`
+wiring path in `inject.sh` reached NSD via an address that couldn't
+carry a correct reply back, and Unbound's own anti-spoofing hardening
+silently dropped what NSD sent instead - the `waitReady` fix above was
+real but not what was still failing.** After the fix above, the exact
+same `ci.yml` step failed again, same symptom, same step, `waitReady`
+having already passed moments earlier in the same restart. Reproduced
+the whole sequence locally (fresh restart, PUT settings, diagnostic-
+logging start/stop, diagnostics call) against the real image with
+`unbound-control verbosity 4` and a host-side `tcpdump` running
+throughout, rather than continuing to guess from CI log excerpts alone.
+The capture showed Unbound sending its query to
+`host.docker.internal`'s address (the *default* Docker bridge's
+gateway) and getting a well-formed, correctly-sized reply back
+*immediately* - but from a *different* source address (the custom
+compose network's own gateway, since NSD is bound to `0.0.0.0:8053`
+and Linux picks a UDP reply's source address by route-to-client, not by
+which local address the query arrived on). Unbound `connect()`s its
+outbound UDP sockets to the exact peer it queried specifically to
+reject spoofed replies at the kernel level - so it silently discarded
+every one of NSD's replies as if they'd never arrived, retried with
+growing backoff, and gave up after ~10-15s with nothing sent back to
+the client at all: not a slow answer, no answer. `dig`, lacking that
+hardening, accepted the same replies without issue, which is why manual
+verification with `dig` during earlier rounds never caught this.
+Fixed by dropping `host.docker.internal` entirely and using the
+container's own network gateway unconditionally (see above) - the one
+address guaranteed to round-trip, since it's the address the host
+actually uses to reach that specific container. Verified the same way:
+reproduced the hang against the old wiring, then confirmed a cold-cache
+query resolves in well under a second against the fix, on the exact
+same host, same image, same sequence. Once `ci.yml` got past both of
+the above, a *third*, unrelated real-domain dependency this round's
+original sweep had missed surfaced in the same job for the first time:
+"Verify DNS through AdGuard and Unbound" still dug `example.com`/
+`dnssec-failed.org` directly through the full published-port pipeline
+(AdGuard -> Unbound). Same fix as everywhere else - the local test
+zone domains.
+
+**Small, fixed: a valid SemVer version with a hyphen inside its
+prerelease identifier could bypass the upgrade test.** Three sites in
+`release-alpha.yml` each filter `git for-each-ref`'s tag list down to
+"real SemVer tags", and two of them correctly hand-wrote SemVer's own
+grammar (`[0-9A-Za-z-]+`, including the hyphen it allows *inside* a
+prerelease identifier like `rc-hotfix`) - `upgrade-test`'s own
+"Determine the previous published release" step hand-wrote the same
+regex without that hyphen (`[0-9A-Za-z]+`), so a real, valid tag like
+`v1.2.3-rc-hotfix.1` was invisible to it. That step then either picked
+an older release than the one actually directly before this one, or (if
+no other tag happened to match) skipped the upgrade test outright -
+either way, silently, with no error. Fixed all three sites to share
+`$SEMVER_PATTERN` (from `scripts/lib/semver-validate.sh`, already
+sourced for `require_semver`) instead of a third hand-written copy, so
+a future grammar change can't silently re-diverge the same way again.
+New `scripts/lib/semver-validate.test.sh` covers `require_semver` and
+the exact `grep -E "^v${SEMVER_PATTERN#^}"` construction all three
+sites use, including the live regression case; wired into `ci.yml`.
+Verified the old hand-written pattern rejects `v1.2.3-rc-hotfix.1` and
+the shared pattern accepts it.
+
+**Small, fixed: `resolve_release_pin_commit` compared `SOURCE_REF` as a
+raw string, rejecting an abbreviated SHA that points at the exact same
+commit.** `release-alpha.yml` always passes the full 40-character SHA,
+but the one documented manual-dispatch escape hatch
+(`workflow_dispatch`'s `source_sha` input) lets a human type a short one
+instead - still the same commit, but a string-equality comparison
+against `origin/main`'s (always full) tip or a candidate's (always
+full) parent would never match it. Normalized once, up front, via
+`git rev-parse "${source_ref}^{commit}"`, so the rest of the function
+never has to think about it again. Two new synthetic-history scenarios
+(first attempt and retry, both with an abbreviated `SOURCE_REF`) added
+to `resolve-release-pin-commit.test.sh`; verified both fail against the
+pre-fix resolver and pass against the fix.
+
+**Medium, fixed: the Unbound settings rollback could fail silently
+under an already-canceled request context.** `rollbackFailedApply`
+restarted the container (and, since round 8's readiness fix, waited for
+it) using the *same* `ctx` `Apply` itself was called with. If that ctx
+is what's canceled - the realistic case, e.g. the HTTP request that
+triggered `Apply` was aborted by the client mid-flight - the rollback's
+own `docker restart` could be killed or refused to even start entirely,
+leaving the already-restored *files* out of sync with whatever Unbound
+is actually still running. A rollback must not be at the mercy of
+whatever canceled the operation it's cleaning up after. Fixed by
+detaching the rollback's own restart-and-wait from the original
+context's cancellation (`context.WithoutCancel`, plus its own bounded
+30-second timeout so it still can't hang forever if something is
+genuinely stuck) rather than inheriting it. New regression test
+confirms: given an already-canceled input context, the rollback restart
+still runs to completion and the previous settings end up active.
+Also added a sibling test proving `rollbackFailedApply` reports honestly
+- not "previous configuration restored" - when the rollback restart's
+own readiness never arrives either, a case the existing test suite
+hadn't separately covered.
+
+## Follow-up review, round 10 (2026-08-31)
+
+A tenth independent review - no critical security issue found this
+round; round 9's local DNSSEC test zone and its live-found fixes hold up
+completely. Same discipline as every round before: each finding verified
+directly against the current code before being counted.
+
+**Medium, fixed: two more real-internet-DNS blocking-CI dependencies
+round 9 missed.** Round 9's own sweep converted `ci.yml`/`ci-unbound.yml`
+to the local test zone but missed two spots: `scenario_integration_test.go`
+(`TestScenarioHomeNetwork`, `TestScenarioSplitDNS`,
+`TestScenarioBrokenUpstream`, `TestScenarioDNSSECFailures` - `example.com`,
+`cloudflare.com`, `1.1.1.1` directly) and `verification-common.sh`'s
+`verify_dns` (`example.com`/`dnssec-failed.org`, shared by
+`verify-clean-install.sh` and `verify-backup-restore.sh`, run by
+`clean-install.yml`/`backup-restore.yml`). Same failure mode as round 9's
+own finding: a transient DNS hiccup on the runner fails the build for
+reasons unrelated to the code under test.
+
+Fixed the scenario tests by pointing every "external/unrelated domain"
+check at `good.rgtest-ci.internal` (already wired up for every scenario
+test via `wireUpLocalDNSSECTestZone`) instead. `TestScenarioSplitDNS`
+needed its own reachable forward target distinct from
+`rgtest-ci.internal` itself - forwarding that zone wouldn't have proven
+anything, since `inject.sh`'s own base config already forwards all of it
+before any scenario's settings are ever applied, so it would resolve
+identically whether or not `Settings.Render`'s `ForwardZone` handling
+actually worked. `setup.sh` now also starts a second, deliberately
+*unsigned* throwaway authority (one record,
+`split.rgtest-split.internal.` → `203.0.113.50`), never forwarded by
+`inject.sh`'s own base wiring - so only the scenario's own guided
+`ForwardZone` setting makes it resolve.
+
+Two live failures while building that, both caught by this PR's own CI
+before merging, not after. First: pointed the scenario's `ForwardZone`
+at the DNSSEC authority's existing `nsd` instance via an `"ip@8053"`
+server string - `Settings.Render()` calls `Settings.Validate()` first,
+which requires `forward_zones[].servers[]` to be a bare canonical IP
+with no port suffix (`@port` is Unbound raw config's own `forward-addr`
+extension, which `inject.sh`'s base wiring uses directly, not something
+the guided-settings API accepts) - failed immediately with "must be a
+canonical IPv4 or IPv6 address". Fixed by giving that same `nsd` a
+second bind, `0.0.0.0@53` alongside the existing `0.0.0.0@8053`, so the
+split zone would be reachable at the standard port a bare guided-
+settings IP always implies. Second: that second bind then failed nsd's
+own startup outright - `can't bind udp socket 0.0.0.0@53: Address
+already in use` - GitHub's own runners already have something bound to
+the host's port 53. Fixed for real by moving the split zone to its own
+throwaway Docker container instead (`alpine:3.20` + `nsd`, plain
+`docker run`, no host port published) - its port 53 lives entirely
+inside that container's own network namespace, so the host's port 53
+being taken is irrelevant, and it's directly reachable from another
+unnetworked container (as the Go scenario tests' own container is) via
+Docker's default bridge. `setup.sh` resolves and writes that container's
+IP to `$OUT_DIR/split-authority-ip`; the Go test reads it directly as
+the bare guided-settings target.
+
+Fixed `verify_dns` by making both domains configurable
+(`ROOTGUARD_VERIFY_DNS_DOMAIN`/`ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN`,
+defaulting to the real domains so any other caller's behavior is
+unchanged) and adding a shared `wire_local_dnssec_test_zone` helper that
+runs `inject.sh` against the running `rootguard-unbound` container and
+waits for it to report healthy again. `clean-install.yml` and
+`backup-restore.yml` now start the local test authority
+(`scripts/ci/dnssec-test-zone/setup.sh`) before their verify step and
+point both env vars at `good`/`bad.rgtest-ci.internal`;
+`verify-backup-restore.sh` calls `wire_local_dnssec_test_zone` twice -
+once for the primary instance, once more for the freshly-restored one,
+since restore deploys an entirely new `rootguard-unbound` container that
+needs its own wiring.
+
+**Small, fixed alongside the above (same file, same review pass):
+`setup.sh`'s own authority-readiness loop only checked `dig`'s exit
+code, and it unconditionally `pkill nsd` on every run.** An exit code
+alone can't distinguish a real answer from an empty NOERROR, REFUSED, or
+NXDOMAIN response - any of which would have let the loop declare the
+authority "ready" before it could actually serve what a caller expects.
+Now checks the actual resolved address against what `good.rgtest-ci.internal`
+and `split.rgtest-split.internal` are supposed to return. Separately,
+`pkill nsd` would kill *any* `nsd` process, not just this script's own -
+harmless on a GitHub-hosted, single-purpose, ephemeral runner, but a real
+hazard on a shared self-hosted runner or a developer's own machine
+running this locally. Now only stops a leftover `nsd` identified by its
+own pidfile under this exact test directory, and only after confirming
+via `ps` that the PID still actually belongs to a process running against
+this script's own `nsd.conf` - a recycled PID now owned by an unrelated
+process is left alone.
+
+**Small, fixed: `release-alpha.yml`'s own `source_ref` was the raw,
+possibly-abbreviated dispatch input, not the resolved full SHA.** Round
+9's fix normalized `resolve_release_pin_commit`'s own string comparison
+against an abbreviated `SOURCE_REF`, but the workflow's `source_ref`
+*output* itself - what every job's checkout, the candidate tag, the OCI
+revision label, and the `origin/main` equality check all consume - was
+still `inputs.source_sha || github.sha` verbatim. `release-version-bump.yml`
+always passes a full 40-character SHA, so the automated path was never
+actually affected, but the input's own description explicitly allows a
+manual by-hand dispatch to type an abbreviated one instead - and every
+later full-SHA comparison in this file would then silently never match,
+surfacing late (at the pin-commit step, after the candidate images are
+already built, scanned, and smoke-tested) instead of failing fast.
+Resolved once, via `git rev-parse HEAD` right after the initial checkout,
+and recorded as `steps.release.outputs.source_ref`; every other job
+already consumed `needs.version.outputs.source_ref` rather than the raw
+input, so fixing it in this one place is sufficient.
+
+**Small, cleaned up: two leftover hazards in the frontend, unrelated to
+each other but both found in the same pass.** `vite.config.ts`'s dev
+proxy hardcoded one developer's own LAN IP (`10.100.0.2`) as its target
+- `npm run dev` only ever worked out of the box on that one machine,
+silently proxying nowhere (`ECONNREFUSED`) for anyone else. Now defaults
+to loopback (where WebApp listens locally by default), overridable per
+machine via `VITE_API_PROXY_TARGET`. Separately, `public/vite.svg` and
+`src/assets/react.svg` - the framework's own default scaffold assets -
+were never referenced anywhere in the app (confirmed via a repo-wide
+grep across `.html`/`.ts`/`.tsx`/`.css`/`.json`) and were removed.
+
+**Small, fixed: three pairs of identically-named jobs across unrelated
+workflows, each producing an unnamed check run with the same generic
+name.** GitHub identifies a status check by its name (plus reporting
+app) - two unrelated workflows each contributing a check called "Linux
+amd64" (`backup-restore.yml`/`clean-install.yml`) or "test"
+(`ci-core.yml`/`ci-webapp.yml`/`ci-updater.yml`) or "build"
+(`ci-blockpage.yml`/`ci-updater.yml`/`ci-webapp.yml`) is at best
+confusing in the Checks UI or `gh pr checks` output (confirmed live,
+this round: briefly mistook a `backup-restore.yml` "Linux amd64" failure
+for `clean-install.yml`'s own job while debugging an unrelated finding)
+and at worst ambiguous as a required-status-check entry, which
+identifies checks by name alone. Named every one of the six jobs
+explicitly and distinctly: `Core unit tests`, `Updater unit tests`,
+`WebApp backend and frontend tests`, `Build and push blockpage/updater/
+webapp image`, `Backup and restore, Linux ${{ matrix.arch }}`, `Clean
+install, Linux ${{ matrix.arch }}`. Branch protection's own required-
+status-check list (configured directly via the GitHub API, not
+committed to this repo) needs its `test` entry updated to the three new
+names in the same change that merges this - tracked as a manual
+follow-up immediately after merge, not automatable from inside a PR.
+
+Confirmed live, this same round: merging PR #446 (`release-alpha.yml`
+only, no `rootguard-core/**`/`rootguard-webapp/**`/`rootguard-updater/**`
+touched) hit exactly the failure mode round 10's finding 9 warns about -
+branch protection's required `test`/`validate`/etc. contexts include
+checks whose owning workflow is path-filtered and never triggers for
+every PR, so GitHub reported `mergeable_state: blocked` indefinitely
+rather than merging. Required an explicit admin-bypass merge. A single
+always-on aggregating "merge gate" job (finding 9's own recommendation)
+would close this for good; not implemented this round given the scope of
+restructuring it needs - recorded here as the concrete case for doing it
+next.
+
+**Small, fixed: `inject.sh`'s gateway auto-detection has no escape hatch
+for Docker Desktop.** The container-own-network-gateway approach round 9
+built and verified is specific to how Docker's Linux bridge networking
+routes container-to-host traffic - correct on the native-Linux GitHub
+runners this actually runs on in CI, but the same detection doesn't
+resolve to anything reachable from inside the container on Docker
+Desktop (macOS/Windows), where the Docker daemon runs inside its own VM
+behind a different network layer. That made the local DNSSEC scenario
+unreproducible on a developer's own Docker Desktop machine - not a
+production bug (nothing here ever runs against Docker Desktop outside
+local reproduction), but worth fixing for local debuggability. Added a
+`DNSSEC_TEST_AUTHORITY_IP` override: when set, `inject.sh` uses it
+directly instead of auto-detecting; CI itself never sets it, so the
+already-verified Linux path is unaffected.
+
+**Small, fixed: `waitReady`'s retry loop slept once more than it ever
+needed to.** It unconditionally waited `unboundReadyInterval` between
+every attempt, including after the very last one - a delay nothing
+downstream ever consumes, since the loop is about to give up and return
+an error either way. Not a bug (every existing readiness/rollback test
+still passed), just a fixed, pointless delay tacked onto every readiness
+timeout. Now breaks out before that final sleep. New
+`TestWaitReadySkipsTheFinalSleep` counts `sleep` calls directly against
+a daemon that never becomes ready: exactly `unboundReadyAttempts-1`, one
+fewer than the number of attempts made.
+
+## Follow-up review, round 11 (2026-08-31)
+
+An eleventh independent review - no critical production or security
+issue found this round. Same discipline as every round before.
+
+**Medium, fixed: required branch-protection status checks and their own
+`pull_request.paths` filters directly contradicted each other.** Round
+10's own finding 9 (recorded above) predicted this and it recurred twice
+more within the same round: merging PR #446 and then PR #449 each hit
+`mergeable_state: blocked` - `mergeable: true`, no actual conflict, just
+GitHub waiting forever for a required check whose owning workflow's path
+filter meant it would never trigger for that particular PR. Round 10's
+fix (naming every job distinctly) made the problem *more* visible, not
+less: before that round, `ci-core.yml`/`ci-webapp.yml`/`ci-updater.yml`
+happened to share one required "test" context, so any one of them
+reporting satisfied it; after distinct names, each of "Core unit tests",
+"Updater unit tests", "WebApp backend and frontend tests" needs its own
+workflow to actually run. Fixed the fast, robust way for now (this
+round's own suggestion): dropped the `pull_request.paths` filter on all
+three - they run on every PR unconditionally now (each well under a
+minute, cheap insurance), `push.paths` on `main` is untouched. The
+proper fix - one always-on job that aggregates exactly the required
+checks for whatever paths a PR actually touched - is still open; this is
+the stopgap that stops every unrelated PR from needing an admin-bypass
+merge in the meantime. (PR #448 needed the same admin-bypass merge a
+third time before this fix landed - same root cause, same missing
+"Updater unit tests"/"WebApp backend and frontend tests" checks.)
+
+**Small, fixed: `setup.sh`'s split-DNS authority readiness check ran
+from the host against the container's own bridge IP - unreachable from a
+Docker Desktop host.** Round 10's `DNSSEC_TEST_AUTHORITY_IP` override
+only fixed `inject.sh`'s container-to-host gateway lookup; the split
+authority's own readiness loop (added in the same round, `setup.sh`) has
+a different problem entirely - it `dig`s the container's bridge IP
+*from the host*, which works on Linux (this script's own supported
+platform - now stated explicitly in its own header comment, since it
+also runs plain `apt-get`/GNU `date -d` with no portability layer at
+all) but not from a macOS/Windows Docker Desktop host, where the Docker
+daemon runs inside its own VM behind a network layer the host itself
+can't reach into. Fixed by checking readiness from *inside* the
+container instead (`docker exec ... dig @127.0.0.1`, `bind-tools` added
+to its `apk` install) - needs no host-to-container routability at all,
+so it works the same regardless of host OS. The container's bridge IP
+is still resolved separately afterward for the Go scenario tests' own
+container to use - that one only ever needs container-to-container
+reachability, which stays inside the Docker daemon's own network
+regardless of which OS that daemon runs on, so it was never actually
+broken.
+
+**Small, fixed alongside the above (same file, same review pass): the
+split authority container had none of the reproducibility/ownership
+safeguards this round's own `nsd`-pidfile fix already established for
+the host authority.** Pinned `alpine:3.20` to its current manifest-list
+digest (the tag alone is mutable - Alpine rebuilds patch releases in
+place) and labeled the container (`io.rootguard.ci=dnssec-split-authority`),
+checking that label before ever removing a same-named leftover - the
+identical "only ever touch something verifiably this script's own"
+reasoning already applied to the `nsd` pidfile check, now applied
+consistently to this container too.
+
+**Small, fixed: `scenario_integration_test.go` ignored `DNSSEC_TEST_ZONE_DIR`
+even though `setup.sh`/`inject.sh` both honor it.** A developer running
+`setup.sh` by hand with that variable set would have it write the local
+authority to a custom directory while this test kept looking in the
+hardcoded default - a real, if narrow, local-repro gap (every CI job
+that runs this package's tests leaves the variable unset, so nothing in
+CI was ever affected). Changed the constant to a package var resolved
+from the environment once, at init, falling back to the same default
+either script uses unset.
+
+**Small, cleaned up: `TestMain` didn't do what its own comment claimed.**
+Its comment described managing container lifecycle "here rather than in
+a package-level init"; the function body was `os.Exit(m.Run())` - Go's
+own default test-binary entry point does exactly that already when no
+`TestMain` is defined, and the real per-test container lifecycle lives
+in `startScenarioContainer`, not here. Removed the now-inaccurate,
+functionally redundant override.
+
+**Small, fixed: the frontend had no declared minimum Node version, and
+already needed one.** `react-router@8.3.0`'s own `package.json` requires
+`node >= 22.22.0`; nothing in this repo said so, so an older Node 22
+(confirmed live: 22.17.0) installs and builds with only a silent
+`EBADENGINE` warning easy to miss - not a failure, just a real version
+floor with nothing enforcing or even documenting it. Added a matching
+`engines.node` to `rootguard-webapp/frontend/package.json` (the exact
+value read directly from `react-router`'s own installed `package.json`,
+not guessed) and a `.nvmrc` (`22`, matching `ci-webapp.yml`'s own
+`setup-node` `node-version: 22`) so a version manager picks up the right
+major version automatically.
+
+**Medium, closed: round 10 finding 9 (Backup/Restore and Unbound never
+part of the required checks).** Requested as "one always-on aggregating
+merge-gate job" - implemented as the equivalent of that instead, for a
+concrete reason: this session has no way to trigger and observe a real
+GitHub Actions run before merging, and a multi-workflow `workflow_call`
+orchestrator (the textbook way to build that single job) has enough
+moving parts - job-name remapping through the caller, `needs`/`if`
+semantics across a reusable-workflow boundary - that getting it wrong
+would only surface once already merged. The already-proven mechanism
+from this same round (drop the `pull_request.paths` filter, so the
+check always triggers) reaches the identical branch-protection outcome
+with far less new surface: `backup-restore.yml` and `clean-install.yml`
+now trigger unconditionally on `pull_request` (their jobs are cheap -
+~3-4 and ~1-1.5 minutes respectively, both arches in parallel), added to
+required status checks. `ci-unbound.yml`'s `test`/`scenario-tests` jobs
+do the same (~2-3 minutes) - its `build-push` job deliberately does
+*not* go unconditional alongside them: it was never required and still
+shouldn't be, so a new `detect-unbound-changes` job (a plain `git diff`
+against the PR's base SHA, no third-party paths-filter action) gates it
+back to only actually building when a PR touches something
+unbound-related, preserving today's behavior instead of adding a ~20-
+minute build to every unrelated PR. `updater-rollback-integration`
+(`ci-core.yml`) and `integration` (`ci-updater.yml`) needed no workflow
+change at all - round 11's own path-filter removal on those two
+workflows already made them unconditional; only branch protection's
+required-checks list itself was missing them. Required status checks
+now: `validate`, `check`, `gitleaks`, `trivy`, the three `go-security`
+legs, `Core unit tests`, `Updater unit tests`,
+`WebApp backend and frontend tests`, `updater-rollback-integration`,
+`integration`, `Backup and restore, Linux amd64`/`arm64`,
+`Clean install, Linux amd64`/`arm64`, `Test amd64`/`arm64`, and
+`Guided-settings scenario tests`. The real single aggregating job is
+still the cleaner end state and stays open as a future improvement, not
+a correctness gap - every one of these checks now triggers
+unconditionally, so the actual bug finding 9 and this entry both
+describe (a required check that silently never fires) cannot recur for
+any of them.
+
+## Follow-up review, round 12 (2026-08-31)
+
+**Low, fixed: the DNSSEC test harness's Alpine pin had passed its own
+end of support.** `dnssec-test-zone/setup.sh`'s split-authority
+container was pinned (by digest, round 11) to `alpine:3.20` - correct
+practice for reproducibility, but 3.20 itself reached the end of its
+regular support window on 2026-04-01 (confirmed against Alpine's own
+release-branches table live) and now only gets patches "on request".
+Repinned to `alpine:3.24@sha256:28bd5fe8b...` - the current release
+with the longest support horizon (main through 2028-06-01). While
+verifying this, the review's second observation checked out too: the
+two integration-test fixture images
+(`rootguard-core/internal/updater/testdata/fixture/Dockerfile`,
+`rootguard-updater/integration/fixture/Dockerfile`) referenced
+`alpine:3.23`/`golang:1.26-alpine` by tag only, with none of the
+reproducibility rationale that motivated digest-pinning everything
+else in this repo (see round 8's audit-log entries on that). Both are
+now pinned by digest too, `alpine:3.23` left in place since it's still
+within its own support window (main through 2027-11-01) - only the
+missing digest was the gap.
+
+**Low, fixed: the frontend's Node version floor wasn't fully wired
+up.** Round 11 added `"engines": {"node": ">=22.22.0"}` to
+`rootguard-webapp/frontend/package.json` (react-router@8.3.0's own
+stated minimum), but two things were still out of step with it: the
+committed `package-lock.json` predated that change and didn't carry it
+in its own root-package metadata (`npm install` against the current
+`package.json` regenerates exactly the three lines - `engines` -
+`package.json` declares, confirmed live, no dependency or version
+changes otherwise), and `.nvmrc` only pinned the major version (`22`),
+which lets an already-installed Node as old as 22.0.0 through -
+tightened to `22.22.0` to actually match the floor it's meant to
+communicate. `npm run lint`/`npm run test` both still pass unchanged.
+
+**Low, fixed: `ci-real-dns-upstream.yml`'s own failures were
+undiagnosable.** Found live, matching the review: this workflow's dig
+exit code 9 failure on its own schedule was expected (it deliberately
+checks the real internet, see this workflow's header comment on why)
+but genuinely uninformative - both checks assigned dig's output via a
+bare `var="$(dig ...)"`, and under this shell's default `set -e`, dig's
+own non-zero exit (9 here) killed the step at that exact line, before
+the following `grep` that would say which check failed ever ran. The
+log showed nothing beyond a bare non-zero exit: not which domain
+(example.com vs dnssec-failed.org), not dig's own error text (only
+`2>&1` captures that; the old code only kept stdout), not the resolver
+status. Rewrote the step to run both checks unconditionally (`|| true`
+on each dig call, `2>&1` to keep dig's real error text, `::group::`
+blocks so each check's own output is visible even on success), collect
+failures into one `fail` variable, and `exit "$fail"` at the end -
+verified locally against a stand-in for a failing dig call that the
+rewritten logic reports the failing domain, dig's real error text, and
+still exits non-zero. This workflow still never runs on `pull_request`
+(schedule/`workflow_dispatch` only) and was already outside branch
+protection's required checks - this is a diagnostics fix, not a
+blocking-behavior change.
+
+## Follow-up review, round 13 (2026-08-31)
+
+**Medium, fixed: no warning existed for a host Docker Engine vulnerable
+to two `docker cp` CVEs RootGuard's own code path relies on.** Confirmed
+live against Docker's own release notes and the upstream advisories:
+CVE-2026-41567 (arbitrary host-binary execution via `PATH` resolution
+during `docker cp` archive decompression) and CVE-2026-42306 (a TOCTOU
+race letting `docker cp` redirect a bind-mount target to an arbitrary
+host path) were both fixed upstream in Docker Engine 29.5.1 - and
+RootGuard itself calls `docker cp` in three places (backupexport,
+backuprestore, updater rollback), so a host running an older, unpatched
+Engine is a real exposure, not a theoretical one. `Preflight` only ever
+checked Docker's *reachability*, never its patch level. Added a new
+advisory check (`docker_engine_cp_cve`) that parses the Server version
+already fetched for the reachability check and warns when it reads
+unambiguously below 29.5.1 - deliberately never failing `Ready`, per the
+review's own explicit caution: a distro package (Debian/Ubuntu's
+`docker.io`, e.g.) can backport this fix while still reporting an
+older-looking upstream version string, so blocking on the version number
+alone would produce real false positives. A version string that doesn't
+parse as a plain `MAJOR.MINOR.PATCH` (any distro-suffixed one) is treated
+identically to "already patched" for the same reason. Added a new
+`Check.Level` field (`omitempty`, every existing check leaves it unset)
+so the frontend can render this distinctly from a real pass/fail -
+amber, not green, and its action text now shows even though `ok` stays
+true, which the existing `!check.ok &&` render guard would otherwise have
+hidden. Documented the same requirement in `platform-support.md`
+directly, per the review's ask to require a patched Engine in the docs
+too. Covered by two new `installer` package tests (the warning firing for
+an old clean version, and *not* firing for a patched version, a newer
+major, and an unparseable/suffixed one).
+
+**Low, fixed: Core and Updater's shared `docker:29-cli` runtime pin
+carried a fixed OpenSSL CVE and a genuinely unused CLI plugin.** Verified
+live: this exact pinned digest's baked-in `libssl3`/`libcrypto3` sit at
+3.5.7-r0, which has CVE-2026-14456 - already fixed at 3.5.8-r0 and
+already published on Alpine 3.24's own `main` repo (confirmed via
+pkgs.alpinelinux.org), just not yet what this particular digest's own
+image layer contains. Added an explicit
+`apk add --no-cache --upgrade libssl3=3.5.8-r0 libcrypto3=3.5.8-r0` to
+both Dockerfiles as a stopgap, meant to be replaced by a plain digest
+bump once upstream publishes a `docker:29-cli` build with the fix baked
+in. Separately, confirmed (via the upstream docker-library/docker
+Dockerfile this digest is built from, and a repo-wide grep of every
+`docker ...` invocation this codebase's own code and CI make) that the
+image's bundled buildx CLI plugin
+(`/usr/local/libexec/docker/cli-plugins/docker-buildx`) is genuinely dead
+weight, not a stopgap - nothing at runtime ever calls `docker buildx`;
+only this repo's own `release-alpha.yml` does, on the GitHub runner's own
+Docker CLI, entirely unrelated to this image. Removed it from both
+images with `rm -f`, a real content reduction rather than something a
+future digest bump would need to add back.
+
+**Medium, fixed: no CI job ever scanned a *built* container image.**
+`ci-security.yml`'s trivy job only ever ran `trivy fs .` - repo files,
+dependency manifests, and Dockerfile misconfigurations - never a built
+image's actual base-layer content. Found in review, confirmed by the
+review's own live scan: the pinned `docker:29-cli` runtime base
+(Core and Updater's shared runtime, see their Dockerfiles) carried 35
+HIGH-severity package findings across 14 distinct CVEs at scan time,
+none of which any CI job would ever have caught. Added
+`scripts/ci/trivy-image-scan.sh`, called from `ci-core.yml`,
+`ci-updater.yml`, and `ci-webapp.yml` right after each workflow's own
+`docker build`, scanning the exact image content a real PR/release would
+ship. Updater and WebApp's `test` jobs previously had no single-platform
+build step to scan at all - their only image build lived in the `build`
+job's multi-arch `docker/build-push-action` step, which (a) never
+executes for real on a PR (`push: false` discards a multi-platform
+result entirely - there is nothing left to scan) and (b) couldn't be
+loaded locally to scan even if it did (a multi-arch manifest can't be
+`--load`ed into the local daemon). Added a plain single-platform
+`docker build` step to both `test` jobs specifically to give trivy
+something real to scan, mirroring `ci-core.yml`'s own `test` job, which
+already built (but never scanned) its image this way.
+
+**High, fixed: the pinned cosign binary itself carried 39 HIGH findings,
+including a real signature-verification bypass - found live by the new
+trivy-image-scan.sh, not by the review.** Running the new scan (round 13
+finding 1, PR #460) against a real `rootguard-updater:test` image before
+it had PR #459's fixes surfaced five separate targets inside the image,
+not just the `docker:29-cli` base the review's own scan covered:
+`usr/local/bin/cosign` alone reported 39 HIGH findings - mostly the same
+Go-stdlib CVEs `usr/local/bin/docker` has (cosign v3.0.6 embeds the same
+stale toolchain), plus several sigstore/fulcio-specific ones. Checked
+upstream: three cosign releases exist past v3.0.6 (v3.1.1, v3.1.2,
+v3.1.3), and v3.1.3 fixes GHSA-fx35-mq7g-6g98, a real signature-
+verification bypass via an unexpected public key in a legacy bundle -
+directly relevant here, since this exact binary is what
+`stack.RequireAttestation` (`rootguard-core/internal/stack`) calls at
+deploy time to verify a published image's attestation before trusting
+it. Bumped the pin to v3.1.3 (by digest) in both Dockerfiles and in
+`release-alpha.yml`'s own `cosign-installer` step, which verifies a
+release candidate's attestation before promotion using the identical
+version - the two were already required to move together (see the
+existing comment there) and previously both said v3.0.6.
+
+**Closed out: the new image scan's remaining findings, verified against
+a real post-fix build.** With every actionable round-13 fix landed
+(PRs #458, #459, #461), re-ran `trivy-image-scan.sh` against a fresh
+`rootguard-updater:test` build: Alpine's own findings are now 0, the
+buildx plugin's 13 are gone with the file itself, and cosign's 39 dropped
+to 13. What's left - 33 HIGH findings across 14 distinct CVE IDs, spread
+across the docker CLI binary, its compose plugin, and cosign itself - is
+genuinely not fixable by RootGuard today: 12 of the 14 are Go-stdlib CVEs
+baked into the upstream Go toolchain each of those three binaries was
+built with (not something a version bump can fix - even cosign's newest
+release, v3.1.3 from 2026-08-06, predates the Go release carrying the
+fix, 1.26.6 from 2026-08-13), and the remaining two
+(CVE-2026-41567/CVE-2026-42306, the same `docker cp` CVEs the new
+Preflight advisory covers at the host-Engine level) are present only in
+the compose plugin's *vendored* docker client library, which compose's
+own binary never actually calls into (compose doesn't implement or
+expose `docker cp`). Added all 14 to `.trivyignore.yaml`, each dated
+2026-11-30, so this doesn't stay silently suppressed once a newer
+upstream build of any of the three exists. One more surfaced only after
+that re-run: bumping cosign to v3.1.3 (this round's own fix, above) pulled
+in a newer `google.golang.org/grpc` that itself has one known HIGH
+finding (GHSA-hrxh-6v49-42gf, fixed at grpc-go 1.82.1) - not present in
+v3.0.6's own dependency tree, not yet fixed in any cosign release
+(confirmed live: v3.1.3 is still the newest). Added with the same dated,
+justified pattern.
+
+## Follow-up review, round 14 (2026-08-31)
+
+**High, fixed: Blockpage's base image carried 9 CVEs across 13 findings,
+none caught by any CI job.** Found in review: `trivy-image-scan.sh`
+(round 13) only runs for Core/Updater/WebApp - Unbound and Blockpage,
+the other two images the release pipeline actually publishes, were
+never scanned at all. Verified live by scanning the currently-published
+`ghcr.io/foxly-it/rootguard-blockpage:latest` directly (no local Docker
+daemon available this session either): exactly 13 HIGH findings across
+9 CVE IDs and 8 packages (c-ares, curl, libcurl, libcrypto3, libssl3,
+libexpat, libxml2, nghttp2-libs), matching the review's own numbers
+exactly. Confirmed live that `nginx:1.29-alpine` (the pinned base) is
+already the current tag - a plain digest bump doesn't help here, since
+this pin already *is* the newest available build of it. Pinned all 8
+packages to their actual current version on Alpine 3.23's own `main`
+repo (confirmed live via pkgs.alpinelinux.org) - not always trivy's own
+reported "fixed version" field: expat and nghttp2 have both moved past
+their respective CVE fixes since trivy's vulnerability DB snapshot
+(2.8.3-r0/1.69.0-r0 vs. trivy's 2.8.2-r0/1.68.1), so pinning to trivy's
+literal field would have under-shot what's actually available. Same
+stopgap pattern as docker:29-cli's own OpenSSL pin (round 13): replace
+with a plain digest bump once upstream ships a build with these baked
+in. Also wired `trivy-image-scan.sh` into `ci-blockpage.yml`'s `build`
+job, so this same PR's own CI proves the fix (Unbound's identical
+wiring is its own separate PR, alongside its own package fixes).
+
+**High, fixed: Unbound's base image carried 58 HIGH/CRITICAL findings
+across 24 CVEs, none caught by any CI job.** Same root cause as
+Blockpage's own entry this round: `trivy-image-scan.sh` never covered
+Unbound either. Verified live by scanning the currently-published
+`ghcr.io/foxly-it/rootguard-unbound:latest`: 58 findings across 24 CVE
+IDs, matching the review's own numbers exactly - including the review's
+own headline finding that 36 of those 58 come from just 4 CVEs
+(CVE-2026-53612..53615) spread across the 9 binary packages the
+util-linux source package builds. Confirmed live via the Debian
+Security Tracker: Debian fixed all 4 in trixie at 2.41.5-0+deb13u1
+(already the current trixie version, not just trixie-security).
+Explicit `apt-get install` pin for all 9 packages closes that.
+
+The remaining 20 CVEs were each checked individually, live, against the
+Debian Security Tracker - not assumed, per the review's own explicit
+caution against a blanket ignore. Every one is genuinely unfixed in
+trixie today: Debian's own tracker marks each `<no-dsa>` ("minor
+issue"), "postponed" ("wait for regressions upstream sorted out"), or
+notes the fix ships "first in unstable, then a point release" - none
+have a trixie-stable fix to pin to the way util-linux did. Checked what
+actually pulls in the more surprising packages rather than assuming: `dig
++deps` (`packages.debian.org` for `bind9-libs`, confirmed live) is what
+brings in `liblmdb0` and this image's second copy of `libxml2` - Unbound's
+own resolver process never touches either, only the `dig`/`host` tools
+this Dockerfile installs for health checks and diagnostics. `perl-base`
+is Debian's own base-install component; nothing in this image ever
+invokes perl. Added all 20 to `.trivyignore.yaml`, each scoped to its
+exact Debian package via `purls` (not left global - see this round's
+separate finding on why that matters) and dated 2026-11-30. Two bugs
+surfaced only once this PR's own CI actually ran the new scan on this
+image: `trivy-image-scan.sh` hardcoded the amd64 trivy binary/checksum,
+which fails with "Exec format error" on `ci-unbound.yml`'s own arm64
+matrix leg - the only caller with an arm64 runner; `uname -m` now picks
+the right release asset. And CVE-2025-69720's ignore entry only scoped
+`libtinfo6`, missing that the same CVE also hits `ncurses-base`/
+`ncurses-bin` in this image - added both.
+
+**Medium, fixed: round 13's own trivy ignores had no `paths`/`purls`,
+so each applied globally - and three of their statements were factually
+wrong.** Confirmed live against trivy's own documentation: an entry with
+neither field "is applied to all files"/"all packages" - so, e.g., the
+same CVE ID would have been silently hidden even if it later showed up
+in a genuinely reachable RootGuard binary or an unrelated image, not
+just the specific package these entries were written for. Added `purls`
+to every one of the 16 round-13 entries, scoping each to the exact
+package trivy reported it against (`pkg:golang/stdlib` for the genuine
+Go-stdlib ones, `pkg:golang/github.com/docker/docker` for the two
+docker-cp CVEs, etc.). Also confirmed live, individually, against each
+CVE's own advisory: CVE-2026-56852 is a `golang.org/x/text` CVE, and
+CVE-2026-56864/CVE-2026-56865 are `golang.org/x/mod` CVEs - none of the
+three are Go standard-library code the way the original statements
+claimed, so a Go-toolchain bump alone doesn't fix them; cosign/compose
+would need to bump their own vendored `golang.org/x/mod`/`x/text`
+dependency instead. Corrected all three statements. (The
+`trivy-image-scan.sh` arm64 bug this same review pass found is covered
+above, in Unbound's own entry - discovered and fixed there first.)
+
+**Low, fixed: the docker-cp preflight advisory (round 13) only named
+two of the three CVEs Docker Engine 29.5.1 actually fixed.** Confirmed
+live against Docker's own 29.5.1 release notes: CVE-2026-41568 (a
+second, separate TOCTOU race letting a container create empty
+files/directories at an arbitrary host path) is fixed in the exact same
+release as the two already covered, listed alongside them in Docker's
+own notes - a real gap, not a different-severity omission. The version
+threshold (29.5.1) was already correct and needed no change. Updated the
+advisory's message text, `manager.go`'s and `manager_test.go`'s own doc
+comments, `platform-support.md`, and both `en.ts`/`de.ts` i18n strings to
+name all three.
+
+**Low, fixed: four smaller gaps from this round's own new tooling.**
+
+- `ci-core.yml`/`ci-updater.yml`/`ci-webapp.yml`/`ci-blockpage.yml`/
+  `ci-unbound.yml`'s `push.paths` filters didn't include
+  `scripts/ci/trivy-image-scan.sh` or `.trivyignore.yaml` - a direct
+  push to main touching only those (a dated-ignore expiry fix, e.g.)
+  wouldn't have triggered any of them. `pull_request` was already
+  unconditional on four of the five (round 10/11); blockpage's own PR
+  trigger keeps a paths filter (its checks aren't required), so it
+  needed the same addition on both triggers. Added to all five.
+- `Preflight`'s docker-cp advisory treated "confirmed patched" and
+  "genuinely can't tell" identically - both produced total silence.
+  Added a distinct `docker_engine_cp_cve_unknown` advisory (still
+  `Level: "warning"`, still never fails `Ready`) for a version that
+  looks version-shaped but isn't the clean, confident form the real
+  warning needs (a distro-suffixed version, e.g.) - scoped narrowly
+  enough (a loose `^\d+\.\d+` check) that this package's own test
+  suite's generic `"ok"` `CommandRunner` stand-in, used across most of
+  its other tests, still resolves to true silence rather than gaining
+  an advisory none of those tests are about.
+- `Setup.tsx`'s check-row icon ternary
+  (`status === "failed" ? "!" : status === "warning" ? "!" : "✓"`)
+  simplified to `status === "ok" ? "✓" : "!"` - both branches already
+  rendered the same glyph.
+- The round-13 warning-level check had backend test coverage but no
+  frontend test of its own. Added one: it renders with a distinct
+  `warning` class (neither `ok` nor `failed`), its action text stays
+  visible despite `check.ok` being `true` (the exact bug the round-13
+  render-guard fix addressed), and the install button stays enabled.
+
+## Follow-up review, round 15 (2026-09-01)
+
+**Medium, fixed: release candidates were never actually image-scanned.**
+`trivy-image-scan.sh` (round 13) only ever ran against a component's own
+PR-time build - single-platform, never published. Nothing in
+`release-alpha.yml` scanned the real multi-arch candidate images
+`publish` pushes, so a platform-specific finding, or something
+introduced only by the release build itself (a build-arg, a base-image
+digest that moved between a component's last PR and this release),
+could ship undetected. Added a new `image-scan` job, matrixed over all
+five images × both published platforms (10 legs, `fail-fast: false` so
+one platform's findings never mask another's) - scans the exact
+`ghcr.io/.../IMAGE:candidate_tag` references `publish` just pushed,
+before promotion to the final version tag. `trivy image` reads a remote
+registry reference directly (confirmed live - no local `docker pull`
+needed), authenticating through the same `~/.docker/config.json`
+`docker/login-action` already leaves behind. `smoke-test`, `upgrade-test`,
+and `update-alpha-pins` all now depend on it - a scan failure blocks
+promotion the same way a failed smoke/upgrade test already does.
+`trivy-image-scan.sh` gained an optional `--platform` flag for this.
+
+Fixed a second bug in the same script while there: it only ever
+installed the pinned trivy release when the `trivy` command was
+completely missing, trusting any pre-existing one (a runner image that
+ships its own, e.g.) to already be the right version without checking.
+Now compares `trivy --version` against the pinned version explicitly and
+reinstalls on any mismatch.
+
+**High, fixed: CI-blocking CVEs trivy's own vulnerability DB surfaced
+overnight, unrelated to anything either review found.** Not a review
+finding - discovered live because every round-15 PR runs the same
+required scans round 13/14 already wired up, and the DB had moved on
+since. Two real, actionable fixes and one genuinely-unfixed set:
+
+- Core/Updater's shared `docker:29-cli` pin: openssh 10.3_p1-r0 has
+  CVE-2026-60002 (CRITICAL), CVE-2026-59999/CVE-2026-60000 (HIGH), fixed
+  at 10.3_p1-r1 - already published on Alpine 3.24's own `main` repo
+  (confirmed live). Same stopgap-apk-pin pattern as the existing
+  openssl/libcrypto3 entries.
+- cosign v3.1.3 (still the newest release, confirmed live) and the
+  compose plugin both carry CVE-2026-56854
+  (`golang.org/x/crypto/ssh`, CRITICAL, fixed at 0.55.0) in their own
+  dependency trees - not fixed in any release of either. Added with the
+  same dated, justified pattern as the existing grpc entry, versioned
+  purls for both resolved versions.
+- Unbound's `libevent-2.1-7t64` (2.1.12-stable-10+b1) carries four new
+  HIGH findings (CVE-2026-63383/63384/63387/63388), all unfixed in
+  trixie (Debian's own tracker doesn't even have a `<no-dsa>`
+  classification yet - simply too new). Unlike every other Unbound
+  ignore entry so far, libevent is a real, direct build dependency
+  (`--with-libevent`) - checked accordingly, not assumed: two are in
+  libevent's own RPC/tagging framework (`event_tagging.c`), one is in
+  its bundled `evdns` DNS-server-response helper, one requires an
+  AF_UNIX listener - Unbound implements DNS wire-format parsing entirely
+  itself (never libevent's own `evdns` API or RPC/tagging framework)
+  and its own remote-control interface is TCP-only (confirmed live in
+  `unbound.conf`), never AF_UNIX. None of the four are reachable through
+  anything this image actually does.
+
+**High, fixed: one more CI-blocking CVE, surfaced by the very next PR
+rebase.** `libexpat` 2.8.2-r0 in Core/Updater's shared `docker:29-cli`
+base - a different package from Blockpage's own nginx-base libexpat pin
+(round 14) - carries CVE-2026-66046/CVE-2026-76641 (both "Expat through
+2.8.3" DoS), fixed at 2.8.4-r0, already published on Alpine 3.24's own
+`main` repo (confirmed live). Same stopgap-apk-pin pattern as the rest
+of this round's own openssh/openssl entries.
+
+**Medium, fixed: Blockpage's own image scan wasn't a required check, and
+couldn't have been even if listed.** Confirmed live against branch
+protection's own `required_status_checks.contexts` (19 entries): "Build
+and push blockpage image" - the only check that runs
+`trivy-image-scan.sh` for Blockpage (round 14) - wasn't among them, so a
+PR with a genuinely failing Blockpage scan could still merge. The deeper
+issue: `ci-blockpage.yml`'s own `pull_request` trigger still carried a
+`paths` filter (round 14 only added the image-scan tooling paths to it,
+not removed it entirely) - a PR that never touched
+`rootguard-blockpage/**` wouldn't even produce the check to require in
+the first place, the identical structural gap round 10/11 already fixed
+for `ci-core.yml`/`ci-updater.yml`/`ci-webapp.yml`/`ci-unbound.yml`.
+Dropped the filter (`pull_request: {}`, matching those four) and added
+"Build and push blockpage image" to the required list (19 → 20,
+confirmed live).
+
+**High, fixed: the newly-required Blockpage build broke outright, live,
+minutes after becoming a required check.** Alpine 3.23's `main` repo
+moved `libexpat` past this Dockerfile's own round-14 pin (2.8.3-r0) to
+2.8.4-r0 (the same libexpat CVE fix already applied to Core/Updater's
+`docker:29-cli` base this round) and stopped carrying 2.8.3-r0 at all -
+`fontconfig`'s own `libexpat.so.1` dependency now resolves only against
+the newer build, so `apk`'s own dependency solver rejected the pin
+outright ("unable to select packages", confirmed live in CI - not a CVE
+finding, a hard build failure). Bumped the pin to 2.8.4-r0 to match what
+Alpine's mirror actually carries.
+
+**Mittel bis niedrig, fixed: `.trivyignore.yaml`'s `purls` exceptions
+still weren't precise enough.** Every one of the 41 vulnerability
+entries carried a bare, unversioned purl (`pkg:golang/stdlib`,
+`pkg:deb/debian/perl-base`, ...) - correct per round 14's own fix, but
+still not precise: a bare purl suppresses every version of that
+package, so a later toolchain/apt bump that reused the same CVE ID
+against a genuinely different, newly-affected version would stay
+silently hidden. Rewrote every purl to the exact installed version
+trivy itself reported, read live from a real scan's own `PURL` field
+(never guessed) - docker CLI and the compose plugin share one Go
+toolchain (stdlib v1.26.5), cosign a separate, older one (v1.26.4), so
+the eight shared stdlib CVEs each list both versions. Also added
+`paths` to the 15 Go-binary entries, naming exactly which of the three
+bundled binaries (`usr/local/bin/docker`,
+`usr/local/libexec/docker/cli-plugins/docker-compose`,
+`usr/local/bin/cosign`) each finding's own scan `Target` field showed it
+against - trivy requires both purl and path to match, so this narrows
+each entry to the specific binary carrying that package/version, not
+merely the package/version wherever it might appear. Re-verified live
+against `rootguard-updater:latest` and `rootguard-unbound:latest` after
+the rewrite: the ignore file still suppresses everything it did before
+(0 residual findings on Unbound; the 2 residual findings on Updater are
+the pre-#470 libexpat CVEs on the stale `:latest` tag, not a
+purl-matching gap - they're gone once a new image ships). Left the
+review's "separate ignore file per image" suggestion unimplemented: the
+versioned-purl-plus-path scoping now does the same job per-entry
+(nothing here can leak onto a different image's package identity by
+version+path), without the added maintenance overhead of tracking five
+parallel files.
+
+**Kleine Punkte, fixed: `platform-support.md` didn't document round
+14's second preflight advisory.** The doc already covered
+`docker_engine_cp_cve` (confidently-unpatched version) but never
+mentioned `docker_engine_cp_cve_unknown` (version string looks
+version-shaped but couldn't be parsed with confidence) - added, with
+the same non-blocking-advisory framing as its sibling. `trivy-image-
+scan.sh`'s "trusts any pre-existing trivy binary" gap is fixed as part
+of finding 1's own PR (explicit version check, not just
+`command -v`).
+
+**Kleiner Punkt, found live, not RootGuard's own bug: the Real-DNS
+workflow (`ci-real-dns-upstream.yml`) was manually re-triggered via
+`workflow_dispatch` as asked - and consistently failed, twice in a row,
+at the same step both times.** `example.com` resolves and validates
+DNSSEC correctly (`ad` flag present); `dnssec-failed.org` - queried
+specifically to confirm Unbound correctly SERVFAILs a domain with
+broken DNSSEC - times out on both `dig` attempts instead, both runs.
+The domain itself is reachable and correctly SERVFAILs from outside
+GitHub Actions (confirmed live from a separate network), so this reads
+as a GitHub Actions runner network-path issue reaching that specific
+domain's authoritative servers, not a RootGuard config regression - but
+that's not yet proven, only the more likely of the two explanations.
+This workflow is diagnostics-only (schedule/`workflow_dispatch`, never
+`pull_request`, not a required check - round 12's own PR #457 already
+noted this), so it doesn't block round 15 or RC2, but it's a real,
+reproducible failure worth tracking as its own follow-up rather than
+closing quietly.
+
+## Independent hardening pass (2026-09-01)
+
+Foxly's own follow-up work on top of round 15, not triggered by an
+external review - `.trivyignore.yaml` precision, the Trivy scan
+tooling, and the Debian pin checker all got a further pass.
+
+**`CVE-2026-56854` split into two precisely-scoped entries instead of
+one shared purl pair.** Round 15 had already pinned both affected
+`x/crypto` versions (cosign's v0.53.0, compose's v0.54.0) on one entry
+without `paths`. Now each version has its own entry with the matching
+binary path (`usr/local/bin/cosign` /
+`usr/local/libexec/docker/cli-plugins/docker-compose`) and its own
+reachability statement: the CVE is in the SSH *server-side*
+`NewServerConn` path that enforces source-address critical options from
+authentication callbacks - both bundled tools only ever act as SSH
+clients (cosign verifies registry attestations, compose talks to the
+local Docker socket), so neither invokes the vulnerable code path.
+
+**OpenSSH removed outright from Core/Updater instead of being patched
+release after release.** `docker:29-cli` only installs it for optional
+`ssh://` Docker contexts; RootGuard always uses the mounted local
+Docker socket and never creates or selects a remote context, so
+`apk del openssh-client` in both Dockerfiles closes the whole class of
+future OpenSSH CVEs (round 15 alone had already patched three) instead
+of carrying an unused client indefinitely. Verified live: built on both
+amd64 and arm64, confirmed OpenSSH and the already-removed buildx
+plugin are both gone, Docker Compose v5.4.0 and cosign still work.
+
+**`trivy-image-scan.sh`'s `--platform` flag accepted a missing value
+without a bad-usage exit.** `trivy-image-scan.sh --platform` (or
+`--platform` followed only by an image ref) used to fall through and
+either use an empty `--platform` argument or misread the platform value
+as the image reference - fixed with an explicit argument-count check
+before consuming `$2`, covered by a new regression test
+(`trivy-image-scan.test.sh`) that stubs `trivy` itself and asserts both
+the usage-error paths and the real argument forwarding.
+
+**Trivy's version and both platform checksums centralized into
+`scripts/ci/trivy-version.env`**, sourced by both
+`trivy-image-scan.sh` and `ci-security.yml`'s own install step instead
+of keeping three hand-synced copies of the same three values - a future
+Trivy bump is now a one-file change. Every `push.paths` filter that
+already watched `trivy-image-scan.sh` now also watches this new file.
+
+**`scripts/check-debian-pins.sh` had four separate live-found bugs,
+all fixed together:**
+- the pin-extraction regex used `\s` in extended-regex mode, which BSD
+  grep/sed (macOS) doesn't support - switched to POSIX `[[:space:]]`
+  so the script actually runs on a macOS dev machine, not just Linux CI;
+- the old `apt-cache policy` output was matched with a `grep` prefix
+  search (`^${pinned_name}=`) that could false-positive against another
+  pinned package sharing a name prefix - replaced with an `awk` exact
+  field match;
+- a package apt couldn't find a candidate for silently printed a `WARN`
+  and kept going, exiting 0 if that was the only issue - now exits 2
+  (a new, distinct "unfixable" exit code, documented at the top of the
+  script) and `--fix` refuses to run at all when any pin is unfixable,
+  rather than silently fixing the ones it could and leaving the rest
+  looking checked;
+- `--fix`'s in-place `sed` also broke on any pinned version containing a
+  literal `+` (common in Debian versions, e.g. `4.16.0-2+really2.41.5-0+deb13u1`)
+  since only `.` was escaped for the replacement pattern - version
+  strings pass through unescaped now since `+` needs no escaping in the
+  replacement text, and each replacement is verified afterward (old
+  string gone, new string present) before anything is written back, all
+  routed through a temporary file that's only `mv`'d into place once
+  every update in the batch validates - `--fix` is now atomic across
+  several drifted packages in one run instead of leaving the Dockerfile
+  half-updated if a later replacement fails.
+Both new behaviors are covered by `check-debian-pins.test.sh`, which
+stubs `docker` to simulate current/drifted/missing-candidate/operational-
+error states and asserts the exit code and file contents for each.
+
+**`debian-pin-freshness.yml`'s auto-fix job used to run `--fix` on any
+non-zero exit code from the checker**, including exit 2 (the new
+"unfixable" code) and genuine operational failures (a `docker pull`
+timeout, e.g.) - now only exit 1 (real, fixable drift) triggers `--fix`;
+any other non-zero exit fails the job outright instead of quietly
+opening a PR built on a broken check. Also added: a post-`--fix`
+`git diff --quiet` guard against opening a no-op PR if the repository
+state changed between the check and the fix step.
+
+Validated live: Core/Updater built and scanned clean on both
+architectures, all four component images show zero unsuppressed
+HIGH/CRITICAL findings under Trivy 0.74, a full repository Trivy
+filesystem scan is clean, all Go/frontend/shell test suites and
+`actionlint` pass, all 21 Debian pins are current against the live
+repository, and Gitleaks found nothing across 636 commits.
+
+## Live discovery cutting 1.0.0-rc.2 (2026-09-01)
+
+**High, fixed: the release pipeline's own direct pushes to `main` were
+never actually exercisable under this repo's current branch
+protection, discovered only by attempting a real release.** `main`
+requires all 20 status checks on every push, not just PR merges -
+`release-version-bump.yml`'s changelog commit and
+`release-alpha.yml`'s `update-alpha-pins` pin/tag commits both push
+directly to `main` by design (documented in `docs/release-process.md`:
+a mechanical commit shouldn't re-trigger the full CI matrix), using the
+default `GITHUB_TOKEN`. That token authenticates as the "github-actions"
+app, which isn't a repository admin and so can't bypass required status
+checks on a direct push even with `contents: write` granted -
+`1.0.0-rc.1` and every earlier release predate this exact pipeline
+shape (an older workflow version pushed the tag directly, before a
+follow-up review moved tag creation into `update-alpha-pins`), so this
+gap had never actually been exercised until this attempt. Fixed by
+introducing `secrets.RELEASE_PAT`, a fine-grained token (Contents: Read
+and write only, scoped to this repository) owned by an account with
+admin rights - admins bypass required status checks on a direct push
+(`enforce_admins` is off). Both jobs' checkout steps now pass this
+token explicitly. Separately, `main`'s branch protection also had
+"Require a pull request before merging" enabled, layered on top of the
+status-check requirement and blocking the same pushes for an
+independent reason - removed, since it directly contradicts this
+pipeline's own documented, intentional design.
+
+## A sixth component: rootguard-attestation-proxy (2026-09-01)
+
+**High, fixed: `RequireAttestation`'s cosign checks could never succeed
+in production - the smoke-test failure above (`smoke-test` in
+`release-alpha.yml` refusing to activate Unbound with "release
+attestation ... is failed") wasn't an image or code bug, it was a
+network-topology one.** Both Core and the separate Updater run only on
+the `control` Docker network, deliberately `internal: true` (no route
+to the internet at all - real privilege isolation for two components
+that hold the Docker socket). `stack.RequireAttestation`
+(`rootguard-core/internal/stack/attestation.go`) and its own
+near-duplicate `verifyAttestation` (`rootguard-updater/attestation.go`)
+shell out to `cosign verify-attestation`, which genuinely needs outbound
+HTTPS - something `control`'s isolation makes structurally impossible.
+This gating was wired into the real deploy/update path only recently
+(previously attestation was checked only for the dashboard's own status
+display, never gating activation) and had never actually been exercised
+end to end before this release attempt - confirmed by comparing the
+`upgrade-test` job (passed, unaffected) against `smoke-test` (failed):
+`upgrade-test`'s own initial deploy and its "upgrade in place" step are
+both driven by the *previous* release's Core binary, which predates
+this gate's existence entirely and so never calls it; only
+`smoke-test`'s fresh, full-candidate deploy actually exercises the new
+code.
+
+Confirmed live, not guessed, at every step:
+- Reproduced the exact `cosign verify-attestation` call both locally
+  (real network - succeeded) and from inside Core's own published
+  candidate image, run via `docker run` on a real GitHub Actions runner
+  with normal internet access (also succeeded) - isolating the failure
+  to the network-isolated deployment context specifically, not the
+  image, the code, or a Sigstore/GHCR outage.
+- Traced exactly which hosts a real, successful verification needs by
+  routing `cosign` through a local HTTPS_PROXY pointed at a
+  purpose-built CONNECT-logging forwarding proxy, once with a
+  completely cold TUF cache to also catch first-run-only bootstrap
+  traffic. Exactly three, port 443 only: `ghcr.io` (registry API),
+  `pkg-containers.githubusercontent.com` (GHCR's actual blob storage
+  CDN, where the registry API redirects), `tuf-repo-cdn.sigstore.dev`
+  (Sigstore trust-root bootstrap). No live call to
+  `fulcio.sigstore.dev` or `rekor.sigstore.dev` happens - both the
+  certificate chain and the transparency-log inclusion proof verify
+  offline, from data embedded in the attestation bundle plus the
+  TUF-provided trust root.
+
+**Fix, chosen explicitly over two lighter alternatives (attaching Core
+directly to `edge`; temporarily reverting the attestation gate) after a
+full design plan and an independent review pass: a genuine sixth
+RootGuard component**, `rootguard-attestation-proxy` - a minimal,
+`scratch`-based, non-root Go binary that does exactly one thing: a
+CONNECT-only forward proxy with the three hosts above hardcoded as its
+complete allowlist, port 443 only. It never terminates TLS itself (a
+pure byte-copying tunnel), so it needs zero CA certificates, zero
+shell, zero OS at all - the smallest, and the first, RootGuard image
+that needs no `.trivyignore.yaml` AVD-DS-0002/0026 suppression (a real
+`USER` and a real `HEALTHCHECK`, not a suppressed absence of either).
+Sits on both `control` and a new, non-internal `egress` network; Core
+and the Updater themselves stay on `control` only, never joining
+`egress` directly. Explicit trust-model note (in the code, the README,
+and `docs/threat-model.md`): the allowlist is defense-in-depth, not an
+authentication boundary - the only two possible callers (Core, the
+Updater) already hold the Docker socket and run as root, i.e. already
+have full host privilege; the point is keeping `control` itself
+provably internet-isolated while making the one legitimate egress path
+explicit and auditable.
+
+Core and the Updater reach it via a new `ROOTGUARD_ATTESTATION_PROXY_URL`
+env var, read only by the two cosign call sites and set only on that
+one `exec.Cmd`'s own `Env` (`HTTPS_PROXY`/`HTTP_PROXY`), never on the
+container's ambient environment - deliberately not a container-wide
+proxy setting, confirmed by code search that no other outbound-HTTPS
+call in either module would fit the narrow 3-host allowlist. (One
+other outbound call exists: Core's own GitHub Releases
+self-update-discovery check, `internal/updater/github_release.go`,
+`api.github.com` - a separate, pre-existing gap on the same isolated
+network, already degrading gracefully to the static image pin today;
+left alone, not silently routed through an allowlist it doesn't fit.)
+
+Wired into both `compose.release.yaml` and the local dev `compose.yaml`
+identically - found live that a developer overriding `ROOTGUARD_*_IMAGE`
+locally to real, signed `ghcr.io` digests (rather than
+`ROOTGUARD_SKIP_ATTESTATION`) hits the exact same isolated-network
+failure `compose.yaml`'s own comment already half-anticipated.
+Deliberately **not** self-update managed like the other five
+components - static, manually-updated infrastructure instead
+(`docs/release-process.md`), reasoned as the simpler, smaller-attack-
+surface choice for a piece this narrow.
+
+**Known, documented, not solved: self-update alone can never deliver
+this (or any) compose-topology change to an existing installation** -
+it only ever swaps container images in place against whatever compose
+file already exists on disk, never re-fetches `compose.release.yaml`
+itself. An operator on an older release updating via the WebGUI alone
+won't get the new proxy/network/env-var topology; only a fresh
+`install.sh` run or a manual `compose.release.yaml` refresh can cross
+it. Pre-existing, structural property of the whole update mechanism,
+not introduced by this change - documented in
+`docs/release-process.md` rather than solved (solving it properly is a
+materially bigger, separate undertaking).
+
+Also fixed while in the area: `docs/threat-model.md`/`.de.md` had a
+stale claim that Unbound "doesn't go through a Cosign provenance check
+like Core/WebApp" - the code already covers Unbound and Blockpage too
+(only AdGuard, a third-party image, is legitimately exempt); every
+"five components" reference across `docs/release-process.md`,
+`docs/threat-model.md`/`.de.md`, `docs/architecture.md`/`.de.md`,
+`CLAUDE.md` (gitignored, local-only, updated for this session's own
+sake), `scripts/verification-common.sh`, and `scripts/soak/probe.sh`
+now says six or lists the new component explicitly - except
+`docs/performance-baseline.md`'s own "all five managed containers"
+line, deliberately left alone since it describes a specific, already-
+completed August 2026 soak-test measurement that genuinely only sampled
+five containers at the time, and `site/docs.html`'s public "five
+components" marketing heading, deliberately left alone too since it's
+scoped to user-relevant, visible components - invisible internal
+plumbing like this proxy was never meant to be counted there.
+`docs/architecture.md`/`.de.md`'s repository-structure tree was also
+separately stale (missing `rootguard-blockpage/` entirely, predating
+this change) - fixed in the same edit rather than left half-corrected
+next to it; the tree's own surrounding prose still describes the
+pre-monorepo submodule era and stays out of scope here (a materially
+bigger, separate cleanup).
+
+Validated live: all new Go code built, `go vet`, and unit-tested
+(including a real end-to-end CONNECT-tunnel test against a local echo
+listener, injected via the same `dialUpstream`-swap pattern
+`rootguard-core`'s own attestation code already uses for testing);
+image built and scanned clean with both `trivy image` (0 findings) and
+`trivy config` (0 Dockerfile misconfigurations - no suppressions
+needed); a running container's `/healthz` and real CONNECT behavior
+(200 for `ghcr.io:443`, 403 for a disallowed host) verified directly
+against the built image; `docker compose config` validated for both
+`compose.release.yaml` and `compose.yaml` after every wiring change.
+The real acceptance test - `release-alpha.yml`'s `smoke-test` actually
+passing end to end for `1.0.0-rc.2` - is still pending as of this
+entry, tracked as the next step once this change merges.
+
+## Independent review of the attestation-proxy work (2026-09-02)
+
+A second, independent review of the merged attestation-proxy change
+found eight concrete issues, none of them speculative - two genuine bugs
+confirmed live via `-race`/CI logs, one real gap in the update path's
+own failure behavior, and five smaller gaps. All were verified before
+fixing, per this project's own established practice.
+
+**High, fixed: a real backup-retention race, reproducible under CI's own
+timing.** `Manager.update()` (`rootguard-core/internal/updater/manager.go`)
+used `defer m.enforceBackupRetention()` to prune old backups on every
+exit path - but `finish()`/`fail()` (both called *before* that defer
+runs, at the end of the enclosing function) already set the manager's
+state to `idle`/`failed` and released the lock, making that terminal
+state externally observable *before* the deferred pruning had actually
+run. A `BackupStatus()` call landing in that exact window saw the
+pre-pruning count - confirmed live: `TestUpdateEnforcesBackupRetentionAfterLifecycle`
+failed reproducibly in CI ("expected 5, got 6") while passing reliably
+locally, exactly the signature of a race that only manifests under
+different I/O timing, not a flaky-and-unrelated test as first assumed.
+Fixed by replacing the single `defer` with two local closures
+(`fail`/`finish`) that call `enforceBackupRetention()` first and then
+delegate - covering all nine exit points uniformly (every failure path,
+rollback, no-change, and success alike) without repeating the call at
+each one. Verified: the existing test now passes reliably under
+`-race -count=5`, and the fix makes the ordering structurally guaranteed
+rather than timing-dependent, so no separate stress test was needed on
+top of it.
+
+**Medium, fixed: a real resource-exhaustion bug in the proxy's own
+tunnel logic.** `pipe()` (`rootguard-attestation-proxy/proxy.go`) set a
+read deadline on the source connection but never a write deadline on
+the destination - a peer that accepts the tunnel but stops reading
+(TCP receive window exhausted, or simply hangs) left the copying
+goroutine's `dst.Write` blocked indefinitely, permanently pinning one of
+the 64 `maxConnections` slots. Enough stalled peers exhaust the whole
+cap, refusing every subsequent, legitimate attestation check. Fixed by
+setting a write deadline before every write, matching the existing read
+deadline's `idleTimeout`. Verified with a new, direct regression test
+(`TestIdleTimeoutUnblocksStalledPeer`) using a real listener that
+accepts a connection and then never reads again - confirms the tunnel
+actually unwinds within the timeout instead of hanging.
+
+Writing that test (and several others added alongside it - see below)
+surfaced a second, genuine bug of its own: tests that temporarily
+override a package-level timing var
+(`headerReadDeadline`/`idleTimeout`/`dialUpstream`) via a plain `defer`
+raced with still-running server-side goroutines that outlive the test
+function's own return, caught live by `-race`. Fixed by giving
+`proxyServer` its own `sync.WaitGroup` tracking in-flight `handleConn`
+goroutines, and switching the affected tests from `defer` to
+`t.Cleanup` registered in an order that guarantees the "wait for every
+goroutine to actually finish" cleanup runs *before* the "restore the
+var" one (`t.Cleanup` callbacks run in LIFO order, same as `defer`, but
+run separately and afterward - documented in `newClientConn`'s own
+comment for future tests). Verified clean under `-race -count=5`.
+
+**Medium, fixed: an update failure with no clear diagnosis was possible
+after the same self-update limitation the previous entry already
+documented (not solved, by design - see "Self-update can never deliver
+a compose-topology change" above).** An operator on an older release
+whose self-update carries them onto the new attestation-gated code
+without the new proxy topology used to get whatever generic
+network-error text cosign itself produced - not obviously distinguishable
+from a transient hiccup worth retrying. Fixed: `RequireAttestation`
+(Core) and `verifyAttestation` (the Updater, its own separate copy)
+both now check the proxy is configured and reachable *before* ever
+invoking cosign, via a new `checkAttestationProxyReachable()` in each -
+an unset `ROOTGUARD_ATTESTATION_PROXY_URL` or an unreachable one each
+produce a specific, actionable message naming the likely cause (a stale
+compose topology) and the fix (reinstall or a manual
+`compose.release.yaml` refresh), not cosign's own opaque text. The
+dashboard's own read-only attestation status field
+(`rootguard-webapp/frontend/src/api/client.ts`'s five-value
+`"verified"|"missing"|"failed"|"unavailable"|"not_applicable"` union)
+is deliberately untouched by this - the richer message is constructed
+only on `RequireAttestation`'s/`verifyAttestation`'s own
+activation-gating error path, not folded into the cached status a
+different, unrelated API surface already type-checks against. Also
+added: an informational (non-failing) log step in `release-alpha.yml`'s
+own `upgrade-test` job, printing whether the just-upgraded Core actually
+has `ROOTGUARD_ATTESTATION_PROXY_URL` set - the real post-upgrade
+scenario this whole finding is about already exists at that point in
+the job for free (no synthetic reproduction needed), so surfacing it in
+every release's own CI log keeps the known gap visible rather than only
+living in a doc comment. A full second-update E2E reproduction (actually
+triggering and observing a real refused update inside that job) was
+considered and deferred - the unit-level tests already prove the exact
+failure behavior deterministically and fast; the E2E version would need
+its own non-trivial harness (a locally-committed, differently-tagged
+image to update to, matching the existing rollback-test pattern) for
+proportionally little additional confidence.
+
+**Low, fixed: a real staticcheck finding (SA4023) in `main.go`** -
+`serve()` only ever returns with a non-nil error (its only exit is
+`Accept` failing), so the `if err := server.serve(ln); err != nil`
+form's branch was always taken, which staticcheck correctly flagged as
+dead-code-shaped. Simplified to `log.Fatalf("serve: %v", server.serve(ln))`.
+
+**Low, fixed: `rootguard-attestation-proxy` was missing from the shared
+`go-security` matrix** (`ci-security.yml`) - the component's own
+`ci-attestation-proxy.yml` ran `go test`/`vet`/`gofmt`/trivy, but neither
+`staticcheck` nor `govulncheck`, unlike every other module (which get
+both centrally, not duplicated per-component - confirmed by checking
+`ci-updater.yml`/`ci-core.yml` don't run either directly, the same
+pattern this fix now follows). Added `rootguard-attestation-proxy` to
+the matrix; both tools already reported clean once run.
+
+**Low, fixed: test coverage gaps in the proxy's own timeout/limit
+logic** - added tests for an unreachable-upstream 502, an oversized
+CONNECT header, the header-read timeout, the idle/write-deadline fix
+above, the `maxConnections` cap actually rejecting excess connections
+(exercising the real `proxyServer.serve` path, not the
+`handleConn`-direct helper the rest of the suite uses), the
+`/healthz` endpoint against a real running server, and a client that
+sends tunnel payload before waiting to read the 200 response (the
+buffered-bytes-drain path `handleConn` already had, previously
+untested). Statement coverage moved from ~54% to ~71%; the remaining
+gap is `main()`'s own CLI dispatch and `runHealthcheck()` (both
+exercised by the real, running Docker image directly - confirmed live -
+rather than unit tests, consistent with keeping `main` itself thin).
+Also added: two new `jq` assertions in `release-alpha.yml`'s own
+"Validate the rewritten public release Compose model" step, confirming
+`ROOTGUARD_ATTESTATION_PROXY_URL` is actually set on both Core and the
+Updater and that `rootguard-attestation-proxy` itself is on both
+`control` and `egress` - closing the one remaining gap from that list
+(compose-level propagation of the proxy variable was previously only
+checked by hand, not automated).
+
+**Separately, live and unrelated to the code review itself: GHCR
+rejected the real release-alpha.yml publish job's own push
+(`denied: permission_denied: write_package`) for the bootstrap image
+pushed by hand in the previous entry** - a manually-created GHCR
+package isn't automatically linked to the repository the way one
+created by that repository's own Actions workflow is, so the repo's
+`GITHUB_TOKEN` (already granted `packages: write`) had nothing to write
+to. No API exists to link an existing package to a repository after the
+fact - fixed via the package's own web settings ("Manage Actions
+access"), a manual, one-time step.

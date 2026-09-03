@@ -19,11 +19,89 @@ jobs:
       ROOTGUARD_WEB_PORT: "18080"
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"
+      # See compose.integration.yaml's own comment on these two - points
+      # Core's /api/unbound/diagnostics at the local, throwaway zone
+      # "Start local DNSSEC test authority" below serves, instead of the
+      # real internet.
+      ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN: good.rgtest-ci.internal
+      ROOTGUARD_UNBOUND_DIAGNOSTIC_DNSSEC_DOMAIN: bad.rgtest-ci.internal
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Found in review: "Verify Unbound configuration lifecycle" below
+      # exercises the real /api/unbound/diagnostics endpoint, which by
+      # design queries real internet domains - a transient DNS/network
+      # hiccup on the runner's own connection then fails this job for
+      # reasons that have nothing to do with the code under test.
+      # Confirmed live: main's own independent, scheduled CI failed this
+      # way multiple times in a row. setup.sh signs a small throwaway
+      # zone fresh every run and serves it locally;
+      # ROOTGUARD_UNBOUND_DIAGNOSTIC_*_DOMAIN above and unbound's own
+      # extra_hosts (compose.integration.yaml) are what point Core and
+      # Unbound at it instead of the real internet.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
       - name: Test verification-common.sh's resource-ownership state machine
         run: ./scripts/verification-common.test.sh
+
+      # Found in review, round 6: the release-version SemVer guard shipped
+      # with no automated regression coverage - this is that coverage.
+      - name: Test semver-compare.sh's SemVer 2.0 precedence rules
+        run: ./scripts/lib/semver-compare.test.sh
+
+      # Found in review: one of three release-alpha.yml sites filtering
+      # tags down to "real SemVer ones" hand-wrote its own copy of this
+      # grammar and silently drifted from the other two (missing the
+      # hyphen SemVer allows inside a prerelease identifier). All three
+      # now share $SEMVER_PATTERN instead of a third hand-written copy -
+      # this is that shared pattern's own coverage.
+      - name: Test semver-validate.sh's grammar and tag-filter construction
+        run: ./scripts/lib/semver-validate.test.sh
+
+      # Found in review, round 7: release-alpha.yml's release-retry
+      # detection had two real bugs (an unreachable retry branch, and a
+      # content-diff check that could resolve to an unrelated commit) -
+      # this exercises the fix against synthetic git histories for every
+      # scenario the review named, not just the two it happened to spot.
+      - name: Test resolve-release-pin-commit.sh's retry detection
+        run: ./scripts/lib/resolve-release-pin-commit.test.sh
+
+      # Found in review: check-site-facts.sh already checks this for
+      # site/*.html, but nothing checked it repo-wide - PR #423 deleted
+      # the per-component SECURITY.md files on the reasoning that nothing
+      # linked to them, verified with a narrow grep for those specific
+      # paths only; at least eight README.md/CONTRIBUTING.md files turned
+      # out to link to their own now-deleted copy and nothing caught it.
+      #
+      # Found in review, round 6: the hand-rolled regex checker this used
+      # to run (scripts/check-markdown-links.sh) only ever matched a single
+      # inline-link shape (`](target)`) - it missed reference-style links
+      # (`[text][id]`), link reference definitions (`[id]: target`), `<...>`
+      # targets, optional link titles, and non-standard code-fence markers
+      # (`~~~`, indented or longer backtick fences) that a real CommonMark
+      # parser handles correctly. lychee is one. No broken link of any of
+      # those shapes exists in this repo today, but the check itself was
+      # incomplete. --offline: local file links only, no network requests
+      # - a CI check shouldn't depend on third-party sites being reachable.
+      # Same version-pinned-and-checksummed install pattern release-alpha.yml
+      # already uses for git-cliff.
+      - name: Install lychee
+        env:
+          LYCHEE_VERSION: "0.24.2"
+          LYCHEE_SHA256: 1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a
+        run: |
+          set -euo pipefail
+          curl -fsSL -o lychee.tar.gz \
+            "https://github.com/lycheeverse/lychee/releases/download/lychee-v${LYCHEE_VERSION}/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${LYCHEE_SHA256}  lychee.tar.gz" | sha256sum -c -
+          tar -xzf lychee.tar.gz "lychee-x86_64-unknown-linux-gnu/lychee"
+          install "lychee-x86_64-unknown-linux-gnu/lychee" /usr/local/bin/lychee
+
+      - name: Check local markdown links repo-wide
+        run: |
+          set -euo pipefail
+          git ls-files -z -- '*.md' | xargs -0 lychee --offline --no-progress
 
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet
@@ -82,6 +160,23 @@ jobs:
           done
           exit 1
 
+      # Restarts rootguard-unbound to pick up the forward-zone/trust-
+      # anchor for the local DNSSEC test zone - safe here, once the rest
+      # of the stack is already confirmed up and stable (same container
+      # identity/IP, compose only checks the service_healthy dependency
+      # once at creation, not continuously).
+      - name: Wire the resolver up to the local DNSSEC test zone
+        run: |
+          ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          for attempt in {1..30}; do
+            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::rootguard-unbound never became healthy again after being wired up to the local DNSSEC test zone" >&2
+          exit 1
+
       - name: Verify Unbound configuration lifecycle
         run: |
           presets="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/presets)"
@@ -127,15 +222,18 @@ jobs:
           test "$(jq 'length' <<<"$versions")" -ge 2
           baseline_id="$(jq -r '.[] | select(.settings.threads == 2) | .id' <<<"$versions")"
           diagnostics="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/diagnostics)"
-          test "$(jq -r .healthy <<<"$diagnostics")" = "true"
+          test "$(jq -r .healthy <<<"$diagnostics")" = "true" || { echo "Expected healthy diagnostics, received $diagnostics"; exit 1; }
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt --request POST "http://127.0.0.1:18080/api/unbound/history/$baseline_id/restore" >/dev/null
           test "$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/unbound/settings | jq -r .threads)" = "2"
 
+      # Found in review, round 9: this used to dig example.com/
+      # dnssec-failed.org directly, same real-internet dependency as
+      # everything else this round moved onto the local test zone.
       - name: Verify DNS through AdGuard and Unbound
         run: |
-          answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 example.com A)"
+          answer="$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 good.rgtest-ci.internal A)"
           test -n "$answer"
-          status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 dnssec-failed.org A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
+          status="$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 bad.rgtest-ci.internal A | sed -n 's/^;; ->>HEADER<<- opcode: QUERY, status: \([^,]*\).*/\1/p')"
           test "$status" = "SERVFAIL"
 
       - name: Verify Unbound expert configuration lifecycle
