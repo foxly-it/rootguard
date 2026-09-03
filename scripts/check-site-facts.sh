@@ -24,16 +24,7 @@ cd "${repository_dir}"
 # shellcheck source=version-pattern.sh
 . "${repository_dir}/scripts/version-pattern.sh"
 
-# Ranked by creation date (not sort -V), so a later-cut stable tag
-# correctly outranks an earlier rc for the same release without needing
-# install.sh's sort -V precedence workaround.
-latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-  | grep -E "^v${rootguard_version_pattern}\$" | head -1)"
-if [[ -z "${latest_tag}" ]]; then
-  echo "No release tag found - cannot determine the current version" >&2
-  exit 1
-fi
-latest_version="${latest_tag#v}"
+latest_version="$(rootguard_current_version)"
 echo "Current release: ${latest_version}"
 
 failures=0
@@ -56,7 +47,9 @@ echo "== Version references =="
 historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
 version_matches=""
 for file in site/*.html README.md; do
-  matches="$(grep -vE "${historical_reference_pattern}" "${file}" | rootguard_extract_versions | sed "s#^#${file}:#" || true)"
+  matches="$(grep -vE "${historical_reference_pattern}" "${file}" \
+    | grep -vE "${rootguard_update_image_line_pattern}" \
+    | rootguard_extract_versions | sed "s#^#${file}:#" || true)"
   if [[ -n "${matches}" ]]; then
     version_matches+="${matches}"$'\n'
   fi
