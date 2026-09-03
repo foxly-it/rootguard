@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-08-29
+Last reviewed: 2026-09-02
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -1160,6 +1160,19 @@ here on: only bug fixes and documentation, per the exit criterion above,
 until the two remaining 1.0.0-gating items close (the 30-day soak test and
 the migration/rollback docs it and the rest of 1.0.0's scope gate, see
 below).
+
+**`v1.0.0-rc.2` (2026-09-02)**, a bug-fix release within this same phase,
+not a new milestone: cutting `1.0.0-rc.2` exposed that Core/Updater's
+Cosign attestation checks (gating every image activation since `rc.1`)
+had never actually been exercised against the real, internet-isolated
+`control` network before. Fixed with a sixth RootGuard component,
+`rootguard-attestation-proxy` - a minimal, hardcoded-3-host-allowlist
+CONNECT proxy sitting on a new `egress` network, so `control` stays fully
+isolated while cosign gets exactly the narrow path it needs. Full
+narrative: `.worklog.md`'s 2026-09-01/02 entry and
+`docs/security-audit-log.md`. Follow-up filed, explicitly scoped for
+before `rc.3`, not before `1.0.0`: bring the proxy itself into self-update
+management ([rootguard#481](https://github.com/foxly-it/rootguard/issues/481)).
 
 ---
 
