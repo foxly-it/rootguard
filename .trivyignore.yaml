@@ -509,6 +509,22 @@ vulnerabilities:
       (`control-interface: 127.0.0.1`, confirmed live in unbound.conf),
       never AF_UNIX. See CVE-2026-63383's identical statement above on
       the unfixed-in-trixie status.
+  - id: CVE-2026-16742
+    purls: ["pkg:deb/debian/libsystemd0@257.13-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Local privilege escalation in systemd-homed via missing home-record
+      signature verification - this image never runs systemd itself (no
+      init, no systemd-homed daemon; libsystemd0 is only a linked
+      dependency pulled in by another package), so the vulnerable daemon
+      is never invoked.
+  - id: CVE-2026-16742
+    purls: ["pkg:deb/debian/libudev1@257.13-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Same finding, same reasoning as libsystemd0 immediately above -
+      libudev1 is a linked dependency only, systemd-homed never runs in
+      this image.
 
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
