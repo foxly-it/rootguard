@@ -8,7 +8,7 @@ before repeating repository-wide discovery.
 ## Repository layout
 
 `foxly-it/rootguard` is a monorepo coordinating deployment, documentation,
-CI, and website, alongside five independently buildable component
+CI, and website, alongside six independently buildable component
 directories (each with its own Dockerfile and path-filtered CI workflow):
 
 - `rootguard-core/` owns privileged orchestration and configuration.
@@ -17,6 +17,11 @@ directories (each with its own Dockerfile and path-filtered CI workflow):
 - `rootguard-updater/` is the internal control-plane updater helper.
 - `rootguard-blockpage/` is the landing page shown for AdGuard-blocked
   requests; also usable standalone (see its own README).
+- `rootguard-attestation-proxy/` (joined 2026-09-02) is the minimal
+  CONNECT-only egress proxy letting Core/Updater's Cosign attestation
+  checks reach GHCR/Sigstore from the fully internet-isolated `control`
+  network - self-update managed via its own dedicated channel since
+  2026-09-03.
 
 These were four separate repositories included as Git submodules until the
 monorepo migration (see "Delivered and verified" below); their full commit
