@@ -1,6 +1,6 @@
 module github.com/foxly-it/rootguard-core
 
-go 1.26.1
+go 1.26.8
 
 require (
 	filippo.io/age v1.3.1
