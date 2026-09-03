@@ -72,8 +72,8 @@ lokaler Build ist nicht notwendig.
 
 ```sh
 mkdir rootguard && cd rootguard
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.1/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.1/.env.release.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/.env.release.example
 ```
 
 Erzeuge zwei voneinander unabhängige Sicherheitsschlüssel:
@@ -221,8 +221,8 @@ required.
 
 ```sh
 mkdir rootguard && cd rootguard
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.1/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.1/.env.release.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0-rc.2/.env.release.example
 ```
 
 Generate two independent random security tokens:

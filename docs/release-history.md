@@ -8,8 +8,8 @@ the security-review finding/fix journal.
 
 ## Release status
 
-`v1.0.0-rc.1` is the current public release, published with digest-pinned
-`amd64`/`arm64` images for all five RootGuard components and a live-verified
+`v1.0.0-rc.2` is the current public release, published with digest-pinned
+`amd64`/`arm64` images for all six RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; 0.9 (release candidate) is in progress - see
 `ROADMAP.md` for the current checklist status - with the 1.0.0
