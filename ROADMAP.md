@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-09-02
+Last reviewed: 2026-09-03
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -1172,7 +1172,11 @@ isolated while cosign gets exactly the narrow path it needs. Full
 narrative: `.worklog.md`'s 2026-09-01/02 entry and
 `docs/security-audit-log.md`. Follow-up filed, explicitly scoped for
 before `rc.3`, not before `1.0.0`: bring the proxy itself into self-update
-management ([rootguard#481](https://github.com/foxly-it/rootguard/issues/481)).
+management - **done** (2026-09-03): a fully separate, parallel update
+channel, own routes/UI/audit action, cosign-verified through the
+identical policy as every other component
+([rootguard#481](https://github.com/foxly-it/rootguard/issues/481),
+closed).
 
 ---
 

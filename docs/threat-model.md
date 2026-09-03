@@ -198,13 +198,14 @@ path instead of directly.
 - AdGuard Home (a third-party image) is the one component that doesn't
   go through a Cosign provenance check - trust here is based on digest
   pinning and the upstream signature, not a RootGuard-owned signature
-  chain. `rootguard-attestation-proxy` is a second, different exception:
-  it's static/manually-updated infrastructure (see
-  `docs/release-process.md`), never re-pulled or re-verified at runtime
-  the way the five self-update-managed components are - trust in it
-  comes from digest pinning and its own minimal, auditable source (a
-  few hundred lines, `scratch`-based, no dependencies), not a live
-  Cosign check.
+  chain. `rootguard-attestation-proxy` used to be a second, different
+  exception (static/manually-updated, never re-verified at runtime) -
+  no longer: it joined self-update management with its own dedicated
+  update channel (2026-09-03), verified through the identical Cosign
+  policy as every other RootGuard-built component. Verification of a
+  new candidate proxy image runs through the *currently running* proxy
+  instance - the swap only happens after that succeeds, so there's no
+  bootstrapping gap.
 - Core's own GitHub Releases self-update-discovery check
   (`internal/updater/github_release.go`, `api.github.com`) has the same
   `control`-network isolation problem `rootguard-attestation-proxy` was
