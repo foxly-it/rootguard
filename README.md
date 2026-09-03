@@ -145,6 +145,7 @@ Die Komponenten sind eigenständig baubare Verzeichnisse im selben Repository:
 | [`rootguard-updater`](rootguard-updater) | Kontrollierte Control-Plane-Updates |
 | [`rootguard-unbound`](rootguard-unbound) | Gehärtetes Unbound-Image |
 | [`rootguard-blockpage`](rootguard-blockpage) | Landingpage für geblockte Anfragen |
+| [`rootguard-attestation-proxy`](rootguard-attestation-proxy) | Egress-Proxy für Cosign-Attestierungsprüfungen |
 
 Die vormaligen eigenständigen Repositories sind archiviert und weiterhin
 lesbar (Historie, alte Issues/PRs); aktive Entwicklung findet nur noch hier
