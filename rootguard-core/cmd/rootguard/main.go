@@ -198,6 +198,37 @@ func main() {
 			return err
 		},
 	})
+	// A separate, parallel manager rather than a second entry in
+	// updaterSelfUpdateManager.Services above - found live, scoping
+	// rootguard#481: the attestation-proxy CAN safely swap itself (unlike
+	// the Updater, which would kill itself mid-operation), it's only
+	// managed by Core because it lives in the same control-plane compose
+	// file/project as the Updater's own self-update. A second Services
+	// entry there would have been silently invisible: both
+	// updaterSelfUpdateInstallHandler (hardcoded StartUpdate("updater"))
+	// and the frontend's Stack.tsx (services[0]) assumed exactly one
+	// service in that status object. A dedicated manager/route/UI trio
+	// avoids touching that already-shipped, tested path at all.
+	attestationProxySelfUpdateManager := updater.NewManager(updater.Options{
+		DataDir:             envOrDefault("ROOTGUARD_ATTESTATION_PROXY_SELF_UPDATE_DIR", "/var/lib/rootguard/attestation-proxy-self-update"),
+		ComposeDir:          filepath.Dir(controlPlaneComposeFile),
+		ComposeProject:      envOrDefault("ROOTGUARD_COMPOSE_PROJECT", "rootguard"),
+		OnPersistError:      logPersistError("attestation proxy self-update manager"),
+		AttestationVerifier: updaterAttestationVerifier,
+		Services: []updater.ServiceSpec{{
+			// No BackupPaths: the container is read_only and stateless,
+			// nothing to snapshot before a swap.
+			Name: "attestation-proxy", DisplayName: "Attestation Proxy",
+			Container:   "rootguard-attestation-proxy",
+			TargetImage: envOrDefault("ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-attestation-proxy:latest"),
+			ResolveTarget: func(ctx context.Context) (string, error) {
+				return updater.ResolveLatestReleaseImage(ctx, githubClient, "attestation-proxy")
+			},
+		}},
+		Verify: func(context.Context, string) error {
+			return stack.CheckAttestationProxyReachable()
+		},
+	})
 	backupExporter := backupexport.New(backupexport.Options{
 		DataDir: envOrDefault("ROOTGUARD_EXPORT_DIR", "/var/lib/rootguard/exports"),
 		LocalSources: []backupexport.Source{
@@ -235,16 +266,17 @@ func main() {
 	stack.StartStatusCollector(context.Background())
 
 	handler := api.RegisterRoutes(api.Dependencies{
-		Token:             token,
-		Unbound:           manager,
-		AdGuard:           adguardManager,
-		Installer:         installationManager,
-		Updater:           updateManager,
-		ControlPlane:      controlPlaneClient,
-		UpdaterSelfUpdate: updaterSelfUpdateManager,
-		AdGuardDNSAddress: envOrDefault("ADGUARD_DNS_ADDRESS", "rootguard-adguard:53"),
-		BackupExporter:    backupExporter,
-		BackupRestorer:    backupRestorer,
+		Token:                      token,
+		Unbound:                    manager,
+		AdGuard:                    adguardManager,
+		Installer:                  installationManager,
+		Updater:                    updateManager,
+		ControlPlane:               controlPlaneClient,
+		UpdaterSelfUpdate:          updaterSelfUpdateManager,
+		AttestationProxySelfUpdate: attestationProxySelfUpdateManager,
+		AdGuardDNSAddress:          envOrDefault("ADGUARD_DNS_ADDRESS", "rootguard-adguard:53"),
+		BackupExporter:             backupExporter,
+		BackupRestorer:             backupRestorer,
 	})
 
 	server := &http.Server{

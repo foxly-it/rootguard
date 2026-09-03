@@ -878,3 +878,28 @@ export async function checkUpdaterSelfUpdate(): Promise<UpdaterSelfUpdateStatus>
 export async function installUpdaterSelfUpdate(): Promise<UpdaterSelfUpdateStatus> {
   return request<UpdaterSelfUpdateStatus>("/api/updater-updates/install", { method: "POST" });
 }
+
+export interface AttestationProxySelfUpdateServiceStatus extends Omit<UpdateServiceStatus, "name"> {
+  name: "attestation-proxy";
+}
+
+export interface AttestationProxySelfUpdateStatus {
+  state: "idle" | "checking" | "updating" | "failed";
+  active_service?: string;
+  message: string;
+  services: AttestationProxySelfUpdateServiceStatus[];
+  history?: UpdateHistoryEntry[];
+  updated_at: string;
+}
+
+export async function fetchAttestationProxySelfUpdateStatus(): Promise<AttestationProxySelfUpdateStatus> {
+  return request<AttestationProxySelfUpdateStatus>("/api/attestation-proxy-updates");
+}
+
+export async function checkAttestationProxySelfUpdate(): Promise<AttestationProxySelfUpdateStatus> {
+  return request<AttestationProxySelfUpdateStatus>("/api/attestation-proxy-updates/check", { method: "POST" });
+}
+
+export async function installAttestationProxySelfUpdate(): Promise<AttestationProxySelfUpdateStatus> {
+  return request<AttestationProxySelfUpdateStatus>("/api/attestation-proxy-updates/install", { method: "POST" });
+}

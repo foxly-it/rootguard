@@ -3751,3 +3751,76 @@ created by that repository's own Actions workflow is, so the repo's
 to. No API exists to link an existing package to a repository after the
 fact - fixed via the package's own web settings ("Manage Actions
 access"), a manual, one-time step.
+
+## Attestation proxy joins self-update management (2026-09-03)
+
+Follow-up to the review above (rootguard#481): `rootguard-attestation-proxy`
+was deliberately scoped as static/manually-updated infrastructure when it
+shipped - the one component with real internet egress, so an unpatched
+Go-runtime/stdlib CVE there would otherwise sit until an operator manually
+refreshed the pin, unlike every other component.
+
+Investigated the "circular dependency" the original decision worried about
+and confirmed it doesn't exist: attestation verification for a *new* proxy
+candidate image runs through the *currently running* proxy container
+(addressed by its stable `attestation-proxy` DNS name), and only swaps the
+container after that verification succeeds - the existing `update()`
+ordering in `manager.go` already guarantees this.
+
+Design question actually worth deciding: Core already has an exact
+precedent for "a control-plane-compose service Core must swap because it
+can't safely swap itself" - `updaterSelfUpdateManager`, built because the
+Updater can't recreate its own running container. Considered adding the
+proxy as a second `ServiceSpec` entry there, since the generic
+`Manager`/`ServiceSpec` machinery already handles multiple services fine
+(the DNS-plane manager already juggles AdGuard + Unbound this way).
+Rejected: both the existing install handler
+(`updaterSelfUpdateInstallHandler`, hardcoded `StartUpdate("updater")`) and
+the frontend (`Stack.tsx`: `updaterUpdate?.services[0]`) assumed exactly
+one service in that particular status object - a second entry would have
+been silently invisible in the UI without generalizing both, and touching
+the already-shipped, tested updater self-update path carried more risk than
+the alternative's extra lines.
+
+Shipped as a fully separate, parallel update channel instead - a second
+`updater.Manager` instance (`attestationProxySelfUpdateManager`,
+`rootguard-core/cmd/rootguard/main.go`), its own three HTTP routes
+(`/api/attestation-proxy-updates*`, mirroring `/api/updater-updates*`
+exactly), its own WebApp backend proxy layer and audit action
+(`attestation_proxy_self_update_install`), and its own Stack Center card.
+The `updaterSelfUpdateInstallHandler`/install-route pattern was
+generalized into a shared `selfUpdateInstallHandler(manager, controlPlane,
+service string)` so both channels reuse the same busy-guard logic instead
+of duplicating it - a pure internal refactor, the existing
+`/api/updater-updates/install` route's own URL/behavior/response shape
+don't change.
+
+`Verify` for the new manager reuses `stack.CheckAttestationProxyReachable`
+(exported from its former unexported `checkAttestationProxyReachable` for
+exactly this cross-package reuse) - the same TCP-dial reachability check
+`RequireAttestation` already uses, now doing double duty as the post-swap
+health check too.
+
+No `release-alpha.yml` change needed: its "Update digest pins" step's `sed`
+matches on the image reference text, not which env var wraps it, and
+`rootguard-attestation-proxy` was already in that job's image list since
+the component shipped. The new `ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE`
+line gets refreshed automatically on the next release cut, same as every
+existing `*_UPDATE_IMAGE` line. `ResolveLatestReleaseImage` needed no
+change either - it only ranks tags by SemVer and constructs
+`ghcr.io/foxly-it/rootguard-<component>:<tag>` directly, no per-component
+allowlist.
+
+Deliberate scope cut, found while building: the new Stack Center card
+doesn't get live running/immutability/attestation-badge detail the way
+Core/WebApp/Updater/Unbound/AdGuard do, because those five come from
+Core's own separate, fixed 5-service dashboard allowlist
+(`servicesHandler` in `rootguard-core/internal/api/routes.go`, backed by a
+fixed `Status` struct in `stack/status.go`) - a materially larger, separate
+change (also touching `stack/metrics.go`, `stack/logs.go`, and every
+"five allowlisted services" reference in ROADMAP.md/docs) that was never
+part of this fix's scope. `ControlPlaneService`'s `runtime` prop is
+already optional with a `fallbackImage`/"not inspected" fallback for
+exactly this case, so the card is fully functional (check, install,
+history, busy states) without it - just visually thinner than its
+siblings. Worth a follow-up if that gap turns out to matter in practice.
