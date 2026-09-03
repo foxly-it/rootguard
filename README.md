@@ -6,9 +6,10 @@
 
 ## Product preview
 
-These screenshots show a verified local development stack with the documented
-default account and loopback-only DNS endpoint. No real network or access data
-is included.
+These screenshots show a verified deployment on an isolated test host with the
+documented default account. The DNS endpoint address shown belongs to that
+disposable test host, not a production or user network; no real network or
+access data is included.
 
 ![RootGuard dashboard showing protected DNS status, stack metrics, and running services](assets/screenshots/rootguard-dashboard.webp)
 
