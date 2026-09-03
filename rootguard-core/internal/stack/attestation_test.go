@@ -76,13 +76,13 @@ func TestReleaseAttestationPinsWebappSignerPolicy(t *testing.T) {
 }
 
 // TestReleaseAttestationCoversEveryReleasedComponent guards updater,
-// unbound, and blockpage against the same silent policy gap webapp once had
-// (see TestReleaseAttestationPinsWebappSignerPolicy) - all 5 components are
-// published by the identical release-alpha.yml matrix build, so none of
-// them should ever report not_applicable for a real, correctly signed
-// release image.
+// unbound, blockpage, and attestation-proxy against the same silent policy
+// gap webapp once had (see TestReleaseAttestationPinsWebappSignerPolicy) -
+// all 6 components are published by the identical release-alpha.yml matrix
+// build, so none of them should ever report not_applicable for a real,
+// correctly signed release image.
 func TestReleaseAttestationCoversEveryReleasedComponent(t *testing.T) {
-	for _, service := range []string{"updater", "unbound", "blockpage"} {
+	for _, service := range []string{"updater", "unbound", "blockpage", "attestation-proxy"} {
 		resetAttestationCache()
 		var arguments []string
 		run := func(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -153,7 +153,7 @@ func resetAttestationCache() {
 // generic network-error text stand in for both.
 func TestCheckAttestationProxyReachableUnset(t *testing.T) {
 	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "")
-	err := checkAttestationProxyReachable()
+	err := CheckAttestationProxyReachable()
 	if err == nil {
 		t.Fatal("expected an error when ROOTGUARD_ATTESTATION_PROXY_URL is unset")
 	}
@@ -170,7 +170,7 @@ func TestCheckAttestationProxyReachableConfiguredButUnreachable(t *testing.T) {
 	}
 	defer func() { dialProxy = original }()
 
-	err := checkAttestationProxyReachable()
+	err := CheckAttestationProxyReachable()
 	if err == nil {
 		t.Fatal("expected an error when the configured proxy is unreachable")
 	}
@@ -196,7 +196,7 @@ func TestCheckAttestationProxyReachableConfiguredAndUp(t *testing.T) {
 	}()
 
 	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "http://"+ln.Addr().String())
-	if err := checkAttestationProxyReachable(); err != nil {
+	if err := CheckAttestationProxyReachable(); err != nil {
 		t.Fatalf("expected no error against a real, reachable listener: %v", err)
 	}
 }

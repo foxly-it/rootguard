@@ -15,15 +15,18 @@ import {
   Trash2,
 } from "lucide-react";
 import {
+  checkAttestationProxySelfUpdate,
   checkControlPlaneUpdates,
   checkUpdates,
   checkUpdaterSelfUpdate,
+  fetchAttestationProxySelfUpdateStatus,
   fetchControlPlaneUpdateStatus,
   fetchCleanupPreview,
   fetchServices,
   fetchUpdateStatus,
   fetchUpdaterSelfUpdateStatus,
   installServiceUpdate,
+  installAttestationProxySelfUpdate,
   installControlPlaneUpdates,
   installUpdaterSelfUpdate,
   runManualCleanup,
@@ -32,6 +35,7 @@ import {
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
+  type AttestationProxySelfUpdateStatus,
   type UpdaterSelfUpdateStatus,
   type CleanupPreview,
   type UpdateHistoryEntry,
@@ -47,6 +51,7 @@ export default function Stack() {
   const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [controlPlane, setControlPlane] = useState<ControlPlaneUpdateStatus | null>(null);
   const [updaterUpdate, setUpdaterUpdate] = useState<UpdaterSelfUpdateStatus | null>(null);
+  const [attestationProxyUpdate, setAttestationProxyUpdate] = useState<AttestationProxySelfUpdateStatus | null>(null);
   const [cleanup, setCleanup] = useState<CleanupPreview | null>(null);
   const [runningCleanup, setRunningCleanup] = useState(false);
   const [services, setServices] = useState<ServiceInfo[]>([]);
@@ -54,15 +59,17 @@ export default function Stack() {
 
   const load = useCallback(async () => {
     try {
-      const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextServices] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextAttestationProxyUpdate, nextServices] = await Promise.all([
         fetchUpdateStatus(),
         fetchControlPlaneUpdateStatus(),
         fetchUpdaterSelfUpdateStatus(),
+        fetchAttestationProxySelfUpdateStatus(),
         fetchServices(),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setUpdaterUpdate(nextUpdaterUpdate);
+      setAttestationProxyUpdate(nextAttestationProxyUpdate);
       setServices(nextServices);
       setError("");
     } catch (cause) {
@@ -77,7 +84,8 @@ export default function Stack() {
 
   const busy = updates?.state === "checking" || updates?.state === "updating"
     || controlPlane?.state === "checking" || controlPlane?.state === "updating"
-    || updaterUpdate?.state === "checking" || updaterUpdate?.state === "updating" || runningCleanup;
+    || updaterUpdate?.state === "checking" || updaterUpdate?.state === "updating"
+    || attestationProxyUpdate?.state === "checking" || attestationProxyUpdate?.state === "updating" || runningCleanup;
   useEffect(() => {
     const timer = window.setInterval(load, busy ? 1500 : 10_000);
     return () => window.clearInterval(timer);
@@ -86,31 +94,44 @@ export default function Stack() {
   const available = useMemo(
     () => (updates?.services.filter((service) => service.update_available).length ?? 0)
       + (controlPlane?.services.filter((service) => service.update_available).length ?? 0)
-      + (updaterUpdate?.services.filter((service) => service.update_available).length ?? 0),
-    [updates, controlPlane, updaterUpdate],
+      + (updaterUpdate?.services.filter((service) => service.update_available).length ?? 0)
+      + (attestationProxyUpdate?.services.filter((service) => service.update_available).length ?? 0),
+    [updates, controlPlane, updaterUpdate, attestationProxyUpdate],
   );
   const history = useMemo(
     () => [
       ...(updates?.history ?? []).map((entry) => ({ ...entry, scope: entry.service === "cleanup" ? "Docker" : entry.service || "DNS" })),
       ...(controlPlane?.history ?? []).map((entry) => ({ ...entry, scope: "Control Panel" })),
       ...(updaterUpdate?.history ?? []).map((entry) => ({ ...entry, scope: "Updater" })),
+      ...(attestationProxyUpdate?.history ?? []).map((entry) => ({ ...entry, scope: "Attestation Proxy" })),
     ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)).slice(0, 12),
-    [updates, controlPlane, updaterUpdate],
+    [updates, controlPlane, updaterUpdate, attestationProxyUpdate],
   );
   const updaterRuntime = services.find((service) => service.name === "updater");
   const updaterService = updaterUpdate?.services[0];
+  // No matching entry in `services` (Core's own dashboard inspection stays
+  // scoped to its existing 5-service allowlist, see servicesHandler in
+  // rootguard-core - out of scope for rootguard#481, which is purely about
+  // the update *mechanism*) - ControlPlaneService's `runtime` prop is
+  // already optional and falls back to `fallbackImage`/"not inspected" for
+  // exactly this case, so the card still works, just without live
+  // running/immutability/attestation-badge detail the allowlisted services
+  // show.
+  const attestationProxyService = attestationProxyUpdate?.services[0];
 
   async function startCheck() {
     setError("");
     try {
-      const [nextUpdates, nextControlPlane, nextUpdaterUpdate] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextAttestationProxyUpdate] = await Promise.all([
         checkUpdates(),
         checkControlPlaneUpdates(),
         checkUpdaterSelfUpdate(),
+        checkAttestationProxySelfUpdate(),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setUpdaterUpdate(nextUpdaterUpdate);
+      setAttestationProxyUpdate(nextAttestationProxyUpdate);
     } catch (cause) {
       setError(errorMessage(cause, t("stack.updateCheckError")));
     }
@@ -133,6 +154,16 @@ export default function Stack() {
       setUpdaterUpdate(await installUpdaterSelfUpdate());
     } catch (cause) {
       setError(errorMessage(cause, t("stack.updaterSelfUpdateStartError")));
+    }
+  }
+
+  async function startAttestationProxySelfUpdate() {
+    if (!window.confirm(t("stack.attestationProxySelfUpdateConfirm"))) return;
+    setError("");
+    try {
+      setAttestationProxyUpdate(await installAttestationProxySelfUpdate());
+    } catch (cause) {
+      setError(errorMessage(cause, t("stack.attestationProxySelfUpdateStartError")));
     }
   }
 
@@ -269,6 +300,18 @@ export default function Stack() {
                 fallbackImage={updaterService.current_image}
                 onUpdate={startUpdaterSelfUpdate}
                 updating={updaterUpdate?.state === "updating"}
+                t={t}
+              />
+            )}
+            {attestationProxyService && (
+              <ControlPlaneService
+                icon={<ShieldCheck />}
+                name={t("stack.attestationProxyName")}
+                updateLabel={attestationProxyService.update_available ? t("stack.update") : attestationProxyService.checked_at ? t("stack.current") : t("stack.unchecked")}
+                updateAvailable={attestationProxyService.update_available}
+                fallbackImage={attestationProxyService.current_image}
+                onUpdate={startAttestationProxySelfUpdate}
+                updating={attestationProxyUpdate?.state === "updating"}
                 t={t}
               />
             )}

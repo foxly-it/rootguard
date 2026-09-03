@@ -735,6 +735,18 @@ func (c *Client) InstallUpdaterSelfUpdate(ctx context.Context) (UpdateStatus, er
 	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/updater-updates/install", nil)
 }
 
+func (c *Client) AttestationProxySelfUpdateStatus(ctx context.Context) (UpdateStatus, error) {
+	return doJSON[UpdateStatus](ctx, c, http.MethodGet, "/api/attestation-proxy-updates", nil)
+}
+
+func (c *Client) CheckAttestationProxySelfUpdate(ctx context.Context) (UpdateStatus, error) {
+	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/attestation-proxy-updates/check", nil)
+}
+
+func (c *Client) InstallAttestationProxySelfUpdate(ctx context.Context) (UpdateStatus, error) {
+	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/attestation-proxy-updates/install", nil)
+}
+
 // doJSON is the shared shape behind every simple proxy method on Client:
 // decode Core's JSON response into T, or propagate the error. Kept next to
 // do, which it wraps.

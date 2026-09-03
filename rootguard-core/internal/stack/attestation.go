@@ -46,10 +46,11 @@ var attestationPolicies = map[string]attestationPolicy{
 	// release image would have failed this policy's repository/workflow
 	// check, since cosign's actual certificate identity names the
 	// monorepo, not the archived repo this used to require.
-	"webapp":    releasePolicy("rootguard-webapp"),
-	"updater":   releasePolicy("rootguard-updater"),
-	"unbound":   releasePolicy("rootguard-unbound"),
-	"blockpage": releasePolicy("rootguard-blockpage"),
+	"webapp":            releasePolicy("rootguard-webapp"),
+	"updater":           releasePolicy("rootguard-updater"),
+	"unbound":           releasePolicy("rootguard-unbound"),
+	"blockpage":         releasePolicy("rootguard-blockpage"),
+	"attestation-proxy": releasePolicy("rootguard-attestation-proxy"),
 }
 
 type attestationResult struct {
@@ -101,7 +102,7 @@ func RequireAttestation(ctx context.Context, service, image string) error {
 	// specific error for exactly this one condition, surfaced only on
 	// the activation-gating path an update actually fails on, not on
 	// the dashboard's own read-only attestation display.
-	if err := checkAttestationProxyReachable(); err != nil {
+	if err := CheckAttestationProxyReachable(); err != nil {
 		return fmt.Errorf("release attestation for %s (%s): %w", service, image, err)
 	}
 	status, _ := verifyReleaseAttestation(ctx, service, image)
@@ -112,13 +113,13 @@ func RequireAttestation(ctx context.Context, service, image string) error {
 }
 
 // dialProxy is swapped out in tests so
-// checkAttestationProxyReachable's own logic can be verified without a
+// CheckAttestationProxyReachable's own logic can be verified without a
 // real TCP dial.
 var dialProxy = func(network, addr string) (net.Conn, error) {
 	return net.DialTimeout(network, addr, 3*time.Second)
 }
 
-// checkAttestationProxyReachable gives operators a specific, actionable
+// CheckAttestationProxyReachable gives operators a specific, actionable
 // diagnosis instead of cosign's own generic network-error text for the
 // single most likely cause of an attestation failure on this network:
 // found live, cutting 1.0.0-rc.2, that self-update can never deliver a
@@ -134,7 +135,7 @@ var dialProxy = func(network, addr string) (net.Conn, error) {
 // tell an operator this is a known, structural gap with a known fix
 // (reinstall or a manual compose.release.yaml refresh), not a transient
 // hiccup worth simply retrying.
-func checkAttestationProxyReachable() error {
+func CheckAttestationProxyReachable() error {
 	proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL")
 	if proxyURL == "" {
 		return errors.New("no attestation proxy configured (ROOTGUARD_ATTESTATION_PROXY_URL is unset) - this installation's compose topology likely predates rootguard-attestation-proxy; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md")
