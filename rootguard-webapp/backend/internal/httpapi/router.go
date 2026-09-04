@@ -232,20 +232,8 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleUpdaterSelfUpdateCheck(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/updater-updates/install", dest(auditUpdaterSelfUpdateInstall, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/updater-updates/install/{name}", dest(auditUpdaterSelfUpdateInstall, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUpdaterSelfUpdateInstall(w, r, core)
-	}))
-
-	mux.HandleFunc("GET /api/attestation-proxy-updates", func(w http.ResponseWriter, r *http.Request) {
-		api.HandleAttestationProxySelfUpdateStatus(w, r, core)
-	})
-
-	mux.HandleFunc("POST /api/attestation-proxy-updates/check", func(w http.ResponseWriter, r *http.Request) {
-		api.HandleAttestationProxySelfUpdateCheck(w, r, core)
-	})
-
-	mux.HandleFunc("POST /api/attestation-proxy-updates/install", dest(auditAttestationProxySelfUpdateInstall, func(w http.ResponseWriter, r *http.Request) {
-		api.HandleAttestationProxySelfUpdateInstall(w, r, core)
 	}))
 
 	putUnboundSettings := dest(auditUnboundSettingsApplied, func(w http.ResponseWriter, r *http.Request) {

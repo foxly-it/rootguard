@@ -200,9 +200,10 @@ path instead of directly.
   pinning and the upstream signature, not a RootGuard-owned signature
   chain. `rootguard-attestation-proxy` used to be a second, different
   exception (static/manually-updated, never re-verified at runtime) -
-  no longer: it joined self-update management with its own dedicated
-  update channel (2026-09-03), verified through the identical Cosign
-  policy as every other RootGuard-built component. Verification of a
+  no longer: it joined self-update management (2026-09-03, sharing the
+  RootGuard Updater's own manager/mutex rather than an independent one -
+  see `docs/security-audit-log.md`), verified through the identical
+  Cosign policy as every other RootGuard-built component. Verification of a
   new candidate proxy image runs through the *currently running* proxy
   instance - the swap only happens after that succeeds, so there's no
   bootstrapping gap.

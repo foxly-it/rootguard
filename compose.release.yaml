@@ -86,7 +86,6 @@ services:
       # management, no longer static/manually-pinned only).
       ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE: "${ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.0-rc.2@sha256:0b4dcab2864630f3d9887325426c61c082096276834acda300bc3be56260e70f}"
       ROOTGUARD_SELF_UPDATE_DIR: /var/lib/rootguard/updater-self-update
-      ROOTGUARD_ATTESTATION_PROXY_SELF_UPDATE_DIR: /var/lib/rootguard/attestation-proxy-self-update
       # Core replaces the updater's own container the same way it already
       # replaces AdGuard/Unbound - via `docker compose ... up -d --no-deps
       # updater` against this same control-plane project. The mounted file

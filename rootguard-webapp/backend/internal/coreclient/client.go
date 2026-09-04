@@ -731,20 +731,11 @@ func (c *Client) CheckUpdaterSelfUpdate(ctx context.Context) (UpdateStatus, erro
 	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/updater-updates/check", nil)
 }
 
-func (c *Client) InstallUpdaterSelfUpdate(ctx context.Context) (UpdateStatus, error) {
-	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/updater-updates/install", nil)
-}
-
-func (c *Client) AttestationProxySelfUpdateStatus(ctx context.Context) (UpdateStatus, error) {
-	return doJSON[UpdateStatus](ctx, c, http.MethodGet, "/api/attestation-proxy-updates", nil)
-}
-
-func (c *Client) CheckAttestationProxySelfUpdate(ctx context.Context) (UpdateStatus, error) {
-	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/attestation-proxy-updates/check", nil)
-}
-
-func (c *Client) InstallAttestationProxySelfUpdate(ctx context.Context) (UpdateStatus, error) {
-	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/attestation-proxy-updates/install", nil)
+// InstallUpdaterSelfUpdate takes the target service name ("updater" or
+// "attestation-proxy") - both share one Core-side manager/mutex now, see
+// the identical comment on Core's own selfUpdateInstallHandler.
+func (c *Client) InstallUpdaterSelfUpdate(ctx context.Context, service string) (UpdateStatus, error) {
+	return doJSON[UpdateStatus](ctx, c, http.MethodPost, "/api/updater-updates/install/"+service, nil)
 }
 
 // doJSON is the shared shape behind every simple proxy method on Client:

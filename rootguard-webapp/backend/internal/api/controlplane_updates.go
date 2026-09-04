@@ -27,17 +27,10 @@ func HandleUpdaterSelfUpdateCheck(w http.ResponseWriter, r *http.Request, core *
 }
 
 func HandleUpdaterSelfUpdateInstall(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	proxyCore(w, r, http.StatusAccepted, core.InstallUpdaterSelfUpdate)
-}
-
-func HandleAttestationProxySelfUpdateStatus(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	proxyCore(w, r, http.StatusOK, core.AttestationProxySelfUpdateStatus)
-}
-
-func HandleAttestationProxySelfUpdateCheck(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	proxyCore(w, r, http.StatusAccepted, core.CheckAttestationProxySelfUpdate)
-}
-
-func HandleAttestationProxySelfUpdateInstall(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
-	proxyCore(w, r, http.StatusAccepted, core.InstallAttestationProxySelfUpdate)
+	status, err := core.InstallUpdaterSelfUpdate(r.Context(), r.PathValue("name"))
+	if err != nil {
+		writeCoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, status)
 }

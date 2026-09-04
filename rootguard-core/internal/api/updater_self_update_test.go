@@ -11,6 +11,28 @@ import (
 	"github.com/foxly-it/rootguard-core/internal/updater"
 )
 
+// newSelfUpdateTestManager builds a manager with both services this shared
+// channel actually carries, mirroring main.go's real Services list -
+// exercising the shared-manager shape these tests are meant to guard,
+// not a single-service stand-in.
+func newSelfUpdateTestManager(t *testing.T, run updater.CommandRunner) *updater.Manager {
+	t.Helper()
+	return updater.NewManager(updater.Options{
+		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
+		Services: []updater.ServiceSpec{
+			{Name: "updater", DisplayName: "RootGuard Updater", Container: "rootguard-updater"},
+			{Name: "attestation-proxy", DisplayName: "Attestation Proxy", Container: "rootguard-attestation-proxy"},
+		},
+		Run: run,
+	})
+}
+
+func selfUpdateInstallRequest(service string) *http.Request {
+	request := httptest.NewRequest(http.MethodPost, "/api/updater-updates/install/"+service, nil)
+	request.SetPathValue("name", service)
+	return request
+}
+
 // TestUpdaterSelfUpdateInstallRefusesWhileControlPlaneBusy guards against
 // the updater's own container being replaced while it's still mid a
 // core/webapp check or update - the container swap would otherwise abort
@@ -23,18 +45,13 @@ func TestUpdaterSelfUpdateInstallRefusesWhileControlPlaneBusy(t *testing.T) {
 	defer server.Close()
 
 	controlPlane := controlplane.NewClient(server.URL, "token")
-	manager := updater.NewManager(updater.Options{
-		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
-		Services: []updater.ServiceSpec{{Name: "updater", DisplayName: "RootGuard Updater", Container: "rootguard-updater"}},
-		Run: func(context.Context, ...string) ([]byte, error) {
-			t.Fatal("docker should not run while the control plane is busy")
-			return nil, nil
-		},
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("docker should not run while the control plane is busy")
+		return nil, nil
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/updater-updates/install", nil)
 	recorder := httptest.NewRecorder()
-	selfUpdateInstallHandler(manager, controlPlane, "updater")(recorder, request)
+	selfUpdateInstallHandler(manager, controlPlane)(recorder, selfUpdateInstallRequest("updater"))
 
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict while the control plane is busy, got %d: %s", recorder.Code, recorder.Body.String())
@@ -52,17 +69,12 @@ func TestUpdaterSelfUpdateInstallProceedsWhileControlPlaneIdle(t *testing.T) {
 	defer server.Close()
 
 	controlPlane := controlplane.NewClient(server.URL, "token")
-	manager := updater.NewManager(updater.Options{
-		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
-		Services: []updater.ServiceSpec{{Name: "updater", DisplayName: "RootGuard Updater", Container: "rootguard-updater"}},
-		Run: func(context.Context, ...string) ([]byte, error) {
-			return []byte("rootguard-updater:v1|sha256:old"), nil
-		},
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		return []byte("rootguard-updater:v1|sha256:old"), nil
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/updater-updates/install", nil)
 	recorder := httptest.NewRecorder()
-	selfUpdateInstallHandler(manager, controlPlane, "updater")(recorder, request)
+	selfUpdateInstallHandler(manager, controlPlane)(recorder, selfUpdateInstallRequest("updater"))
 
 	if recorder.Code != http.StatusAccepted {
 		t.Fatalf("expected 202 Accepted while the control plane is idle, got %d: %s", recorder.Code, recorder.Body.String())
@@ -77,11 +89,14 @@ func TestUpdaterSelfUpdateInstallProceedsWhileControlPlaneIdle(t *testing.T) {
 }
 
 // TestAttestationProxySelfUpdateInstallRefusesWhileControlPlaneBusy mirrors
-// TestUpdaterSelfUpdateInstallRefusesWhileControlPlaneBusy exactly, but
-// through the attestation-proxy's own route/service name - proves
-// selfUpdateInstallHandler's busy guard works identically from either of
-// its two registrations, not just the one that existed before it was
-// generalized (rootguard#481).
+// TestUpdaterSelfUpdateInstallRefusesWhileControlPlaneBusy for the
+// attestation-proxy service on the *same* shared manager instance -
+// proves selfUpdateInstallHandler's busy guard works identically for
+// either service the shared channel carries (rootguard#481/#488: this
+// manager used to be split into two separate instances with two separate
+// mutexes, which raced against each other on the same compose project;
+// sharing one manager closes that race, these tests guard the shared
+// manager's own service-name dispatch instead of a second instance).
 func TestAttestationProxySelfUpdateInstallRefusesWhileControlPlaneBusy(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -90,18 +105,13 @@ func TestAttestationProxySelfUpdateInstallRefusesWhileControlPlaneBusy(t *testin
 	defer server.Close()
 
 	controlPlane := controlplane.NewClient(server.URL, "token")
-	manager := updater.NewManager(updater.Options{
-		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
-		Services: []updater.ServiceSpec{{Name: "attestation-proxy", DisplayName: "Attestation Proxy", Container: "rootguard-attestation-proxy"}},
-		Run: func(context.Context, ...string) ([]byte, error) {
-			t.Fatal("docker should not run while the control plane is busy")
-			return nil, nil
-		},
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("docker should not run while the control plane is busy")
+		return nil, nil
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/attestation-proxy-updates/install", nil)
 	recorder := httptest.NewRecorder()
-	selfUpdateInstallHandler(manager, controlPlane, "attestation-proxy")(recorder, request)
+	selfUpdateInstallHandler(manager, controlPlane)(recorder, selfUpdateInstallRequest("attestation-proxy"))
 
 	if recorder.Code != http.StatusConflict {
 		t.Fatalf("expected 409 Conflict while the control plane is busy, got %d: %s", recorder.Code, recorder.Body.String())
@@ -119,17 +129,12 @@ func TestAttestationProxySelfUpdateInstallProceedsWhileControlPlaneIdle(t *testi
 	defer server.Close()
 
 	controlPlane := controlplane.NewClient(server.URL, "token")
-	manager := updater.NewManager(updater.Options{
-		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
-		Services: []updater.ServiceSpec{{Name: "attestation-proxy", DisplayName: "Attestation Proxy", Container: "rootguard-attestation-proxy"}},
-		Run: func(context.Context, ...string) ([]byte, error) {
-			return []byte("rootguard-attestation-proxy:v1|sha256:old"), nil
-		},
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		return []byte("rootguard-attestation-proxy:v1|sha256:old"), nil
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/api/attestation-proxy-updates/install", nil)
 	recorder := httptest.NewRecorder()
-	selfUpdateInstallHandler(manager, controlPlane, "attestation-proxy")(recorder, request)
+	selfUpdateInstallHandler(manager, controlPlane)(recorder, selfUpdateInstallRequest("attestation-proxy"))
 
 	if recorder.Code != http.StatusAccepted {
 		t.Fatalf("expected 202 Accepted while the control plane is idle, got %d: %s", recorder.Code, recorder.Body.String())
@@ -138,5 +143,30 @@ func TestAttestationProxySelfUpdateInstallProceedsWhileControlPlaneIdle(t *testi
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) && manager.Status().State == updater.StateUpdating {
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestSelfUpdateInstallRejectsUnknownService proves the shared manager's
+// own StartUpdate validation still rejects a service name that isn't in
+// its Services list - the shared channel doesn't silently accept an
+// arbitrary path segment.
+func TestSelfUpdateInstallRejectsUnknownService(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"idle","message":"","services":[],"updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	controlPlane := controlplane.NewClient(server.URL, "token")
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("docker should not run for an unknown service")
+		return nil, nil
+	})
+
+	recorder := httptest.NewRecorder()
+	selfUpdateInstallHandler(manager, controlPlane)(recorder, selfUpdateInstallRequest("not-a-real-service"))
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 Bad Request for an unknown service, got %d: %s", recorder.Code, recorder.Body.String())
 	}
 }
