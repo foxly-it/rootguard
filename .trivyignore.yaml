@@ -526,6 +526,118 @@ vulnerabilities:
       libudev1 is a linked dependency only, systemd-homed never runs in
       this image.
 
+  # Found live, round of PR #488: trivy's own vulnerability DB surfaced
+  # these only now - genuinely new since the round-14/15 Unbound scans,
+  # not something either round missed. Two separate families:
+  #
+  # 1. Four new util-linux CVEs (CVE-2026-76642/78408/78409/78410), all at
+  #    the exact same 2.41.5-0+deb13u1 the Dockerfile already explicitly
+  #    pinned to fix the *previous* four (CVE-2026-53612..53615, see the
+  #    Dockerfile's own comment) - confirmed live via the Debian Security
+  #    Tracker: "vulnerable (no DSA)" in trixie/trixie-security, fixed only
+  #    in sid/forky at 2.42.3-1, no trixie point release exists yet to pin
+  #    to instead. All four are mount/nsenter/cgroup-migration/bind-mount
+  #    issues (failed external mount helper cleanup, `nsenter
+  #    --join-cgroup` root leak, `X-mount.subdir` detached-tree handling,
+  #    restricted bind mounts not pinning propagation) - this image never
+  #    calls mount, nsenter, or any cgroup-migration tooling at runtime;
+  #    the util-linux family is present only because it's part of
+  #    debian:13-slim's own base install (dnsutils/login's own
+  #    dependencies), same reachability reasoning as the round-14 block
+  #    above. All nine binary packages share the one util-linux source
+  #    package, so all nine need every one of the four IDs listed the same
+  #    way the Dockerfile comment already documents for the prior batch.
+  #
+  # 2. Two new libevent CVEs (CVE-2026-63382/63385), both in the same
+  #    unused evhttp/http.c subsystem as the four already-suppressed
+  #    libevent entries above (request-desynchronization from malformed
+  #    Transfer-Encoding/chunked framing, and evhttp_decode_uri_internal's
+  #    embedded-NUL / evhttp_header_is_valid_value's obsolete line-folding
+  #    handling) - Unbound never links against or calls libevent's evhttp
+  #    module, only the event-loop/socket-buffering primitives
+  #    (event_base, bufferevent), same reasoning as the existing block.
+  #    Confirmed unfixed in trixie live (Debian Security Tracker); fix
+  #    only in sid/forky at 2.1.13-stable-1.
+  - id: CVE-2026-76642
+    purls:
+      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
+    expired_at: 2026-11-30
+    statement: >-
+      util-linux: failed external mount helper cleanup - unfixed in
+      trixie, this image never invokes mount or any external mount helper
+      at runtime - see the comment above this block.
+  - id: CVE-2026-78408
+    purls:
+      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
+    expired_at: 2026-11-30
+    statement: >-
+      util-linux: nsenter --join-cgroup root leak - unfixed in trixie,
+      this image never invokes nsenter at runtime - see the comment above
+      this block.
+  - id: CVE-2026-78409
+    purls:
+      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
+    expired_at: 2026-11-30
+    statement: >-
+      util-linux: X-mount.subdir detached-tree handling - unfixed in
+      trixie, this image never mounts anything at runtime - see the
+      comment above this block.
+  - id: CVE-2026-78410
+    purls:
+      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
+      - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
+    expired_at: 2026-11-30
+    statement: >-
+      util-linux: restricted bind mounts do not pin propagation - unfixed
+      in trixie, this image never creates bind mounts at runtime - see the
+      comment above this block.
+  - id: CVE-2026-63382
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    expired_at: 2026-11-30
+    statement: >-
+      evhttp parser (http.c) request-desynchronization via malformed
+      Transfer-Encoding/chunked framing - libevent's own HTTP
+      client/server module, which Unbound never links against or calls -
+      see the comment above this block.
+  - id: CVE-2026-63385
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    expired_at: 2026-11-30
+    statement: >-
+      evhttp_decode_uri_internal/evhttp_header_is_valid_value (http.c) -
+      same unused evhttp module as CVE-2026-63382 above - see the comment
+      above this block.
+
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so
