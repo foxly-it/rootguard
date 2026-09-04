@@ -112,8 +112,9 @@ narrow, explicit bridge to actually reach GHCR/Sigstore:
 `rootguard-attestation-proxy`, a minimal CONNECT-only forward proxy with
 a hardcoded, 3-host allowlist, sitting on both `control` and a separate,
 real-internet-facing `egress` network. It's the sixth RootGuard
-component, static/manually-updated infrastructure (not self-update
-managed like the other five) - see
+component, self-update managed via its own dedicated channel since
+2026-09-03 (a fully separate update path from the other five, not a
+shared one - see `docs/security-audit-log.md` for why) - see
 `rootguard-attestation-proxy/README.md` and `docs/threat-model.md`
 (§3) for the full design and trust model.
 
