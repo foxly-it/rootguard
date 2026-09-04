@@ -854,8 +854,14 @@ export async function installControlPlaneUpdates(): Promise<ControlPlaneUpdateSt
   return request<ControlPlaneUpdateStatus>("/api/control-plane-updates/install", { method: "POST" });
 }
 
+// Shared channel for the two services Core manages because they can't (or
+// - for the attestation proxy - only happen to) swap independently of the
+// control-plane compose project: RootGuard Updater and the Attestation
+// Proxy. Both go through one Core-side manager/mutex, so they can never
+// race each other's container swap - see the identical comment on Core's
+// own selfUpdateInstallHandler for why that matters.
 export interface UpdaterSelfUpdateServiceStatus extends Omit<UpdateServiceStatus, "name"> {
-  name: "updater";
+  name: "updater" | "attestation-proxy";
 }
 
 export interface UpdaterSelfUpdateStatus {
@@ -875,31 +881,6 @@ export async function checkUpdaterSelfUpdate(): Promise<UpdaterSelfUpdateStatus>
   return request<UpdaterSelfUpdateStatus>("/api/updater-updates/check", { method: "POST" });
 }
 
-export async function installUpdaterSelfUpdate(): Promise<UpdaterSelfUpdateStatus> {
-  return request<UpdaterSelfUpdateStatus>("/api/updater-updates/install", { method: "POST" });
-}
-
-export interface AttestationProxySelfUpdateServiceStatus extends Omit<UpdateServiceStatus, "name"> {
-  name: "attestation-proxy";
-}
-
-export interface AttestationProxySelfUpdateStatus {
-  state: "idle" | "checking" | "updating" | "failed";
-  active_service?: string;
-  message: string;
-  services: AttestationProxySelfUpdateServiceStatus[];
-  history?: UpdateHistoryEntry[];
-  updated_at: string;
-}
-
-export async function fetchAttestationProxySelfUpdateStatus(): Promise<AttestationProxySelfUpdateStatus> {
-  return request<AttestationProxySelfUpdateStatus>("/api/attestation-proxy-updates");
-}
-
-export async function checkAttestationProxySelfUpdate(): Promise<AttestationProxySelfUpdateStatus> {
-  return request<AttestationProxySelfUpdateStatus>("/api/attestation-proxy-updates/check", { method: "POST" });
-}
-
-export async function installAttestationProxySelfUpdate(): Promise<AttestationProxySelfUpdateStatus> {
-  return request<AttestationProxySelfUpdateStatus>("/api/attestation-proxy-updates/install", { method: "POST" });
+export async function installUpdaterSelfUpdate(service: "updater" | "attestation-proxy"): Promise<UpdaterSelfUpdateStatus> {
+  return request<UpdaterSelfUpdateStatus>(`/api/updater-updates/install/${service}`, { method: "POST" });
 }
