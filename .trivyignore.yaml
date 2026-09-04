@@ -560,13 +560,13 @@ vulnerabilities:
   #    only in sid/forky at 2.1.13-stable-1.
   - id: CVE-2026-76642
     purls:
-      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
-      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
     expired_at: 2026-11-30
@@ -576,13 +576,13 @@ vulnerabilities:
       at runtime - see the comment above this block.
   - id: CVE-2026-78408
     purls:
-      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
-      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
     expired_at: 2026-11-30
@@ -592,13 +592,13 @@ vulnerabilities:
       this block.
   - id: CVE-2026-78409
     purls:
-      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
-      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
     expired_at: 2026-11-30
@@ -608,13 +608,13 @@ vulnerabilities:
       comment above this block.
   - id: CVE-2026-78410
     purls:
-      - "pkg:deb/debian/bsdutils@1:2.41.5-0+deb13u1"
+      - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1"
-      - "pkg:deb/debian/login@1:4.16.0-2+really2.41.5-0+deb13u1"
+      - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
     expired_at: 2026-11-30
