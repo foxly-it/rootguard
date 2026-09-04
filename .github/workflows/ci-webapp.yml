@@ -80,9 +80,32 @@ jobs:
         working-directory: rootguard-webapp/frontend
         run: npm ci
 
+      # Found live, 2026-09-04: registry.npmjs.org's own
+      # `/-/npm/v1/security/audits/quick` endpoint (what `npm audit` calls)
+      # is mid-rollout of being retired in favor of a bulk-advisory
+      # endpoint - confirmed via the npm CLI's own printed notice
+      # ("This endpoint is being retired") plus two different failure
+      # modes on the exact same unchanged code (a transient 503, then a
+      # 400 "Invalid package tree" on a plain rerun minutes later).
+      # Reproduced live against both the CI-pinned npm (10.9.8, via
+      # actions/setup-node's own resolved version) and a newer one
+      # (11.4.2) - neither is reliably better, so this isn't a
+      # client-version fix, just an upstream rollout being temporarily
+      # inconsistent. A short retry loop is proportionate here (matches
+      # how this project already treats a confirmed external flake,
+      # rather than pinning past a real check or silently dropping the
+      # audit).
       - name: Audit frontend dependencies
         working-directory: rootguard-webapp/frontend
-        run: npm audit --audit-level=high
+        run: |
+          for attempt in 1 2 3; do
+            if npm audit --audit-level=high; then
+              exit 0
+            fi
+            echo "::warning::npm audit failed (attempt ${attempt}/3), retrying..."
+            sleep 15
+          done
+          exit 1
 
       - name: Lint frontend
         working-directory: rootguard-webapp/frontend
