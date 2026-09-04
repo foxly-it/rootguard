@@ -52,8 +52,8 @@ und eine gemeinsame Bedienoberfläche.
 - **Netzwerkweite Filterung:** AdGuard Home stoppt unerwünschte DNS-Anfragen.
 - **Eigene DNS-Auflösung:** Unbound fragt die DNS-Hierarchie rekursiv ab und
   validiert DNSSEC.
-- **Zentrale Verwaltung:** Setup, Konfiguration, Updates und Rollbacks laufen
-  über die RootGuard-Weboberfläche.
+- **Zentrale Verwaltung:** Geführtes Setup, Konfiguration, Updates,
+  Health-Checks, Diagnose und Rollbacks laufen über die RootGuard-Weboberfläche.
 - **Geführtes lokales DNS:** Lokale Einträge, private Domains, Conditional
   Forwarding und sichere RFC1918-Reverse-Zonen kommen ohne rohe
   Unbound-Konfiguration aus.
@@ -150,6 +150,17 @@ Die Komponenten sind eigenständig baubare Verzeichnisse im selben Repository:
 Die vormaligen eigenständigen Repositories sind archiviert und weiterhin
 lesbar (Historie, alte Issues/PRs); aktive Entwicklung findet nur noch hier
 statt.
+
+## Qualitätssicherung
+
+Neben menschlichem Code-Review setzt dieses Projekt Claude (Anthropic) als
+KI-gestütztes Werkzeug ein, um Fehler und Sicherheitsrisiken im Code zu
+finden, bevor sie ausgeliefert werden – vergleichbar mit einem zusätzlichen,
+automatisierten Reviewer. Jeder Befund wird von einem Menschen geprüft und
+erst nach eigener Verifikation behoben; nichts wird ungeprüft übernommen.
+Der vollständige, chronologische Verlauf aller bisherigen Audit-Runden
+inklusive Befunden und Fixes steht öffentlich in
+[docs/security-audit-log.md](docs/security-audit-log.md).
 
 ## Mitwirken
 
@@ -270,7 +281,7 @@ Further technical information:
 - [Performance and memory baseline](docs/performance-baseline.md)
 - [Accessibility and security review](docs/accessibility-security-review.md)
 
-### Development and contributions
+### Development
 
 RootGuard is a monorepo, so a plain clone is enough:
 
@@ -281,9 +292,40 @@ cp .env.example .env
 docker compose up --build -d
 ```
 
+The components are independently buildable directories in the same
+repository:
+
+| Directory | Responsibility |
+| --- | --- |
+| [`rootguard-core`](rootguard-core) | Control plane and DNS orchestration |
+| [`rootguard-webapp`](rootguard-webapp) | Web interface and session management |
+| [`rootguard-updater`](rootguard-updater) | Coordinated control-plane updates |
+| [`rootguard-unbound`](rootguard-unbound) | Hardened Unbound image |
+| [`rootguard-blockpage`](rootguard-blockpage) | Landing page for blocked requests |
+| [`rootguard-attestation-proxy`](rootguard-attestation-proxy) | Egress proxy for cosign attestation checks |
+
+The formerly separate repositories are archived and still readable (history,
+old issues/PRs); active development happens only here now.
+
+### Quality assurance
+
+Alongside human code review, this project uses Claude (Anthropic) as an
+AI-assisted tool to find bugs and security risks in the code before they
+ship - comparable to an additional, automated reviewer. Every finding is
+verified by a human before being fixed; nothing is accepted unreviewed. The
+full, chronological record of every audit round, including findings and
+fixes, is public in
+[docs/security-audit-log.md](docs/security-audit-log.md).
+
+### Contributing
+
 Contributions, testing, and clear documentation are welcome. Read
-[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report
-security vulnerabilities privately by following [SECURITY.md](SECURITY.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Good
+starting points are issues labeled
+[`good first issue`](https://github.com/foxly-it/rootguard/labels/good%20first%20issue)
+or [`help wanted`](https://github.com/foxly-it/rootguard/labels/help%20wanted).
+Report security vulnerabilities privately by following
+[SECURITY.md](SECURITY.md), not in a public issue.
 
 ### License and trademark
 
