@@ -3824,3 +3824,74 @@ already optional with a `fallbackImage`/"not inspected" fallback for
 exactly this case, so the card is fully functional (check, install,
 history, busy states) without it - just visually thinner than its
 siblings. Worth a follow-up if that gap turns out to matter in practice.
+
+## Correction: the attestation proxy's self-update channel was racing itself (2026-09-04)
+
+Follow-up to the entry above. A codebase-wide review (`/code-review` at
+high effort, four parallel review angles against PR #484) surfaced a
+real, previously-undetected concurrency bug in that same commit, plus a
+compelling case that the split-manager design it introduced was the
+wrong call even before the bug: the design should have shared the
+Updater's own manager instance from the start.
+
+**The bug:** `updaterSelfUpdateManager` and `attestationProxySelfUpdateManager`
+were two independent `*updater.Manager` instances - each with its own
+mutex - both targeting the identical Docker Compose project (`rootguard`)
+and compose file. Nothing serialized one against the other. Triggering
+an Updater self-update and an Attestation Proxy self-update within the
+same few seconds (trivially reachable through the Stack Center UI, since
+each card's button only checked its own channel's `updating` state, not
+the page-wide `busy` flag) let both reach `composeUp()` and run
+`docker compose --project-name rootguard -f compose.yaml -f <own
+updates.yaml> up -d --no-deps <service>` concurrently against the same
+live project - risking interleaved container recreation or a spurious
+failure/rollback of a control-plane-critical container. This race did
+not exist before the proxy joined self-update management: the compose
+project was previously only ever driven by one manager at a time.
+
+**The design reconsideration:** the original split was justified by two
+assumptions - the install handler and the frontend both "assumed exactly
+one service per manager." Only half of that held up: the install
+handler needed generalizing regardless of which design was chosen (and
+was, in the same commit, into `selfUpdateInstallHandler(manager,
+controlPlane, service)`), and the frontend's `services[0]` was a
+one-line fix (`services.find(s => s.name === "updater")`, the identical
+pattern already used two lines above for `updaterRuntime`) - not a
+reason to duplicate the manager, its `Dependencies` field, three routes,
+three `coreclient` methods, three backend handlers, three frontend
+client functions, and a second Stack Center card block.
+
+**The fix:** reverted to a single shared `updater.Manager` carrying both
+`ServiceSpec` entries ("updater", "attestation-proxy") - its own mutex
+now serializes the two against each other for free, exactly the way it
+already serializes AdGuard/Unbound updates on the DNS-plane manager. The
+install route is now `POST /api/updater-updates/install/{name}`,
+mirroring the DNS-plane's own existing `POST /api/updates/{name}`
+pattern instead of inventing a new one. The Stack Center's Updater and
+Attestation Proxy cards now share one status object and one `updating`
+gate - starting either one disables both buttons, closing the UI trigger
+for the race directly, not just its root cause.
+`ROOTGUARD_ATTESTATION_PROXY_SELF_UPDATE_DIR` (the second manager's own
+data directory) is gone; both services now persist under the existing
+`ROOTGUARD_SELF_UPDATE_DIR`.
+
+A weaker, related finding from the same review: an unrelated DNS-plane
+update (or the Updater's own self-update) racing a proxy swap could hit
+a transient "attestation proxy unreachable" failure and roll back, since
+the proxy container it depends on is briefly down mid-recreate. This
+fails safe (a clean rollback, not corruption) and is a narrower, harder
+problem than the compose race above - not fixed here; left as a known,
+narrow residual gap.
+
+Also flagged by the same review, already resolved separately: the
+feature had landed without the required same-PR `ROADMAP.md`/
+`docs/project-state.md` updates (AGENTS.md's own rule), caught and fixed
+the very next day by a routine currency check
+([#487](https://github.com/foxly-it/rootguard/pull/487)) rather than by
+the review pass itself.
+
+Lesson for next time a component "can't share a manager because X and Y
+assume one service": verify X and Y are actually both real blockers, at
+the actual cost of fixing them, before building a parallel structure to
+avoid touching them - here, one of the two turned out to be a single
+line.

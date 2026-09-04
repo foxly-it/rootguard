@@ -71,7 +71,6 @@ services:
       ROOTGUARD_UPDATER_UPDATE_IMAGE: "${ROOTGUARD_UPDATER_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-updater:latest}"
       ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE: "${ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE:-rootguard-attestation-proxy:dev}"
       ROOTGUARD_SELF_UPDATE_DIR: /var/lib/rootguard/updater-self-update
-      ROOTGUARD_ATTESTATION_PROXY_SELF_UPDATE_DIR: /var/lib/rootguard/attestation-proxy-self-update
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard
       # Core never reads these two - they exist only so `docker compose -f

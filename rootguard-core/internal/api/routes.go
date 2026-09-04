@@ -24,17 +24,16 @@ import (
 )
 
 type Dependencies struct {
-	Token                      string
-	Unbound                    *unbound.Manager
-	AdGuard                    *adguard.Manager
-	Installer                  *installer.Manager
-	Updater                    *updater.Manager
-	ControlPlane               *controlplane.Client
-	UpdaterSelfUpdate          *updater.Manager
-	AttestationProxySelfUpdate *updater.Manager
-	AdGuardDNSAddress          string
-	BackupExporter             *backupexport.Exporter
-	BackupRestorer             *backuprestore.Manager
+	Token             string
+	Unbound           *unbound.Manager
+	AdGuard           *adguard.Manager
+	Installer         *installer.Manager
+	Updater           *updater.Manager
+	ControlPlane      *controlplane.Client
+	UpdaterSelfUpdate *updater.Manager
+	AdGuardDNSAddress string
+	BackupExporter    *backupexport.Exporter
+	BackupRestorer    *backuprestore.Manager
 }
 
 func RegisterRoutes(deps Dependencies) http.Handler {
@@ -64,10 +63,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane))
 	apiMux.HandleFunc("GET /api/updater-updates", updateStatusHandler(deps.UpdaterSelfUpdate))
 	apiMux.HandleFunc("POST /api/updater-updates/check", updateCheckHandler(deps.UpdaterSelfUpdate))
-	apiMux.HandleFunc("POST /api/updater-updates/install", selfUpdateInstallHandler(deps.UpdaterSelfUpdate, deps.ControlPlane, "updater"))
-	apiMux.HandleFunc("GET /api/attestation-proxy-updates", updateStatusHandler(deps.AttestationProxySelfUpdate))
-	apiMux.HandleFunc("POST /api/attestation-proxy-updates/check", updateCheckHandler(deps.AttestationProxySelfUpdate))
-	apiMux.HandleFunc("POST /api/attestation-proxy-updates/install", selfUpdateInstallHandler(deps.AttestationProxySelfUpdate, deps.ControlPlane, "attestation-proxy"))
+	apiMux.HandleFunc("POST /api/updater-updates/install/{name}", selfUpdateInstallHandler(deps.UpdaterSelfUpdate, deps.ControlPlane))
 	apiMux.HandleFunc("GET /api/unbound/settings", getUnboundSettingsHandler(deps.Unbound))
 	apiMux.HandleFunc("GET /api/unbound/config", getUnboundConfigurationHandler(deps.Unbound))
 	apiMux.HandleFunc("PUT /api/unbound/settings", putUnboundSettingsHandler(deps.Unbound))
@@ -184,23 +180,27 @@ func controlPlaneUpdateHandler(client *controlplane.Client) http.HandlerFunc {
 }
 
 // selfUpdateInstallHandler triggers a Core-managed self-update image swap
-// for one service (the RootGuard Updater, or the attestation proxy - both
-// live in the same control-plane compose file/project and can't reach the
-// internet or attest their own new image without a working control plane).
-// Unlike updateServiceHandler, it first refuses if the control-plane
-// updater is itself mid core/webapp check or update - the container swap
-// would otherwise abort that operation, or (for the proxy) briefly cut the
+// for one service on the shared updater-self-update manager (currently
+// "updater" and "attestation-proxy" - both live in the same control-plane
+// compose file/project and can't reach the internet or attest their own
+// new image without a working control plane; sharing one Manager instance
+// means its own mutex already serializes the two against each other, so
+// they can never run composeUp concurrently against that shared compose
+// project - see docs/security-audit-log.md for why that matters). Unlike
+// updateServiceHandler, it first refuses if the control-plane updater is
+// itself mid core/webapp check or update - the container swap would
+// otherwise abort that operation, or (for the proxy) briefly cut the
 // egress path a concurrent attestation check is actively depending on.
 // This is a UX guard, not a correctness requirement: an interrupted
 // core/webapp update already recovers cleanly on the updater's own next
 // start (the same path already exercised by a real process kill).
-func selfUpdateInstallHandler(manager *updater.Manager, controlPlane *controlplane.Client, service string) http.HandlerFunc {
+func selfUpdateInstallHandler(manager *updater.Manager, controlPlane *controlplane.Client) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if status, err := controlPlane.Status(r.Context()); err == nil && (status.State == "checking" || status.State == "updating") {
 			writeError(w, http.StatusConflict, fmt.Errorf("control-plane updater is busy with a core/webapp operation, try again once it finishes"))
 			return
 		}
-		status, err := manager.StartUpdate(service)
+		status, err := manager.StartUpdate(r.PathValue("name"))
 		if err != nil {
 			switch {
 			case errors.Is(err, updater.ErrBusy):

@@ -15,18 +15,15 @@ import {
   Trash2,
 } from "lucide-react";
 import {
-  checkAttestationProxySelfUpdate,
   checkControlPlaneUpdates,
   checkUpdates,
   checkUpdaterSelfUpdate,
-  fetchAttestationProxySelfUpdateStatus,
   fetchControlPlaneUpdateStatus,
   fetchCleanupPreview,
   fetchServices,
   fetchUpdateStatus,
   fetchUpdaterSelfUpdateStatus,
   installServiceUpdate,
-  installAttestationProxySelfUpdate,
   installControlPlaneUpdates,
   installUpdaterSelfUpdate,
   runManualCleanup,
@@ -35,7 +32,6 @@ import {
   type UpdateServiceStatus,
   type UpdateStatus,
   type ControlPlaneUpdateStatus,
-  type AttestationProxySelfUpdateStatus,
   type UpdaterSelfUpdateStatus,
   type CleanupPreview,
   type UpdateHistoryEntry,
@@ -51,7 +47,6 @@ export default function Stack() {
   const [updates, setUpdates] = useState<UpdateStatus | null>(null);
   const [controlPlane, setControlPlane] = useState<ControlPlaneUpdateStatus | null>(null);
   const [updaterUpdate, setUpdaterUpdate] = useState<UpdaterSelfUpdateStatus | null>(null);
-  const [attestationProxyUpdate, setAttestationProxyUpdate] = useState<AttestationProxySelfUpdateStatus | null>(null);
   const [cleanup, setCleanup] = useState<CleanupPreview | null>(null);
   const [runningCleanup, setRunningCleanup] = useState(false);
   const [services, setServices] = useState<ServiceInfo[]>([]);
@@ -59,17 +54,15 @@ export default function Stack() {
 
   const load = useCallback(async () => {
     try {
-      const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextAttestationProxyUpdate, nextServices] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextServices] = await Promise.all([
         fetchUpdateStatus(),
         fetchControlPlaneUpdateStatus(),
         fetchUpdaterSelfUpdateStatus(),
-        fetchAttestationProxySelfUpdateStatus(),
         fetchServices(),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setUpdaterUpdate(nextUpdaterUpdate);
-      setAttestationProxyUpdate(nextAttestationProxyUpdate);
       setServices(nextServices);
       setError("");
     } catch (cause) {
@@ -84,8 +77,7 @@ export default function Stack() {
 
   const busy = updates?.state === "checking" || updates?.state === "updating"
     || controlPlane?.state === "checking" || controlPlane?.state === "updating"
-    || updaterUpdate?.state === "checking" || updaterUpdate?.state === "updating"
-    || attestationProxyUpdate?.state === "checking" || attestationProxyUpdate?.state === "updating" || runningCleanup;
+    || updaterUpdate?.state === "checking" || updaterUpdate?.state === "updating" || runningCleanup;
   useEffect(() => {
     const timer = window.setInterval(load, busy ? 1500 : 10_000);
     return () => window.clearInterval(timer);
@@ -94,21 +86,24 @@ export default function Stack() {
   const available = useMemo(
     () => (updates?.services.filter((service) => service.update_available).length ?? 0)
       + (controlPlane?.services.filter((service) => service.update_available).length ?? 0)
-      + (updaterUpdate?.services.filter((service) => service.update_available).length ?? 0)
-      + (attestationProxyUpdate?.services.filter((service) => service.update_available).length ?? 0),
-    [updates, controlPlane, updaterUpdate, attestationProxyUpdate],
+      + (updaterUpdate?.services.filter((service) => service.update_available).length ?? 0),
+    [updates, controlPlane, updaterUpdate],
   );
   const history = useMemo(
     () => [
       ...(updates?.history ?? []).map((entry) => ({ ...entry, scope: entry.service === "cleanup" ? "Docker" : entry.service || "DNS" })),
       ...(controlPlane?.history ?? []).map((entry) => ({ ...entry, scope: "Control Panel" })),
-      ...(updaterUpdate?.history ?? []).map((entry) => ({ ...entry, scope: "Updater" })),
-      ...(attestationProxyUpdate?.history ?? []).map((entry) => ({ ...entry, scope: "Attestation Proxy" })),
+      // updaterUpdate carries both "updater" and "attestation-proxy"
+      // entries now (one shared Core-side manager, see the module-level
+      // comment on this component's imports) - the scope label is
+      // per-entry, not a single fixed string, unlike the two spreads
+      // above whose whole status object only ever covers one scope.
+      ...(updaterUpdate?.history ?? []).map((entry) => ({ ...entry, scope: entry.service === "attestation-proxy" ? "Attestation Proxy" : "Updater" })),
     ].sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)).slice(0, 12),
-    [updates, controlPlane, updaterUpdate, attestationProxyUpdate],
+    [updates, controlPlane, updaterUpdate],
   );
   const updaterRuntime = services.find((service) => service.name === "updater");
-  const updaterService = updaterUpdate?.services[0];
+  const updaterService = updaterUpdate?.services.find((service) => service.name === "updater");
   // No matching entry in `services` (Core's own dashboard inspection stays
   // scoped to its existing 5-service allowlist, see servicesHandler in
   // rootguard-core - out of scope for rootguard#481, which is purely about
@@ -117,21 +112,19 @@ export default function Stack() {
   // exactly this case, so the card still works, just without live
   // running/immutability/attestation-badge detail the allowlisted services
   // show.
-  const attestationProxyService = attestationProxyUpdate?.services[0];
+  const attestationProxyService = updaterUpdate?.services.find((service) => service.name === "attestation-proxy");
 
   async function startCheck() {
     setError("");
     try {
-      const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextAttestationProxyUpdate] = await Promise.all([
+      const [nextUpdates, nextControlPlane, nextUpdaterUpdate] = await Promise.all([
         checkUpdates(),
         checkControlPlaneUpdates(),
         checkUpdaterSelfUpdate(),
-        checkAttestationProxySelfUpdate(),
       ]);
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setUpdaterUpdate(nextUpdaterUpdate);
-      setAttestationProxyUpdate(nextAttestationProxyUpdate);
     } catch (cause) {
       setError(errorMessage(cause, t("stack.updateCheckError")));
     }
@@ -147,23 +140,15 @@ export default function Stack() {
     }
   }
 
-  async function startUpdaterSelfUpdate() {
-    if (!window.confirm(t("stack.updaterSelfUpdateConfirm"))) return;
+  async function startSelfUpdate(service: "updater" | "attestation-proxy") {
+    const confirmKey = service === "updater" ? "stack.updaterSelfUpdateConfirm" : "stack.attestationProxySelfUpdateConfirm";
+    if (!window.confirm(t(confirmKey))) return;
     setError("");
     try {
-      setUpdaterUpdate(await installUpdaterSelfUpdate());
+      setUpdaterUpdate(await installUpdaterSelfUpdate(service));
     } catch (cause) {
-      setError(errorMessage(cause, t("stack.updaterSelfUpdateStartError")));
-    }
-  }
-
-  async function startAttestationProxySelfUpdate() {
-    if (!window.confirm(t("stack.attestationProxySelfUpdateConfirm"))) return;
-    setError("");
-    try {
-      setAttestationProxyUpdate(await installAttestationProxySelfUpdate());
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.attestationProxySelfUpdateStartError")));
+      const errorKey = service === "updater" ? "stack.updaterSelfUpdateStartError" : "stack.attestationProxySelfUpdateStartError";
+      setError(errorMessage(cause, t(errorKey)));
     }
   }
 
@@ -290,6 +275,14 @@ export default function Stack() {
                 t={t}
               />
             ))}
+            {/* Both cards below share one status object (updaterUpdate) and
+                therefore one `state === "updating"` gate - the two
+                services live on one Core-side manager/mutex now (see the
+                module-level comment on the imports above) precisely so
+                they can never run their compose swap concurrently. Using
+                the same shared state for both cards' `updating` prop
+                mirrors that at the UI layer too: starting either one
+                disables *both* buttons, not just its own. */}
             {updaterRuntime && updaterService && (
               <ControlPlaneService
                 icon={<ServerCog />}
@@ -298,7 +291,7 @@ export default function Stack() {
                 updateAvailable={updaterService.update_available}
                 runtime={updaterRuntime}
                 fallbackImage={updaterService.current_image}
-                onUpdate={startUpdaterSelfUpdate}
+                onUpdate={() => startSelfUpdate("updater")}
                 updating={updaterUpdate?.state === "updating"}
                 t={t}
               />
@@ -310,8 +303,8 @@ export default function Stack() {
                 updateLabel={attestationProxyService.update_available ? t("stack.update") : attestationProxyService.checked_at ? t("stack.current") : t("stack.unchecked")}
                 updateAvailable={attestationProxyService.update_available}
                 fallbackImage={attestationProxyService.current_image}
-                onUpdate={startAttestationProxySelfUpdate}
-                updating={attestationProxyUpdate?.state === "updating"}
+                onUpdate={() => startSelfUpdate("attestation-proxy")}
+                updating={updaterUpdate?.state === "updating"}
                 t={t}
               />
             )}

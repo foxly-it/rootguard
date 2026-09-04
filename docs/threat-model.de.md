@@ -212,9 +212,11 @@ Update-Pfad statt direkt.
   RootGuard-eigenen Signaturkette. `rootguard-attestation-proxy` war
   früher eine zweite, andere Ausnahme (statisch, nur manuell
   aktualisiert, nie zur Laufzeit erneut geprüft) - nicht mehr: er ist
-  seit 2026-09-03 über einen eigenen Update-Kanal ins
-  Self-Update-Management aufgenommen, geprüft über dieselbe
-  Cosign-Policy wie jede andere RootGuard-eigene Komponente. Die
+  seit 2026-09-03 ins Self-Update-Management aufgenommen - geteilt über
+  dieselbe Manager-/Mutex-Instanz wie der RootGuard Updater, bewusst
+  nicht über eine eigene (siehe `docs/security-audit-log.md`) -, geprüft
+  über dieselbe Cosign-Policy wie jede andere RootGuard-eigene
+  Komponente. Die
   Verifizierung eines neuen Proxy-Kandidaten-Images läuft über die
   *aktuell laufende* Proxy-Instanz - der Swap passiert erst danach, es
   gibt also keine Bootstrapping-Lücke.

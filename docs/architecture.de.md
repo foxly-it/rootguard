@@ -114,10 +114,11 @@ erreichen: `rootguard-attestation-proxy`, ein minimaler, reiner
 CONNECT-Forward-Proxy mit fest einprogrammierter 3-Host-Allowlist, der
 sowohl im `control`- als auch in einem separaten, echt
 internetfähigen `egress`-Netzwerk hängt. Die sechste RootGuard-Komponente,
-seit 2026-09-03 über einen eigenen, dedizierten Update-Kanal ins
-Self-Update-Management aufgenommen (ein vollständig getrennter Pfad von
-den übrigen fünf, kein gemeinsam genutzter - siehe
-`docs/security-audit-log.md` für die Begründung) - siehe
+seit 2026-09-03 ins Self-Update-Management aufgenommen - geteilt über
+dieselbe Manager-/Mutex-Instanz wie der RootGuard Updater, bewusst nicht
+über eine eigene: eine frühere Fassung mit zwei getrennten Managern ließ
+deren Compose-Operationen gegeneinander laufen (siehe
+`docs/security-audit-log.md`) - siehe
 `rootguard-attestation-proxy/README.md` und `docs/threat-model.de.md`
 (§3) für das vollständige Design und Vertrauensmodell.
 
