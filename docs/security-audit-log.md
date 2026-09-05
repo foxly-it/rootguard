@@ -3895,3 +3895,121 @@ assume one service": verify X and Y are actually both real blockers, at
 the actual cost of fixing them, before building a parallel structure to
 avoid touching them - here, one of the two turned out to be a single
 line.
+
+## Internal review, no external tooling (2026-09-05)
+
+Unlike every round above, this one wasn't triggered by an external
+third-party audit - the user asked directly for a careful internal
+security/quality pass. Five parallel deep-read agents each covered one
+component area (Core; WebApp backend+frontend; Updater+Attestation-Proxy;
+Unbound+Blockpage; scripts/Compose/CI), briefed on every bug class the
+prior two audit rounds already found and fixed, specifically to hunt for
+the same class recurring elsewhere rather than re-verifying old fixes.
+Verdict, consistent with round 1's own: no Critical/High finding anywhere
+- 10 Medium/Low findings, all fixed same-day, one per issue/PR per the
+usual discipline.
+
+1. **[rootguard#491](https://github.com/foxly-it/rootguard/pull/502):**
+   `/api/router-import/fritzbox/discover` forwarded a FritzBox
+   address/username/password to Core with no rate limiting, unlike
+   practically every other mutating route - a hijacked session could
+   brute-force the FritzBox password at unlimited rate. Wrapped in the
+   existing `dest()`/`guardDestructive` limiter, live-verified against
+   the real compiled binary (429 past the 30-req/5-min budget).
+2. **[rootguard#492](https://github.com/foxly-it/rootguard/pull/503):**
+   `/api/backups/restore/preview` accepted the same ~1GB multipart
+   upload as `/api/backups/restore` but wasn't rate-limited - DoS via
+   repeated large uploads. Same fix and verification as #491.
+3. **[rootguard#493](https://github.com/foxly-it/rootguard/pull/504):**
+   `/api/unbound/forward-check` and `/api/router-import/reverse-dns/discover`
+   trigger outbound network probes to admin-supplied targets with no rate
+   limiting - RootGuard usable as an undrosselt internal-network scan
+   proxy. Same fix and verification.
+4. **[rootguard#494](https://github.com/foxly-it/rootguard/pull/507):**
+   the expert Unbound custom-config editor's `access-control` handling
+   only ever produced a dismissible warning, never a hard block, even
+   though `DirectiveReferences()` itself documents it as "Risk: high" -
+   `access-control: 0.0.0.0/0 allow` combined with the installer's own
+   permitted `DNSBindAddress: 0.0.0.0` creates an internet-reachable open
+   resolver (DNS-amplification risk). Now hard-blocked whenever an
+   allow-family action's range reaches beyond RFC1918/loopback/link-local
+   space (deny/refuse-family actions are never blocked, regardless of
+   range - they only restrict); an unparseable range fails closed. Same
+   hard-refusal pattern already used for the DNSSEC-downgrade directives.
+5. **[rootguard#495](https://github.com/foxly-it/rootguard/pull/500):**
+   `ROOTGUARD_SKIP_ATTESTATION=true` silently disabled every attestation
+   gate with nothing logged - a stray CI/E2E-sourced `.env` fragment or
+   stale debug override in a real deployment would go unnoticed
+   indefinitely. Now logs a clear warning at startup.
+6. **[rootguard#496](https://github.com/foxly-it/rootguard/pull/508):**
+   `compose.integration.yaml`'s `updater` service still had the exact
+   self-referential relative bind-mount bug already fixed in
+   `compose.yaml`/`compose.release.yaml` (2026-08-22, this same log) -
+   missed when that fix landed. Currently latent (`ci.yml` only calls
+   `/check`, never `/apply`, against this file) but would have bitten the
+   moment a real apply/rollback test is added. Applied the identical
+   `${PWD}` + `PWD` env pattern; also added the equivalent alias-mount to
+   the `core` service pre-emptively, live-verified on the `.7` LXC with a
+   minimal throwaway compose file reproducing the exact self-referential
+   pattern.
+7. **[rootguard#497](https://github.com/foxly-it/rootguard/pull/509):**
+   the `target_images` override in `rootguard-updater`'s
+   `/api/control-plane/check|update` reached `docker pull` with no
+   registry/repo allowlist - only the later attestation check gated
+   *activation*, not the pull itself. Since `docker pull` runs against
+   the host's dockerd over the Docker socket (not inside this
+   container's own network namespace), a holder of
+   `ROOTGUARD_UPDATER_TOKEN` could force arbitrary outbound registry
+   connections, undermining the internet isolation the attestation-proxy
+   + `internal: true` `control` network are specifically meant to
+   guarantee (exploitability already requires that same token, so this
+   closes an isolation-guarantee gap, not an auth bypass). Every override
+   must now stay within its service's own static `TargetImage` pin's
+   repository.
+8. **[rootguard#498](https://github.com/foxly-it/rootguard/pull/501):**
+   both attestation policy checks (`rootguard-core/internal/stack` and
+   `rootguard-updater`) used an unanchored `strings.HasPrefix` for the
+   image-repository check, so a same-prefix sibling image name (e.g.
+   `rootguard-core-evil`) would pass the `core` policy's eligibility
+   check - real exploitation still requires that image to separately pass
+   cosign verification against the exact release workflow identity, so
+   this tightens a check rather than closing an active bypass. Anchored
+   to the `@` digest delimiter in both places; the four existing tests
+   that used an unrealistic `repo:tag@sha256:...` fixture shape (real
+   production references are always tag-less, `repo@sha256:...`) were
+   corrected to match what the code actually receives.
+9. **[rootguard#499](https://github.com/foxly-it/rootguard/pull/510):**
+   Core's own self-update `update()` never compared the container's
+   actual running image ID to the candidate after `composeUp` - only the
+   caller-supplied functional `Verify` callback, which for
+   attestation-proxy is a bare TCP dial to its port. A `compose up` that
+   reported success without actually recreating the container (stale
+   compose cache, environment quirk) would be recorded as a successful
+   update even though the security-critical egress image never changed.
+   `rootguard-updater`'s own sibling manager already did this comparison
+   correctly. Added `verifyImageSwapped`, applied uniformly to every
+   service Core's manager handles, not a special case for one.
+10. **[rootguard#505](https://github.com/foxly-it/rootguard/pull/506):**
+    not a security finding - found while merging the above: Blockpage
+    CI's image build had been failing on every push (Alpine's mirror
+    moved `curl`/`libcurl` past the pinned `8.20.0-r0`, "unable to select
+    packages"), blocking every PR via branch protection. Same recurring
+    pin-drift pattern as the c-ares/libexpat rounds already in this file.
+    Bumped the pin; the same CI run then caught 6 new HIGH
+    `util-linux`/`libuuid` CVEs the old pin hadn't touched at all -
+    pinned that too rather than suppressing via `.trivyignore.yaml`.
+    Live-verified on the `.7` LXC: clean build, 0 HIGH/CRITICAL trivy
+    findings.
+
+**Not a finding, closed as already-resolved:** the 30-day soak test's
+2026-08-21 backup-restore drill had `post_restore_dns_ok: false` -
+investigated as part of this same pass
+([rootguard#490](https://github.com/foxly-it/rootguard/issues/490)) and
+root-caused as the exact incident that already motivated
+`scripts/soak/backup-restore-drill.sh`'s own bounded `wait_dns_ok` retry
+(PR #302, same day): Core reaches `state=installed` after its own
+internal DNS-chain check already passed, but the host's published port
+53 can lag a few seconds behind container recreation. The systemd
+journal for that exact run confirms `export_ok`/`restore_ok` both true
+and DNS healthy again by the very next probe cycle. All three drills
+since (08-28, 09-04) came back clean.

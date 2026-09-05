@@ -1178,6 +1178,19 @@ identical policy as every other component
 ([rootguard#481](https://github.com/foxly-it/rootguard/issues/481),
 closed).
 
+**2026-09-05, internal review round (no external tooling):** the user
+asked for a careful internal security/quality pass rather than waiting
+for another third-party audit. 10 Medium/Low findings across rate
+limiting, an Unbound open-resolver footgun, attestation-check
+robustness, a compose self-referential-mount bug, and a control-network
+isolation gap - no Critical/High, consistent with round 1's own
+"ungewöhnlich sauber" verdict. All fixed same-day, one issue/PR each.
+Also caught and fixed along the way: Blockpage CI had been failing on
+every push (an Alpine package-pin drift, unrelated to the review
+itself) blocking merges via branch protection. Full narrative:
+`docs/security-audit-log.md`'s "Internal review, no external tooling"
+entry.
+
 ---
 
 ## 1.0.0 — stable Docker appliance
