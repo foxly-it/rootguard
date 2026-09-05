@@ -49,6 +49,13 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # 2.41.6-r0. Added to the pinned set rather than left to trivy's own
 # .trivyignore suppression, matching this file's existing policy of
 # fixing what's actually fixable over suppressing it.
+#
+# Found live, round 17 - same day, a couple hours after round 16: the
+# mirror moved libuuid again, 2.41.6-r0 -> 2.41.6-r1 (an -r rebuild, not
+# even a new upstream version), same "unable to select packages" break.
+# The Alpine 3.23 mirror is evidently mid-rollout today specifically;
+# confirmed live that every other package is still exactly where round
+# 16 left it.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.8-r0 \
         curl=8.22.0-r0 \
@@ -56,7 +63,7 @@ RUN apk add --no-cache --upgrade \
         libcrypto3=3.5.8-r0 \
         libssl3=3.5.8-r0 \
         libexpat=2.8.4-r0 \
-        libuuid=2.41.6-r0 \
+        libuuid=2.41.6-r1 \
         libxml2=2.13.9-r1 \
         nghttp2-libs=1.69.0-r0
 
