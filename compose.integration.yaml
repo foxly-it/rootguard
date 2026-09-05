@@ -109,10 +109,32 @@ services:
       ADGUARD_DATA_DIR: /var/lib/rootguard/adguard
       ADGUARD_UPSTREAM: 172.29.53.2:5335
       ADGUARD_DNS_ADDRESS: rootguard-adguard:53
+      # Propagates the real host checkout directory into a
+      # `docker compose -f /opt/rootguard/compose.yaml ...`
+      # re-invocation from inside this container - see the matching
+      # comment on the volumes line below and on compose.yaml's own core
+      # service (the identical fix, applied there first).
+      PWD: "${PWD}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - unbound-config:/var/lib/rootguard/unbound
+      # Aliased to the fixed "compose.yaml" name (not this file's own
+      # "compose.integration.yaml") because
+      # internal/updater/manager.go's composeUp hardcodes that filename -
+      # same reason compose.yaml/compose.release.yaml's own core service
+      # alias-mounts theirs. ${PWD}, not a relative "./...", for the same
+      # reason those two files use it: a relative source re-resolves
+      # against the wrong directory the moment this container re-invokes
+      # `docker compose -f <this mounted path> ...` against itself.
+      # Nothing in this file currently drives Core's own
+      # updater-of-updater self-update path (no ROOTGUARD_SELF_UPDATE_DIR/
+      # ROOTGUARD_COMPOSE_FILE wired here, no attestation-proxy service),
+      # so this mount is currently unused - added so the same silent
+      # "missing file" surprise found live in compose.yaml (2026-08-29,
+      # see docs/security-audit-log.md) can't recur here the moment that
+      # gets wired up.
+      - ${PWD}/compose.integration.yaml:/opt/rootguard/compose.yaml:ro
     networks:
       - control
       - dns
@@ -167,11 +189,26 @@ services:
       ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
       ROOTGUARD_WEB_PORT: "${ROOTGUARD_WEB_PORT:-8080}"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
+      # See the matching PWD/${PWD} comments on the core service above
+      # and on compose.yaml/compose.release.yaml's identical updater
+      # service - required for the volumes line below to resolve
+      # correctly when this container re-invokes `docker compose -f
+      # /opt/rootguard/compose.integration.yaml ...` against itself.
+      PWD: "${PWD}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - rootguard-sessions:/var/lib/rootguard-sessions
-      - ./compose.integration.yaml:/opt/rootguard/compose.integration.yaml:ro
+      # ${PWD}, not a relative "./compose.integration.yaml" - found in
+      # review: this file was missed when compose.yaml/compose.release.yaml
+      # got the identical fix (2026-08-22, docs/security-audit-log.md). A
+      # relative bind source resolves against the directory of whatever
+      # -f file is being read, not this file's own location - breaks the
+      # moment this container re-invokes `docker compose -f
+      # /opt/rootguard/compose.integration.yaml ...` against itself,
+      # silently mounting an auto-vivified empty directory instead of the
+      # real file.
+      - ${PWD}/compose.integration.yaml:/opt/rootguard/compose.integration.yaml:ro
     networks:
       - control
     healthcheck:
