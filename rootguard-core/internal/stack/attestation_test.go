@@ -106,6 +106,35 @@ func TestReleaseAttestationCoversEveryReleasedComponent(t *testing.T) {
 	}
 }
 
+// TestReleaseAttestationAcceptsTagPlusDigestReference is the regression
+// test for a real, live-impacting gap: the previous "@"-only anchor
+// (added the same session, to close a same-prefix-sibling-name gap)
+// broke 1.0.0-rc.3's very first fresh install. installer.Manager's own
+// resolveDigest returns an already-"@sha256:"-qualified image completely
+// unchanged if it already contains one - and .env.release.example's
+// static ROOTGUARD_UNBOUND_IMAGE/ROOTGUARD_BLOCKPAGE_IMAGE pins are
+// exactly that: "repo:1.0.0-rc.3@sha256:..." with the tag kept alongside
+// the digest, unlike the self-update path's own digestFromPullOutput,
+// which always strips the tag first. An anchor requiring "@" to
+// immediately follow the repo name rejected every one of these as
+// "not_applicable" - refused by RequireAttestation - even though the
+// underlying cosign attestation was completely valid (confirmed live
+// against the real published image with a raw `cosign verify-attestation`
+// call). Both shapes must resolve identically.
+func TestReleaseAttestationAcceptsTagPlusDigestReference(t *testing.T) {
+	resetAttestationCache()
+	run := func(_ context.Context, name string, args ...string) ([]byte, error) {
+		if name != "cosign" {
+			t.Fatalf("unexpected command %s", name)
+		}
+		return []byte(`{"verified":true}`), nil
+	}
+	status, checked := verifyReleaseAttestationWith(context.Background(), "unbound", "ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.3@sha256:abc", run, func() time.Time { return time.Unix(1, 0) })
+	if status != "verified" || checked == "" {
+		t.Fatalf("expected a tag-plus-digest reference to verify, got: %s %s", status, checked)
+	}
+}
+
 func TestReleaseAttestationCachesResultByDigestReference(t *testing.T) {
 	resetAttestationCache()
 	calls := 0

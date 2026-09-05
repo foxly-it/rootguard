@@ -79,3 +79,23 @@ func TestVerifyAttestationFailsClearlyWhenProxyMissing(t *testing.T) {
 		t.Fatalf("expected the proxy-specific message, got: %v", err)
 	}
 }
+
+// TestVerifyAttestationAcceptsTagPlusDigestReference is the regression
+// test for a real, live-impacting gap found the same session: an
+// "@"-only prefix anchor rejected every tag-plus-digest image reference
+// (e.g. "repo:1.0.0-rc.3@sha256:...", the shape a release's own
+// pre-pinned .env.release.example entries carry) as "not eligible",
+// even though the underlying cosign attestation was completely valid -
+// see rootguard-core/internal/stack/attestation_test.go's identical
+// test for the full live-break narrative. Proxy left unset deliberately,
+// so this exercises only the eligibility anchor, not the proxy check.
+func TestVerifyAttestationAcceptsTagPlusDigestReference(t *testing.T) {
+	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "")
+	err := verifyAttestation(context.Background(), "core", "ghcr.io/foxly-it/rootguard-core:1.0.0-rc.3@sha256:abc")
+	if err == nil || strings.Contains(err.Error(), "is not eligible for attestation verification") {
+		t.Fatalf("expected a tag-plus-digest reference to pass eligibility and reach the proxy check, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "no attestation proxy configured") {
+		t.Fatalf("expected the proxy-specific message once eligibility passed, got: %v", err)
+	}
+}

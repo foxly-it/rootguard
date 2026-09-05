@@ -82,9 +82,13 @@ func checkAttestationProxyReachable() error {
 // environment).
 func verifyAttestation(ctx context.Context, service, image string) error {
 	prefix, ok := attestationImagePrefix[service]
-	// Anchored to "@" - see rootguard-core/internal/stack/attestation.go's
-	// identical fix and comment for the full rationale.
-	if !ok || !strings.HasPrefix(image, prefix+"@") || !strings.Contains(image, "@sha256:") {
+	// Anchored to the delimiter right after the repo name (either "@" or
+	// a tag-then-"@") - see rootguard-core/internal/stack/attestation.go's
+	// identical fix and comment for the full rationale, including the
+	// live 1.0.0-rc.3 fresh-install break an "@"-only anchor caused.
+	afterPrefix, hasPrefix := strings.CutPrefix(image, prefix)
+	validAnchor := hasPrefix && len(afterPrefix) > 0 && (afterPrefix[0] == '@' || afterPrefix[0] == ':')
+	if !ok || !validAnchor || !strings.Contains(image, "@sha256:") {
 		return fmt.Errorf("%s (%s) is not eligible for attestation verification", service, image)
 	}
 	if err := checkAttestationProxyReachable(); err != nil {
