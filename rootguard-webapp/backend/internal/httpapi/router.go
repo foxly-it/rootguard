@@ -205,9 +205,15 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	mux.HandleFunc("POST /api/backups/export", dest(auditBackupExport, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupExport(w, r, core)
 	}))
-	mux.HandleFunc("POST /api/backups/restore/preview", func(w http.ResponseWriter, r *http.Request) {
+	// Rate-limited like the non-preview restore route right below it -
+	// found in review: this accepts the identical ~1GB multipart upload
+	// with the same 10-minute deadline and forwards to Core, but was
+	// missing the dest() wrap the sibling route already has, letting an
+	// authenticated session exhaust WebApp/Core memory, disk, and CPU by
+	// firing repeated large uploads at it.
+	mux.HandleFunc("POST /api/backups/restore/preview", dest(auditBackupRestorePreview, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupRestore(w, r, core, true)
-	})
+	}))
 	mux.HandleFunc("POST /api/backups/restore", dest(auditBackupRestore, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupRestore(w, r, core, false)
 	}))
