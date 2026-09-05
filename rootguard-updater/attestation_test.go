@@ -71,7 +71,7 @@ func TestCheckAttestationProxyReachableConfiguredAndUp(t *testing.T) {
 // proxy check at all, rather than short-circuiting on eligibility.
 func TestVerifyAttestationFailsClearlyWhenProxyMissing(t *testing.T) {
 	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "")
-	err := verifyAttestation(context.Background(), "core", "ghcr.io/foxly-it/rootguard-core:v1@sha256:abc")
+	err := verifyAttestation(context.Background(), "core", "ghcr.io/foxly-it/rootguard-core@sha256:abc")
 	if err == nil {
 		t.Fatal("expected verifyAttestation to refuse when no proxy is configured")
 	}
