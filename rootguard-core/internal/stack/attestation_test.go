@@ -33,7 +33,7 @@ func TestReleaseAttestationPinsSignerPolicy(t *testing.T) {
 		arguments = args
 		return []byte(`{"verified":true}`), nil
 	}
-	status, checked := verifyReleaseAttestationWith(context.Background(), "core", "ghcr.io/foxly-it/rootguard-core:v1@sha256:abc", run, func() time.Time { return time.Unix(1, 0) })
+	status, checked := verifyReleaseAttestationWith(context.Background(), "core", "ghcr.io/foxly-it/rootguard-core@sha256:abc", run, func() time.Time { return time.Unix(1, 0) })
 	joined := strings.Join(arguments, " ")
 	if status != "verified" || checked == "" {
 		t.Fatalf("unexpected verification result: %s %s", status, checked)
@@ -60,7 +60,7 @@ func TestReleaseAttestationPinsWebappSignerPolicy(t *testing.T) {
 		arguments = args
 		return []byte(`{"verified":true}`), nil
 	}
-	status, checked := verifyReleaseAttestationWith(context.Background(), "webapp", "ghcr.io/foxly-it/rootguard-webapp:v1@sha256:abc", run, func() time.Time { return time.Unix(1, 0) })
+	status, checked := verifyReleaseAttestationWith(context.Background(), "webapp", "ghcr.io/foxly-it/rootguard-webapp@sha256:abc", run, func() time.Time { return time.Unix(1, 0) })
 	joined := strings.Join(arguments, " ")
 	if status != "verified" || checked == "" {
 		t.Fatalf("unexpected verification result: %s %s", status, checked)
@@ -92,7 +92,7 @@ func TestReleaseAttestationCoversEveryReleasedComponent(t *testing.T) {
 			arguments = args
 			return []byte(`{"verified":true}`), nil
 		}
-		image := "ghcr.io/foxly-it/rootguard-" + service + ":v1@sha256:abc"
+		image := "ghcr.io/foxly-it/rootguard-" + service + "@sha256:abc"
 		status, checked := verifyReleaseAttestationWith(context.Background(), service, image, run, func() time.Time { return time.Unix(1, 0) })
 		if status != "verified" || checked == "" {
 			t.Fatalf("%s: unexpected verification result: %s %s", service, status, checked)
@@ -111,7 +111,7 @@ func TestReleaseAttestationCachesResultByDigestReference(t *testing.T) {
 	calls := 0
 	now := time.Unix(10, 0)
 	run := func(context.Context, string, ...string) ([]byte, error) { calls++; return nil, nil }
-	image := "ghcr.io/foxly-it/rootguard-webapp:v1@sha256:def"
+	image := "ghcr.io/foxly-it/rootguard-webapp@sha256:def"
 	verifyReleaseAttestationWith(context.Background(), "webapp", image, run, func() time.Time { return now })
 	verifyReleaseAttestationWith(context.Background(), "webapp", image, run, func() time.Time { return now.Add(time.Minute) })
 	if calls != 1 {

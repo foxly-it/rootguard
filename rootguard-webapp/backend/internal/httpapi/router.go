@@ -205,9 +205,15 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	mux.HandleFunc("POST /api/backups/export", dest(auditBackupExport, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupExport(w, r, core)
 	}))
-	mux.HandleFunc("POST /api/backups/restore/preview", func(w http.ResponseWriter, r *http.Request) {
+	// Rate-limited like the non-preview restore route right below it -
+	// found in review: this accepts the identical ~1GB multipart upload
+	// with the same 10-minute deadline and forwards to Core, but was
+	// missing the dest() wrap the sibling route already has, letting an
+	// authenticated session exhaust WebApp/Core memory, disk, and CPU by
+	// firing repeated large uploads at it.
+	mux.HandleFunc("POST /api/backups/restore/preview", dest(auditBackupRestorePreview, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupRestore(w, r, core, true)
-	})
+	}))
 	mux.HandleFunc("POST /api/backups/restore", dest(auditBackupRestore, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBackupRestore(w, r, core, false)
 	}))
@@ -290,18 +296,28 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleUnboundAdvice(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/unbound/forward-check", func(w http.ResponseWriter, r *http.Request) {
+	// Rate-limited like every other admin-triggered network probe in this
+	// file - found in review: these two trigger outbound network activity
+	// to admin-supplied targets/CIDR ranges with no rate limiting,
+	// letting a compromised session use RootGuard as an undrosselt scan
+	// proxy into the LAN.
+	mux.HandleFunc("POST /api/unbound/forward-check", dest(auditUnboundForwardCheck, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundForwardCheck(w, r, core)
-	})
+	}))
 	mux.HandleFunc("GET /api/unbound/network-capabilities", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundNetworkCapabilities(w, r, core)
 	})
-	mux.HandleFunc("POST /api/router-import/fritzbox/discover", func(w http.ResponseWriter, r *http.Request) {
+	// Rate-limited like every other mutating/credential-handling route -
+	// found in review: this one forwards a FritzBox address/username/
+	// password to Core unthrottled, unlike the rest of this file, letting
+	// a hijacked session brute-force the FritzBox password at unlimited
+	// rate through RootGuard as a proxy into the LAN.
+	mux.HandleFunc("POST /api/router-import/fritzbox/discover", dest(auditFritzBoxDiscover, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleFritzBoxDiscover(w, r, core)
-	})
-	mux.HandleFunc("POST /api/router-import/reverse-dns/discover", func(w http.ResponseWriter, r *http.Request) {
+	}))
+	mux.HandleFunc("POST /api/router-import/reverse-dns/discover", dest(auditReverseDNSDiscover, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleReverseDNSDiscover(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("GET /api/unbound/custom", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleGetUnboundCustom(w, r, core)

@@ -50,6 +50,56 @@ func TestCheckComparesRunningAndPulledImageIDs(t *testing.T) {
 	}
 }
 
+// TestUpdateFailsWhenComposeUpDoesNotActuallySwapTheImage is the
+// regression test for a real gap found in review: nothing compared the
+// container's actual running image ID to the candidate after "compose
+// up" - only the per-service Verify callback, which only ever checks
+// functional health/reachability. Simulates a "compose up" that reports
+// success (exit 0) but never actually recreates the container (a stale
+// compose cache, an environment quirk) by leaving "inspect" reporting the
+// old image ID throughout, on both the forward attempt and rollback's own
+// composeUp back to that same old ID (a no-op here, since it was already
+// running) - the forward attempt must fail specifically because the swap
+// never happened, distinct from any functional-health failure.
+func TestUpdateFailsWhenComposeUpDoesNotActuallySwapTheImage(t *testing.T) {
+	dataDir := t.TempDir()
+	composeDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewManager(Options{
+		DataDir: dataDir, ComposeDir: composeDir,
+		VerifyAttempts: 1, RetryDelay: time.Millisecond,
+		Services: []ServiceSpec{{
+			Name: "adguard", DisplayName: "AdGuard Home", Container: "rootguard-adguard",
+			TargetImage: "adguard:latest", BackupPaths: []string{"/opt/adguardhome/conf"},
+		}},
+		AttestationVerifier: noopAttestationVerifier,
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			switch arguments[0] {
+			case "inspect":
+				// Always the old ID - "compose up" below reports success
+				// but never actually recreates the container.
+				return []byte("adguard:v1|sha256:old"), nil
+			case "image":
+				return []byte("sha256:new"), nil
+			default:
+				return []byte("ok"), nil
+			}
+		},
+		Verify: func(context.Context, string) error { return nil },
+	})
+
+	if _, err := manager.StartUpdate("adguard"); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	result := manager.Status()
+	if result.State != StateFailed || !strings.Contains(result.Message, "was not actually recreated") {
+		t.Fatalf("expected a failure naming the un-recreated container, got %#v", result)
+	}
+}
+
 func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
@@ -58,6 +108,7 @@ func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 	}
 	var mu sync.Mutex
 	var commands []string
+	composedUp := false
 	manager := NewManager(Options{
 		DataDir: dataDir, ComposeDir: composeDir,
 		Services: []ServiceSpec{{
@@ -71,7 +122,16 @@ func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 			mu.Unlock()
 			switch arguments[0] {
 			case "inspect":
+				// Reflects the real container's own state: still on the old
+				// image until "compose up" actually recreates it - required
+				// for verifyImageSwapped's post-composeUp check.
+				if composedUp {
+					return []byte("rootguard-unbound:v1|sha256:new"), nil
+				}
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
+			case "compose":
+				composedUp = true
+				return []byte("ok"), nil
 			case "image":
 				return []byte("sha256:new"), nil
 			default:
@@ -170,6 +230,7 @@ func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T)
 		t.Fatal(err)
 	}
 	var commands []string
+	composedUp := false
 	manager := NewManager(Options{
 		DataDir: dataDir, ComposeDir: composeDir,
 		Services: []ServiceSpec{{
@@ -185,7 +246,16 @@ func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T)
 			commands = append(commands, command)
 			switch arguments[0] {
 			case "inspect":
+				// Reflects the real container's own state: still on the old
+				// image until "compose up" actually recreates it - required
+				// for verifyImageSwapped's post-composeUp check.
+				if composedUp {
+					return []byte("rootguard-unbound:v1|sha256:new"), nil
+				}
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
+			case "compose":
+				composedUp = true
+				return []byte("ok"), nil
 			case "image":
 				return []byte("sha256:new"), nil
 			case "run":
@@ -401,6 +471,7 @@ func TestFailedHealthCheckRestoresPreviousImageAndBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifyCalls := 0
+	composedUp := false
 	manager := NewManager(Options{
 		DataDir: dataDir, ComposeDir: composeDir,
 		VerifyAttempts: 1, RetryDelay: time.Millisecond,
@@ -411,7 +482,19 @@ func TestFailedHealthCheckRestoresPreviousImageAndBackup(t *testing.T) {
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
 			case "inspect":
+				// Reflects the real container's own state: still on the old
+				// image until "compose up" actually recreates it - required
+				// for verifyImageSwapped's post-composeUp check. Rollback's
+				// own composeUp (back to oldID) doesn't go through
+				// verifyImageSwapped, so staying "new" here for the rest of
+				// the test is fine.
+				if composedUp {
+					return []byte("adguard:v1|sha256:new"), nil
+				}
 				return []byte("adguard:v1|sha256:old"), nil
+			case "compose":
+				composedUp = true
+				return []byte("ok"), nil
 			case "image":
 				return []byte("sha256:new"), nil
 			default:
