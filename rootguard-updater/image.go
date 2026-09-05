@@ -142,20 +142,29 @@ var errTargetOverrideNotAllowlisted = errors.New("target image override is not i
 // outbound connections to any registry - undermining the internet
 // isolation the attestation-proxy + `internal: true` `control` network
 // are specifically meant to guarantee, even though exploiting it already
-// requires the same trust tier as Core itself. Every override must stay
-// within the same repository as its service's own static TargetImage pin
-// (the legitimate use - see StartCheck's own doc comment - only ever
-// substitutes a live-resolved *version* of the identical image, never a
-// different one), checked once here rather than at every pull call site.
-func validateTargetOverrides(specs []serviceSpec, targetImages map[string]string) error {
+// requires the same trust tier as Core itself.
+//
+// Checked against attestationImagePrefix (attestation.go's own hardcoded
+// per-service GHCR repository), not against the service's own static
+// TargetImage pin - found live in CI right after the first version of
+// this fix landed: compose.integration.yaml's updater service pins
+// ROOTGUARD_CORE_UPDATE_IMAGE to the bare local "rootguard-core:dev" for
+// testing, but Core's live target resolver (WithTargetResolver, see
+// controlplane/client.go) always resolves the real
+// "ghcr.io/foxly-it/rootguard-core:<version>" from the public GitHub
+// Releases API regardless of environment - comparing against the local
+// dev pin rejected every legitimate override in that environment. The
+// attestation prefix map is the actual authoritative "what a real image
+// for this service looks like" and doesn't depend on whatever the local
+// static pin happens to be overridden to for testing.
+func validateTargetOverrides(targetImages map[string]string) error {
 	for name, image := range targetImages {
-		for _, spec := range specs {
-			if spec.Name != name {
-				continue
-			}
-			if allowed := repositoryOf(spec.TargetImage); repositoryOf(image) != allowed {
-				return fmt.Errorf("%w: %s override %q is not in repository %q", errTargetOverrideNotAllowlisted, name, image, allowed)
-			}
+		allowed, ok := attestationImagePrefix[name]
+		if !ok {
+			continue
+		}
+		if repositoryOf(image) != allowed {
+			return fmt.Errorf("%w: %s override %q is not in repository %q", errTargetOverrideNotAllowlisted, name, image, allowed)
 		}
 	}
 	return nil
