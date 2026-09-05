@@ -3,6 +3,47 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.0-rc.3] - 2026-09-05
+
+### Added
+
+- Bring rootguard-attestation-proxy into self-update management ([#484](https://github.com/foxly-it/rootguard/pull/484))
+
+### Documentation
+
+- Refresh stale README product-preview screenshots ([#409](https://github.com/foxly-it/rootguard/pull/409))
+- Note the 1.0.0-rc.2 cut in ROADMAP.md's 0.9 exit note ([#482](https://github.com/foxly-it/rootguard/pull/482))
+- Add rootguard-attestation-proxy to README's component table ([#486](https://github.com/foxly-it/rootguard/pull/486))
+- Catch up threat-model/architecture/site to the proxy's self-update status ([#487](https://github.com/foxly-it/rootguard/pull/487))
+- Summarize 2026-09-05 internal security review round (WIP, will finalize before push) ([#511](https://github.com/foxly-it/rootguard/pull/511))
+- Bring roadmap.html and index.html up to date ([#514](https://github.com/foxly-it/rootguard/pull/514))
+
+### Fixed
+
+- Give bump-site-versions.sh/check-site-facts.sh the version they're actively cutting ([#480](https://github.com/foxly-it/rootguard/pull/480))
+- Suppress newly-surfaced CVE-2026-16742 in rootguard-unbound's base image ([#485](https://github.com/foxly-it/rootguard/pull/485))
+- Share one self-update manager for updater and attestation-proxy ([#488](https://github.com/foxly-it/rootguard/pull/488))
+- Bump curl/libcurl apk pin to 8.22.0-r0 ([#506](https://github.com/foxly-it/rootguard/pull/506))
+- Log a warning when ROOTGUARD_SKIP_ATTESTATION disables attestation gates ([#500](https://github.com/foxly-it/rootguard/pull/500))
+- Anchor image-prefix policy check to the digest delimiter ([#501](https://github.com/foxly-it/rootguard/pull/501))
+- Rate-limit /api/router-import/fritzbox/discover ([#502](https://github.com/foxly-it/rootguard/pull/502))
+- Rate-limit /api/backups/restore/preview ([#503](https://github.com/foxly-it/rootguard/pull/503))
+- Rate-limit unbound forward-check and reverse-dns discover routes ([#504](https://github.com/foxly-it/rootguard/pull/504))
+- Fix self-referential relative bind-mount in compose.integration.yaml ([#508](https://github.com/foxly-it/rootguard/pull/508))
+- Validate target_images overrides against the pinned repository ([#509](https://github.com/foxly-it/rootguard/pull/509))
+- Verify the container image actually swapped after compose up ([#510](https://github.com/foxly-it/rootguard/pull/510))
+- Hard-block access-control rules that reach beyond private space ([#507](https://github.com/foxly-it/rootguard/pull/507))
+- Install-demo-section never collapsed to one column on mobile ([#513](https://github.com/foxly-it/rootguard/pull/513))
+- Bump libuuid apk pin to 2.41.6-r1 ([#515](https://github.com/foxly-it/rootguard/pull/515))
+
+### Maintenance
+
+- Bump the actions group across 1 directory with 2 updates ([#429](https://github.com/foxly-it/rootguard/pull/429))
+
+### Other
+
+- Bring current, disclose AI-assisted code review ([#489](https://github.com/foxly-it/rootguard/pull/489))
+
 ## [1.0.0-rc.2] - 2026-09-01
 
 ### Added
