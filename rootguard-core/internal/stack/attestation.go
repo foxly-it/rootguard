@@ -151,14 +151,27 @@ func CheckAttestationProxyReachable() error {
 
 func verifyReleaseAttestationWith(ctx context.Context, service, image string, run attestationRunner, now func() time.Time) (string, string) {
 	policy, supported := attestationPolicies[service]
-	// Anchored to "@" (every eligible image here is always digest-qualified,
-	// enforced by the strings.Contains check right after) so a same-prefix
-	// sibling image name (e.g. "rootguard-core-evil") can't pass the "core"
-	// policy just because "rootguard-core" is a string-prefix of it - found
-	// in review. Real exploitation still requires the image to separately
-	// pass cosign verification against the exact release workflow identity
-	// below, so this tightens a check rather than closing an active bypass.
-	if !supported || !strings.HasPrefix(image, policy.imagePrefix+"@") || !strings.Contains(image, "@sha256:") {
+	// Anchored to the delimiter immediately after the repo name - either
+	// "@" (a bare digest reference, what the self-update path's
+	// digestFromPullOutput produces) or ":" (a tag kept alongside the
+	// digest, what a release's own pre-pinned env vars carry, e.g.
+	// "ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.3@sha256:...") - so a
+	// same-prefix sibling image name (e.g. "rootguard-core-evil") can't
+	// pass the "core" policy just because "rootguard-core" is a string-
+	// prefix of it, found in review, without also rejecting the
+	// legitimate tag-carrying shape. Found live, breaking 1.0.0-rc.3's
+	// very first fresh install: the original "@"-only anchor rejected
+	// every installer-managed image (Unbound/AdGuard/Blockpage), which
+	// arrive already tag-qualified from .env.release.example and are
+	// never re-stripped of their tag - only the self-update path's own
+	// digest resolution happens to produce a tag-less reference. Real
+	// exploitation of the sibling-name gap still requires the image to
+	// separately pass cosign verification against the exact release
+	// workflow identity below, so this tightens a check rather than
+	// closing an active bypass.
+	afterPrefix, hasPrefix := strings.CutPrefix(image, policy.imagePrefix)
+	validAnchor := hasPrefix && len(afterPrefix) > 0 && (afterPrefix[0] == '@' || afterPrefix[0] == ':')
+	if !supported || !validAnchor || !strings.Contains(image, "@sha256:") {
 		return "not_applicable", ""
 	}
 
