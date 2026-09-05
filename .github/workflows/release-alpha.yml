@@ -713,8 +713,8 @@ jobs:
         run: |
           set -euo pipefail
           source scripts/lib/resolve-release-pin-commit.sh
-          if git diff --quiet -- compose.release.yaml .env.release.example site/; then
-            echo "compose.release.yaml, .env.release.example, and site/*.html already reflect the published release, nothing to commit"
+          if git diff --quiet -- compose.release.yaml .env.release.example site/ README.md; then
+            echo "compose.release.yaml, .env.release.example, site/*.html, and README.md already reflect the published release, nothing to commit"
             exit 0
           fi
 
@@ -729,8 +729,8 @@ jobs:
             # compare against what "Update digest pins" just regenerated.
             # Defense in depth against a forged or hand-crafted commit
             # that happens to pass every structural check above.
-            if ! git diff --quiet "$pin_commit" -- compose.release.yaml .env.release.example site/; then
-              echo "::error::${pin_commit} is verified as this exact release's own pin commit by message, parentage, and scope, but its content doesn't match what this run just regenerated for compose.release.yaml/.env.release.example/site/ - refusing to reuse it. Abort this release and start a fresh one instead." >&2
+            if ! git diff --quiet "$pin_commit" -- compose.release.yaml .env.release.example site/ README.md; then
+              echo "::error::${pin_commit} is verified as this exact release's own pin commit by message, parentage, and scope, but its content doesn't match what this run just regenerated for compose.release.yaml/.env.release.example/site/README.md - refusing to reuse it. Abort this release and start a fresh one instead." >&2
               exit 1
             fi
             echo "${pin_commit} is verified as this exact release's own earlier pin commit, still current on origin/main, with matching content - nothing to commit"
@@ -770,7 +770,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add compose.release.yaml .env.release.example site/
+          git add compose.release.yaml .env.release.example site/ README.md
           git commit -m "$(release_pin_commit_message "$VERSION")"
           git push origin HEAD:main
           # Recorded so the next steps can act on exactly this commit,

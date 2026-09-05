@@ -53,7 +53,7 @@
 # of them would have silently broken retry detection instead of failing
 # loudly. One function now, called from all three.
 release_pin_commit_message() {
-  echo "ci: pin compose.release.yaml, .env.release.example, and site/*.html to $1 [skip ci]"
+  echo "ci: pin compose.release.yaml, .env.release.example, site/*.html, and README.md to $1 [skip ci]"
 }
 
 resolve_release_pin_commit() {
@@ -119,9 +119,9 @@ resolve_release_pin_commit() {
   # defense in depth against a forged or corrupted commit that happens
   # to match both the message and the parentage checks above.
   local out_of_scope
-  out_of_scope="$(git diff --name-only "${source_ref}" "${candidate}" | grep -Ev '^(compose\.release\.yaml|\.env\.release\.example|site/)' || true)"
+  out_of_scope="$(git diff --name-only "${source_ref}" "${candidate}" | grep -Ev '^(compose\.release\.yaml|\.env\.release\.example|site/|README\.md)' || true)"
   if [[ -n "$out_of_scope" ]]; then
-    echo "${candidate} touches paths outside compose.release.yaml/.env.release.example/site/ - refusing to treat it as this release's own pin commit: ${out_of_scope}" >&2
+    echo "${candidate} touches paths outside compose.release.yaml/.env.release.example/site/README.md - refusing to treat it as this release's own pin commit: ${out_of_scope}" >&2
     return 1
   fi
 
@@ -146,8 +146,8 @@ resolve_release_pin_commit() {
   # main_ref's *current* tip - a pure git-ref comparison, no working-tree
   # regeneration needed, so this is safe to call before "Update digest
   # pins" has even run.
-  if ! git diff --quiet "${candidate}" "${main_ref}" -- compose.release.yaml .env.release.example site/; then
-    echo "${candidate} matches this release's own pin-commit message, shape, and scope, but ${main_ref}'s current tip (${main_sha}) no longer matches its content for compose.release.yaml/.env.release.example/site/ - something (a revert, a manual edit, or another process) changed these paths again since. Refusing to reuse a superseded pin commit" >&2
+  if ! git diff --quiet "${candidate}" "${main_ref}" -- compose.release.yaml .env.release.example site/ README.md; then
+    echo "${candidate} matches this release's own pin-commit message, shape, and scope, but ${main_ref}'s current tip (${main_sha}) no longer matches its content for compose.release.yaml/.env.release.example/site/README.md - something (a revert, a manual edit, or another process) changed these paths again since. Refusing to reuse a superseded pin commit" >&2
     return 1
   fi
 

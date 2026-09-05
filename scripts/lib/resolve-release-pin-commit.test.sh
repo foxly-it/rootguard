@@ -95,9 +95,12 @@ assert_resolves "$source_ref" "$version" main "$pin_commit" "retry right after t
 assert_resolves "${source_ref:0:10}" "$version" main "$pin_commit" "retry, SOURCE_REF given as an abbreviated SHA (parent comparison must still match)"
 
 # --- Scenario 4: retry after main has moved further still (an unrelated
-# commit landed after the pin commit) - must find the pin commit, not
-# main's new tip ---
-commit "docs: unrelated change" README.md >/dev/null
+# commit landed after the pin commit, on a path outside the pin commit's
+# own scope) - must find the pin commit, not main's new tip. Uses
+# src/main.go, not README.md - README.md joined the in-scope path set
+# (see Scenario 7b below), so a commit touching it now exercises the
+# content-staleness check instead of this one. ---
+commit "feat: unrelated change" src/main.go >/dev/null
 assert_resolves "$source_ref" "$version" main "$pin_commit" "retry after main moved further past the pin commit"
 
 # --- Scenario 5: a foreign commit that happens to touch the same three
@@ -148,6 +151,20 @@ git branch -f main out-of-scope
 git checkout -q main
 git branch -D out-of-scope >/dev/null
 assert_rejects "$source_ref" "$version" main "right message and parentage, but touches an out-of-scope path"
+
+# --- Scenario 7b: right message, direct child of SOURCE_REF, touches
+# compose.release.yaml/.env.release.example/site/*.html *and* README.md -
+# found live cutting 1.0.0-rc.3: README.md joined bump-site-versions.sh's
+# own scope, but this scope check (and release-alpha.yml's own "Commit
+# updated pins" step) never did, so a real pin commit touching it looked
+# structurally identical to an out-of-scope one until this fix. Must be
+# *accepted*, not rejected. ---
+git checkout -q -b readme-in-scope "$source_ref"
+readme_pin_commit="$(commit "$pin_message" compose.release.yaml .env.release.example site/index.html README.md)"
+git branch -f main readme-in-scope
+git checkout -q main
+git branch -D readme-in-scope >/dev/null
+assert_resolves "$source_ref" "$version" main "$readme_pin_commit" "right message, parentage, and scope including README.md"
 
 # --- Scenario 8 (round 8): a real pin commit, then `git revert`ed - the
 # exact scenario found live: a maintainer reverting a pin commit after a
