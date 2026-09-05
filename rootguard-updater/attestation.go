@@ -82,7 +82,9 @@ func checkAttestationProxyReachable() error {
 // environment).
 func verifyAttestation(ctx context.Context, service, image string) error {
 	prefix, ok := attestationImagePrefix[service]
-	if !ok || !strings.HasPrefix(image, prefix) || !strings.Contains(image, "@sha256:") {
+	// Anchored to "@" - see rootguard-core/internal/stack/attestation.go's
+	// identical fix and comment for the full rationale.
+	if !ok || !strings.HasPrefix(image, prefix+"@") || !strings.Contains(image, "@sha256:") {
 		return fmt.Errorf("%s (%s) is not eligible for attestation verification", service, image)
 	}
 	if err := checkAttestationProxyReachable(); err != nil {
