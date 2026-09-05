@@ -53,6 +53,7 @@ const (
 	auditBackupSettingsChanged           = "backup_settings_changed"
 	auditCleanupRun                      = "cleanup_run"
 	auditBackupExport                    = "backup_export"
+	auditBackupRestorePreview            = "backup_restore_preview"
 	auditBackupRestore                   = "backup_restore"
 	auditControlPlaneUpdateInstall       = "control_plane_update_install"
 	auditUpdaterSelfUpdateInstall        = "updater_self_update_install"
