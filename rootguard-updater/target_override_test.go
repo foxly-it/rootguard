@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -33,8 +34,9 @@ func TestDecodeTargetOverridesRejectsInvalidJSON(t *testing.T) {
 // fake docker runner does not recognize, so the check only succeeds if
 // the override is actually what gets pulled/inspected and reported.
 func TestControlPlaneCheckAppliesTargetImageOverride(t *testing.T) {
+	const resolved = "ghcr.io/foxly-it/rootguard-core:0.1.0-resolved"
 	current := map[string]string{"rootguard-core": "sha256:core-old"}
-	candidates := map[string]string{"core:resolved": "sha256:core-new"}
+	candidates := map[string]string{resolved: "sha256:core-new"}
 	run := func(_ context.Context, arguments ...string) ([]byte, error) {
 		switch {
 		case arguments[0] == "inspect":
@@ -49,7 +51,7 @@ func TestControlPlaneCheckAppliesTargetImageOverride(t *testing.T) {
 			return []byte(id), nil
 		case arguments[0] == "pull":
 			image := arguments[len(arguments)-1]
-			if image != "core:resolved" {
+			if image != resolved {
 				t.Fatalf("unexpected image pulled (override not applied): %q", image)
 			}
 			return []byte("ok"), nil
@@ -59,12 +61,17 @@ func TestControlPlaneCheckAppliesTargetImageOverride(t *testing.T) {
 		}
 	}
 	specs := []serviceSpec{{
+		// A local dev pin, deliberately in a different-looking repository
+		// than the resolved override - mirrors compose.integration.yaml's
+		// real ROOTGUARD_CORE_UPDATE_IMAGE ("rootguard-core:dev"), the
+		// exact shape that broke the first version of this allowlist
+		// check in CI (see validateTargetOverrides's doc comment).
 		Name: "core", DisplayName: "Core", Container: "rootguard-core",
-		TargetImage: "core:static-pin-should-not-be-used",
+		TargetImage: "rootguard-core:dev",
 		HealthURL:   "http://core/health",
 	}}
 	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", specs, run)
-	if _, err := manager.StartCheck(map[string]string{"core": "core:resolved"}); err != nil {
+	if _, err := manager.StartCheck(map[string]string{"core": resolved}); err != nil {
 		t.Fatal(err)
 	}
 	result := waitForState(t, manager, stateIdle)
@@ -72,7 +79,7 @@ func TestControlPlaneCheckAppliesTargetImageOverride(t *testing.T) {
 		t.Fatalf("expected one service result, got %#v", result.Services)
 	}
 	service := result.Services[0]
-	if service.TargetImage != "core:resolved" {
+	if service.TargetImage != resolved {
 		t.Fatalf("expected the override target image to be reported, got %q", service.TargetImage)
 	}
 	if !service.UpdateAvailable || service.CandidateID != "sha256:core-new" {
@@ -89,7 +96,7 @@ func TestControlPlaneCheckFallsBackToStaticPinWithoutOverride(t *testing.T) {
 		case "inspect":
 			return []byte("rootguard-core:old|sha256:core-old"), nil
 		case "pull":
-			if arguments[len(arguments)-1] != "core:static-pin" {
+			if arguments[len(arguments)-1] != "rootguard-core:dev" {
 				t.Fatalf("expected the static pin to be pulled, got %v", arguments)
 			}
 			return []byte("ok"), nil
@@ -102,16 +109,52 @@ func TestControlPlaneCheckFallsBackToStaticPinWithoutOverride(t *testing.T) {
 	}
 	specs := []serviceSpec{{
 		Name: "core", DisplayName: "Core", Container: "rootguard-core",
-		TargetImage: "core:static-pin",
+		TargetImage: "rootguard-core:dev",
 		HealthURL:   "http://core/health",
 	}}
 	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", specs, run)
-	if _, err := manager.StartCheck(map[string]string{"webapp": "webapp:resolved"}); err != nil {
+	if _, err := manager.StartCheck(map[string]string{"webapp": "ghcr.io/foxly-it/rootguard-webapp:0.1.0-resolved"}); err != nil {
 		t.Fatal(err)
 	}
 	result := waitForState(t, manager, stateIdle)
-	if result.Services[0].TargetImage != "core:static-pin" {
+	if result.Services[0].TargetImage != "rootguard-core:dev" {
 		t.Fatalf("expected the static pin unaffected, got %q", result.Services[0].TargetImage)
+	}
+}
+
+// TestControlPlaneRejectsOverrideOutsidePinnedRepository is the regression
+// test for a real gap found in review: target_images used to reach
+// `docker pull` completely unchecked, letting a holder of
+// ROOTGUARD_UPDATER_TOKEN force the host dockerd to pull from any
+// registry - undermining the internet isolation the attestation-proxy +
+// `internal: true` control network are meant to guarantee. Covers both a
+// completely different repository and a same-prefix sibling repository
+// (e.g. "rootguard-core-evil"), and confirms docker is never invoked at
+// all once the allowlist check has already failed. The service's own
+// static TargetImage pin is irrelevant to this check (see
+// validateTargetOverrides's doc comment for why) - left at a realistic
+// local-dev shape here to match how it's actually configured in practice.
+func TestControlPlaneRejectsOverrideOutsidePinnedRepository(t *testing.T) {
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		t.Fatalf("docker must never be invoked when the override fails the allowlist check, got %v", arguments)
+		return nil, nil
+	}
+	specs := []serviceSpec{{
+		Name: "core", DisplayName: "Core", Container: "rootguard-core",
+		TargetImage: "rootguard-core:dev",
+		HealthURL:   "http://core/health",
+	}}
+	for _, override := range []string{
+		"ghcr.io/attacker/evil-image:latest",
+		"ghcr.io/foxly-it/rootguard-core-evil:latest",
+	} {
+		manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", specs, run)
+		if _, err := manager.StartCheck(map[string]string{"core": override}); !errors.Is(err, errTargetOverrideNotAllowlisted) {
+			t.Fatalf("StartCheck: expected errTargetOverrideNotAllowlisted for %q, got %v", override, err)
+		}
+		if _, err := manager.StartUpdate(map[string]string{"core": override}); !errors.Is(err, errTargetOverrideNotAllowlisted) {
+			t.Fatalf("StartUpdate: expected errTargetOverrideNotAllowlisted for %q, got %v", override, err)
+		}
 	}
 }
 
