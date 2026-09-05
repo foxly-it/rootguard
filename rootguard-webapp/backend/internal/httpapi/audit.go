@@ -62,6 +62,8 @@ const (
 	auditAdGuardFilteringToggled         = "adguard_filtering_toggled"
 	auditAdGuardProtectionToggled        = "adguard_protection_toggled"
 	auditFritzBoxDiscover                = "fritzbox_discover"
+	auditUnboundForwardCheck             = "unbound_forward_check"
+	auditReverseDNSDiscover              = "reverse_dns_discover"
 )
 
 func (a *SessionAuth) recordAudit(event, username, remoteIP string) {
