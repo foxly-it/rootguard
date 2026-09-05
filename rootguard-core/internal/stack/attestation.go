@@ -151,7 +151,14 @@ func CheckAttestationProxyReachable() error {
 
 func verifyReleaseAttestationWith(ctx context.Context, service, image string, run attestationRunner, now func() time.Time) (string, string) {
 	policy, supported := attestationPolicies[service]
-	if !supported || !strings.HasPrefix(image, policy.imagePrefix) || !strings.Contains(image, "@sha256:") {
+	// Anchored to "@" (every eligible image here is always digest-qualified,
+	// enforced by the strings.Contains check right after) so a same-prefix
+	// sibling image name (e.g. "rootguard-core-evil") can't pass the "core"
+	// policy just because "rootguard-core" is a string-prefix of it - found
+	// in review. Real exploitation still requires the image to separately
+	// pass cosign verification against the exact release workflow identity
+	// below, so this tightens a check rather than closing an active bypass.
+	if !supported || !strings.HasPrefix(image, policy.imagePrefix+"@") || !strings.Contains(image, "@sha256:") {
 		return "not_applicable", ""
 	}
 
