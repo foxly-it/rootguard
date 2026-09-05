@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -220,8 +221,77 @@ func normalizeCustom(content string) (string, error) {
 		if key == "harden-dnssec-stripped" && !strings.EqualFold(directiveValue(line), "yes") {
 			return "", fmt.Errorf("%w: line %d: harden-dnssec-stripped must be set to yes (DNSSEC validation must not be weakened)", ErrInvalidCustomConfig, lineNumber+1)
 		}
+		// Not in blockedDirectives above because most access-control lines
+		// are legitimate (narrowing or widening the allowed LAN range) -
+		// adviseCustom below still flags those with a dismissible warning.
+		// Found in review: only a dismissible warning stood between an
+		// admin and turning the resolver into an internet-reachable open
+		// resolver (access-control: 0.0.0.0/0 allow, combined with the
+		// installer's own permitted DNSBindAddress: 0.0.0.0) - a classic
+		// DNS-amplification setup. This project already treats comparable
+		// footguns (DNSSEC downgrade above) as a hard refusal; an
+		// allow-rule whose range reaches beyond RFC1918/loopback/
+		// link-local space gets the same treatment. A rule that only
+		// narrows access (deny/refuse/*_non_local) is never blocked here,
+		// regardless of range - it can only take access away.
+		if key == "access-control" && accessControlGrantsNonPrivateAccess(directiveValue(line)) {
+			return "", fmt.Errorf("%w: line %d: access-control %q would let non-private clients query this resolver directly (open-resolver / DNS-amplification risk); restrict the range to RFC1918, loopback, or link-local space", ErrInvalidCustomConfig, lineNumber+1, directiveValue(line))
+		}
 	}
 	return content, nil
+}
+
+// privateAccessControlRanges are the ranges an access-control "allow*"
+// action is permitted to grant direct resolver access to. Deliberately
+// covers RFC1918 + loopback + link-local + IPv6 unique-local, matching
+// what a LAN-facing resolver actually needs - anything reaching beyond
+// this (including an unparseable range, which fails closed) is refused.
+var privateAccessControlRanges = []netip.Prefix{
+	netip.MustParsePrefix("10.0.0.0/8"),
+	netip.MustParsePrefix("172.16.0.0/12"),
+	netip.MustParsePrefix("192.168.0.0/16"),
+	netip.MustParsePrefix("127.0.0.0/8"),
+	netip.MustParsePrefix("169.254.0.0/16"),
+	netip.MustParsePrefix("::1/128"),
+	netip.MustParsePrefix("fc00::/7"),
+	netip.MustParsePrefix("fe80::/10"),
+}
+
+// accessControlGrantsNonPrivateAccess reports whether an access-control
+// directive's value (everything after the colon, e.g. "0.0.0.0/0 allow")
+// grants query access to any address outside privateAccessControlRanges.
+// Only "allow"-family actions (allow, allow_setrd, allow_snoop,
+// allow_cookie) actually grant access - deny/refuse/*_non_local only ever
+// restrict it, so those are never blocked regardless of range. A
+// malformed or unparseable range fails closed (treated as non-private):
+// this function only needs to prove a range is safe, not classify every
+// possible input.
+func accessControlGrantsNonPrivateAccess(value string) bool {
+	fields := strings.Fields(value)
+	if len(fields) < 2 || !strings.HasPrefix(strings.ToLower(fields[1]), "allow") {
+		return false
+	}
+	network, err := parseAccessControlRange(fields[0])
+	if err != nil {
+		return true
+	}
+	for _, private := range privateAccessControlRanges {
+		if network.Bits() >= private.Bits() && private.Contains(network.Addr()) {
+			return false
+		}
+	}
+	return true
+}
+
+func parseAccessControlRange(text string) (netip.Prefix, error) {
+	if prefix, err := netip.ParsePrefix(text); err == nil {
+		return prefix, nil
+	}
+	addr, err := netip.ParseAddr(text)
+	if err != nil {
+		return netip.Prefix{}, err
+	}
+	return netip.PrefixFrom(addr, addr.BitLen()), nil
 }
 
 func directiveKey(line string) string {

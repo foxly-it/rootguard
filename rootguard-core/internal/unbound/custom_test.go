@@ -125,6 +125,55 @@ func TestCustomConfigRejectsDNSSECBypasses(t *testing.T) {
 	}
 }
 
+// TestCustomConfigRejectsPublicAccessControl is the regression test for a
+// real gap found in review: access-control only ever produced a
+// dismissible "warning" advisory, even for a rule that turns the resolver
+// into an internet-reachable open resolver (access-control: 0.0.0.0/0
+// allow, combined with the installer's own permitted DNSBindAddress:
+// 0.0.0.0) - a classic DNS-amplification setup. DirectiveReferences
+// itself already documents access-control as "Risk: high".
+func TestCustomConfigRejectsPublicAccessControl(t *testing.T) {
+	for _, content := range []string{
+		"server:\n    access-control: 0.0.0.0/0 allow\n",
+		"server:\n    access-control: ::/0 allow\n",
+		// A single public host, not just a whole-internet range.
+		"server:\n    access-control: 8.8.8.8/32 allow\n",
+		"server:\n    access-control: 8.8.8.8 allow\n",
+		// Every allow-family action grants access, not just plain "allow".
+		"server:\n    access-control: 0.0.0.0/0 allow_snoop\n",
+		"server:\n    access-control: 0.0.0.0/0 allow_setrd\n",
+		"server:\n    access-control: 0.0.0.0/0 allow_cookie\n",
+		// A range partially outside RFC1918 must still be refused - it's
+		// not enough for the range to merely overlap a private one.
+		"server:\n    access-control: 192.168.0.0/8 allow\n",
+		// Unparseable ranges fail closed rather than being let through.
+		"server:\n    access-control: not-an-ip allow\n",
+	} {
+		if _, err := normalizeCustom(content); !errors.Is(err, ErrInvalidCustomConfig) {
+			t.Fatalf("expected policy rejection for %q, got %v", content, err)
+		}
+	}
+	// Legitimate LAN-range allow rules, and any range under a
+	// restricting action, must remain usable - this is a hard block on
+	// reaching beyond private space, not on the directive itself.
+	for _, content := range []string{
+		"server:\n    access-control: 192.168.1.0/24 allow\n",
+		"server:\n    access-control: 10.0.0.0/8 allow\n",
+		"server:\n    access-control: 127.0.0.1/32 allow\n",
+		"server:\n    access-control: ::1/128 allow\n",
+		"server:\n    access-control: fe80::/10 allow\n",
+		// deny/refuse/*_non_local only ever restrict access - never
+		// blocked regardless of range.
+		"server:\n    access-control: 0.0.0.0/0 refuse\n",
+		"server:\n    access-control: 0.0.0.0/0 deny\n",
+		"server:\n    access-control: 0.0.0.0/0 deny_non_local\n",
+	} {
+		if _, err := normalizeCustom(content); err != nil {
+			t.Fatalf("expected %q to remain accepted, got %v", content, err)
+		}
+	}
+}
+
 func TestCustomConfigRestoresFilesWhenEffectiveCheckFails(t *testing.T) {
 	manager := newTestManager(t)
 	initial := "server:\n    hide-identity: yes\n"
