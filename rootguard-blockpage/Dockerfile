@@ -43,7 +43,12 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # both from 8.20.0-r0 to 8.22.0-r0 and no longer carries the old build,
 # breaking every build again. Confirmed live against the pinned base
 # (`apk list -a`) that every other package below is still current;
-# only curl/libcurl needed bumping this round.
+# only curl/libcurl needed bumping this round. Also newly caught by
+# trivy in the same CI run, not by the apk pin (libuuid wasn't pinned at
+# all before): 6 HIGH util-linux/libuuid CVEs already fixed upstream at
+# 2.41.6-r0. Added to the pinned set rather than left to trivy's own
+# .trivyignore suppression, matching this file's existing policy of
+# fixing what's actually fixable over suppressing it.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.8-r0 \
         curl=8.22.0-r0 \
@@ -51,6 +56,7 @@ RUN apk add --no-cache --upgrade \
         libcrypto3=3.5.8-r0 \
         libssl3=3.5.8-r0 \
         libexpat=2.8.4-r0 \
+        libuuid=2.41.6-r0 \
         libxml2=2.13.9-r1 \
         nghttp2-libs=1.69.0-r0
 
