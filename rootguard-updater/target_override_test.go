@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -112,6 +113,39 @@ func TestControlPlaneCheckFallsBackToStaticPinWithoutOverride(t *testing.T) {
 	result := waitForState(t, manager, stateIdle)
 	if result.Services[0].TargetImage != "core:static-pin" {
 		t.Fatalf("expected the static pin unaffected, got %q", result.Services[0].TargetImage)
+	}
+}
+
+// TestControlPlaneRejectsOverrideOutsidePinnedRepository is the regression
+// test for a real gap found in review: target_images used to reach
+// `docker pull` completely unchecked, letting a holder of
+// ROOTGUARD_UPDATER_TOKEN force the host dockerd to pull from any
+// registry - undermining the internet isolation the attestation-proxy +
+// `internal: true` control network are meant to guarantee. Covers both a
+// completely different repository and a same-prefix sibling repository
+// (e.g. "rootguard-core-evil"), and confirms docker is never invoked at
+// all once the allowlist check has already failed.
+func TestControlPlaneRejectsOverrideOutsidePinnedRepository(t *testing.T) {
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		t.Fatalf("docker must never be invoked when the override fails the allowlist check, got %v", arguments)
+		return nil, nil
+	}
+	specs := []serviceSpec{{
+		Name: "core", DisplayName: "Core", Container: "rootguard-core",
+		TargetImage: "ghcr.io/foxly-it/rootguard-core:latest",
+		HealthURL:   "http://core/health",
+	}}
+	for _, override := range []string{
+		"ghcr.io/attacker/evil-image:latest",
+		"ghcr.io/foxly-it/rootguard-core-evil:latest",
+	} {
+		manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", specs, run)
+		if _, err := manager.StartCheck(map[string]string{"core": override}); !errors.Is(err, errTargetOverrideNotAllowlisted) {
+			t.Fatalf("StartCheck: expected errTargetOverrideNotAllowlisted for %q, got %v", override, err)
+		}
+		if _, err := manager.StartUpdate(map[string]string{"core": override}); !errors.Is(err, errTargetOverrideNotAllowlisted) {
+			t.Fatalf("StartUpdate: expected errTargetOverrideNotAllowlisted for %q, got %v", override, err)
+		}
 	}
 }
 

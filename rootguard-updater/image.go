@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 
 	"golang.org/x/mod/semver"
@@ -104,6 +106,59 @@ func imageRepo(image string) (repo string, ok bool) {
 		return "", false
 	}
 	return image[:lastColon], true
+}
+
+// repositoryOf returns image's repository (registry host/path, neither tag
+// nor digest) - unlike imageRepo above (deliberately left untouched: kept
+// in sync by hand with rootguard-core's copy for the pull/digest-
+// qualification use case, which only ever sees a bare "repo:tag"), this
+// also strips an "@sha256:..." digest suffix. Used only to validate a
+// target_images override (see validateTargetOverrides) against untrusted
+// input, which - unlike every value imageRepo itself is ever called with
+// today - could arrive in either shape.
+func repositoryOf(image string) string {
+	if at := strings.IndexByte(image, '@'); at != -1 {
+		image = image[:at]
+	}
+	if repo, ok := imageRepo(image); ok {
+		return repo
+	}
+	return image
+}
+
+// errTargetOverrideNotAllowlisted is returned by validateTargetOverrides -
+// mapped to 400 Bad Request in the HTTP handlers, distinct from every
+// other manager error (which the handlers already map to 409/500).
+var errTargetOverrideNotAllowlisted = errors.New("target image override is not in the repository this service is pinned to")
+
+// validateTargetOverrides is the registry/repo allowlist check found
+// missing in review: target_images (an override supplied in the POST body
+// of /api/control-plane/check|update, see decodeTargetOverrides) used to
+// reach `docker pull` completely unchecked - only the later
+// attestationVerifier call gated *activation*, not the pull itself. Since
+// `docker pull` runs against the host's dockerd over the Docker socket
+// (not inside this container's own network namespace), a holder of
+// ROOTGUARD_UPDATER_TOKEN could force the host dockerd to make arbitrary
+// outbound connections to any registry - undermining the internet
+// isolation the attestation-proxy + `internal: true` `control` network
+// are specifically meant to guarantee, even though exploiting it already
+// requires the same trust tier as Core itself. Every override must stay
+// within the same repository as its service's own static TargetImage pin
+// (the legitimate use - see StartCheck's own doc comment - only ever
+// substitutes a live-resolved *version* of the identical image, never a
+// different one), checked once here rather than at every pull call site.
+func validateTargetOverrides(specs []serviceSpec, targetImages map[string]string) error {
+	for name, image := range targetImages {
+		for _, spec := range specs {
+			if spec.Name != name {
+				continue
+			}
+			if allowed := repositoryOf(spec.TargetImage); repositoryOf(image) != allowed {
+				return fmt.Errorf("%w: %s override %q is not in repository %q", errTargetOverrideNotAllowlisted, name, image, allowed)
+			}
+		}
+	}
+	return nil
 }
 
 // isOlderReleaseVersion reports whether candidate is an older release than
