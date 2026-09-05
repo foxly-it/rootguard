@@ -38,10 +38,16 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # dependency now resolves only against the newer build, so the pin
 # outright broke every build (`apk`'s own "unable to select packages",
 # confirmed live in CI). Bumped to match what's actually installable.
+#
+# Found live, round 16: same story for curl/libcurl - the mirror moved
+# both from 8.20.0-r0 to 8.22.0-r0 and no longer carries the old build,
+# breaking every build again. Confirmed live against the pinned base
+# (`apk list -a`) that every other package below is still current;
+# only curl/libcurl needed bumping this round.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.8-r0 \
-        curl=8.20.0-r0 \
-        libcurl=8.20.0-r0 \
+        curl=8.22.0-r0 \
+        libcurl=8.22.0-r0 \
         libcrypto3=3.5.8-r0 \
         libssl3=3.5.8-r0 \
         libexpat=2.8.4-r0 \
