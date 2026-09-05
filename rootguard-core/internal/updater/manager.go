@@ -424,6 +424,9 @@ func (m *Manager) update(service string) {
 	}
 	err = m.composeUp(ctx, service)
 	if err == nil {
+		err = m.verifyImageSwapped(ctx, spec, candidateID)
+	}
+	if err == nil {
 		err = m.verifyWithRetry(ctx, service)
 	}
 	if err != nil {
@@ -640,6 +643,31 @@ func (m *Manager) inspectContainer(ctx context.Context, spec ServiceSpec) (strin
 		return "", "", fmt.Errorf("invalid image metadata for %s", spec.Container)
 	}
 	return parts[0], parts[1], nil
+}
+
+// verifyImageSwapped confirms composeUp actually recreated the container
+// against candidateID, not just that the compose command exited zero -
+// found in review: the per-service Verify callback (see cmd/rootguard/
+// main.go's Options) only ever checks functional health/reachability,
+// never the container's own image ID, so a "docker compose up -d
+// --no-deps <service>" that for any reason left the OLD container running
+// (a stale compose cache, an environment quirk) but still passing its
+// health check would be recorded as a successful update. Worst for
+// attestation-proxy specifically: its own Verify callback is a bare TCP
+// dial to the proxy port, which the old container would still answer.
+// The sibling module, rootguard-updater/manager.go's own verify(),
+// already does this ID comparison for its two managed services - this
+// closes the same gap here, uniformly for every service this Manager
+// manages rather than a special case for one.
+func (m *Manager) verifyImageSwapped(ctx context.Context, spec ServiceSpec, candidateID string) error {
+	_, currentID, err := m.inspectContainer(ctx, spec)
+	if err != nil {
+		return fmt.Errorf("verify image swap: %w", err)
+	}
+	if currentID != candidateID {
+		return fmt.Errorf("%s is still running %s after compose up, expected %s - the container was not actually recreated", spec.DisplayName, currentID, candidateID)
+	}
+	return nil
 }
 
 func (m *Manager) inspectImage(ctx context.Context, image string) (string, error) {

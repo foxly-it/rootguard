@@ -180,6 +180,7 @@ func TestUpdateUsesResolveTargetWhenSet(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	composedUp := false
 	manager := NewManager(Options{
 		DataDir: dataDir, ComposeDir: composeDir,
 		Services: []ServiceSpec{{
@@ -192,7 +193,16 @@ func TestUpdateUsesResolveTargetWhenSet(t *testing.T) {
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
 			case "inspect":
+				// Reflects the real container's own state: still on the old
+				// image until "compose up" actually recreates it - required
+				// for verifyImageSwapped's post-composeUp check.
+				if composedUp {
+					return []byte("rootguard-unbound:v1|sha256:new"), nil
+				}
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
+			case "compose":
+				composedUp = true
+				return []byte("ok"), nil
 			case "pull":
 				if arguments[len(arguments)-1] != "unbound:resolved" {
 					t.Fatalf("unexpected image pulled (resolver not used): %v", arguments)
