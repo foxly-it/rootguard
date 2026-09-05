@@ -3,6 +3,13 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.0-rc.4] - 2026-09-05
+
+### Fixed
+
+- Include README.md in the pin-commit's path scope ([#517](https://github.com/foxly-it/rootguard/pull/517))
+- CRITICAL - anchor accepts both tag-less and tag+digest image references ([#519](https://github.com/foxly-it/rootguard/pull/519))
+
 ## [1.0.0-rc.3] - 2026-09-05
 
 ### Added
