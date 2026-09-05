@@ -60,6 +60,12 @@ func main() {
 	var attestationVerifier installer.AttestationVerifierFunc
 	var updaterAttestationVerifier updater.AttestationVerifierFunc
 	if strings.EqualFold(os.Getenv("ROOTGUARD_SKIP_ATTESTATION"), "true") {
+		// Found in review: this used to flip silently, with nothing in the
+		// logs distinguishing a real deployment that lost every
+		// attestation gate from normal operation - a stray CI/E2E-sourced
+		// .env fragment or a stale debug override would go unnoticed
+		// indefinitely. This log line is the only observable signal.
+		log.Print("WARNING: attestation checks disabled via ROOTGUARD_SKIP_ATTESTATION - installation deploy, service updates, and self-update will accept unsigned/unattested images")
 		attestationVerifier = func(context.Context, string, string) error { return nil }
 		updaterAttestationVerifier = func(context.Context, string, string) error { return nil }
 	}
