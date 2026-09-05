@@ -117,10 +117,16 @@ func (m *manager) Status() status {
 // isolated control-plane updater - has outbound internet access); a
 // service with no entry keeps using its configured static pin.
 func (m *manager) StartCheck(targetImages map[string]string) (status, error) {
+	if err := validateTargetOverrides(targetImages); err != nil {
+		return status{}, err
+	}
 	return m.start(stateChecking, "Core- und WebApp-Images werden geprüft.", func() { m.check(targetImages) })
 }
 
 func (m *manager) StartUpdate(targetImages map[string]string) (status, error) {
+	if err := validateTargetOverrides(targetImages); err != nil {
+		return status{}, err
+	}
 	return m.start(stateUpdating, "Das atomare Control-Plane-Update wird vorbereitet.", func() { m.update(targetImages) })
 }
 
