@@ -290,18 +290,23 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleUnboundAdvice(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/unbound/forward-check", func(w http.ResponseWriter, r *http.Request) {
+	// Rate-limited like every other admin-triggered network probe in this
+	// file - found in review: these two trigger outbound network activity
+	// to admin-supplied targets/CIDR ranges with no rate limiting,
+	// letting a compromised session use RootGuard as an undrosselt scan
+	// proxy into the LAN.
+	mux.HandleFunc("POST /api/unbound/forward-check", dest(auditUnboundForwardCheck, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundForwardCheck(w, r, core)
-	})
+	}))
 	mux.HandleFunc("GET /api/unbound/network-capabilities", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundNetworkCapabilities(w, r, core)
 	})
 	mux.HandleFunc("POST /api/router-import/fritzbox/discover", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleFritzBoxDiscover(w, r, core)
 	})
-	mux.HandleFunc("POST /api/router-import/reverse-dns/discover", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/router-import/reverse-dns/discover", dest(auditReverseDNSDiscover, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleReverseDNSDiscover(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("GET /api/unbound/custom", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleGetUnboundCustom(w, r, core)
