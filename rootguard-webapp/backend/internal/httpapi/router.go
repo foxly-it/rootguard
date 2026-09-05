@@ -302,9 +302,14 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	mux.HandleFunc("GET /api/unbound/network-capabilities", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUnboundNetworkCapabilities(w, r, core)
 	})
-	mux.HandleFunc("POST /api/router-import/fritzbox/discover", func(w http.ResponseWriter, r *http.Request) {
+	// Rate-limited like every other mutating/credential-handling route -
+	// found in review: this one forwards a FritzBox address/username/
+	// password to Core unthrottled, unlike the rest of this file, letting
+	// a hijacked session brute-force the FritzBox password at unlimited
+	// rate through RootGuard as a proxy into the LAN.
+	mux.HandleFunc("POST /api/router-import/fritzbox/discover", dest(auditFritzBoxDiscover, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleFritzBoxDiscover(w, r, core)
-	})
+	}))
 	mux.HandleFunc("POST /api/router-import/reverse-dns/discover", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleReverseDNSDiscover(w, r, core)
 	})
