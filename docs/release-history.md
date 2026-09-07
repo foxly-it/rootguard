@@ -8,7 +8,7 @@ the security-review finding/fix journal.
 
 ## Release status
 
-`v1.0.0-rc.2` is the current public release, published with digest-pinned
+`v1.0.0-rc.4` is the current public release, published with digest-pinned
 `amd64`/`arm64` images for all six RootGuard components and a live-verified
 `upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
 complete and verified; 0.9 (release candidate) is in progress - see
@@ -666,4 +666,85 @@ callout's `0.1.0-beta.14` mention doesn't get flagged as a stale
 current-version claim - verified the callout's `1.0.0-rc.1` mentions
 still get checked and will auto-update via `bump-site-versions.sh` on
 every future release, same as everywhere else on the site.
+
+## `v1.0.0-rc.3`: published broken, pulled same day, `v1.0.0-rc.4` fixes it
+
+**2026-09-05.** An internal security/quality review round (10 findings,
+see `docs/security-audit-log.md`'s "Internal review, no external
+tooling" entry) was merged and `1.0.0-rc.3` cut immediately after. Within
+minutes of publishing, verifying the release live surfaced that
+**every fresh guided-setup install of `1.0.0-rc.3` failed** - `Clean
+install` CI failed on both `amd64`/`arm64` against the real published
+images, with no detail beyond "Installation failed" in the container
+logs.
+
+**Root cause:** one of that same review round's own fixes
+([rootguard#498](https://github.com/foxly-it/rootguard/pull/501),
+anchoring the attestation image-prefix check to `"@"` to close a
+same-prefix-sibling-image gap like `rootguard-core-evil`) was tested
+only against the self-update path's own image shape - a bare
+`repo@sha256:...`, always tag-less because `digestFromPullOutput`/
+`digestQualify` strip the tag before qualifying. It broke the
+completely different shape a release's own pre-pinned
+`.env.release.example` entries carry: `installer.Manager`'s
+`resolveDigest` returns an already-`@sha256:`-qualified image
+completely unchanged, and those static `ROOTGUARD_UNBOUND_IMAGE`/
+`ROOTGUARD_BLOCKPAGE_IMAGE` pins keep their tag alongside the digest -
+`ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.3@sha256:...`. The
+`"@"`-only anchor rejected every one of these as `not_applicable`,
+which `RequireAttestation` refuses to activate - even though the
+underlying cosign attestation was completely valid, confirmed live with
+a raw `cosign verify-attestation` call against the real published image
+outside of Core entirely.
+
+**Fixed** ([rootguard#519](https://github.com/foxly-it/rootguard/pull/519),
+same day): anchored to the delimiter immediately after the repo name
+(either `@` or `:`) instead of `"@"` alone, accepting both shapes while
+still rejecting a same-prefix sibling name. Regression tests added for
+the tag-plus-digest shape in both `rootguard-core/internal/stack` and
+`rootguard-updater`; revert-confirmed the fix reproduces the exact live
+failure without it.
+
+**A second, independent bug found in the same verification pass**
+([rootguard#517](https://github.com/foxly-it/rootguard/pull/517)):
+`release-alpha.yml`'s "Commit updated pins" step never staged
+`README.md`, even though `bump-site-versions.sh`'s own scope already
+covered it (it joined that scope after an earlier incident, see the
+`v0.1.0-beta.2`/`v0.1.0-beta.3` entries above) - the refreshed content
+was silently discarded every release. Fixed the git-add scope in
+`release-alpha.yml` and the identical gap in
+`scripts/lib/resolve-release-pin-commit.sh`'s own retry-detection logic
+(which would otherwise have started rejecting every future pin commit
+as "out of scope" the moment README.md legitimately joined it).
+
+**Recovery, same day:** `v1.0.0-rc.3`'s GitHub Release and git tag were
+both deleted (the commit itself stays in `main`'s history, only the tag
+pointer is gone) specifically because `release-alpha.yml`'s own
+`upgrade-test` job resolves its "previous release" baseline purely from
+`git for-each-ref refs/tags/v*` - as long as the `v1.0.0-rc.3` tag
+existed, every future release's `upgrade-test` would fail at its very
+first step (deploying rc.3 fresh, which is exactly the broken behavior
+above), regardless of how correct the new candidate was. Confirmed this
+live: the first `1.0.0-rc.4` cut attempt failed `upgrade-test` for
+exactly this reason before the tag was removed. With `v1.0.0-rc.2`
+correctly resolving as the new "previous release," `1.0.0-rc.4` was cut
+via `release-alpha.yml`'s documented manual-dispatch escape hatch
+(`version=1.0.0-rc.4`, reusing the changelog/version-bump commit the
+first attempt had already produced) and published fully green -
+`upgrade-test` and `smoke-test` both passed, and a manually-triggered
+`clean-install.yml` run against the real published images confirmed the
+fresh-install fix live.
+
+**Lesson:** a fix tested against only one of two legitimate production
+reference shapes for the same value (here: digest-qualified image
+references, tag-less on one code path and tag-plus-digest on another)
+can pass every unit test and still break the untested shape in
+production. When a value can arrive in more than one real shape from
+different call sites, write test fixtures for *every* shape actually in
+use, not just the one the change was written against - the same lesson
+`docs/security-audit-log.md` already drew once this session for a
+different reference-shape gap (issue #498's own `repo:tag@sha256`
+fixture correction), which is exactly the fixture shape that would have
+caught this one, too, had it been checked in both directions instead of
+corrected in only one.
 
