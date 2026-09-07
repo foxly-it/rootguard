@@ -1191,6 +1191,19 @@ itself) blocking merges via branch protection. Full narrative:
 `docs/security-audit-log.md`'s "Internal review, no external tooling"
 entry.
 
+**`v1.0.0-rc.3` (2026-09-05) was published broken and pulled the same
+day; `v1.0.0-rc.4` fixes it.** One of the review round's own fixes above
+(the attestation image-prefix anchor) was tested against only one of
+two legitimate production reference shapes, breaking every fresh
+guided-setup install of rc.3. Found live within minutes of publishing,
+fixed same-day, `v1.0.0-rc.3`'s tag/release deleted (its own git commit
+stays in history) since `upgrade-test` resolves its "previous release"
+baseline from git tags and would otherwise fail on every future cut.
+`v1.0.0-rc.4` is the current release, fully green including a live
+fresh-install re-verification. Full incident narrative:
+`docs/release-history.md`'s "`v1.0.0-rc.3`: published broken, pulled
+same day" entry.
+
 ---
 
 ## 1.0.0 — stable Docker appliance
