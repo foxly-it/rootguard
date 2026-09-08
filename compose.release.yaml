@@ -69,16 +69,26 @@ services:
       # tag with no digest pin and no attestation ever checked, unlike
       # core/webapp/unbound/the updater.
       ROOTGUARD_BLOCKPAGE_IMAGE: "${ROOTGUARD_BLOCKPAGE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:1.0.0-rc.4@sha256:8993b0ab60fb4a9384c14dc452dd4124dd665bf58c0f8e0139cd05c29bc0dffb}"
+      # Found in review: Blockpage had no ServiceSpec in either update
+      # manager at all, so an installation could only ever get a
+      # Blockpage fix via reinstall or a manual compose refresh - unlike
+      # every other RootGuard-built component. Same digest-pinned,
+      # refreshed-every-release treatment as ROOTGUARD_UNBOUND_UPDATE_IMAGE
+      # right below (live GitHub Releases discovery is the primary
+      # source; this pin is only the fallback for when that lookup fails).
+      ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE: "${ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:1.0.0-rc.4@sha256:8993b0ab60fb4a9384c14dc452dd4124dd665bf58c0f8e0139cd05c29bc0dffb}"
       ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.0-rc.4@sha256:3bec502f2127ce5cf8445836c8072ffd95b4104018ed3b23120e6e069654d562}"
       ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
-      # Unlike the digest-pinned images above, this stays an unpinned :latest
-      # fallback deliberately - it's only used if live GitHub Releases
-      # discovery fails (see ROOTGUARD_SELF_UPDATE_DIR below), so a
-      # self-refreshing tag is preferable to a snapshot that would need its
-      # own release-pipeline pin-refresh step for a value that's never the
-      # primary source of truth.
+      # Found in review: this comment used to claim the value below stays
+      # an unpinned :latest fallback, but it's digest-pinned right here
+      # like every other value above and refreshed by the same
+      # update-alpha-pins step (it iterates every managed component
+      # generically, this one included) - stale ever since it was first
+      # digest-pinned. Live GitHub Releases discovery
+      # (ROOTGUARD_SELF_UPDATE_DIR below) is still the primary source;
+      # this pin is only the fallback for when that lookup fails.
       ROOTGUARD_UPDATER_UPDATE_IMAGE: "${ROOTGUARD_UPDATER_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-updater:1.0.0-rc.4@sha256:9d5bc2b011a7efde60f47ac07ff6ef4bfcb1d2355fdab52429fd5c0332cbe8d4}"
       # Same fallback rationale as ROOTGUARD_UPDATER_UPDATE_IMAGE above -
       # live GitHub Releases discovery is the primary source

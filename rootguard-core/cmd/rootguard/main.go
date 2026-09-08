@@ -65,6 +65,43 @@ func githubReleaseTransport() http.RoundTripper {
 	return transport
 }
 
+// checkBlockpageHealthy is Blockpage's ServiceSpec.Verify callback,
+// checked after composeUp before an update/self-update is reported
+// successful - same role as adguardManager.Status() and
+// manager.Diagnose() for AdGuard/Unbound above. Blockpage has no
+// backend or auth to query (see rootguard-blockpage's own README), so
+// this reaches over the shared `rootguard-dns` network for the exact
+// endpoint its own Dockerfile HEALTHCHECK already uses.
+// ROOTGUARD_BLOCKPAGE_HEALTH_URL exists for tests, same convention as
+// adguard.NewManager's own ADGUARD_API_URL parameter above.
+func checkBlockpageHealthy(ctx context.Context) error {
+	url := envOrDefault("ROOTGUARD_BLOCKPAGE_HEALTH_URL", "http://rootguard-blockpage:8080/clientip.txt")
+	return checkBlockpageHealthyAt(ctx, url)
+}
+
+// checkBlockpageHealthyAt does the actual request - split out from
+// checkBlockpageHealthy so tests can point it at a local httptest
+// server without depending on env vars or real DNS. A dedicated client,
+// not the shared githubClient: githubClient's Transport unconditionally
+// routes every request through rootguard-attestation-proxy, which would
+// refuse this internal, non-allowlisted host outright.
+func checkBlockpageHealthyAt(ctx context.Context, url string) error {
+	client := &http.Client{Timeout: 5 * time.Second}
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("blockpage health check: %w", err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("blockpage health check: unexpected status %s", response.Status)
+	}
+	return nil
+}
+
 func main() {
 	token := os.Getenv("ROOTGUARD_API_TOKEN")
 	if token == "" {
@@ -175,6 +212,21 @@ func main() {
 					GID:    101,
 				}},
 			},
+			{
+				// No BackupPaths: read_only and stateless (nginx serving
+				// static content only), nothing to snapshot before a swap -
+				// same reasoning as the attestation-proxy ServiceSpec below.
+				// Found in review: Blockpage previously had no ServiceSpec
+				// at all, so an installation could only ever get a
+				// Blockpage fix via reinstall or a manual compose refresh,
+				// unlike every other RootGuard-built component.
+				Name: "blockpage", DisplayName: "Blockpage",
+				Container:   "rootguard-blockpage",
+				TargetImage: envOrDefault("ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
+				ResolveTarget: func(ctx context.Context) (string, error) {
+					return updater.ResolveLatestReleaseImage(ctx, githubClient, "blockpage")
+				},
+			},
 		},
 		Verify: func(ctx context.Context, service string) error {
 			switch service {
@@ -191,6 +243,8 @@ func main() {
 				if !report.Healthy {
 					return fmt.Errorf("unbound diagnostics failed")
 				}
+			case "blockpage":
+				return checkBlockpageHealthy(ctx)
 			default:
 				return fmt.Errorf("unknown service %q", service)
 			}

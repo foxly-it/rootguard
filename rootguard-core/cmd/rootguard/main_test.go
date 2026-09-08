@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"testing"
 )
@@ -36,6 +38,34 @@ func TestGithubReleaseTransport(t *testing.T) {
 		t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "://not-a-valid-url")
 		if got := githubReleaseTransport(); got != http.DefaultTransport {
 			t.Errorf("expected http.DefaultTransport fallback, got %T", got)
+		}
+	})
+}
+
+func TestCheckBlockpageHealthyAt(t *testing.T) {
+	t.Run("200 OK is healthy", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+		if err := checkBlockpageHealthyAt(context.Background(), server.URL); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("non-200 status is unhealthy", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+		if err := checkBlockpageHealthyAt(context.Background(), server.URL); err == nil {
+			t.Fatal("expected an error for a non-200 status")
+		}
+	})
+
+	t.Run("unreachable server is unhealthy", func(t *testing.T) {
+		if err := checkBlockpageHealthyAt(context.Background(), "http://127.0.0.1:1"); err == nil {
+			t.Fatal("expected an error for an unreachable server")
 		}
 	})
 }

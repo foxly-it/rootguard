@@ -136,11 +136,13 @@ credentials, and a public administration port remain excluded.
 
 ## Controlled container updates
 
-The Stack area can only check and update the DNS services AdGuard Home
-and Unbound, both fixed in Core's allowlist. Browser requests can specify
-neither image names, Compose arguments, nor containers. A check pulls the
-server-side configured target image and compares its actual image ID
-against the running container.
+The Stack area can only check and update the DNS-plane services AdGuard
+Home, Unbound, and Blockpage, all fixed in Core's allowlist (Blockpage
+joined 2026-09-08 - found in review that it previously had no update path
+at all, unlike every other RootGuard-built component). Browser requests
+can specify neither image names, Compose arguments, nor containers. A
+check pulls the server-side configured target image and compares its
+actual image ID against the running container.
 
 Before a swap, Core copies the persistent service paths into its
 protected data volume. Exactly one Compose service is then replaced and
