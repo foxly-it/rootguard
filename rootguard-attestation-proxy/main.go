@@ -10,9 +10,11 @@
 // HTTPS to a handful of real internet hosts, something `control`'s own
 // isolation otherwise makes impossible.
 //
-// This binary is the one, narrow, auditable bridge for exactly that:
-// a hardcoded 3-host allowlist (see allowlist.go), CONNECT-tunnel only,
-// nothing else. It never terminates TLS itself (a pure byte-copying
+// This binary is the one, narrow, auditable bridge for exactly that
+// (plus Core's GitHub Releases self-update-discovery check, the only
+// other outbound call on this isolated network): a hardcoded 4-host
+// allowlist (see allowlist.go), CONNECT-tunnel only, nothing else. It
+// never terminates TLS itself (a pure byte-copying
 // tunnel), so it needs no CA certificates, no shell, no OS at all - it
 // ships on a `scratch` base, the smallest possible RootGuard image.
 package main

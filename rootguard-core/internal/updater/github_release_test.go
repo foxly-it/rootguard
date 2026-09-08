@@ -344,6 +344,28 @@ func TestDigestFromPullOutputReturnsFalseWithoutADigestLine(t *testing.T) {
 	}
 }
 
+// TestDigestFromPullOutputLeavesAlreadyQualifiedImagesUnchanged is the
+// regression test for a real bug found live verifying the rootguard#525
+// fix: an already-qualified static pin (AdGuard's, which never goes
+// through live release discovery) reached imageRepo unguarded. Its
+// colon-splitting only accounts for a tag separator, not a digest's own
+// internal colon, so it mis-split the reference and this function
+// appended a second "@sha256:..." on top of the first, producing an
+// invalid, doubled reference like
+// "adguard/adguardhome:v0.107.79@sha256@sha256:...".
+func TestDigestFromPullOutputLeavesAlreadyQualifiedImagesUnchanged(t *testing.T) {
+	image := "adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0"
+	output := []byte("v0.107.79: Pulling from adguard/adguardhome\n" +
+		"Digest: sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0\n")
+	got, ok := digestFromPullOutput(image, output)
+	if !ok {
+		t.Fatal("expected the already-qualified image to be returned as-is")
+	}
+	if got != image {
+		t.Fatalf("got %q, want %q unchanged", got, image)
+	}
+}
+
 // TestImageRepoHandlesRegistryPort is the regression test for a follow-up
 // review finding: strings.Cut(image, ":") (first colon), previously used
 // by both digestQualify and digestFromPullOutput above, mis-split any

@@ -138,16 +138,18 @@ network):** Access to internal interfaces that aren't meant to be public
   network-isolated.
 - `control`'s own internet isolation stays total except for one narrow,
   auditable path: `rootguard-attestation-proxy`, a CONNECT-only forward
-  proxy with a hardcoded, 3-host allowlist (`ghcr.io`,
+  proxy with a hardcoded, 4-host allowlist (`ghcr.io`,
   `pkg-containers.githubusercontent.com`, `tuf-repo-cdn.sigstore.dev` -
   exactly what cosign's own attestation verification needs, empirically
-  confirmed, nothing more). It's defense-in-depth, not an authentication
-  boundary - Core and the Updater, the only two callers that can reach
-  it, already hold the Docker socket and run as root, i.e. already have
-  full host privilege; the point is keeping `control` itself provably
-  internet-isolated while making the one legitimate egress path explicit
-  rather than reopening internet access wholesale. See
-  `rootguard-attestation-proxy/README.md` for the full design.
+  confirmed, nothing more - plus `api.github.com` for Core's GitHub
+  Releases self-update-discovery check, see below). It's defense-in-depth,
+  not an authentication boundary - Core and the Updater, the only two
+  callers that can reach it, already hold the Docker socket and run as
+  root, i.e. already have full host privilege; the point is keeping
+  `control` itself provably internet-isolated while making the one
+  legitimate egress path explicit rather than reopening internet access
+  wholesale. See `rootguard-attestation-proxy/README.md` for the full
+  design.
 
 **Known residual risks / open:**
 - Whoever can already start arbitrary containers *on the same Docker
@@ -208,12 +210,16 @@ path instead of directly.
   instance - the swap only happens after that succeeds, so there's no
   bootstrapping gap.
 - Core's own GitHub Releases self-update-discovery check
-  (`internal/updater/github_release.go`, `api.github.com`) has the same
+  (`internal/updater/github_release.go`, `api.github.com`) had the same
   `control`-network isolation problem `rootguard-attestation-proxy` was
-  built to solve for cosign, but for a different host that doesn't fit
-  the proxy's narrow allowlist - it already degrades gracefully (falls
-  back to the static image pin) rather than failing, so this is a known,
-  accepted, permanently-degraded-mode gap, not an outage risk.
+  built to solve for cosign, but for a different host that didn't fit
+  the proxy's narrow allowlist - found in an external code review
+  (2026-09-08): the check silently degraded to the static image pin on
+  every run in the real release topology, since it could never actually
+  reach `api.github.com`. Fixed by adding `api.github.com` to the
+  proxy's allowlist and routing the check's HTTP client through it
+  (`githubReleaseTransport` in `cmd/rootguard/main.go`), the same way
+  `runAttestationCommand` already did for cosign.
 - No SBOM/provenance for every release - now delivered, see
   `docs/compatibility-matrix.md` and ROADMAP.md 0.6 - which makes forensic
   analysis of an affected release possible after the fact.

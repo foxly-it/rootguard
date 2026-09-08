@@ -1,14 +1,15 @@
 # Contributing to RootGuard Attestation Proxy
 
 This component is intentionally tiny and narrowly scoped: a CONNECT-only
-forward proxy with a hardcoded, 3-host allowlist, existing purely so
+forward proxy with a hardcoded, 4-host allowlist, existing purely so
 Core/the Updater can reach the internet for cosign's own attestation
-verification without `control`'s own network isolation being reopened
-wholesale. Before opening a pull request:
+verification and Core's GitHub Releases self-update-discovery check,
+without `control`'s own network isolation being reopened wholesale.
+Before opening a pull request:
 
 1. never widen the allowlist without live confirmation of what host a
-   real, successful `cosign verify-attestation` call actually needs -
-   don't guess or "just to be safe" add a host;
+   real, successful call actually needs - don't guess or "just to be
+   safe" add a host;
 2. never add general-purpose HTTP proxying, only CONNECT tunneling;
 3. never terminate TLS here - this proxy must stay content-blind to
    everything except the CONNECT target itself;

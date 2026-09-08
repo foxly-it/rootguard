@@ -1258,6 +1258,22 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       already use the expert editor today, while a future guided surface must
       conflict-check zones, forwarding, and expert configuration before it can
       activate.
+- [ ] Give self-update a real compose-topology migration path. Today it only
+      ever swaps container *images* in place against whatever
+      `compose.release.yaml` already exists on disk (documented in
+      `docs/release-process.md`, "Self-update can never deliver a
+      compose-topology change") - a release that adds a new service, network,
+      mount, or env var (like `rootguard-attestation-proxy`/`egress` in
+      `1.0.0-rc.2`) can never reach an installation that updated via the
+      WebGUI alone; only a fresh install or a manual compose refresh can
+      cross it. `RequireAttestation`/`CheckAttestationProxyReachable` already
+      turn this into a clear, actionable error instead of a hang or a generic
+      cosign network failure, but that's a diagnosis, not a fix. Flagged
+      again in an external code review (2026-09-08); three candidate
+      directions, unevaluated so far: a signed compose migration mechanism,
+      a bootstrapper process outside the stack itself, or a clearly guided,
+      manual pre-update compose refresh step surfaced in the WebGUI before
+      the image swap runs.
 
 ## How we work with this roadmap
 

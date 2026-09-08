@@ -24,12 +24,14 @@ running it standalone.
 - **CONNECT-only.** No plain HTTP proxying, no TLS termination - the
   proxy is content-blind to everything past the CONNECT line itself.
   This isn't a MITM proxy.
-- **Hardcoded, 3-host allowlist**, port 443 only: `ghcr.io` (registry
+- **Hardcoded, 4-host allowlist**, port 443 only: `ghcr.io` (registry
   API), `pkg-containers.githubusercontent.com` (GHCR blob storage),
   `tuf-repo-cdn.sigstore.dev` (Sigstore trust-root bootstrap) - the
   exact, empirically-confirmed set a real `cosign verify-attestation`
-  call needs, no more. See `allowlist.go`'s own comment for how that set
-  was derived.
+  call needs, no more - plus `api.github.com`, reused by Core's GitHub
+  Releases self-update-discovery check, the only other outbound call on
+  the isolated `control` network. See `allowlist.go`'s own comment for
+  how that set was derived.
 - **Not an authentication boundary.** Every process that can reach this
   proxy (Core, the Updater) already holds the Docker socket and runs as
   root - i.e. already has full host privilege. The allowlist is

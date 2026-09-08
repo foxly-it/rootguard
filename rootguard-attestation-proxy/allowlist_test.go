@@ -12,6 +12,7 @@ func TestIsAllowed(t *testing.T) {
 		{"ghcr.io allowed", "ghcr.io", "443", true},
 		{"pkg-containers allowed", "pkg-containers.githubusercontent.com", "443", true},
 		{"tuf-cdn allowed", "tuf-repo-cdn.sigstore.dev", "443", true},
+		{"github api allowed", "api.github.com", "443", true},
 		{"unlisted host rejected", "example.com", "443", false},
 		{"unlisted host rejected even with a trailing-dot lookalike", "ghcr.io.evil.example", "443", false},
 		{"allowed host, wrong port rejected", "ghcr.io", "80", false},
