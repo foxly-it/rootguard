@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -209,25 +211,68 @@ func TestCheckAttestationProxyReachableConfiguredButUnreachable(t *testing.T) {
 }
 
 func TestCheckAttestationProxyReachableConfiguredAndUp(t *testing.T) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	defer ln.Close()
-	go func() {
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			conn.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
+			w.WriteHeader(http.StatusOK)
+			return
 		}
-	}()
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
 
-	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "http://"+ln.Addr().String())
+	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", server.URL)
 	if err := CheckAttestationProxyReachable(); err != nil {
-		t.Fatalf("expected no error against a real, reachable listener: %v", err)
+		t.Fatalf("expected no error against a real, healthy /healthz endpoint: %v", err)
 	}
+}
+
+// TestCheckAttestationProxyReachableConfiguredButUnhealthy is the
+// regression test for the fix itself, found in review: a bare TCP
+// connect used to be enough to pass this check, even against something
+// that merely accepts connections without ever answering /healthz (a
+// misconfigured listener, or a process that speaks a completely
+// different protocol on the same port) - the real cosign call would
+// then fail anyway, with only its own generic network-error text. A
+// listener that accepts but never speaks HTTP at all must now fail this
+// check, not just one that answers with a non-200 status.
+func TestCheckAttestationProxyReachableConfiguredButUnhealthy(t *testing.T) {
+	t.Run("non-200 healthz response", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+
+		t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", server.URL)
+		err := CheckAttestationProxyReachable()
+		if err == nil {
+			t.Fatal("expected an error against a non-200 /healthz response")
+		}
+		if !strings.Contains(err.Error(), "unhealthy") {
+			t.Fatalf("expected the unhealthy-specific message, got: %v", err)
+		}
+	})
+
+	t.Run("accepts connections but never speaks HTTP", func(t *testing.T) {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatalf("listen: %v", err)
+		}
+		defer ln.Close()
+		go func() {
+			for {
+				conn, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				conn.Close()
+			}
+		}()
+
+		t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "http://"+ln.Addr().String())
+		if err := CheckAttestationProxyReachable(); err == nil {
+			t.Fatal("expected an error against a listener that never answers /healthz")
+		}
+	})
 }
 
 // TestRequireAttestationFailsClearlyWithoutCallingCosignWhenProxyMissing
