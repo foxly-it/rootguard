@@ -648,7 +648,7 @@ jobs:
           # .services[].image already covers attestation-proxy too - it
           # has an `image:` key like every other service, no separate
           # line needed.
-          test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
+          test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
           test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false
           # Found in review: nothing ever automated-checked that Core
           # and the Updater actually get ROOTGUARD_ATTESTATION_PROXY_URL
