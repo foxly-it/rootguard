@@ -154,7 +154,11 @@ func CheckAttestationProxyReachable() error {
 		return errors.New("no attestation proxy configured (ROOTGUARD_ATTESTATION_PROXY_URL is unset) - this installation's compose topology likely predates rootguard-attestation-proxy; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md")
 	}
 	client := &http.Client{
-		Transport: &http.Transport{Dial: dialProxy},
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, network, addr string) (net.Conn, error) {
+				return dialProxy(network, addr)
+			},
+		},
 		Timeout:   3 * time.Second,
 	}
 	response, err := client.Get(strings.TrimSuffix(proxyURL, "/") + "/healthz")
