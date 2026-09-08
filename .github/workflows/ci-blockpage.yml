@@ -97,6 +97,8 @@ jobs:
       - name: Verify the page serves and enforces its security headers
         run: |
           docker run -d --name blockpage-ci -p 18080:8080 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in $(seq 1 30); do
             if curl --fail --silent --output /dev/null http://127.0.0.1:18080/; then break; fi
             sleep 1

@@ -122,6 +122,8 @@ jobs:
 
       - name: Wait for WebApp
         run: |
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..60}; do
             login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
               --cookie-jar /tmp/rootguard-ci-cookies.txt \
@@ -148,6 +150,8 @@ jobs:
         run: |
           curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
             --request POST http://127.0.0.1:18080/api/control-plane-updates/check >/dev/null
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             status="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt \
               http://127.0.0.1:18080/api/control-plane-updates)"
@@ -168,6 +172,8 @@ jobs:
       - name: Wire the resolver up to the local DNSSEC test zone
         run: |
           ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
               exit 0
@@ -388,6 +394,8 @@ jobs:
             --cookie /tmp/rootguard-ci-cookies.txt \
             http://127.0.0.1:18080/api/auth/session)" = "401"
           docker compose -f compose.integration.yaml restart webapp
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
               --cookie-jar /tmp/rootguard-ci-recovered-cookies.txt \

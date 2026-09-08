@@ -155,22 +155,9 @@ body{overflow-x:hidden}
 }
 @media(min-width:1021px) and (hover:hover) and (pointer:fine){
   .hero .dashboard-current{
-    /* Resting state is deliberately untransformed, not a subtle
-       rotateZ(1deg) - found live, reported twice by the user on a real
-       1080p Windows 11/Edge display: *any* non-zero rotation angle,
-       however small, takes every glyph and border in this box off the
-       pixel grid, forcing sub-pixel anti-aliasing on all of it. That's
-       highly visible at the small text sizes used throughout this
-       mockup (7-11px) on a standard, non-HiDPI 100%-scale display,
-       independent of the GPU-layer-promotion issue already fixed
-       separately (backface-visibility/will-change scoping below) -
-       that fix alone wasn't enough, confirmed live. The tilt still
-       happens, just only transiently: the entrance swoosh (below) and
-       the hover tilt (:hover, below) each end or hold on an actual
-       rotation for well under a second at a time, where the same
-       softness is far less noticeable than it is as a permanent
-       resting state users are meant to actually read.
-    */
+    /* Untransformed at rest, not a subtle rotateZ(1deg): found live on
+       real 1080p Windows/Edge - any non-zero angle takes text/borders
+       off the pixel grid, independent of the GPU-layer fix below. */
     transform-style:preserve-3d;
     backface-visibility:hidden;
     transition:transform 280ms ease-in-out,box-shadow 280ms ease-in-out;

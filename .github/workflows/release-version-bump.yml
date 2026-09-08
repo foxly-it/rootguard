@@ -137,9 +137,11 @@ jobs:
           # next_version equals latest_tag's own version.
           source scripts/lib/semver-compare.sh
           require_new_version "$next_version" "${latest_tag#v}"
-          echo "latest_tag=${latest_tag}" >> "$GITHUB_OUTPUT"
-          echo "version=${next_version}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${next_version}" >> "$GITHUB_OUTPUT"
+          {
+            echo "latest_tag=${latest_tag}"
+            echo "version=${next_version}"
+            echo "tag=v${next_version}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install git-cliff
         env:

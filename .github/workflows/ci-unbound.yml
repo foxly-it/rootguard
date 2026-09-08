@@ -125,6 +125,8 @@ jobs:
 
       - name: Verify recursive DNS and DNSSEC
         run: |
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound-ci)" = "healthy"; then
               break
