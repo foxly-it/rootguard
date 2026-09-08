@@ -71,3 +71,34 @@ func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http
 		}
 	}
 }
+
+// guardRestoreUpload wraps guardDestructive with an additional, much
+// tighter concurrency-only gate (restoreLimiter, see its construction in
+// NewSessionAuth) specifically for backup-restore and restore-preview -
+// found in review: the shared destructiveLimiter's 30-per-5-minutes
+// budget, combined with restore's own ~1 GiB per-request cap, let a
+// single session have up to ~30 GiB of restore uploads in flight at
+// once. Checked outside guardDestructive (before its own audit/shared-
+// limiter logic runs), so a request this gate rejects is never even
+// attributed to the shared budget - it never started. endAttempt is
+// always called with failed=false: this is purely a concurrency cap, not
+// a time-window quota, so a legitimate large restore never gets
+// penalized against a later, unrelated restore attempt the way the
+// shared limiter's own window would.
+func (a *SessionAuth) guardRestoreUpload(event string, next http.HandlerFunc) http.HandlerFunc {
+	guarded := a.guardDestructive(event, next)
+	return func(w http.ResponseWriter, r *http.Request) {
+		key, ok := a.authenticatedSessionID(r)
+		if !ok {
+			key = rateLimitKey(r)
+		}
+		if !a.restoreLimiter.beginAttempt(key) {
+			username, _ := a.authenticatedUser(r)
+			a.recordAuditDetail(event+"_rate_limited", username, clientAddress(r), r.Method+" "+r.URL.Path)
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+			return
+		}
+		defer a.restoreLimiter.endAttempt(key, false)
+		guarded(w, r)
+	}
+}
