@@ -227,3 +227,67 @@ func TestGuardDestructiveRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
 		t.Fatalf("expected the remaining %d requests to be rejected outright, got %d", concurrentRequests-auth.destructiveLimiter.maxFailure, rejected)
 	}
 }
+
+// TestGuardRestoreUploadBoundsConcurrencyTighterThanTheSharedLimiter is
+// the regression test for the fix itself, found in review: the shared
+// destructiveLimiter's much larger per-session budget (30 by default)
+// alone would let far more than a couple of ~1 GiB restore uploads run
+// at once. Sets the shared limiter's budget deliberately higher than
+// restoreLimiter's own, so a pass here can only be explained by
+// guardRestoreUpload's own tighter gate actually doing something -
+// not just inheriting the shared limiter's already-tighter number.
+func TestGuardRestoreUploadBoundsConcurrencyTighterThanTheSharedLimiter(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth.destructiveLimiter = newRateLimiter(time.Minute, 30)
+	auth.restoreLimiter = newRateLimiter(time.Minute, 2)
+	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]
+
+	release := make(chan struct{})
+	action := auth.guardRestoreUpload("restore_thing", func(w http.ResponseWriter, _ *http.Request) {
+		<-release // hold the "upload" open until every goroutine has had a chance to race in
+		w.WriteHeader(http.StatusOK)
+	})
+
+	const concurrentRequests = 10
+	var start, done sync.WaitGroup
+	start.Add(1)
+	done.Add(concurrentRequests)
+	codes := make([]int, concurrentRequests)
+	for i := range concurrentRequests {
+		go func(i int) {
+			defer done.Done()
+			request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/whatever/%d", i), nil)
+			request.AddCookie(cookie)
+			response := httptest.NewRecorder()
+			start.Wait()
+			action(response, request)
+			codes[i] = response.Code
+		}(i)
+	}
+	start.Done()
+	// Give every goroutine time to actually reach beginAttempt before
+	// releasing the held-open handlers - otherwise this could finish
+	// requests one at a time faster than new ones arrive, never actually
+	// exercising the concurrency gate at all.
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	done.Wait()
+
+	var accepted, rejected int
+	for _, code := range codes {
+		switch code {
+		case http.StatusOK:
+			accepted++
+		case http.StatusTooManyRequests:
+			rejected++
+		default:
+			t.Fatalf("unexpected status code %d", code)
+		}
+	}
+	if accepted != auth.restoreLimiter.maxFailure {
+		t.Fatalf("expected exactly %d concurrent restore uploads to actually proceed, got %d (rejected: %d)", auth.restoreLimiter.maxFailure, accepted, rejected)
+	}
+	if rejected != concurrentRequests-auth.restoreLimiter.maxFailure {
+		t.Fatalf("expected the remaining %d requests to be rejected outright, got %d", concurrentRequests-auth.restoreLimiter.maxFailure, rejected)
+	}
+}

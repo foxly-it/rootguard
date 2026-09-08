@@ -42,6 +42,7 @@ type SessionAuth struct {
 	loginLimiter         *rateLimiter
 	recoveryLimiter      *rateLimiter
 	destructiveLimiter   *rateLimiter
+	restoreLimiter       *rateLimiter
 	auditPath            string
 	auditMu              sync.Mutex
 	auditEvents          []auditEvent
@@ -135,6 +136,19 @@ func NewSessionAuth(expectedUser, expectedPassword, recoveryToken string, ttl ti
 		// working through Setup or Unbound configuration while still
 		// stopping a runaway script.
 		destructiveLimiter: newRateLimiter(5*time.Minute, 30),
+		// Found in review: the shared destructiveLimiter's 30-per-5-minutes
+		// budget, combined with restore/restore-preview's own ~1 GiB
+		// per-request cap (see archive.go's MaxEncryptedBytes and
+		// HandleBackupRestore's MaxBytesReader), let a single (possibly
+		// compromised) session have up to ~30 GiB of restore uploads in
+		// flight at once - the shared budget bounds overall request
+		// volume, not the specific memory/disk pressure one particularly
+		// large route can cause. A tight, separate concurrency-only gate
+		// (window is irrelevant here - endAttempt is always called with
+		// failed=false, see guardRestoreUpload, so nothing ever
+		// accumulates against a time window the way the shared limiter's
+		// does) on top of, not instead of, the shared limiter above.
+		restoreLimiter: newRateLimiter(5*time.Minute, 2),
 	}
 	if persistencePath != "" {
 		auth.credentialsPath = filepath.Join(filepath.Dir(persistencePath), "credentials.json")
@@ -159,6 +173,7 @@ func (a *SessionAuth) sweepLimitersPeriodically() {
 		a.loginLimiter.sweep()
 		a.recoveryLimiter.sweep()
 		a.destructiveLimiter.sweep()
+		a.restoreLimiter.sweep()
 	}
 }
 
