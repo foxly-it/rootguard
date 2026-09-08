@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -35,6 +36,33 @@ func logPersistError(component string) func(error) {
 	return func(err error) {
 		log.Printf("%s: failed to persist state: %v", component, err)
 	}
+}
+
+// githubReleaseTransport routes the GitHub Releases self-update-discovery
+// check (internal/updater/github_release.go, api.github.com) through
+// rootguard-attestation-proxy - the same known gap runAttestationCommand's
+// own doc comment (internal/stack/attestation.go) used to flag: Core runs
+// only on the `control` network, deliberately `internal: true`, so a plain
+// *http.Client can never reach api.github.com there. Sharing the proxy
+// already used for cosign's GHCR/Sigstore calls (its allowlist now also
+// covers api.github.com, see rootguard-attestation-proxy/allowlist.go)
+// avoids standing up a second, separate metadata proxy for one more host.
+// ROOTGUARD_ATTESTATION_PROXY_URL unset/empty (local dev, unit tests, the
+// integration/E2E fixtures) falls back to http.DefaultTransport - unchanged
+// pre-proxy behavior, same convention as runAttestationCommand.
+func githubReleaseTransport() http.RoundTripper {
+	proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL")
+	if proxyURL == "" {
+		return http.DefaultTransport
+	}
+	parsed, err := url.Parse(proxyURL)
+	if err != nil {
+		log.Printf("github release client: ignoring invalid ROOTGUARD_ATTESTATION_PROXY_URL: %v", err)
+		return http.DefaultTransport
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = http.ProxyURL(parsed)
+	return transport
 }
 
 func main() {
@@ -119,7 +147,7 @@ func main() {
 			return nil
 		},
 	})
-	githubClient := &http.Client{Timeout: 8 * time.Second}
+	githubClient := &http.Client{Timeout: 8 * time.Second, Transport: githubReleaseTransport()}
 	updateManager := updater.NewManager(updater.Options{
 		DataDir:             envOrDefault("ROOTGUARD_UPDATE_DIR", "/var/lib/rootguard/updates"),
 		ComposeDir:          envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),

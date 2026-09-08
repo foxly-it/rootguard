@@ -141,7 +141,20 @@ func digestQualify(ctx context.Context, run CommandRunner, image string) string 
 //
 // Also kept in sync by hand with rootguard-updater/image.go's identical
 // copy - see digestQualify's own doc comment above for why.
+//
+// Found live via manual verification of the rootguard#525 fix (2026-09-08):
+// an already-qualified image (e.g. AdGuard's static "repo:tag@sha256:..."
+// pin, which never goes through live release discovery) reached this
+// function unguarded. imageRepo's own colon-splitting only accounts for a
+// tag separator, not a digest's internal colon, so it silently mis-split
+// the reference and this function appended a second "@sha256:..." on top
+// of the first, producing an invalid, doubled reference. digestQualify
+// already special-cased this exact input shape; this function needed the
+// identical guard.
 func digestFromPullOutput(image string, output []byte) (string, bool) {
+	if strings.Contains(image, "@sha256:") {
+		return image, true
+	}
 	repo, ok := imageRepo(image)
 	if !ok {
 		return "", false

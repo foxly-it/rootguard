@@ -110,8 +110,11 @@ Core and the updater helper both run only on the internal `control`
 network (no route to the internet at all), so this Cosign check needs a
 narrow, explicit bridge to actually reach GHCR/Sigstore:
 `rootguard-attestation-proxy`, a minimal CONNECT-only forward proxy with
-a hardcoded, 3-host allowlist, sitting on both `control` and a separate,
-real-internet-facing `egress` network. It's the sixth RootGuard
+a hardcoded, 4-host allowlist, sitting on both `control` and a separate,
+real-internet-facing `egress` network. The fourth host, `api.github.com`,
+is reused by Core's GitHub Releases self-update-discovery check
+(`internal/updater/github_release.go`) - the only other outbound call on
+the isolated `control` network. It's the sixth RootGuard
 component, self-update managed since 2026-09-03, sharing the RootGuard
 Updater's own manager/mutex rather than an independent one - deliberately,
 after an earlier version with two separate managers let their compose

@@ -60,6 +60,26 @@ func TestDigestFromPullOutputReturnsFalseForATaglessImage(t *testing.T) {
 	}
 }
 
+// TestDigestFromPullOutputLeavesAlreadyQualifiedImagesUnchanged is the
+// regression test for a real bug found live verifying the rootguard#525
+// fix: an already-qualified static pin reached imageRepo unguarded. Its
+// colon-splitting only accounts for a tag separator, not a digest's own
+// internal colon, so it mis-split the reference and this function
+// appended a second "@sha256:..." on top of the first, producing an
+// invalid, doubled reference.
+func TestDigestFromPullOutputLeavesAlreadyQualifiedImagesUnchanged(t *testing.T) {
+	image := "ghcr.io/foxly-it/rootguard-core:1.0.0-rc.4@sha256:8bd8d7fd86f112f845a0485967e856739485168c2a52136d5ae53b275f87ec37"
+	output := []byte("1.0.0-rc.4: Pulling from foxly-it/rootguard-core\n" +
+		"Digest: sha256:8bd8d7fd86f112f845a0485967e856739485168c2a52136d5ae53b275f87ec37\n")
+	got, ok := digestFromPullOutput(image, output)
+	if !ok {
+		t.Fatal("expected the already-qualified image to be returned as-is")
+	}
+	if got != image {
+		t.Fatalf("got %q, want %q unchanged", got, image)
+	}
+}
+
 // TestImageRepoHandlesRegistryPort is the regression test for a follow-up
 // review finding: strings.Cut(image, ":") (first colon), previously used
 // by both digestQualify and digestFromPullOutput above, mis-split any

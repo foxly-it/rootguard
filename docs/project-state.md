@@ -865,8 +865,13 @@ Trustworthy Stack Center and production visibility:
   [rootguard#318](https://github.com/foxly-it/rootguard/pull/318)).
 - "Auf Updates prüfen" now discovers real new RootGuard releases live
   instead of requiring an administrator to hand-pin the next image in
-  `.env` first. Core (which has real outbound internet access) queries the
-  public GitHub Releases API for `foxly-it/rootguard` (the full,
+  `.env` first. Core queries the public GitHub Releases API for
+  `foxly-it/rootguard` through `rootguard-attestation-proxy` - Core itself
+  has no outbound internet access at all (`control` network,
+  `internal: true`; found in an external code review, 2026-09-08, that
+  this had been silently degrading to the static image pin on every run
+  before the proxy route existed, see `docs/threat-model.md`) - fetching
+  the full,
   newest-first `/releases` list, since every release here is created with
   `--prerelease` and is therefore invisible to `/releases/latest`), picks
   the newest tag matching RootGuard's own `v0.1.0-(alpha|beta).N`
