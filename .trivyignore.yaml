@@ -422,6 +422,19 @@ vulnerabilities:
       libxml2 arrives only as bind9-libs' own dependency (see
       CVE-2019-16224's statement above) - Unbound's own resolver process
       doesn't use it.
+  - id: CVE-2026-86140
+    purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
+    expired_at: 2026-11-30
+    statement: >-
+      Found live, 2026-09-08 (second external review round, unrelated CI
+      failure on an otherwise unrelated PR - confirmed the same failure
+      already broke main's own Unbound CI independently). Unfixed in
+      trixie (confirmed live via the Debian Security Tracker; fixed only
+      in sid at 2.15.4). strcat stack-based buffer overflow in
+      xmlSnprintfElements; libxml2 arrives only as bind9-libs' own
+      dependency - see CVE-2019-16224's/CVE-2026-6653's identical
+      statement above on why Unbound's own resolver process is
+      unaffected.
   - id: CVE-2026-8376
     purls: ["pkg:deb/debian/perl-base@5.40.1-6"]
     expired_at: 2026-11-30
