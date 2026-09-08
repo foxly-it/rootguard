@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"strings"
@@ -135,17 +136,35 @@ var dialProxy = func(network, addr string) (net.Conn, error) {
 // tell an operator this is a known, structural gap with a known fix
 // (reinstall or a manual compose.release.yaml refresh), not a transient
 // hiccup worth simply retrying.
+//
+// A real HTTP GET against the proxy's own /healthz endpoint
+// (rootguard-attestation-proxy/proxy.go), not just a TCP dial-and-close -
+// found in review: a bare TCP connect succeeds against anything that
+// merely accepts connections without speaking the proxy's protocol at
+// all (a misconfigured or placeholder listener on the same port), which
+// this check would have reported as healthy right before the real
+// cosign call failed anyway. dialProxy still supplies the underlying
+// connection (swapped out in tests, see attestation_test.go), so this
+// stays a fast, dependency-free check - just one that actually verifies
+// the proxy speaks HTTP and reports itself healthy, not merely that
+// something is listening on the port.
 func CheckAttestationProxyReachable() error {
 	proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL")
 	if proxyURL == "" {
 		return errors.New("no attestation proxy configured (ROOTGUARD_ATTESTATION_PROXY_URL is unset) - this installation's compose topology likely predates rootguard-attestation-proxy; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md")
 	}
-	target := strings.TrimPrefix(strings.TrimPrefix(proxyURL, "https://"), "http://")
-	conn, err := dialProxy("tcp", target)
+	client := &http.Client{
+		Transport: &http.Transport{Dial: dialProxy},
+		Timeout:   3 * time.Second,
+	}
+	response, err := client.Get(strings.TrimSuffix(proxyURL, "/") + "/healthz")
 	if err != nil {
 		return fmt.Errorf("attestation proxy configured (%s) but unreachable: %w - this installation's compose topology may be missing the rootguard-attestation-proxy service or its egress network; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md", proxyURL, err)
 	}
-	_ = conn.Close()
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("attestation proxy configured (%s) but unhealthy: /healthz returned %s - this installation's compose topology may be missing the rootguard-attestation-proxy service or its egress network; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md", proxyURL, response.Status)
+	}
 	return nil
 }
 
