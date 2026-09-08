@@ -159,7 +159,7 @@ func CheckAttestationProxyReachable() error {
 				return dialProxy(network, addr)
 			},
 		},
-		Timeout:   3 * time.Second,
+		Timeout: 3 * time.Second,
 	}
 	response, err := client.Get(strings.TrimSuffix(proxyURL, "/") + "/healthz")
 	if err != nil {
