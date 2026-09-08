@@ -1100,6 +1100,8 @@ jobs:
         run: docker compose -f compose.release.yaml up -d
       - name: Install and verify the DNS stack
         run: |
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..60}; do
             code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
               --cookie-jar /tmp/rootguard-alpha-cookies.txt \
@@ -1120,6 +1122,8 @@ jobs:
           curl --fail --silent --cookie /tmp/rootguard-alpha-cookies.txt \
             --header 'Content-Type: application/json' --data "$config" \
             http://127.0.0.1:18080/api/installation/deploy >/dev/null
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..90}; do
             installation="$(curl --fail --silent \
               --cookie /tmp/rootguard-alpha-cookies.txt \
@@ -1131,6 +1135,8 @@ jobs:
           done
           test "$state" = installed
           ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
               break
@@ -1262,10 +1268,12 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-          echo "commit=${pin_commit}" >> "$GITHUB_OUTPUT"
-          echo "compose_path=${pin_compose_path}" >> "$GITHUB_OUTPUT"
-          echo "version=${previous_version}" >> "$GITHUB_OUTPUT"
+          {
+            echo "skip=false"
+            echo "commit=${pin_commit}"
+            echo "compose_path=${pin_compose_path}"
+            echo "version=${previous_version}"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Extract the previous release's correctly pinned Compose model
         if: steps.previous.outputs.skip != 'true'
@@ -1313,6 +1321,8 @@ jobs:
         if: steps.previous.outputs.skip != 'true'
         run: |
           set -euo pipefail
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..60}; do
             code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
               --cookie-jar /tmp/rootguard-upgrade-cookies.txt \
@@ -1330,6 +1340,8 @@ jobs:
           curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
             --header 'Content-Type: application/json' --data "$config" \
             http://127.0.0.1:18082/api/installation/deploy >/dev/null
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..90}; do
             installation="$(curl --fail --silent \
               --cookie /tmp/rootguard-upgrade-cookies.txt \
@@ -1341,6 +1353,8 @@ jobs:
           done
           test "$state" = installed
           ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
               break
@@ -1372,6 +1386,8 @@ jobs:
             fi
             echo "$body"
           }
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             code="$(curl --silent --output /dev/null --write-out '%{http_code}' http://127.0.0.1:18082/ || true)"
             if [ -n "$code" ] && [ "$code" != "000" ]; then break; fi
@@ -1410,6 +1426,8 @@ jobs:
             --post-data="$target_body" \
             http://updater:8082/api/control-plane/check >/dev/null
           state=""
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..90}; do
             status="$(poll_status)"
             if [ -z "$status" ]; then sleep 2; continue; fi
@@ -1428,6 +1446,8 @@ jobs:
           # the WebApp is expected to be briefly unreachable mid-poll here -
           # unlike everywhere else in this step, that's not a failure.
           state=""
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..90}; do
             status="$(poll_status)"
             if [ -z "$status" ]; then sleep 2; continue; fi

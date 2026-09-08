@@ -48,6 +48,8 @@ jobs:
       # discarding that output before it can be printed.
       - name: Verify real-internet resolution and DNSSEC validation
         run: |
+          # attempt is a retry-loop counter, never read in the body
+          # shellcheck disable=SC2034
           for attempt in {1..30}; do
             if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound-real-dns)" = "healthy"; then
               break
