@@ -146,6 +146,65 @@ func TestAttestationProxySelfUpdateInstallProceedsWhileControlPlaneIdle(t *testi
 	}
 }
 
+// TestControlPlaneUpdateHandlerRefusesWhileSelfUpdateBusy is the reverse
+// guard found missing in review: nothing previously stopped a
+// core/webapp update from starting while updaterSelfUpdate was itself
+// mid a compose swap of the very updater container about to execute the
+// request - selfUpdateInstallHandler already guarded the other
+// direction (see the tests above), this one guards the direction that
+// was missing.
+func TestControlPlaneUpdateHandlerRefusesWhileSelfUpdateBusy(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		t.Fatal("the remote control plane should not be contacted while the self-update manager is busy")
+	}))
+	defer server.Close()
+
+	controlPlane := controlplane.NewClient(server.URL, "token")
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		return []byte("rootguard-updater:v1|sha256:old"), nil
+	})
+	if _, err := manager.StartUpdate("updater"); err != nil {
+		t.Fatalf("failed to put the self-update manager into a busy state: %v", err)
+	}
+
+	recorder := httptest.NewRecorder()
+	controlPlaneUpdateHandler(controlPlane, manager)(recorder, httptest.NewRequest(http.MethodPost, "/api/control-plane-updates/install", nil))
+
+	if recorder.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict while the self-update manager is busy, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && manager.Status().State == updater.StateUpdating {
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// TestControlPlaneUpdateHandlerProceedsWhileSelfUpdateIdle is the
+// inverse: a real control-plane update request must actually reach the
+// remote updater once the self-update manager is idle, proving the
+// guard above isn't just refusing everything unconditionally.
+func TestControlPlaneUpdateHandlerProceedsWhileSelfUpdateIdle(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"updating","message":"","services":[],"updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	controlPlane := controlplane.NewClient(server.URL, "token")
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("docker should not run - the self-update manager was never asked to do anything in this test")
+		return nil, nil
+	})
+
+	recorder := httptest.NewRecorder()
+	controlPlaneUpdateHandler(controlPlane, manager)(recorder, httptest.NewRequest(http.MethodPost, "/api/control-plane-updates/install", nil))
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 Accepted while the self-update manager is idle, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 // TestSelfUpdateInstallRejectsUnknownService proves the shared manager's
 // own StartUpdate validation still rejects a service name that isn't in
 // its Services list - the shared channel doesn't silently accept an

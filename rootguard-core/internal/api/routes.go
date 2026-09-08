@@ -60,7 +60,7 @@ func RegisterRoutes(deps Dependencies) http.Handler {
 	apiMux.HandleFunc("POST /api/backups/restore", backupRestoreHandler(deps.BackupRestorer, deps.Updater))
 	apiMux.HandleFunc("GET /api/control-plane-updates", controlPlaneStatusHandler(deps.ControlPlane))
 	apiMux.HandleFunc("POST /api/control-plane-updates/check", controlPlaneCheckHandler(deps.ControlPlane))
-	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane))
+	apiMux.HandleFunc("POST /api/control-plane-updates/install", controlPlaneUpdateHandler(deps.ControlPlane, deps.UpdaterSelfUpdate))
 	apiMux.HandleFunc("GET /api/updater-updates", updateStatusHandler(deps.UpdaterSelfUpdate))
 	apiMux.HandleFunc("POST /api/updater-updates/check", updateCheckHandler(deps.UpdaterSelfUpdate))
 	apiMux.HandleFunc("POST /api/updater-updates/install/{name}", selfUpdateInstallHandler(deps.UpdaterSelfUpdate, deps.ControlPlane))
@@ -168,8 +168,22 @@ func controlPlaneCheckHandler(client *controlplane.Client) http.HandlerFunc {
 	}
 }
 
-func controlPlaneUpdateHandler(client *controlplane.Client) http.HandlerFunc {
+// controlPlaneUpdateHandler starts a Core/WebApp update via the remote
+// rootguard-updater. Found in review: the reverse of
+// selfUpdateInstallHandler's own guard was missing entirely - nothing
+// stopped this from starting while updaterSelfUpdate was itself mid a
+// compose swap of the very updater container about to execute this
+// request, which would abort that swap (or the request itself) instead
+// of failing cleanly with a clear, retryable error. Same UX-guard
+// reasoning as selfUpdateInstallHandler: not required for correctness
+// (the remote side already recovers on its own next start), just avoids
+// an easily-avoidable, confusing failure.
+func controlPlaneUpdateHandler(client *controlplane.Client, updaterSelfUpdate *updater.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if status := updaterSelfUpdate.Status(); status.State == updater.StateChecking || status.State == updater.StateUpdating {
+			writeError(w, http.StatusConflict, fmt.Errorf("the updater is itself mid a self-update, try again once it finishes"))
+			return
+		}
 		result, err := client.Update(r.Context())
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err)
