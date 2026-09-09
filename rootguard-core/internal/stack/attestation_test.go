@@ -226,6 +226,31 @@ func TestCheckAttestationProxyReachableConfiguredAndUp(t *testing.T) {
 	}
 }
 
+// TestCheckAttestationProxyReachableConfiguredWithoutScheme is the
+// regression test for a second-pass review finding: switching from a
+// raw TCP dial to client.Get (for the fix above) accidentally dropped
+// the old code's tolerance for a bare "host:port" value with no
+// scheme - url.Parse reads the part before the first colon as a URI
+// scheme rather than a hostname for a value like that, producing a
+// confusing "unsupported protocol scheme" instead of an actual
+// reachability check.
+func TestCheckAttestationProxyReachableConfiguredWithoutScheme(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/healthz" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	bareHostPort := strings.TrimPrefix(server.URL, "http://")
+	t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", bareHostPort)
+	if err := CheckAttestationProxyReachable(); err != nil {
+		t.Fatalf("expected a schemeless host:port value to default to http://, got: %v", err)
+	}
+}
+
 // TestCheckAttestationProxyReachableConfiguredButUnhealthy is the
 // regression test for the fix itself, found in review: a bare TCP
 // connect used to be enough to pass this check, even against something

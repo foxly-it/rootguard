@@ -15,6 +15,25 @@ func (rec *statusRecorder) WriteHeader(status int) {
 	rec.ResponseWriter.WriteHeader(status)
 }
 
+// destructiveLimiterKey resolves the key every destructive-action limiter
+// (destructiveLimiter, restoreLimiter) is keyed by - shared by
+// guardDestructive and guardRestoreUpload, found in a second-pass review
+// duplicated between them. Keyed by session, not by account - found in
+// review: this used to key by username, so every session the same admin
+// account happens to have open (the session-inventory feature explicitly
+// allows more than one) shared a single combined budget, directly
+// contradicting these limiters' own documented purpose ("bound how much
+// a single... session can do", see NewSessionAuth). Falls back to the
+// IP-based key only when there's genuinely no session, which shouldn't
+// happen given both callers' own precondition (already behind
+// SessionAuth.Handler's session check) - defensive, not the normal path.
+func (a *SessionAuth) destructiveLimiterKey(r *http.Request) string {
+	if key, ok := a.authenticatedSessionID(r); ok {
+		return key
+	}
+	return rateLimitKey(r)
+}
+
 // guardDestructive wraps a mutating route handler with the same
 // rate-limit-then-audit shape the login/recovery handlers already use
 // inline (see auth.go), generalized into one wrapper since destructive
@@ -28,20 +47,7 @@ func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http
 	return func(w http.ResponseWriter, r *http.Request) {
 		username, _ := a.authenticatedUser(r)
 		remoteIP := clientAddress(r)
-		// Keyed by session, not by account - found in review: this used
-		// to key by username, so every session the same admin account
-		// happens to have open (the session-inventory feature explicitly
-		// allows more than one) shared a single combined budget, directly
-		// contradicting this limiter's own documented purpose ("bound how
-		// much a single... session can do", see its construction in
-		// NewSessionAuth). Falls back to the IP-based key only when
-		// there's genuinely no session, which shouldn't happen given the
-		// caller's own precondition above - defensive, not the normal
-		// path.
-		key, ok := a.authenticatedSessionID(r)
-		if !ok {
-			key = rateLimitKey(r)
-		}
+		key := a.destructiveLimiterKey(r)
 
 		// beginAttempt/endAttempt, not blocked()/recordFailure() - found
 		// in review, the same TOCTOU gap already fixed for login/recovery
@@ -88,10 +94,7 @@ func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http
 func (a *SessionAuth) guardRestoreUpload(event string, next http.HandlerFunc) http.HandlerFunc {
 	guarded := a.guardDestructive(event, next)
 	return func(w http.ResponseWriter, r *http.Request) {
-		key, ok := a.authenticatedSessionID(r)
-		if !ok {
-			key = rateLimitKey(r)
-		}
+		key := a.destructiveLimiterKey(r)
 		if !a.restoreLimiter.beginAttempt(key) {
 			username, _ := a.authenticatedUser(r)
 			a.recordAuditDetail(event+"_rate_limited", username, clientAddress(r), r.Method+" "+r.URL.Path)
