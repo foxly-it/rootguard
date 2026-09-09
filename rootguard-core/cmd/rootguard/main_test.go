@@ -40,6 +40,28 @@ func TestGithubReleaseTransport(t *testing.T) {
 			t.Errorf("expected http.DefaultTransport fallback, got %T", got)
 		}
 	})
+
+	t.Run("schemeless host:port defaults to http", func(t *testing.T) {
+		t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "attestation-proxy:8443")
+		transport, ok := githubReleaseTransport().(*http.Transport)
+		if !ok {
+			t.Fatalf("expected *http.Transport, got %T", githubReleaseTransport())
+		}
+		proxyURL, err := transport.Proxy(&http.Request{URL: mustParseURL(t, "https://api.github.com/repos/foxly-it/rootguard/releases")})
+		if err != nil {
+			t.Fatalf("proxy func returned error: %v", err)
+		}
+		if proxyURL == nil || proxyURL.String() != "http://attestation-proxy:8443" {
+			t.Errorf("expected proxy URL http://attestation-proxy:8443, got %v", proxyURL)
+		}
+	})
+
+	t.Run("empty host falls back to default transport", func(t *testing.T) {
+		t.Setenv("ROOTGUARD_ATTESTATION_PROXY_URL", "http://")
+		if got := githubReleaseTransport(); got != http.DefaultTransport {
+			t.Errorf("expected http.DefaultTransport fallback, got %T", got)
+		}
+	})
 }
 
 func TestCheckBlockpageHealthyAt(t *testing.T) {

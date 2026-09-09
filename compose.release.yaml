@@ -12,7 +12,10 @@ services:
   # any route to the internet at all, so `RequireAttestation`'s cosign
   # calls could never succeed once wired into the real deploy/update
   # path. See rootguard-attestation-proxy/README.md for the full
-  # rationale and its hardcoded, 3-host allowlist.
+  # rationale and its hardcoded, 4-host allowlist (the 4th host,
+  # api.github.com, was added for Core's GitHub Releases self-update
+  # discovery - found in review that it ran on this same isolated
+  # network but was never actually routed through this proxy).
   attestation-proxy:
     # Bootstrap pin: this component's very first published image, pushed
     # by hand (real, public, multi-arch manifest - no real release has

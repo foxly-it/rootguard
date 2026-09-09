@@ -50,14 +50,28 @@ func logPersistError(component string) func(error) {
 // ROOTGUARD_ATTESTATION_PROXY_URL unset/empty (local dev, unit tests, the
 // integration/E2E fixtures) falls back to http.DefaultTransport - unchanged
 // pre-proxy behavior, same convention as runAttestationCommand.
+//
+// Found in a second-pass review: url.Parse alone doesn't reject a value
+// that isn't actually usable as a proxy URL - a bare "host:port" parses
+// successfully with the part before the colon read as a URI scheme
+// instead of a hostname, and "http://" alone parses with an empty host.
+// Neither fails here, so the broken Transport would previously have been
+// returned and used silently, only surfacing as a confusing dial/proxy
+// error on the first real self-update check with no diagnostic tying it
+// back to this env var. Explicitly requires an http/https scheme and a
+// non-empty host, same standard CheckAttestationProxyReachable's own
+// fix now applies for the identical env var's other consumer.
 func githubReleaseTransport() http.RoundTripper {
 	proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL")
 	if proxyURL == "" {
 		return http.DefaultTransport
 	}
+	if !strings.Contains(proxyURL, "://") {
+		proxyURL = "http://" + proxyURL
+	}
 	parsed, err := url.Parse(proxyURL)
-	if err != nil {
-		log.Printf("github release client: ignoring invalid ROOTGUARD_ATTESTATION_PROXY_URL: %v", err)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		log.Printf("github release client: ignoring invalid ROOTGUARD_ATTESTATION_PROXY_URL %q: %v", proxyURL, err)
 		return http.DefaultTransport
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()

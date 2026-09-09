@@ -291,3 +291,58 @@ func TestGuardRestoreUploadBoundsConcurrencyTighterThanTheSharedLimiter(t *testi
 		t.Fatalf("expected the remaining %d requests to be rejected outright, got %d", concurrentRequests-auth.restoreLimiter.maxFailure, rejected)
 	}
 }
+
+// TestGuardRestoreUploadReleasesItsSlotWhenTheSharedLimiterRejects is the
+// regression test for the reverse ordering from the test above: the
+// shared destructiveLimiter already exhausted by unrelated actions while
+// restoreLimiter still has free slots. guardRestoreUpload's own
+// beginAttempt succeeds first, then guardDestructive's beginAttempt
+// fails and returns 429 without ever calling next - found in a
+// second-pass review as untested: nothing previously asserted that the
+// restoreLimiter reservation this rejection path holds is actually
+// released, rather than leaked for the rest of the window.
+func TestGuardRestoreUploadReleasesItsSlotWhenTheSharedLimiterRejects(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
+	auth.restoreLimiter = newRateLimiter(time.Minute, 2)
+	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]
+
+	// Exhaust the shared budget with an unrelated destructive action first.
+	other := auth.guardDestructive("other_thing", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	otherRequest := httptest.NewRequest(http.MethodPost, "/api/whatever", nil)
+	otherRequest.AddCookie(cookie)
+	otherResponse := httptest.NewRecorder()
+	other(otherResponse, otherRequest)
+	if otherResponse.Code != http.StatusOK {
+		t.Fatalf("expected the unrelated action to succeed, got %d", otherResponse.Code)
+	}
+
+	restoreCalled := false
+	action := auth.guardRestoreUpload("restore_thing", func(w http.ResponseWriter, _ *http.Request) {
+		restoreCalled = true
+		w.WriteHeader(http.StatusOK)
+	})
+
+	for i := 0; i < 3; i++ {
+		request := httptest.NewRequest(http.MethodPost, "/api/whatever", nil)
+		request.AddCookie(cookie)
+		response := httptest.NewRecorder()
+		action(response, request)
+		if response.Code != http.StatusTooManyRequests {
+			t.Fatalf("attempt %d: expected 429 from the exhausted shared limiter, got %d: %s", i, response.Code, response.Body.String())
+		}
+	}
+	if restoreCalled {
+		t.Fatal("expected the inner handler to never run once the shared limiter is exhausted")
+	}
+
+	sessionID, ok := auth.authenticatedSessionID(otherRequest)
+	if !ok {
+		t.Fatal("expected the logged-in request to resolve a session ID")
+	}
+	if n := auth.restoreLimiter.inFlight[sessionID]; n != 0 {
+		t.Fatalf("expected every restoreLimiter reservation to be released after a shared-limiter rejection, got %d still held", n)
+	}
+}

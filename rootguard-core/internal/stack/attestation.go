@@ -148,10 +148,24 @@ var dialProxy = func(network, addr string) (net.Conn, error) {
 // stays a fast, dependency-free check - just one that actually verifies
 // the proxy speaks HTTP and reports itself healthy, not merely that
 // something is listening on the port.
+//
+// Found in a second-pass review: a bare "host:port" value (accepted
+// fine by the old TCP-dial version, which only ever stripped an
+// optional scheme prefix) fails url.Parse's scheme detection here
+// instead - "host" before the first colon reads as a URI scheme, not a
+// hostname, producing a confusing "unsupported protocol scheme" instead
+// of an actual reachability check. Every value this repository itself
+// ever sets already includes "http://", but a hand-edited or
+// copy-pasted override without one shouldn't silently change failure
+// mode. Restores the old tolerance by defaulting to "http://" when the
+// configured value has no scheme at all.
 func CheckAttestationProxyReachable() error {
 	proxyURL := os.Getenv("ROOTGUARD_ATTESTATION_PROXY_URL")
 	if proxyURL == "" {
 		return errors.New("no attestation proxy configured (ROOTGUARD_ATTESTATION_PROXY_URL is unset) - this installation's compose topology likely predates rootguard-attestation-proxy; a fresh install or a manual compose.release.yaml refresh is required, see docs/release-process.md")
+	}
+	if !strings.Contains(proxyURL, "://") {
+		proxyURL = "http://" + proxyURL
 	}
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -159,7 +173,14 @@ func CheckAttestationProxyReachable() error {
 				return dialProxy(network, addr)
 			},
 		},
-		Timeout: 3 * time.Second,
+		// Comfortably longer than dialProxy's own fixed 3s dial timeout -
+		// found in a second-pass review: DialContext ignores the request
+		// context and dialProxy's real implementation runs its own
+		// independent net.DialTimeout, so a dial that takes close to 3s
+		// used to leave almost no budget in an equal 3s client Timeout for
+		// the actual GET round-trip, misreporting a merely-slow-to-accept
+		// proxy as unreachable.
+		Timeout: 5 * time.Second,
 	}
 	response, err := client.Get(strings.TrimSuffix(proxyURL, "/") + "/healthz")
 	if err != nil {
