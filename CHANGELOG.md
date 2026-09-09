@@ -3,6 +3,35 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.0-rc.5] - 2026-09-09
+
+### Documentation
+
+- Document the 1.0.0-rc.3 broken-release incident and 1.0.0-rc.4 recovery ([#521](https://github.com/foxly-it/rootguard/pull/521))
+- Sync German translations and fix stale claims from today's fixes ([#544](https://github.com/foxly-it/rootguard/pull/544))
+- Add versioned 1.0.0 migration/rollback instructions ([#545](https://github.com/foxly-it/rootguard/pull/545))
+
+### Fixed
+
+- Stop permanently GPU-promoting the hero dashboard mockup ([#523](https://github.com/foxly-it/rootguard/pull/523))
+- Make the hero dashboard mockup's resting state fully untransformed ([#524](https://github.com/foxly-it/rootguard/pull/524))
+- Suppress CVE-2026-86140 (libxml2) in Unbound's image scan ([#533](https://github.com/foxly-it/rootguard/pull/533))
+- Route GitHub Releases self-update discovery through the attestation proxy ([#532](https://github.com/foxly-it/rootguard/pull/532))
+- Give Blockpage a real self-update path ([#534](https://github.com/foxly-it/rootguard/pull/534))
+- Refuse a control-plane update while the updater self-update is busy ([#535](https://github.com/foxly-it/rootguard/pull/535))
+- Check the attestation proxy's real /healthz endpoint, not just TCP ([#536](https://github.com/foxly-it/rootguard/pull/536))
+- Bound backup-restore uploads to 2 concurrent, not the shared 30 ([#537](https://github.com/foxly-it/rootguard/pull/537))
+- Suppress CVE-2026-84445 (grpc-go xDS DoS) in bundled cosign/compose ([#541](https://github.com/foxly-it/rootguard/pull/541))
+- Run upgrade-test on both amd64 and arm64, not just amd64 ([#540](https://github.com/foxly-it/rootguard/pull/540))
+- Harden attestation-proxy URL handling before RC5 ([#548](https://github.com/foxly-it/rootguard/pull/548))
+
+### Maintenance
+
+- Bump the actions group across 1 directory with 2 updates ([#520](https://github.com/foxly-it/rootguard/pull/520))
+- Minor cleanups from the 2026-09-08 external review ([#538](https://github.com/foxly-it/rootguard/pull/538))
+- Bump @vitest/mocker and vitest ([#542](https://github.com/foxly-it/rootguard/pull/542))
+- Bump vitest in /rootguard-webapp/frontend ([#543](https://github.com/foxly-it/rootguard/pull/543))
+
 ## [1.0.0-rc.4] - 2026-09-05
 
 ### Fixed
