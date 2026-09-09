@@ -53,6 +53,15 @@ Docker architecture, Docker Engine version, and Compose version in its job
 summary. A failed install prints bounded control-plane and DNS-service logs
 before cleaning up its own resources.
 
+Upgrade (`release-alpha.yml`'s `upgrade-test`, a real N-1 → N upgrade
+through the control-plane updater) and backup/restore
+(`backup-restore.yml`, a real export → teardown → fresh install → restore
+cycle) run on the identical native `amd64`/`arm64` matrix, not just clean
+install - found in review: `upgrade-test` had been `amd64`-only since it
+was first added, an unintentional narrower platform claim than the 1.0
+gate ("installation... upgrades, and restore are repeatable on every
+supported platform") actually requires.
+
 The first complete native matrix passed in
 [GitHub Actions run 30353823582](https://github.com/foxly-it/rootguard/actions/runs/30353823582).
 
