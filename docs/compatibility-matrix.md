@@ -18,6 +18,11 @@ Scoped to N-1 -> N: RootGuard is pre-1.0 and doesn't yet promise
 compatibility further back than the one release directly before the
 current one.
 
+See [upgrading-to-1.0.md](upgrading-to-1.0.md) for what's specific to
+landing on `1.0.0` itself, including where this general path doesn't
+apply (a compose-topology change) and what rolling back actually looks
+like once an update has already succeeded.
+
 ## Docker platform and engine
 
 See [platform-support.md](platform-support.md) for the full verification
