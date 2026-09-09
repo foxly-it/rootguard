@@ -223,9 +223,9 @@ path instead of directly.
 - No SBOM/provenance for every release - now delivered, see
   `docs/compatibility-matrix.md` and ROADMAP.md 0.6 - which makes forensic
   analysis of an affected release possible after the fact.
-- Image signing beyond Cosign, applied consistently across the five
-  self-update-managed components - now delivered as well, see
-  ROADMAP.md 0.6.
+- Image signing beyond Cosign, applied consistently across the six
+  self-update-managed components (Blockpage joined 2026-09-08) - now
+  delivered as well, see ROADMAP.md 0.6.
 
 ### 5. Backups
 

@@ -111,9 +111,12 @@ Core und der Updater-Helper laufen beide ausschließlich im internen
 `control`-Netzwerk (keine Internet-Route) - diese Cosign-Prüfung braucht
 deshalb eine schmale, explizite Brücke, um GHCR/Sigstore überhaupt zu
 erreichen: `rootguard-attestation-proxy`, ein minimaler, reiner
-CONNECT-Forward-Proxy mit fest einprogrammierter 3-Host-Allowlist, der
+CONNECT-Forward-Proxy mit fest einprogrammierter 4-Host-Allowlist, der
 sowohl im `control`- als auch in einem separaten, echt
-internetfähigen `egress`-Netzwerk hängt. Die sechste RootGuard-Komponente,
+internetfähigen `egress`-Netzwerk hängt. Der vierte Host, `api.github.com`,
+wird von Cores GitHub-Releases-Selbstupdate-Erkennung
+(`internal/updater/github_release.go`) mitgenutzt - dem einzigen anderen
+ausgehenden Aufruf im isolierten `control`-Netzwerk. Die sechste RootGuard-Komponente,
 seit 2026-09-03 ins Self-Update-Management aufgenommen - geteilt über
 dieselbe Manager-/Mutex-Instanz wie der RootGuard Updater, bewusst nicht
 über eine eigene: eine frühere Fassung mit zwei getrennten Managern ließ
@@ -138,10 +141,13 @@ ausgeschlossen.
 ## Kontrollierte Container-Updates
 
 Der Stack-Bereich kann ausschließlich die fest in Core freigegebenen
-DNS-Dienste AdGuard Home und Unbound prüfen und aktualisieren. Browser-Anfragen
-können weder Image-Namen noch Compose-Argumente oder Container festlegen.
-Eine Prüfung lädt das serverseitig konfigurierte Ziel-Image und vergleicht
-dessen tatsächliche Image-ID mit dem laufenden Container.
+DNS-Dienste AdGuard Home, Unbound und die Blockseite prüfen und aktualisieren
+(Blockseite seit 2026-09-08 dabei - im Review gefunden, dass sie bis dahin
+gar keinen Update-Pfad hatte, anders als jede andere RootGuard-eigene
+Komponente). Browser-Anfragen können weder Image-Namen noch
+Compose-Argumente oder Container festlegen. Eine Prüfung lädt das
+serverseitig konfigurierte Ziel-Image und vergleicht dessen tatsächliche
+Image-ID mit dem laufenden Container.
 
 Vor einem Austausch kopiert Core die persistenten Dienstpfade in sein
 geschütztes Daten-Volume. Anschließend wird genau ein Compose-Dienst ersetzt

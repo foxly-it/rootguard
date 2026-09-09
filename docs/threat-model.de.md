@@ -147,9 +147,11 @@ gedachte Schnittstellen (AdGuard-Admin-API, Core-Bearer-Token-API).
 - `control`s eigene Internet-Isolation bleibt vollständig, bis auf einen
   einzigen schmalen, auditierbaren Pfad: `rootguard-attestation-proxy`,
   ein reiner CONNECT-Forward-Proxy mit fest einprogrammierter
-  3-Host-Allowlist (`ghcr.io`, `pkg-containers.githubusercontent.com`,
+  4-Host-Allowlist (`ghcr.io`, `pkg-containers.githubusercontent.com`,
   `tuf-repo-cdn.sigstore.dev` - genau das, was Cosigns eigene
-  Attestation-Prüfung braucht, empirisch bestätigt, nicht mehr). Das ist
+  Attestation-Prüfung braucht, empirisch bestätigt, nicht mehr - sowie
+  `api.github.com` für Cores GitHub-Releases-Live-Erkennung, siehe
+  unten). Das ist
   Defense-in-Depth, keine Authentifizierungsgrenze - Core und der
   Updater, die einzigen zwei möglichen Aufrufer, halten bereits den
   Docker-Socket und laufen als root, besitzen also schon volle
@@ -221,17 +223,25 @@ Update-Pfad statt direkt.
   *aktuell laufende* Proxy-Instanz - der Swap passiert erst danach, es
   gibt also keine Bootstrapping-Lücke.
 - Cores eigene GitHub-Releases-Selbstupdate-Erkennung
-  (`internal/updater/github_release.go`, `api.github.com`) hat dasselbe
-  `control`-Netzwerk-Isolationsproblem, das `rootguard-attestation-proxy`
-  für Cosign lösen sollte, aber für einen anderen Host, der nicht in
-  die schmale Allowlist des Proxys passt - degradiert bereits sauber
-  (fällt auf den statischen Image-Pin zurück) statt zu scheitern, also
-  eine bekannte, akzeptierte, dauerhaft degradierte Lücke, kein
-  Ausfallrisiko.
-- Kein SBOM/keine Provenance für jedes Release (ROADMAP.md 0.6) - erschwert
-  aktuell eine nachträgliche forensische Analyse eines betroffenen Releases.
-- Kein Image-Signing im eigentlichen Sinn über Cosign hinaus für die fünf
-  selbst-update-fähigen Komponenten einheitlich (ROADMAP.md 0.6).
+  (`internal/updater/github_release.go`, `api.github.com`) hatte
+  dasselbe `control`-Netzwerk-Isolationsproblem, das
+  `rootguard-attestation-proxy` für Cosign lösen sollte, aber für einen
+  anderen Host, der nicht in die schmale Allowlist des Proxys passte -
+  in einem externen Code-Review (2026-09-08) gefunden: die Prüfung
+  degradierte dadurch bei jedem Lauf in der echten Release-Topologie
+  lautlos auf den statischen Image-Pin, da sie `api.github.com` nie
+  erreichen konnte. Behoben, indem `api.github.com` zur Allowlist des
+  Proxys hinzugefügt und der HTTP-Client der Prüfung darüber geroutet
+  wird (`githubReleaseTransport` in `cmd/rootguard/main.go`), genau wie
+  `runAttestationCommand` es bereits für Cosign tat.
+- Kein SBOM/keine Provenance für jedes Release - inzwischen ausgeliefert,
+  siehe `docs/compatibility-matrix.md` und ROADMAP.md 0.6 - was eine
+  nachträgliche forensische Analyse eines betroffenen Releases möglich
+  macht.
+- Kein Image-Signing im eigentlichen Sinn über Cosign hinaus für die
+  sechs selbst-update-fähigen Komponenten einheitlich (Blockpage seit
+  2026-09-08 dabei) - ebenfalls inzwischen ausgeliefert, siehe
+  ROADMAP.md 0.6.
 
 ### 5. Backups
 
