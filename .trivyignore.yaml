@@ -266,6 +266,37 @@ vulnerabilities:
       digest this repo currently pins - see the comment above this
       block.
 
+  # Found live, 2026-09-09: trivy's own vulnerability DB surfaced this
+  # only now, same two bundled grpc-go versions as CVE-2026-84304 above
+  # (cosign v3.1.3 still the newest release, confirmed live against
+  # sigstore/cosign's own releases page; docker:29-cli's pinned digest
+  # unchanged) - a fix exists upstream (grpc-go 1.82.2/1.83.2) but
+  # neither cosign nor the compose plugin has picked it up yet. Unlike
+  # the CVE-2026-84304 pair, this one is narrowly scoped to grpc-go's
+  # own xDS server implementation (a crash from missing validation
+  # handling a malformed xDS resource) - xDS is Envoy's service-mesh
+  # configuration-discovery protocol; neither binary here ever runs as
+  # an xDS server (cosign talks to Fulcio/Rekor as a plain HTTPS/gRPC
+  # client for certificate issuance and transparency-log lookups; the
+  # compose plugin talks to the local Docker Engine socket) - the
+  # vulnerable code path is present in the binary but never invoked.
+  - id: CVE-2026-84445
+    purls: ["pkg:golang/google.golang.org/grpc@v1.82.0"]
+    paths: ["usr/local/bin/cosign"]
+    expired_at: 2026-11-30
+    statement: >-
+      gRPC-Go xDS-server DoS in cosign v3.1.3's own dependency tree -
+      cosign only ever uses grpc as a client, never runs an xDS server
+      - see the comment above this block.
+  - id: CVE-2026-84445
+    purls: ["pkg:golang/google.golang.org/grpc@v1.82.1"]
+    paths: ["usr/local/libexec/docker/cli-plugins/docker-compose"]
+    expired_at: 2026-11-30
+    statement: >-
+      gRPC-Go xDS-server DoS in the bundled compose plugin's own
+      dependency tree - compose only ever uses grpc as a client, never
+      runs an xDS server - see the comment above this block.
+
   # CVE-2026-56854 affects the SSH server-side NewServerConn path that
   # enforces source-address critical options returned by authentication
   # callbacks. RootGuard invokes both bundled tools as clients only:
@@ -413,6 +444,22 @@ vulnerabilities:
       live). Quadratic-complexity DoS in expat's storeAtts() when
       parsing XML with many non-normalized attributes; Unbound's own
       resolver process doesn't parse XML at all.
+  - id: CVE-2026-76956
+    purls: ["pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - unfixed in trixie (confirmed
+      live). Hash-flooding DoS in expat's hash-table implementation -
+      same package, same reasoning as CVE-2026-66046's identical
+      statement above.
+  - id: CVE-2026-76957
+    purls: ["pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - unfixed in trixie (confirmed
+      live). Use-after-free from missing handler call-depth tracking
+      with custom encoding callbacks - same package, same reasoning as
+      CVE-2026-66046's identical statement above.
   - id: CVE-2026-6653
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
     expired_at: 2026-11-30
