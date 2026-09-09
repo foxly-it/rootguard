@@ -1184,8 +1184,17 @@ jobs:
   # release directly before this one - RootGuard is pre-1.0 alpha and
   # doesn't yet promise compatibility further back than that.
   upgrade-test:
+    name: Upgrade test, Linux ${{ matrix.arch }}
     needs: [version, publish, image-scan]
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: read
