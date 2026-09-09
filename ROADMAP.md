@@ -1142,13 +1142,15 @@ Goal: freeze features and prove reliability.
       already cover each in depth, and a pre-1.0 support policy that's
       explicitly deferred to a real support window once 1.0 ships
       ([rootguard#280](https://github.com/foxly-it/rootguard/pull/280)).
-- [ ] Versioned 1.0 migration and rollback instructions complete -
-      deliberately deferred: the underlying mechanism (the control-plane
-      updater's upgrade/rollback path) is already fully built, tested, and
-      documented, but 1.0.0 itself still has 7 open checklist items below
-      that could still change its exact shape. Writing version-specific
-      migration instructions now would risk describing a release that
-      doesn't exist yet - stays open until 1.0's scope is actually final.
+- [x] Versioned 1.0 migration and rollback instructions complete -
+      `docs/upgrading-to-1.0.md`. Covers the actual, asymmetric upgrade/
+      rollback behavior found while writing it: Core/WebApp's update API
+      explicitly refuses a downgrade by design (no "click to roll back"
+      once an update has succeeded), while AdGuard/Unbound/Blockpage have
+      no such check but also no per-request override, and a backup's
+      restorability across versions depends on its schema version
+      matching exactly, not a release-number comparison
+      ([rootguard#539](https://github.com/foxly-it/rootguard/issues/539)).
 
 Exit: publish `1.0.0-rc.1`; only bug fixes and documentation may follow.
 
@@ -1218,20 +1220,41 @@ RootGuard 1.0 ships when:
       any one build, so it doesn't need to precede the RC to be meaningful.
       **In progress**, started 2026-08-14 on a dedicated host
       (`scripts/soak/*.sh` + systemd timers, see that directory's README).
-      Live status as of 2026-08-26 (day 12): 1563/1579 probes passed (99%),
-      consistent with the transient DNSSEC-timeout jitter already seen and
-      confirmed not a RootGuard defect; 6 update exercises (5 no-op poll
-      cycles, 1 real swap verified clean); 2 backup/restore drills, both
-      clean restores, no fallback used. Closes with the final `report.sh`
-      rollup around 2026-09-13
-      ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
-- [ ] installation, DNS operation, configuration, upgrades, and restore are
-      repeatable on every supported platform;
-- [ ] no supported change can bypass validation and recovery;
-- [ ] immutable signed artifacts and complete source are published;
-- [ ] the documentation matches the shipped UI and configuration model;
-- [ ] security, accessibility, backup, and release gates above are complete;
-- [ ] a tested rollback path from 1.0 to the previous stable state is documented.
+      Live status as of 2026-09-09 (day 26): 3285+ probes, 94% cumulative
+      pass rate - every failure is the identical, already-classified
+      transient DNSSEC-timeout jitter (never a resolve/block/api failure),
+      confirmed not a RootGuard defect; 5 update exercises, all clean; 4
+      backup/restore drills, 3 clean restores and 1 with a post-restore
+      DNS-check failure matching the already-tracked
+      [#443](https://github.com/foxly-it/rootguard/issues/443) flake, not
+      a new cause. Closes with the final `report.sh` rollup around
+      2026-09-13 ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
+- [x] installation, DNS operation, configuration, upgrades, and restore are
+      repeatable on every supported platform - clean install, upgrade
+      (`upgrade-test`), and backup/restore all now run on the identical
+      native `amd64`/`arm64` matrix; `upgrade-test` was `amd64`-only until
+      found and fixed while closing this item out
+      ([rootguard#539](https://github.com/foxly-it/rootguard/issues/539)).
+- [x] no supported change can bypass validation and recovery - every one
+      of the WebApp's 57 registered routes individually re-verified: each
+      mutating route carries the shared destructive-action guard (or the
+      tighter restore-specific one), every unguarded route confirmed
+      read-only, a dry-run/preview, or a bounded, non-user-sized check
+      ([rootguard#539](https://github.com/foxly-it/rootguard/issues/539)).
+- [x] immutable signed artifacts and complete source are published - SLSA
+      provenance (`mode=max`) and an SBOM ship for all six images via
+      `actions/attest`, verified by Core/the Updater's own Cosign policy
+      before activation; the repository is public, AGPL-3.0
+      ([rootguard#539](https://github.com/foxly-it/rootguard/issues/539)).
+- [x] the documentation matches the shipped UI and configuration model -
+      targeted currency pass against today's changes found and fixed a
+      real gap: `docs/threat-model.de.md` had never received the Finding-1
+      fix earlier this round, still describing a since-fixed gap as open
+      ([rootguard#539](https://github.com/foxly-it/rootguard/issues/539)).
+- [x] security, accessibility, backup, and release gates above are
+      complete - the `0.9` checklist above is now fully checked.
+- [x] a tested rollback path from 1.0 to the previous stable state is
+      documented - `docs/upgrading-to-1.0.md`.
 
 Post-1.0 candidates: bare-metal/systemd provider, multi-node management, high
 availability, and external identity providers.

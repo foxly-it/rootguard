@@ -56,6 +56,15 @@ The host, VM, or LXC RootGuard ran on is gone or its disk is unrecoverable.
 Full detail, exact included/excluded data, and the failure-cleanup behavior:
 [backup-export.md](backup-export.md).
 
+## Scenario: an update succeeded, but you want to go back anyway
+
+This is not the scenario below - that one covers an update that itself
+failed. If the update actually succeeded and you deliberately want to
+return to the previous version afterward, see
+[upgrading-to-1.0.md](upgrading-to-1.0.md)'s rollback section: Core/WebApp
+explicitly refuse to install an older version by design, so the path back
+differs by which service you're rolling back.
+
 ## Scenario: a failed update did not roll back cleanly
 
 RootGuard's own update path (Stack Center for AdGuard/Unbound, the
