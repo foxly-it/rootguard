@@ -444,6 +444,22 @@ vulnerabilities:
       live). Quadratic-complexity DoS in expat's storeAtts() when
       parsing XML with many non-normalized attributes; Unbound's own
       resolver process doesn't parse XML at all.
+  - id: CVE-2026-76956
+    purls: ["pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - unfixed in trixie (confirmed
+      live). Hash-flooding DoS in expat's hash-table implementation -
+      same package, same reasoning as CVE-2026-66046's identical
+      statement above.
+  - id: CVE-2026-76957
+    purls: ["pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - unfixed in trixie (confirmed
+      live). Use-after-free from missing handler call-depth tracking
+      with custom encoding callbacks - same package, same reasoning as
+      CVE-2026-66046's identical statement above.
   - id: CVE-2026-6653
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
     expired_at: 2026-11-30
