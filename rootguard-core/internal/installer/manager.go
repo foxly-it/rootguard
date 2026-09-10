@@ -288,33 +288,13 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 	}
 
 	if dockerOK && validNetworkConfig(config) {
-		output, err := m.run(ctx, "ps", "--format", "{{.Names}}|{{.Ports}}")
-		if err != nil {
-			checks = append(checks, Check{
-				ID: "dns_port_available", Code: "port_check_failed", OK: false,
-				Message: "Docker port assignments could not be inspected.",
-				Action:  "Verify Docker access and run the preflight again.",
-			})
-		} else if owner := occupiedDockerPort(string(output), config.DNSBindAddress, config.DNSPort); owner != "" {
-			checks = append(checks, Check{
-				ID: "dns_port_available", Code: "dns_port_occupied", OK: false,
-				Message: fmt.Sprintf("DNS port %s:%d is already published.", config.DNSBindAddress, config.DNSPort),
-				Detail:  owner,
-				Action:  "Stop or reconfigure the conflicting DNS service, then run the preflight again.",
-			})
-		} else if busy, detail := m.probeHostPortBusy(ctx, config.DNSBindAddress, config.DNSPort); busy {
-			checks = append(checks, Check{
-				ID: "dns_port_available", Code: "dns_port_occupied", OK: false,
-				Message: fmt.Sprintf("DNS port %s:%d is already in use on this host.", config.DNSBindAddress, config.DNSPort),
-				Detail:  detail,
-				Action:  "Stop or reconfigure the conflicting service - a non-Docker process such as systemd-resolved is a common cause - then run the preflight again.",
-			})
-		} else {
-			checks = append(checks, Check{
-				ID: "dns_port_available", Code: "dns_port_available", OK: true,
-				Message: "No conflicting port publication was found.",
-			})
-		}
+		checks = append(checks, m.checkPortAvailable(ctx, config.DNSBindAddress, config.DNSPort, "dns_port_available", "dns_port_occupied", portCheckMessages{
+			occupiedMessage:  fmt.Sprintf("DNS port %s:%d is already published.", config.DNSBindAddress, config.DNSPort),
+			occupiedAction:   "Stop or reconfigure the conflicting DNS service, then run the preflight again.",
+			busyMessage:      fmt.Sprintf("DNS port %s:%d is already in use on this host.", config.DNSBindAddress, config.DNSPort),
+			busyAction:       "Stop or reconfigure the conflicting service - a non-Docker process such as systemd-resolved is a common cause - then run the preflight again.",
+			availableMessage: "No conflicting port publication was found.",
+		}))
 	}
 
 	// Blockpage port 80 is a second, separate publication (composeDNSFile
@@ -325,33 +305,13 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 	// preflight instead of surfacing only after DNS deployment already
 	// succeeded.
 	if dockerOK && validNetworkConfig(config) && config.BlockpageEnabled {
-		output, err := m.run(ctx, "ps", "--format", "{{.Names}}|{{.Ports}}")
-		if err != nil {
-			checks = append(checks, Check{
-				ID: "blockpage_port_available", Code: "port_check_failed", OK: false,
-				Message: "Docker port assignments could not be inspected.",
-				Action:  "Verify Docker access and run the preflight again.",
-			})
-		} else if owner := occupiedDockerPort(string(output), config.DNSBindAddress, blockpagePort); owner != "" {
-			checks = append(checks, Check{
-				ID: "blockpage_port_available", Code: "blockpage_port_occupied", OK: false,
-				Message: fmt.Sprintf("Blockpage port %s:%d is already published.", config.DNSBindAddress, blockpagePort),
-				Detail:  owner,
-				Action:  "Stop or reconfigure the conflicting service, or disable the blockpage, then run the preflight again.",
-			})
-		} else if busy, detail := m.probeHostPortBusy(ctx, config.DNSBindAddress, blockpagePort); busy {
-			checks = append(checks, Check{
-				ID: "blockpage_port_available", Code: "blockpage_port_occupied", OK: false,
-				Message: fmt.Sprintf("Blockpage port %s:%d is already in use on this host.", config.DNSBindAddress, blockpagePort),
-				Detail:  detail,
-				Action:  "Stop or reconfigure the conflicting service - a web server listening on port 80 is a common cause - or disable the blockpage, then run the preflight again.",
-			})
-		} else {
-			checks = append(checks, Check{
-				ID: "blockpage_port_available", Code: "blockpage_port_available", OK: true,
-				Message: "No conflicting port publication was found for the blockpage.",
-			})
-		}
+		checks = append(checks, m.checkPortAvailable(ctx, config.DNSBindAddress, blockpagePort, "blockpage_port_available", "blockpage_port_occupied", portCheckMessages{
+			occupiedMessage:  fmt.Sprintf("Blockpage port %s:%d is already published.", config.DNSBindAddress, blockpagePort),
+			occupiedAction:   "Stop or reconfigure the conflicting service, or disable the blockpage, then run the preflight again.",
+			busyMessage:      fmt.Sprintf("Blockpage port %s:%d is already in use on this host.", config.DNSBindAddress, blockpagePort),
+			busyAction:       "Stop or reconfigure the conflicting service - a web server listening on port 80 is a common cause - or disable the blockpage, then run the preflight again.",
+			availableMessage: "No conflicting port publication was found for the blockpage.",
+		}))
 	}
 
 	ready := true
@@ -361,6 +321,46 @@ func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
 		}
 	}
 	return Preflight{Ready: ready, Config: config, Checks: checks}
+}
+
+// portCheckMessages holds the caller-supplied wording for
+// checkPortAvailable's three failure/success outcomes. Kept as literal
+// strings per call site rather than a templated substitution (e.g. just a
+// service label) because the DNS and blockpage checks' wording already
+// differed beyond a simple name swap - blockpage's actions mention "or
+// disable the blockpage", DNS's mentions systemd-resolved as a common
+// cause - and templating them would have meant either losing that nuance
+// or bleeding one check's wording into the other's.
+type portCheckMessages struct {
+	occupiedMessage  string
+	occupiedAction   string
+	busyMessage      string
+	busyAction       string
+	availableMessage string
+}
+
+// checkPortAvailable runs the Docker-publication-then-host-level-busy probe
+// shared by the DNS and blockpage port checks in Preflight - found in
+// review, those two were near-duplicates of this exact 4-outcome sequence
+// (inspection failure/Docker-published conflict/host-level conflict/
+// available), differing only in which port they probed and their message
+// wording (see portCheckMessages).
+func (m *Manager) checkPortAvailable(ctx context.Context, bindAddr string, port int, id, occupiedCode string, msg portCheckMessages) Check {
+	output, err := m.run(ctx, "ps", "--format", "{{.Names}}|{{.Ports}}")
+	if err != nil {
+		return Check{
+			ID: id, Code: "port_check_failed", OK: false,
+			Message: "Docker port assignments could not be inspected.",
+			Action:  "Verify Docker access and run the preflight again.",
+		}
+	}
+	if owner := occupiedDockerPort(string(output), bindAddr, port); owner != "" {
+		return Check{ID: id, Code: occupiedCode, OK: false, Message: msg.occupiedMessage, Detail: owner, Action: msg.occupiedAction}
+	}
+	if busy, detail := m.probeHostPortBusy(ctx, bindAddr, port); busy {
+		return Check{ID: id, Code: occupiedCode, OK: false, Message: msg.busyMessage, Detail: detail, Action: msg.busyAction}
+	}
+	return Check{ID: id, Code: id, OK: true, Message: msg.availableMessage}
 }
 
 // dockerCPFixedVersion is Docker Engine 29.5.1, the first upstream release

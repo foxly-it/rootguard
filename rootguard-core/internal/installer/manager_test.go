@@ -248,6 +248,15 @@ func TestPreflightReportsOccupiedDockerDNSPort(t *testing.T) {
 	if check.Code != "dns_port_occupied" || check.Detail != "existing-dns" || check.Action == "" {
 		t.Fatalf("unexpected occupied-port diagnostic: %#v", check)
 	}
+	// Pins the exact wording checkPortAvailable's extraction (found in
+	// review) must preserve - it must not drift towards the blockpage
+	// check's own, differently-worded action text.
+	if check.Message != "DNS port 192.168.1.2:53 is already published." {
+		t.Fatalf("unexpected occupied-port message: %q", check.Message)
+	}
+	if check.Action != "Stop or reconfigure the conflicting DNS service, then run the preflight again." {
+		t.Fatalf("unexpected occupied-port action: %q", check.Action)
+	}
 }
 
 // TestPreflightProbesHostPortWhenDockerPsIsClean covers a `docker ps` blind
@@ -329,6 +338,15 @@ func TestPreflightReportsOccupiedBlockpagePort(t *testing.T) {
 	check := report.Checks[len(report.Checks)-1]
 	if check.Code != "blockpage_port_occupied" || check.Detail != "existing-web" || check.Action == "" {
 		t.Fatalf("unexpected occupied-blockpage-port diagnostic: %#v", check)
+	}
+	// Pins the exact wording checkPortAvailable's extraction (found in
+	// review) must preserve - "or disable the blockpage" is specific to
+	// this check and must not bleed into (or vanish from) the DNS one.
+	if check.Message != "Blockpage port 192.168.1.2:80 is already published." {
+		t.Fatalf("unexpected occupied-blockpage-port message: %q", check.Message)
+	}
+	if check.Action != "Stop or reconfigure the conflicting service, or disable the blockpage, then run the preflight again." {
+		t.Fatalf("unexpected occupied-blockpage-port action: %q", check.Action)
 	}
 }
 
