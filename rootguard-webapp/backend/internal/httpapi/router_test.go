@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
 )
@@ -28,7 +27,7 @@ import (
 // convention instead of diverging from it with their own explicit 405.
 func TestRouterMethodDispatch(t *testing.T) {
 	core := coreclient.New("http://127.0.0.1:1", "test-token")
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	mux := NewRouter(core, auth)
 
 	cases := []struct {

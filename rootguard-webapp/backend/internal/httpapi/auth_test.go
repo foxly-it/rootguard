@@ -15,8 +15,17 @@ import (
 	"time"
 )
 
+// newTestSessionAuth builds a SessionAuth for the many tests here that
+// don't care about the specific credentials/recovery-token/persistence
+// path - found in review: this exact 5-argument NewSessionAuth literal was
+// duplicated at 17+ call sites, so a future signature change would have
+// needed updating each one individually instead of just this helper.
+func newTestSessionAuth() *SessionAuth {
+	return NewSessionAuth("admin", "secret", "", time.Hour, "")
+}
+
 func TestSessionAuthLoginProtectsAPIAndLogoutInvalidatesSession(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})))
@@ -72,7 +81,7 @@ func TestSessionAuthLoginProtectsAPIAndLogoutInvalidatesSession(t *testing.T) {
 }
 
 func TestSessionAuthRejectsWrongCredentialsAndCrossOriginLogin(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 	body := []byte(`{"username":"admin","password":"wrong"}`)
 
@@ -196,7 +205,7 @@ func TestPasswordRecoveryRollsBackOnCredentialPersistFailure(t *testing.T) {
 }
 
 func TestSessionInventoryListsAndRevokes(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 	loginBody := []byte(`{"username":"admin","password":"secret"}`)
 
@@ -301,7 +310,7 @@ func TestSessionInventoryListsAndRevokes(t *testing.T) {
 // guardDestructive (see destructive.go). A hijacked session cookie could
 // have invalidated every other active session, unthrottled.
 func TestSessionRevokeSharesTheDestructiveRateLimitBudget(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 
@@ -354,7 +363,7 @@ func TestSessionRevokeSharesTheDestructiveRateLimitBudget(t *testing.T) {
 // entry the frontend has no translation for (see i18n/de.ts) on top of
 // handleRevokeSession's own, more specific "session_revoked" entry.
 func TestSessionRevokeDoesNotDoubleAudit(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 	loginBody := []byte(`{"username":"admin","password":"secret"}`)
 
@@ -619,7 +628,7 @@ func TestSessionInventoryMigratesPreExistingSessionsWithoutID(t *testing.T) {
 }
 
 func TestLoginRateLimitBlocksRepeatedFailuresAndResetsOnSuccess(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
 
@@ -663,7 +672,7 @@ func TestLoginRateLimitBlocksRepeatedFailuresAndResetsOnSuccess(t *testing.T) {
 // (401); every other truly-concurrent request must be rejected outright
 // (429) without ever reaching the password check.
 func TestLoginRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
 
@@ -705,7 +714,7 @@ func TestLoginRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
 }
 
 func TestLoginRateLimitIgnoresSpoofedForwardedForHeader(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
 
@@ -747,7 +756,7 @@ func TestLoginRateLimitIgnoresSpoofedForwardedForHeader(t *testing.T) {
 // operator reviewing "who logged in from where" for incident response
 // would see attacker-controlled garbage instead of the real peer address.
 func TestAuditLogIgnoresSpoofedForwardedForHeader(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 
 	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)
@@ -787,7 +796,7 @@ func TestAuditLogIgnoresSpoofedForwardedForHeader(t *testing.T) {
 }
 
 func TestAuditLogRecordsLoginLogoutAndRateLimitEvents(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
 
 	wrongBody := []byte(`{"username":"admin","password":"wrong"}`)

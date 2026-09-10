@@ -13,9 +13,7 @@ import (
 func TestUpdateEnforcesBackupRetentionAfterLifecycle(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	oldest := writeManagedBackup(t, dataDir, "20260801T010000.000000000Z", "unbound", "rootguard-unbound", "oldest")
 	for day := 2; day <= DefaultBackupRetention; day++ {
 		writeManagedBackup(t, dataDir, "2026080"+string(rune('0'+day))+"T010000.000000000Z", "unbound", "rootguard-unbound", "existing")
