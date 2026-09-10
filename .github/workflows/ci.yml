@@ -15,39 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    timeout-minutes: 30
+  # Found in review: these 4 shell-script unit tests used to run as steps
+  # inside the validate job below, sequentially ahead of the Docker-based
+  # integration test - despite being independent of it and of each other.
+  # A separate job runs them in parallel with validate/markdown-links
+  # instead of adding to validate's own runtime.
+  unit-tests:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
-    env:
-      ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
-      ROOTGUARD_ADMIN_USER: admin
-      ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
-      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token-not-a-real-secret-32
-      ROOTGUARD_WEB_PORT: "18080"
-      ROOTGUARD_DNS_BIND: 127.0.0.1
-      ROOTGUARD_DNS_PORT: "1053"
-      # See compose.integration.yaml's own comment on these two - points
-      # Core's /api/unbound/diagnostics at the local, throwaway zone
-      # "Start local DNSSEC test authority" below serves, instead of the
-      # real internet.
-      ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN: good.rgtest-ci.internal
-      ROOTGUARD_UNBOUND_DIAGNOSTIC_DNSSEC_DOMAIN: bad.rgtest-ci.internal
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      # Found in review: "Verify Unbound configuration lifecycle" below
-      # exercises the real /api/unbound/diagnostics endpoint, which by
-      # design queries real internet domains - a transient DNS/network
-      # hiccup on the runner's own connection then fails this job for
-      # reasons that have nothing to do with the code under test.
-      # Confirmed live: main's own independent, scheduled CI failed this
-      # way multiple times in a row. setup.sh signs a small throwaway
-      # zone fresh every run and serves it locally;
-      # ROOTGUARD_UNBOUND_DIAGNOSTIC_*_DOMAIN above and unbound's own
-      # extra_hosts (compose.integration.yaml) are what point Core and
-      # Unbound at it instead of the real internet.
-      - name: Start local DNSSEC test authority
-        run: ./scripts/ci/dnssec-test-zone/setup.sh
 
       - name: Test verification-common.sh's resource-ownership state machine
         run: ./scripts/verification-common.test.sh
@@ -73,6 +50,15 @@ jobs:
       # scenario the review named, not just the two it happened to spot.
       - name: Test resolve-release-pin-commit.sh's retry detection
         run: ./scripts/lib/resolve-release-pin-commit.test.sh
+
+  # Found in review: see unit-tests' own comment above - this used to be
+  # two more sequential steps ahead of validate's Docker-based test,
+  # independent of it and of unit-tests above.
+  markdown-links:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Found in review: check-site-facts.sh already checks this for
       # site/*.html, but nothing checked it repo-wide - PR #423 deleted
@@ -109,6 +95,40 @@ jobs:
         run: |
           set -euo pipefail
           git ls-files -z -- '*.md' | xargs -0 lychee --offline --no-progress
+
+  validate:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    env:
+      ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
+      ROOTGUARD_ADMIN_USER: admin
+      ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
+      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token-not-a-real-secret-32
+      ROOTGUARD_WEB_PORT: "18080"
+      ROOTGUARD_DNS_BIND: 127.0.0.1
+      ROOTGUARD_DNS_PORT: "1053"
+      # See compose.integration.yaml's own comment on these two - points
+      # Core's /api/unbound/diagnostics at the local, throwaway zone
+      # "Start local DNSSEC test authority" below serves, instead of the
+      # real internet.
+      ROOTGUARD_UNBOUND_DIAGNOSTIC_RESOLUTION_DOMAIN: good.rgtest-ci.internal
+      ROOTGUARD_UNBOUND_DIAGNOSTIC_DNSSEC_DOMAIN: bad.rgtest-ci.internal
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # Found in review: "Verify Unbound configuration lifecycle" below
+      # exercises the real /api/unbound/diagnostics endpoint, which by
+      # design queries real internet domains - a transient DNS/network
+      # hiccup on the runner's own connection then fails this job for
+      # reasons that have nothing to do with the code under test.
+      # Confirmed live: main's own independent, scheduled CI failed this
+      # way multiple times in a row. setup.sh signs a small throwaway
+      # zone fresh every run and serves it locally;
+      # ROOTGUARD_UNBOUND_DIAGNOSTIC_*_DOMAIN above and unbound's own
+      # extra_hosts (compose.integration.yaml) are what point Core and
+      # Unbound at it instead of the real internet.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
 
       - name: Validate Compose model
         run: docker compose -f compose.integration.yaml config --quiet
