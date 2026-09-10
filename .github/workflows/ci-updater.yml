@@ -36,8 +36,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: rootguard-updater/go.mod
+          # Found in review: cache: false made the cache-dependency-path
+          # above a no-op - every other Go component in this repo (see
+          # ci-core.yml, ci-webapp.yml, ci-unbound.yml) caches the module
+          # download, no reason for this one to differ.
           cache-dependency-path: rootguard-updater/go.sum
-          cache: false
       - working-directory: rootguard-updater
         run: go test ./...
       - working-directory: rootguard-updater
@@ -100,6 +103,8 @@ jobs:
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=updater
+          cache-to: type=gha,mode=max,scope=updater
 
   integration:
     needs: test
