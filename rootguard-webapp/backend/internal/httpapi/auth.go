@@ -207,7 +207,17 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 		}
 
 		if strings.HasPrefix(r.URL.Path, "/api/auth/sessions/") {
-			a.handleRevokeSession(w, r)
+			// Found in review: this dispatched straight into
+			// handleRevokeSession, bypassing every rate limit every other
+			// destructive route gets via guardDestructive (see
+			// destructive.go) - a hijacked session cookie could invalidate
+			// every other active session, unthrottled. Gated with the same
+			// shared destructiveLimiter budget, not the full guardDestructive
+			// wrapper, since handleRevokeSession already records its own
+			// more specific "session_revoked" audit entry (which the
+			// frontend translates, see i18n/de.ts) and doesn't need
+			// guardDestructive's generic one layered on top.
+			a.destructiveRateLimitGate(auditSessionRevoked, a.handleRevokeSession)(w, r)
 			return
 		}
 
