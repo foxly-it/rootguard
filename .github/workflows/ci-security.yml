@@ -65,14 +65,12 @@ jobs:
         run: ./scripts/ci/trivy-image-scan.test.sh
       - name: Test Debian pin checker
         run: ./scripts/check-debian-pins.test.sh
+      # Found in review: this used to be its own, simpler copy of
+      # trivy-image-scan.sh's install logic - hardcoded amd64, and
+      # reinstalled unconditionally instead of skipping an already-
+      # correct version. Both now share install-trivy.sh.
       - name: Install trivy
-        run: |
-          set -euo pipefail
-          source scripts/ci/trivy-version.env
-          curl -sSfL -o trivy.tar.gz \
-            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-          echo "${TRIVY_LINUX_AMD64_SHA256}  trivy.tar.gz" | sha256sum -c -
-          tar -xz -C /usr/local/bin -f trivy.tar.gz trivy
+        run: ./scripts/ci/install-trivy.sh
       - name: Scan for vulnerabilities, secrets, and Dockerfile misconfigurations
         run: |
           trivy fs . \
