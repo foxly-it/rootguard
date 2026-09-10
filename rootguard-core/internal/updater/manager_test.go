@@ -19,6 +19,18 @@ import (
 // included, which every fixture target image here is.
 func noopAttestationVerifier(context.Context, string, string) error { return nil }
 
+// writeEmptyComposeFixture writes a minimal, valid compose.yaml (no real
+// services) to dir - found in review: this exact bootstrap was duplicated
+// across every test here (and in backups_test.go/github_release_test.go)
+// that points Manager's own ComposeDir at *something* that exists without
+// ever actually calling docker compose for real.
+func writeEmptyComposeFixture(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCheckComparesRunningAndPulledImageIDs(t *testing.T) {
 	manager := NewManager(Options{
 		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
@@ -64,9 +76,7 @@ func TestCheckComparesRunningAndPulledImageIDs(t *testing.T) {
 func TestUpdateFailsWhenComposeUpDoesNotActuallySwapTheImage(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	manager := NewManager(Options{
 		DataDir: dataDir, ComposeDir: composeDir,
 		VerifyAttempts: 1, RetryDelay: time.Millisecond,
@@ -103,9 +113,7 @@ func TestUpdateFailsWhenComposeUpDoesNotActuallySwapTheImage(t *testing.T) {
 func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	var mu sync.Mutex
 	var commands []string
 	composedUp := false
@@ -174,9 +182,7 @@ func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 func TestUpdateRefusesActivationWhenAttestationFails(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	var mu sync.Mutex
 	var commands []string
 	manager := NewManager(Options{
@@ -226,9 +232,7 @@ func TestUpdateRefusesActivationWhenAttestationFails(t *testing.T) {
 func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	var commands []string
 	composedUp := false
 	manager := NewManager(Options{
@@ -290,9 +294,7 @@ func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T)
 func TestFailedUpdateRestoresPreviousVolumeOwnershipBeforeRollback(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	var commands []string
 	verifyCalls := 0
 	manager := NewManager(Options{
@@ -351,9 +353,7 @@ func TestFailedUpdateRestoresPreviousVolumeOwnershipBeforeRollback(t *testing.T)
 func TestFailedRollbackRefusesTamperedBackupInsteadOfRestoringIt(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	containerRoot := t.TempDir()
 	confDir := filepath.Join(containerRoot, "opt", "adguardhome", "conf")
 	if err := os.MkdirAll(confDir, 0700); err != nil {
@@ -467,9 +467,7 @@ func TestUnknownServiceIsRejected(t *testing.T) {
 func TestFailedHealthCheckRestoresPreviousImageAndBackup(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	verifyCalls := 0
 	composedUp := false
 	manager := NewManager(Options{

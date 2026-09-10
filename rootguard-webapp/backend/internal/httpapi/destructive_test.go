@@ -33,7 +33,7 @@ func loggedInRequest(t *testing.T, auth *SessionAuth, method, path string, body 
 }
 
 func TestGuardDestructiveRecordsSuccessAndFailure(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 
 	succeed := auth.guardDestructive("thing_done", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -73,7 +73,7 @@ func TestGuardDestructiveRecordsSuccessAndFailure(t *testing.T) {
 }
 
 func TestGuardDestructiveRateLimitsSharedAcrossActions(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	auth.destructiveLimiter = newRateLimiter(time.Minute, 2)
 
 	first := auth.guardDestructive("action_one", func(w http.ResponseWriter, _ *http.Request) {
@@ -127,7 +127,7 @@ func TestGuardDestructiveRateLimitsSharedAcrossActions(t *testing.T) {
 // ("bound how much a single... session can do", see its construction in
 // NewSessionAuth).
 func TestGuardDestructiveRateLimitIsPerSessionNotPerAccount(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
 
 	action := auth.guardDestructive("thing_done", func(w http.ResponseWriter, _ *http.Request) {
@@ -182,7 +182,7 @@ func TestGuardDestructiveRateLimitIsPerSessionNotPerAccount(t *testing.T) {
 // forward, just not as a guaranteed fails-without-the-fix regression
 // gate the way the login/recovery ones are.
 func TestGuardDestructiveRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	auth.destructiveLimiter = newRateLimiter(time.Minute, 2)
 	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]
 
@@ -237,7 +237,7 @@ func TestGuardDestructiveRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
 // guardRestoreUpload's own tighter gate actually doing something -
 // not just inheriting the shared limiter's already-tighter number.
 func TestGuardRestoreUploadBoundsConcurrencyTighterThanTheSharedLimiter(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	auth.destructiveLimiter = newRateLimiter(time.Minute, 30)
 	auth.restoreLimiter = newRateLimiter(time.Minute, 2)
 	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]
@@ -302,7 +302,7 @@ func TestGuardRestoreUploadBoundsConcurrencyTighterThanTheSharedLimiter(t *testi
 // restoreLimiter reservation this rejection path holds is actually
 // released, rather than leaked for the rest of the window.
 func TestGuardRestoreUploadReleasesItsSlotWhenTheSharedLimiterRejects(t *testing.T) {
-	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth := newTestSessionAuth()
 	auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
 	auth.restoreLimiter = newRateLimiter(time.Minute, 2)
 	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]

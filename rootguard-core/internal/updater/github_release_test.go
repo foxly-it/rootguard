@@ -3,8 +3,6 @@ package updater
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -177,9 +175,7 @@ func TestCheckUsesResolveTargetWhenSet(t *testing.T) {
 func TestUpdateUsesResolveTargetWhenSet(t *testing.T) {
 	dataDir := t.TempDir()
 	composeDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(composeDir, "compose.yaml"), []byte("services: {}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
+	writeEmptyComposeFixture(t, composeDir)
 	composedUp := false
 	manager := NewManager(Options{
 		DataDir: dataDir, ComposeDir: composeDir,
