@@ -44,6 +44,7 @@ import UnboundGuidedZones from "../components/UnboundGuidedZones";
 import UnboundPrivateDomains from "../components/UnboundPrivateDomains";
 import ContentModal from "../components/ContentModal";
 import { useI18n } from "../i18n";
+import { useInterval } from "../hooks/useInterval";
 import { useSidebarSubNav, type SidebarSubNavItem } from "../layout/SidebarSubNav";
 import { errorMessage } from "../utils/errors";
 
@@ -142,15 +143,11 @@ export default function Unbound() {
     };
   }, [settings]);
 
-  useEffect(() => {
-    if (!diagnosticLogging?.active) return;
-    const refresh = window.setInterval(() => {
-      fetchUnboundDiagnosticLoggingStatus()
-        .then(setDiagnosticLogging)
-        .catch(() => undefined);
-    }, 10_000);
-    return () => window.clearInterval(refresh);
-  }, [diagnosticLogging?.active]);
+  useInterval(() => {
+    fetchUnboundDiagnosticLoggingStatus()
+      .then(setDiagnosticLogging)
+      .catch(() => undefined);
+  }, diagnosticLogging?.active ? 10_000 : null);
 
   // Deep-links and search results can point at a specific section within a
   // tab (e.g. "/unbound/advanced#unbound-section-advanced-expert"), not just

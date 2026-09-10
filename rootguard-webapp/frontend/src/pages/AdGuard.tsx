@@ -16,6 +16,7 @@ import {
 import ContentModal from "../components/ContentModal";
 import "../styles/adguard.css";
 import { useI18n } from "../i18n";
+import { useInterval } from "../hooks/useInterval";
 import { errorMessage } from "../utils/errors";
 import { formatCountdown } from "../utils/countdown";
 
@@ -75,16 +76,16 @@ export default function AdGuard() {
   // changeProtection) - without polling here, RootGuard would keep showing
   // "paused" until the page was manually reloaded. Only runs while actually
   // paused, so it doesn't add load the rest of the time.
-  useEffect(() => {
-    if (!status || status.protection_enabled) return;
-    const interval = window.setInterval(() => {
-      fetchAdGuardStatus().then(applyStatus).catch(() => {});
-    }, 5000);
-    return () => window.clearInterval(interval);
-  }, [status, applyStatus]);
+  useInterval(() => {
+    fetchAdGuardStatus().then(applyStatus).catch(() => {});
+  }, status && !status.protection_enabled ? 5000 : null);
 
   // Drives the visible countdown between polls above - only ticks while a
-  // *timed* pause (not an indefinite one) is showing.
+  // *timed* pause (not an indefinite one) is showing. Not useInterval: this
+  // one deliberately resyncs `now` to Date.now() and restarts its 1s phase
+  // on every fresh `status` (i.e. after each poll above), not just when
+  // entering/leaving a pause - useInterval's fixed-cadence contract would
+  // drop that resync.
   useEffect(() => {
     if (!status || status.protection_enabled || status.protection_disabled_duration_ms <= 0) return;
     setNow(Date.now());

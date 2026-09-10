@@ -27,6 +27,7 @@ import {
 } from "../api/client";
 import "../styles/dashboard.css";
 import { useI18n } from "../i18n";
+import { useInterval } from "../hooks/useInterval";
 import { healthLabel, runtimeTone } from "../utils/serviceHealth";
 import { blockRatePercent, pushHistory, type HistoryPoint } from "../utils/metrics";
 
@@ -179,64 +180,41 @@ export default function Overview() {
     await Promise.all([loadStatus(), loadMetrics()]);
   }, [loadStatus, loadMetrics]);
 
+  // Backgrounded/hidden tabs have no reason to keep polling Core, Docker,
+  // and AdGuard every second - nobody's watching the charts. Pausing there
+  // and firing an immediate load on return keeps the same "feels current"
+  // behavior without the wasted requests in between.
+  const [visible, setVisible] = useState(() => !document.hidden);
   useEffect(() => {
-    // At a 500ms cadence the interval itself already delivers a fresh
-    // sample about as fast as a burst ever could, so the earlier
-    // startup-burst scheme (extra timeouts at 2/4/7s to front-load a few
-    // samples before the old, much slower 10s interval caught up) is
-    // redundant now and was removed - one immediate call plus the
-    // interval is already fast.
-    let metricsInterval: number | null = null;
-    let adGuardInterval: number | null = null;
-    let statusInterval: number | null = null;
-
-    function start() {
-      loadStatus();
-      loadCoreMetrics();
-      loadAdGuardMetrics();
-      metricsInterval = window.setInterval(loadCoreMetrics, 500);
-      // AdGuard's status endpoint makes several real upstream requests per
-      // call (see loadAdGuardMetrics) - a much slower cadence than CPU/RAM
-      // keeps that load reasonable without the query/block counts feeling
-      // stale, since they don't change on a sub-second timescale anyway.
-      adGuardInterval = window.setInterval(loadAdGuardMetrics, 5_000);
-      // Service/installation status changes far less often than CPU/memory/
-      // query counts - a slower cadence is plenty fresh for it and avoids
-      // hitting Core for a full service/Docker inspect every single second.
-      statusInterval = window.setInterval(loadStatus, 20_000);
-    }
-
-    function stop() {
-      if (metricsInterval !== null) {
-        window.clearInterval(metricsInterval);
-        metricsInterval = null;
-      }
-      if (adGuardInterval !== null) {
-        window.clearInterval(adGuardInterval);
-        adGuardInterval = null;
-      }
-      if (statusInterval !== null) {
-        window.clearInterval(statusInterval);
-        statusInterval = null;
-      }
-    }
-
-    // Backgrounded/hidden tabs have no reason to keep polling Core, Docker,
-    // and AdGuard every second - nobody's watching the charts. Pausing
-    // there and firing an immediate load on return keeps the same "feels
-    // current" behavior without the wasted requests in between.
     function handleVisibilityChange() {
-      if (document.hidden) stop();
-      else start();
+      setVisible(!document.hidden);
     }
-
-    if (!document.hidden) start();
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      stop();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [loadCoreMetrics, loadAdGuardMetrics, loadStatus]);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  // At a 500ms cadence the interval itself already delivers a fresh sample
+  // about as fast as a burst ever could, so the earlier startup-burst
+  // scheme (extra timeouts at 2/4/7s to front-load a few samples before
+  // the old, much slower 10s interval caught up) is redundant now and was
+  // removed - one immediate call plus the interval is already fast.
+  useEffect(() => {
+    if (!visible) return;
+    loadStatus();
+    loadCoreMetrics();
+    loadAdGuardMetrics();
+  }, [visible, loadStatus, loadCoreMetrics, loadAdGuardMetrics]);
+
+  useInterval(loadCoreMetrics, visible ? 500 : null);
+  // AdGuard's status endpoint makes several real upstream requests per call
+  // (see loadAdGuardMetrics) - a much slower cadence than CPU/RAM keeps
+  // that load reasonable without the query/block counts feeling stale,
+  // since they don't change on a sub-second timescale anyway.
+  useInterval(loadAdGuardMetrics, visible ? 5_000 : null);
+  // Service/installation status changes far less often than CPU/memory/
+  // query counts - a slower cadence is plenty fresh for it and avoids
+  // hitting Core for a full service/Docker inspect every single second.
+  useInterval(loadStatus, visible ? 20_000 : null);
 
   async function restart(service: ServiceInfo["name"]) {
     setBusyService(service);

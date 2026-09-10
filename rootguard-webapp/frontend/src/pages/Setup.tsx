@@ -10,6 +10,7 @@ import {
 } from "../api/client";
 import "../styles/setup.css";
 import { useI18n } from "../i18n";
+import { useInterval } from "../hooks/useInterval";
 import { errorMessage as messageFrom } from "../utils/errors";
 import { detectDefaultBindAddress } from "../utils/network";
 import { AlertTriangle, ArrowRight, Check, Download, ExternalLink, Filter, Layers, Link2, Network, Play, RotateCcw, ServerCog, ShieldCheck, X } from "lucide-react";
@@ -57,13 +58,7 @@ export default function Setup() {
     return () => window.clearTimeout(initialLoad);
   }, [loadStatus]);
 
-  useEffect(() => {
-    if (status?.state !== "deploying") {
-      return;
-    }
-    const poll = window.setInterval(loadStatus, 1500);
-    return () => window.clearInterval(poll);
-  }, [loadStatus, status?.state]);
+  useInterval(loadStatus, status?.state === "deploying" ? 1500 : null);
 
   async function runPreflight() {
     setBusy(true);
