@@ -36,52 +36,12 @@ if [[ $# -ne 1 ]]; then
 fi
 image="$1"
 
-# ci-security.yml sources the same file, keeping the version and asset
-# checksums in one place.
-#
-# Found in review, round 14: this used to hardcode the amd64 asset and
-# checksum - silently fine on every caller except ci-unbound.yml's own
-# arm64 matrix leg (ubuntu-24.04-arm), where it failed live with "cannot
-# execute binary file: Exec format error". `uname -m` picks the matching
-# release asset/checksum for both architectures this repo's CI actually
-# runs on.
-#
-# Found in review, round 15: this used to skip installing entirely
-# whenever *any* `trivy` was already on PATH, trusting it to be this
-# exact pinned version without ever checking - a runner image that ships
-# its own trivy (GitHub's hosted images add security tools like this
-# over time) would then silently scan with whatever version that happened
-# to be, unpinned, with no `.trivyignore.yaml` entry safe to assume still
-# applies the same way against a different DB/ruleset. Now installs
-# whenever the version doesn't match exactly, not just when the command
-# is missing.
+# Found in review: the arch-aware, skip-if-already-pinned install logic
+# that used to live here (rounds 14/15) is now install-trivy.sh, shared
+# with ci-security.yml's own `trivy fs .` job - see that script's own
+# header for the full history.
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=scripts/ci/trivy-version.env
-source "${script_dir}/trivy-version.env"
-
-want_version="$TRIVY_VERSION"
-have_version="$(trivy --version 2>/dev/null | awk '/^Version:/ {print $2; exit}' || true)"
-if [[ "$have_version" != "$want_version" ]]; then
-  case "$(uname -m)" in
-    x86_64)
-      asset="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
-      checksum="$TRIVY_LINUX_AMD64_SHA256"
-      ;;
-    aarch64)
-      asset="trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz"
-      checksum="$TRIVY_LINUX_ARM64_SHA256"
-      ;;
-    *)
-      echo "::error::trivy-image-scan.sh: unsupported architecture $(uname -m)" >&2
-      exit 1
-      ;;
-  esac
-  curl -sSfL -o trivy.tar.gz \
-    "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${asset}"
-  echo "${checksum}  trivy.tar.gz" | sha256sum -c -
-  sudo tar -xz -C /usr/local/bin -f trivy.tar.gz trivy
-  rm trivy.tar.gz
-fi
+"${script_dir}/install-trivy.sh"
 
 platform_args=()
 if [[ -n "$platform" ]]; then
