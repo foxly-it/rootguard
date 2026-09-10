@@ -294,6 +294,127 @@ func TestSessionInventoryListsAndRevokes(t *testing.T) {
 	}
 }
 
+// TestSessionRevokeSharesTheDestructiveRateLimitBudget is the regression
+// test for a real gap found in review: DELETE /api/auth/sessions/{id}
+// dispatched straight from Handler into handleRevokeSession, completely
+// bypassing the destructiveLimiter every other mutating route gets via
+// guardDestructive (see destructive.go). A hijacked session cookie could
+// have invalidated every other active session, unthrottled.
+func TestSessionRevokeSharesTheDestructiveRateLimitBudget(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	loginBody := []byte(`{"username":"admin","password":"secret"}`)
+	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+	login := httptest.NewRecorder()
+	handler.ServeHTTP(login, loginRequest)
+	if login.Code != http.StatusOK {
+		t.Fatalf("expected login 200, got %d", login.Code)
+	}
+	cookie := login.Result().Cookies()[0]
+
+	// Consume the shared budget's only slot with an unrelated destructive
+	// action first, mirroring TestGuardDestructiveRateLimitsSharedAcrossActions.
+	unrelated := auth.guardDestructive("action_one", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	unrelatedRequest := httptest.NewRequest(http.MethodPost, "/api/whatever", nil)
+	unrelatedRequest.AddCookie(cookie)
+	unrelatedResponse := httptest.NewRecorder()
+	unrelated(unrelatedResponse, unrelatedRequest)
+	if unrelatedResponse.Code != http.StatusOK {
+		t.Fatalf("expected the unrelated action to succeed, got %d", unrelatedResponse.Code)
+	}
+
+	revokeRequest := httptest.NewRequest(http.MethodDelete, "/api/auth/sessions/does-not-matter", nil)
+	revokeRequest.Header.Set("Origin", "http://example.com")
+	revokeRequest.Host = "example.com"
+	revokeRequest.AddCookie(cookie)
+	revokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokeResponse, revokeRequest)
+	if revokeResponse.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected session revoke to be rate-limited once the shared budget was exhausted, got %d: %s", revokeResponse.Code, revokeResponse.Body.String())
+	}
+
+	var sawRateLimited bool
+	for _, event := range auth.auditSnapshot() {
+		if event.Event == auditSessionRevoked+"_rate_limited" {
+			sawRateLimited = true
+		}
+	}
+	if !sawRateLimited {
+		t.Fatal("expected a session_revoked_rate_limited audit event")
+	}
+}
+
+// TestSessionRevokeDoesNotDoubleAudit makes sure the rate-limit fix above
+// didn't route session revocation through the full guardDestructive
+// wrapper, which would additionally log a generic "session_revoked_success"
+// entry the frontend has no translation for (see i18n/de.ts) on top of
+// handleRevokeSession's own, more specific "session_revoked" entry.
+func TestSessionRevokeDoesNotDoubleAudit(t *testing.T) {
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, "")
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+	loginBody := []byte(`{"username":"admin","password":"secret"}`)
+
+	login := func() *http.Cookie {
+		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("expected login 200, got %d", response.Code)
+		}
+		return response.Result().Cookies()[0]
+	}
+	login()
+	secondCookie := login()
+
+	listRequest := httptest.NewRequest(http.MethodGet, "/api/auth/sessions", nil)
+	listRequest.AddCookie(secondCookie)
+	listResponse := httptest.NewRecorder()
+	handler.ServeHTTP(listResponse, listRequest)
+	var entries []sessionSummary
+	if err := json.Unmarshal(listResponse.Body.Bytes(), &entries); err != nil {
+		t.Fatalf("failed to decode session list: %v", err)
+	}
+	var otherID string
+	for _, entry := range entries {
+		if !entry.Current {
+			otherID = entry.ID
+		}
+	}
+	if otherID == "" {
+		t.Fatal("expected to find the other (non-current) session's id")
+	}
+
+	revokeRequest := httptest.NewRequest(http.MethodDelete, "/api/auth/sessions/"+otherID, nil)
+	revokeRequest.Header.Set("Origin", "http://example.com")
+	revokeRequest.Host = "example.com"
+	revokeRequest.AddCookie(secondCookie)
+	revokeResponse := httptest.NewRecorder()
+	handler.ServeHTTP(revokeResponse, revokeRequest)
+	if revokeResponse.Code != http.StatusOK {
+		t.Fatalf("expected revoke 200, got %d", revokeResponse.Code)
+	}
+
+	var revokedCount, genericSuccessCount int
+	for _, event := range auth.auditSnapshot() {
+		switch event.Event {
+		case auditSessionRevoked:
+			revokedCount++
+		case auditSessionRevoked + "_success":
+			genericSuccessCount++
+		}
+	}
+	if revokedCount != 1 {
+		t.Fatalf("expected exactly 1 session_revoked audit entry, got %d", revokedCount)
+	}
+	if genericSuccessCount != 0 {
+		t.Fatalf("expected no generic session_revoked_success audit entry, got %d", genericSuccessCount)
+	}
+}
+
 // TestLogoutClearsCookieEvenWhenPersistFails is the regression test for a
 // real gap found in review: the delete-cookie call used to run only after
 // persistLocked succeeded, so a persist failure returned a 500 with the

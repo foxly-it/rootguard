@@ -43,29 +43,41 @@ func (a *SessionAuth) destructiveLimiterKey(r *http.Request) string {
 // authenticatedSessionID here are expected to succeed; they're re-read
 // anyway since guardDestructive has no other way to learn which session
 // is acting.
-func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http.HandlerFunc {
+// destructiveRateLimitGate applies the shared destructiveLimiter budget -
+// the same TOCTOU-safe beginAttempt/endAttempt gate guardDestructive already
+// used inline - factored out so a handler that already records its own,
+// more specific audit entry (handleRevokeSession's "session_revoked", see
+// auth.go) can get the same rate-limit protection without also picking up
+// guardDestructive's generic post-response success/failure audit on top of
+// its own.
+//
+// beginAttempt/endAttempt, not blocked()/recordFailure() - found in review,
+// the same TOCTOU gap already fixed for login/recovery (see ratelimit.go's
+// own doc comment): many concurrent requests could all observe zero
+// recorded uses and all be admitted before any of them got counted, so the
+// limit never actually bounded concurrent volume, only sequential. Every
+// attempt counts here (endAttempt(key, true) unconditionally below), not
+// just failures - the thing being bounded is request volume itself,
+// matching this limiter's pre-existing recordFailure-on-every-call
+// behavior.
+func (a *SessionAuth) destructiveRateLimitGate(event string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username, _ := a.authenticatedUser(r)
-		remoteIP := clientAddress(r)
 		key := a.destructiveLimiterKey(r)
-
-		// beginAttempt/endAttempt, not blocked()/recordFailure() - found
-		// in review, the same TOCTOU gap already fixed for login/recovery
-		// (see ratelimit.go's own doc comment): many concurrent requests
-		// could all observe zero recorded uses and all be admitted before
-		// any of them got counted, so the limit never actually bounded
-		// concurrent volume, only sequential. Every attempt counts here
-		// (endAttempt(key, true) unconditionally below), not just
-		// failures - the thing being bounded is request volume itself,
-		// matching this limiter's pre-existing recordFailure-on-every-call
-		// behavior.
 		if !a.destructiveLimiter.beginAttempt(key) {
-			a.recordAuditDetail(event+"_rate_limited", username, remoteIP, r.Method+" "+r.URL.Path)
+			username, _ := a.authenticatedUser(r)
+			a.recordAuditDetail(event+"_rate_limited", username, clientAddress(r), r.Method+" "+r.URL.Path)
 			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 			return
 		}
 		defer a.destructiveLimiter.endAttempt(key, true)
+		next(w, r)
+	}
+}
 
+func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http.HandlerFunc {
+	return a.destructiveRateLimitGate(event, func(w http.ResponseWriter, r *http.Request) {
+		username, _ := a.authenticatedUser(r)
+		remoteIP := clientAddress(r)
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 		next(rec, r)
 
@@ -75,7 +87,7 @@ func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http
 		} else {
 			a.recordAuditDetail(event+"_failure", username, remoteIP, detail)
 		}
-	}
+	})
 }
 
 // guardRestoreUpload wraps guardDestructive with an additional, much
