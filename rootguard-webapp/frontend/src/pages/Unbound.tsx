@@ -1,35 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import {
   Activity, Code2, Expand, MapPinned, SlidersHorizontal,
   Sparkles, Settings2, Lightbulb, Home, Lock, Route, FileText, SquarePen, History as HistoryIcon,
   Router as RouterIcon, ArrowLeftRight, FileUp, Stethoscope, Waypoints,
 } from "lucide-react";
-import {
-  fetchUnboundDiagnostics,
-  fetchUnboundPathDiagnostics,
-  fetchUnboundDiagnosticLoggingStatus,
-  fetchUnboundHistory,
-  fetchUnboundAdvice,
-  fetchUnboundActiveConfiguration,
-  fetchUnboundPresets,
-  fetchUnboundSettings,
-  fetchUnboundNetworkCapabilities,
-  previewUnboundSettings,
-  startUnboundDiagnosticLogging,
-  stopUnboundDiagnosticLogging,
-  restoreUnboundVersion,
-  updateUnboundSettings,
-  type UnboundDiagnosticReport,
-  type UnboundDiagnosticLoggingStatus,
-  type UnboundAdvice,
-  type UnboundActiveConfiguration,
-  type UnboundHistoryEntry,
-  type UnboundPreset,
-  type UnboundPreview,
-  type UnboundSettings,
-  type UnboundNetworkCapabilities,
-} from "../api/client";
+import { type UnboundSettings } from "../api/client";
 import "../styles/unbound.css";
 import "../styles/unbound-live.css";
 import "../styles/unbound-polish.css";
@@ -44,25 +20,39 @@ import UnboundGuidedZones from "../components/UnboundGuidedZones";
 import UnboundPrivateDomains from "../components/UnboundPrivateDomains";
 import ContentModal from "../components/ContentModal";
 import { useI18n } from "../i18n";
-import { useInterval } from "../hooks/useInterval";
+import { useUnboundData } from "../hooks/useUnboundData";
 import { useSidebarSubNav, type SidebarSubNavItem } from "../layout/SidebarSubNav";
-import { errorMessage } from "../utils/errors";
+import { presetText } from "../utils/unboundText";
 
 export default function Unbound() {
   const { t, formatDate } = useI18n();
-  const [settings, setSettings] = useState<UnboundSettings | null>(null);
-  const [history, setHistory] = useState<UnboundHistoryEntry[]>([]);
-  const [preview, setPreview] = useState<UnboundPreview | null>(null);
-  const [diagnostics, setDiagnostics] = useState<UnboundDiagnosticReport | null>(null);
-  const [pathDiagnostics, setPathDiagnostics] = useState<UnboundDiagnosticReport | null>(null);
-  const [diagnosticLogging, setDiagnosticLogging] = useState<UnboundDiagnosticLoggingStatus | null>(null);
-  const [presets, setPresets] = useState<UnboundPreset[]>([]);
-  const [advice, setAdvice] = useState<UnboundAdvice | null>(null);
-  const [liveConfig, setLiveConfig] = useState<UnboundActiveConfiguration | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const {
+    settings,
+    setSettings,
+    history,
+    preview,
+    setPreview,
+    diagnostics,
+    pathDiagnostics,
+    diagnosticLogging,
+    presets,
+    advice,
+    liveConfig,
+    networkCapabilities,
+    loading,
+    busy,
+    message,
+    error,
+    reload,
+    checkNetworkCapabilities,
+    selectPreset,
+    createPreview,
+    applyPreview,
+    restore,
+    runDiagnostics,
+    runPathDiagnostics,
+    toggleDiagnosticLogging,
+  } = useUnboundData();
   const navigate = useNavigate();
   const location = useLocation();
   const { section: sectionParam } = useParams<{ section?: string }>();
@@ -71,83 +61,7 @@ export default function Unbound() {
     (section: UnboundSection) => navigate(section === "overview" ? "/unbound" : `/unbound/${section}`, { replace: true }),
     [navigate],
   );
-  const [networkCapabilities, setNetworkCapabilities] = useState<UnboundNetworkCapabilities | null>(null);
   const [configModal, setConfigModal] = useState<"base" | "custom" | null>(null);
-
-  const reload = useCallback(async () => {
-    const [loadedSettings, loadedHistory, loadedPresets, loadedConfig, loadedDiagnosticLogging] = await Promise.all([
-      fetchUnboundSettings(),
-      fetchUnboundHistory(),
-      fetchUnboundPresets(),
-      fetchUnboundActiveConfiguration(),
-      fetchUnboundDiagnosticLoggingStatus(),
-    ]);
-    setSettings({
-      ...loadedSettings,
-      forward_zones: loadedSettings.forward_zones ?? [],
-      private_domains: loadedSettings.private_domains ?? [],
-      reverse_zones: loadedSettings.reverse_zones ?? [],
-      local_zones: loadedSettings.local_zones ?? [],
-      network_mode: loadedSettings.network_mode ?? "ipv4",
-      resource_profile: loadedSettings.resource_profile ?? "medium",
-      prefetch_key: loadedSettings.prefetch_key ?? true,
-      aggressive_nsec: loadedSettings.aggressive_nsec ?? true,
-      edns_buffer_size: loadedSettings.edns_buffer_size ?? 1232,
-      log_verbosity: loadedSettings.log_verbosity ?? 1,
-      serve_expired_ttl: loadedSettings.serve_expired_ttl ?? 86400,
-      serve_expired_client_timeout: loadedSettings.serve_expired_client_timeout ?? 1800,
-    });
-    setHistory(loadedHistory);
-    setPresets(loadedPresets);
-    setLiveConfig(loadedConfig);
-    setDiagnosticLogging(loadedDiagnosticLogging);
-  }, []);
-
-  async function withBusy(action: () => Promise<void>, fallback: string) {
-    if (busy) return;
-    setBusy(true);
-    clearFeedback();
-    try {
-      await action();
-    } catch (err) {
-      setError(errorMessage(err, t(fallback)));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function checkNetworkCapabilities() {
-    return withBusy(async () => {
-      setNetworkCapabilities(await fetchUnboundNetworkCapabilities());
-      setMessage(t("network.checked"));
-    }, "network.checkError");
-  }
-
-  useEffect(() => {
-    reload()
-      .catch((err: unknown) => setError(errorMessage(err, t("unbound.loadError"))))
-      .finally(() => setLoading(false));
-  }, [reload, t]);
-
-  useEffect(() => {
-    if (!settings) return;
-    let current = true;
-    const request = window.setTimeout(() => {
-      fetchUnboundAdvice(settings)
-        .then((nextAdvice) => { if (current) setAdvice(nextAdvice); })
-        .catch(() => { if (current) setAdvice(null); });
-    }, 250);
-    return () => {
-      current = false;
-      window.clearTimeout(request);
-    };
-  }, [settings]);
-
-  useInterval(() => {
-    fetchUnboundDiagnosticLoggingStatus()
-      .then(setDiagnosticLogging)
-      .catch(() => undefined);
-  }, diagnosticLogging?.active ? 10_000 : null);
 
   // Deep-links and search results can point at a specific section within a
   // tab (e.g. "/unbound/advanced#unbound-section-advanced-expert"), not just
@@ -158,103 +72,6 @@ export default function Unbound() {
     if (loading || !location.hash) return;
     jumpToSection(location.hash.slice(1));
   }, [loading, location.hash]);
-
-  async function selectPreset(preset: UnboundPreset) {
-    if (busy || !settings) return;
-    setBusy(true);
-    clearFeedback();
-    try {
-      const proposed = {
-        ...preset.settings,
-        forward_zones: settings.forward_zones,
-        private_domains: settings.private_domains,
-        reverse_zones: settings.reverse_zones,
-        local_zones: settings.local_zones,
-        network_mode: settings.network_mode,
-      };
-      setSettings(proposed);
-      setPreview(await previewUnboundSettings(proposed));
-      setMessage(t("unbound.presetLoaded", { name: presetText(preset.id, "name", t, preset.name) }));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.presetError")));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createPreview(event: FormEvent) {
-    event.preventDefault();
-    if (!settings || busy) return;
-    setBusy(true);
-    clearFeedback();
-    try {
-      setPreview(await previewUnboundSettings(settings));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.previewError")));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function applyPreview() {
-    if (!settings || busy || !preview?.changed) return;
-    setBusy(true);
-    clearFeedback();
-    try {
-      const updated = await updateUnboundSettings(settings);
-      setSettings(updated);
-      setPreview(null);
-      await reload();
-      setMessage(t("unbound.activated"));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.activateError")));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function restore(entry: UnboundHistoryEntry) {
-    if (busy || !window.confirm(t("unbound.confirmRestore", { date: formatDate(entry.created_at) }))) return;
-    setBusy(true);
-    clearFeedback();
-    try {
-      setSettings(await restoreUnboundVersion(entry.id));
-      setPreview(null);
-      await reload();
-      setMessage(t("unbound.restored"));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.restoreError")));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function runDiagnostics() {
-    return withBusy(async () => {
-      setDiagnostics(await fetchUnboundDiagnostics());
-    }, "unbound.diagnosticError");
-  }
-
-  function runPathDiagnostics() {
-    return withBusy(async () => {
-      setPathDiagnostics(await fetchUnboundPathDiagnostics());
-    }, "unbound.pathDiagnosticError");
-  }
-
-  function toggleDiagnosticLogging() {
-    return withBusy(async () => {
-      const status = diagnosticLogging?.active
-        ? await stopUnboundDiagnosticLogging()
-        : await startUnboundDiagnosticLogging();
-      setDiagnosticLogging(status);
-      setMessage(t(status.active ? "unbound.diagnosticLoggingStarted" : "unbound.diagnosticLoggingStopped"));
-    }, "unbound.diagnosticLoggingError");
-  }
-
-  function clearFeedback() {
-    setMessage("");
-    setError("");
-  }
 
   if (loading) return <Page><p>{t("unbound.loading")}</p></Page>;
   if (!settings) return <Page><p className="error-message">{error}</p></Page>;
@@ -626,12 +443,6 @@ function settingsEqual(left: UnboundSettings, right: UnboundSettings) {
 function resourceProfileDirectives(profile: UnboundSettings["resource_profile"]) {
   const sizes = { small: ["32m", "16m"], medium: ["64m", "32m"], large: ["128m", "64m"] }[profile];
   return `rrset-cache-size: ${sizes[0]} · msg-cache-size: ${sizes[1]}`;
-}
-
-function presetText(id: string, field: "name" | "description" | "bestFor", t: (key: string) => string, fallback: string) {
-  const key = `unbound.preset.${id}.${field}`;
-  const translated = t(key);
-  return translated === key ? fallback : translated;
 }
 
 function adviceText(id: string, field: "title" | "description" | "suggestion", t: (key: string) => string, fallback: string) {
