@@ -299,3 +299,5 @@ jobs:
           build-args: |
             COMMIT=${{ github.sha }}
             CREATED=${{ steps.build-time.outputs.value }}
+          cache-from: type=gha,scope=unbound
+          cache-to: type=gha,mode=max,scope=unbound

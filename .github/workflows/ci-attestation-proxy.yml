@@ -33,7 +33,11 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: rootguard-attestation-proxy/go.mod
-          cache: false
+          # Found in review: cache: false with no cache-dependency-path was
+          # undocumented and inconsistent with every other Go component in
+          # this repo (see ci-core.yml, ci-webapp.yml, ci-unbound.yml),
+          # which all cache the module download.
+          cache-dependency-path: rootguard-attestation-proxy/go.sum
       - working-directory: rootguard-attestation-proxy
         run: go test ./...
       - working-directory: rootguard-attestation-proxy
@@ -89,3 +93,5 @@ jobs:
           build-args: |
             VERSION=${{ github.ref_name }}
             COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=attestation-proxy
+          cache-to: type=gha,mode=max,scope=attestation-proxy

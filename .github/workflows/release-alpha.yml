@@ -324,6 +324,14 @@ jobs:
           build-args: |
             VERSION=${{ needs.version.outputs.value }}
             COMMIT=${{ needs.version.outputs.source_ref }}
+          # Found in review: this was the only multi-arch build in the repo
+          # with no layer cache at all - every release rebuilt go mod
+          # download/npm ci/apt-get install from zero for both amd64 and the
+          # QEMU-emulated arm64 leg. Same scope names as each component's
+          # own ci-*.yml build (core has none - it never publishes outside a
+          # release), so a release can reuse layers CI already warmed on main.
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
       - name: Attest published image provenance
         if: steps.existing.outputs.exists != 'true'
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
