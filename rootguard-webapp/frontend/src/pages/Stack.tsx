@@ -38,6 +38,7 @@ import {
 } from "../api/client";
 import "../styles/stack.css";
 import { useI18n } from "../i18n";
+import { useInterval } from "../hooks/useInterval";
 import { errorMessage } from "../utils/errors";
 import { formatBytes } from "../utils/format";
 import { healthLabel, runtimeTone, type Translate } from "../utils/serviceHealth";
@@ -78,10 +79,7 @@ export default function Stack() {
   const busy = updates?.state === "checking" || updates?.state === "updating"
     || controlPlane?.state === "checking" || controlPlane?.state === "updating"
     || updaterUpdate?.state === "checking" || updaterUpdate?.state === "updating" || runningCleanup;
-  useEffect(() => {
-    const timer = window.setInterval(load, busy ? 1500 : 10_000);
-    return () => window.clearInterval(timer);
-  }, [busy, load]);
+  useInterval(load, busy ? 1500 : 10_000);
 
   const available = useMemo(
     () => (updates?.services.filter((service) => service.update_available).length ?? 0)

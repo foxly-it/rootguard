@@ -3,6 +3,7 @@ import { Download, FileSearch, RefreshCw, Search, ShieldCheck, Stethoscope } fro
 import { Link, useSearchParams } from "react-router";
 import { fetchServiceLogs, fetchServices, type ServiceInfo, type ServiceLogs } from "../api/client";
 import { useI18n } from "../i18n";
+import { useInterval } from "../hooks/useInterval";
 import "../styles/logs.css";
 
 type Level = "all" | "error" | "warning" | "info";
@@ -48,10 +49,9 @@ export default function Logs() {
 
   useEffect(() => {
     const initial = window.setTimeout(() => load(), 0);
-    if (!autoRefresh) return () => window.clearTimeout(initial);
-    const interval = window.setInterval(() => load(), 10_000);
-    return () => { window.clearTimeout(initial); window.clearInterval(interval); };
+    return () => window.clearTimeout(initial);
   }, [autoRefresh, load]);
+  useInterval(load, autoRefresh ? 10_000 : null);
 
   const visibleLines = useMemo(() => (logs?.lines ?? []).filter((line) => {
     const normalized = line.toLowerCase();
