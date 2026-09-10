@@ -70,15 +70,8 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	// Dashboard Endpoint
 	// ==================================================
 
-	mux.HandleFunc("/api/dashboard", func(w http.ResponseWriter, r *http.Request) {
-
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
+	mux.HandleFunc("GET /api/dashboard", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleDashboard(w, r, core)
-
 	})
 
 	// ==================================================
@@ -94,15 +87,8 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	//
 	// ==================================================
 
-	mux.HandleFunc("/api/system", func(w http.ResponseWriter, r *http.Request) {
-
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
+	mux.HandleFunc("GET /api/system", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleSystem(w, r, core)
-
 	})
 
 	// ==================================================
@@ -130,15 +116,8 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	//
 	// ==================================================
 
-	mux.HandleFunc("/api/services", func(w http.ResponseWriter, r *http.Request) {
-
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
+	mux.HandleFunc("GET /api/services", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleServices(w, r, core)
-
 	})
 
 	mux.HandleFunc("GET /api/services/{name}/logs", func(w http.ResponseWriter, r *http.Request) {
@@ -154,19 +133,9 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 	//
 	// ==================================================
 
-	serviceAction := dest(auditServiceAction, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/service/", dest(auditServiceAction, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleServiceAction(w, r, core)
-	})
-	mux.HandleFunc("/api/service/", func(w http.ResponseWriter, r *http.Request) {
-
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		serviceAction(w, r)
-
-	})
+	}))
 
 	mux.HandleFunc("GET /api/installation", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleInstallationStatus(w, r, core)
@@ -352,54 +321,25 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleClassifyUnboundImportConf(w, r, core)
 	})
 
-	mux.HandleFunc("/api/adguard/status", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	mux.HandleFunc("GET /api/adguard/status", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleGetAdGuardStatus(w, r, core)
 	})
 
-	bootstrapAdGuard := dest(auditAdGuardBootstrap, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/adguard/bootstrap", dest(auditAdGuardBootstrap, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleBootstrapAdGuard(w, r, core)
-	})
-	mux.HandleFunc("/api/adguard/bootstrap", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		bootstrapAdGuard(w, r)
-	})
+	}))
 
-	mux.HandleFunc("/api/adguard/filter-report", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
+	mux.HandleFunc("GET /api/adguard/filter-report", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleGetAdGuardFilterReport(w, r, core)
 	})
 
-	setAdGuardFiltering := dest(auditAdGuardFilteringToggled, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/adguard/filtering", dest(auditAdGuardFilteringToggled, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleSetAdGuardFiltering(w, r, core)
-	})
-	mux.HandleFunc("/api/adguard/filtering", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		setAdGuardFiltering(w, r)
-	})
+	}))
 
-	setAdGuardProtection := dest(auditAdGuardProtectionToggled, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/adguard/protection", dest(auditAdGuardProtectionToggled, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleSetAdGuardProtection(w, r, core)
-	})
-	mux.HandleFunc("/api/adguard/protection", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		setAdGuardProtection(w, r)
-	})
+	}))
 
 	mux.Handle("/adguard-ui/", core.AdGuardUIHandler())
 
