@@ -416,15 +416,6 @@ type BackupStatus struct {
 	LastError      string               `json:"last_error,omitempty"`
 }
 
-type BackupRestorePreview struct {
-	SchemaVersion int                   `json:"schema_version"`
-	CreatedAt     time.Time             `json:"created_at"`
-	FileCount     int                   `json:"file_count"`
-	ExpandedBytes int64                 `json:"expanded_bytes"`
-	Config        InstallationConfig    `json:"config"`
-	Preflight     InstallationPreflight `json:"preflight"`
-}
-
 type CleanupResource struct {
 	Kind           string `json:"kind"`
 	ID             string `json:"id"`
