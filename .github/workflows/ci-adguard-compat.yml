@@ -74,23 +74,10 @@ jobs:
         run: docker compose -f compose.integration.yaml up -d
 
       - name: Wait for WebApp
-        run: |
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..60}; do
-            login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              --cookie-jar /tmp/rootguard-ci-cookies.txt \
-              --header 'Content-Type: application/json' \
-              --data '{"username":"admin","password":"ci-rootguard-password"}' \
-              http://127.0.0.1:18080/api/auth/login || true)"
-            if test "$login_status" = "200"; then
-              if curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/version >/dev/null; then
-                exit 0
-              fi
-            fi
-            sleep 2
-          done
-          exit 1
+        uses: ./.github/actions/wait-for-webapp-login
+        with:
+          password: ci-rootguard-password
+          cookie-jar: /tmp/rootguard-ci-cookies.txt
 
       - name: Bootstrap AdGuard Home
         run: |
@@ -111,18 +98,12 @@ jobs:
           test "$(jq -r '.total_filter_lists >= 1' <<<"$status")" = "true" || { echo "Expected at least one filter list"; exit 1; }
 
       - name: Wire the resolver up to the local DNSSEC test zone
-        run: |
-          ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..30}; do
-            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "::error::rootguard-unbound never became healthy again after being wired up to the local DNSSEC test zone" >&2
-          exit 1
+        run: ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+
+      - name: Wait for rootguard-unbound healthy
+        uses: ./.github/actions/wait-for-unbound-healthy
+        with:
+          container: rootguard-unbound
 
       - name: Verify DNS through AdGuard and Unbound
         run: |

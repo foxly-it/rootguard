@@ -1,0 +1,33 @@
+name: Wait for rootguard-unbound healthy
+description: >-
+  Polls `docker inspect` until the given rootguard-unbound container
+  reports a healthy Docker healthcheck status, or fails with a clear
+  error after the given number of one-second attempts.
+
+# Found in review: this exact retry loop was duplicated, byte-for-byte
+# apart from the container name, across ci-adguard-compat.yml, ci.yml,
+# ci-unbound.yml, ci-real-dns-upstream.yml, and twice in release-alpha.yml
+# (smoke-test and upgrade-test each deploy their own instance).
+
+inputs:
+  container:
+    description: Name of the rootguard-unbound container to wait for
+    required: true
+  attempts:
+    description: Number of one-second polls before giving up
+    required: false
+    default: "30"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        for attempt in $(seq 1 ${{ inputs.attempts }}); do
+          if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' ${{ inputs.container }})" = "healthy"; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "::error::${{ inputs.container }} never became healthy within ${{ inputs.attempts }}s" >&2
+        exit 1

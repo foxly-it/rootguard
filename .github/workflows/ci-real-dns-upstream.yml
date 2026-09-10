@@ -55,18 +55,13 @@ jobs:
       # the resolver's actual status line, instead of just a bare non-zero
       # exit. `|| true` on each dig call is what stops `set -e` from
       # discarding that output before it can be printed.
+      - name: Wait for rootguard-unbound healthy
+        uses: ./.github/actions/wait-for-unbound-healthy
+        with:
+          container: rootguard-unbound-real-dns
+
       - name: Verify real-internet resolution and DNSSEC validation
         run: |
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..30}; do
-            if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound-real-dns)" = "healthy"; then
-              break
-            fi
-            sleep 1
-          done
-          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-real-dns)" = "healthy"
-
           fail=0
 
           echo "::group::example.com (expect an 'ad' flag - DNSSEC validates)"

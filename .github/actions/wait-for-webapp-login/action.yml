@@ -1,0 +1,59 @@
+name: Wait for WebApp login
+description: >-
+  Polls the WebApp's /api/auth/login endpoint with the given credentials
+  until it returns 200, or fails with a clear error after the given
+  number of two-second attempts. Writes the resulting session cookie to
+  cookie-jar for subsequent steps to reuse. Optionally also verifies
+  /api/version responds before reporting success, for callers that want
+  proof the session is fully usable, not just that login itself succeeded.
+
+# Found in review: this exact retry loop was duplicated, byte-for-byte in
+# ci-adguard-compat.yml and ci.yml, and duplicated again with a different
+# port/password/cookie-jar (and no /api/version check) twice in
+# release-alpha.yml (smoke-test and upgrade-test each deploy their own
+# WebApp instance on its own port).
+
+inputs:
+  port:
+    description: Local port the WebApp is published on
+    required: false
+    default: "18080"
+  username:
+    description: Login username
+    required: false
+    default: admin
+  password:
+    description: Login password
+    required: true
+  cookie-jar:
+    description: Path to write the session cookie to
+    required: true
+  attempts:
+    description: Number of two-second polls before giving up
+    required: false
+    default: "60"
+  verify-version:
+    description: Also require /api/version to respond before reporting success
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        for attempt in $(seq 1 ${{ inputs.attempts }}); do
+          login_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --cookie-jar '${{ inputs.cookie-jar }}' \
+            --header 'Content-Type: application/json' \
+            --data '{"username":"${{ inputs.username }}","password":"${{ inputs.password }}"}' \
+            "http://127.0.0.1:${{ inputs.port }}/api/auth/login" || true)"
+          if test "$login_status" = "200"; then
+            if [ "${{ inputs.verify-version }}" != "true" ] || curl --fail --silent --cookie '${{ inputs.cookie-jar }}' "http://127.0.0.1:${{ inputs.port }}/api/version" >/dev/null; then
+              exit 0
+            fi
+          fi
+          sleep 2
+        done
+        echo "::error::WebApp on port ${{ inputs.port }} never accepted a login within $(( ${{ inputs.attempts }} * 2 ))s" >&2
+        exit 1

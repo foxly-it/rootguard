@@ -1116,20 +1116,15 @@ jobs:
         run: ./scripts/ci/dnssec-test-zone/setup.sh
       - name: Start published control plane
         run: docker compose -f compose.release.yaml up -d
+      - name: Wait for WebApp
+        uses: ./.github/actions/wait-for-webapp-login
+        with:
+          password: alpha-smoke-test-password
+          cookie-jar: /tmp/rootguard-alpha-cookies.txt
+          verify-version: "false"
+
       - name: Install and verify the DNS stack
         run: |
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..60}; do
-            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              --cookie-jar /tmp/rootguard-alpha-cookies.txt \
-              --header 'Content-Type: application/json' \
-              --data '{"username":"admin","password":"alpha-smoke-test-password"}' \
-              http://127.0.0.1:18080/api/auth/login || true)"
-            if [ "$code" = 200 ]; then break; fi
-            sleep 2
-          done
-          test "$code" = 200
           # blockpage_enabled: true - see the env block's own comment on
           # ROOTGUARD_BLOCKPAGE_IMAGE above for why this must actually be
           # turned on here, not left at its default off.
@@ -1153,15 +1148,12 @@ jobs:
           done
           test "$state" = installed
           ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..30}; do
-            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
-              break
-            fi
-            sleep 1
-          done
-          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"
+      - name: Wait for rootguard-unbound healthy
+        uses: ./.github/actions/wait-for-unbound-healthy
+        with:
+          container: rootguard-unbound
+      - name: Verify DNS through AdGuard and Unbound
+        run: |
           test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1053 good.rgtest-ci.internal A)"
           test "$(dig +dnssec +time=5 +tries=2 @127.0.0.1 -p 1053 \
             bad.rgtest-ci.internal A | sed -n \
@@ -1345,22 +1337,19 @@ jobs:
           ROOTGUARD_WEB_PORT: "18082"
         run: docker compose -f compose.release.yaml up -d
 
+      - name: Wait for WebApp
+        if: steps.previous.outputs.skip != 'true'
+        uses: ./.github/actions/wait-for-webapp-login
+        with:
+          port: "18082"
+          password: alpha-upgrade-test-password
+          cookie-jar: /tmp/rootguard-upgrade-cookies.txt
+          verify-version: "false"
+
       - name: Install the previous release and verify DNS
         if: steps.previous.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..60}; do
-            code="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-              --cookie-jar /tmp/rootguard-upgrade-cookies.txt \
-              --header 'Content-Type: application/json' \
-              --data '{"username":"admin","password":"alpha-upgrade-test-password"}' \
-              http://127.0.0.1:18082/api/auth/login || true)"
-            if [ "$code" = 200 ]; then break; fi
-            sleep 2
-          done
-          test "$code" = 200
           config='{"dns_bind_address":"127.0.0.1","dns_port":1055}'
           test "$(curl --fail --silent --cookie /tmp/rootguard-upgrade-cookies.txt \
             --header 'Content-Type: application/json' --data "$config" \
@@ -1381,16 +1370,16 @@ jobs:
           done
           test "$state" = installed
           ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..30}; do
-            if test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"; then
-              break
-            fi
-            sleep 1
-          done
-          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound)" = "healthy"
-          test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 good.rgtest-ci.internal A)"
+
+      - name: Wait for rootguard-unbound healthy
+        if: steps.previous.outputs.skip != 'true'
+        uses: ./.github/actions/wait-for-unbound-healthy
+        with:
+          container: rootguard-unbound
+
+      - name: Verify DNS resolves through the previous release
+        if: steps.previous.outputs.skip != 'true'
+        run: test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 good.rgtest-ci.internal A)"
 
       - name: Upgrade in place through the real control-plane updater
         if: steps.previous.outputs.skip != 'true'
