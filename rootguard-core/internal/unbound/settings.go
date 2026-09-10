@@ -182,12 +182,25 @@ func (s Settings) Validate() error {
 	if s.NetworkMode != networkModeIPv4 && s.NetworkMode != networkModeDual && s.NetworkMode != networkModeIPv6 {
 		return fmt.Errorf("%w: network_mode must be ipv4, dual, or ipv6", ErrInvalidSettings)
 	}
-	if len(s.ForwardZones) > maxForwardZones {
+	if err := validateForwardZones(s.ForwardZones); err != nil {
+		return err
+	}
+	if err := validatePrivateDomains(s.PrivateDomains, s.ForwardZones); err != nil {
+		return err
+	}
+	if err := validateLocalZones(s.LocalZones); err != nil {
+		return err
+	}
+	return validateReverseZones(s.ReverseZones)
+}
+
+func validateForwardZones(zones []ForwardZone) error {
+	if len(zones) > maxForwardZones {
 		return fmt.Errorf("%w: forward_zones must contain at most %d zones", ErrInvalidSettings, maxForwardZones)
 	}
-	zoneNames := make(map[string]struct{}, len(s.ForwardZones))
+	zoneNames := make(map[string]struct{}, len(zones))
 	targetCount := 0
-	for zoneIndex, zone := range s.ForwardZones {
+	for zoneIndex, zone := range zones {
 		if err := validateCanonicalZoneName(zone.Name); err != nil {
 			return fmt.Errorf("%w: forward_zones[%d].name: %v", ErrInvalidSettings, zoneIndex, err)
 		}
@@ -217,11 +230,15 @@ func (s Settings) Validate() error {
 			servers[address] = struct{}{}
 		}
 	}
-	if len(s.PrivateDomains) > maxPrivateDomains {
+	return nil
+}
+
+func validatePrivateDomains(domains []string, forwardZones []ForwardZone) error {
+	if len(domains) > maxPrivateDomains {
 		return fmt.Errorf("%w: private_domains must contain at most %d domains", ErrInvalidSettings, maxPrivateDomains)
 	}
-	privateNames := make(map[string]struct{}, len(s.PrivateDomains))
-	for domainIndex, domain := range s.PrivateDomains {
+	privateNames := make(map[string]struct{}, len(domains))
+	for domainIndex, domain := range domains {
 		if err := validateCanonicalZoneName(domain); err != nil {
 			return fmt.Errorf("%w: private_domains[%d]: %v", ErrInvalidSettings, domainIndex, err)
 		}
@@ -229,20 +246,21 @@ func (s Settings) Validate() error {
 			return fmt.Errorf("%w: private_domains[%d] duplicates %q", ErrInvalidSettings, domainIndex, domain)
 		}
 		privateNames[domain] = struct{}{}
-		for _, zone := range s.ForwardZones {
+		for _, zone := range forwardZones {
 			if zone.AllowPrivateAddresses && zone.Name == domain {
 				return fmt.Errorf("%w: private domain %q duplicates the forwarding-zone rebinding exception", ErrInvalidSettings, domain)
 			}
 		}
 	}
-	if err := validateLocalZones(s.LocalZones); err != nil {
-		return err
-	}
-	if len(s.ReverseZones) > len(rfc1918ReverseZones) {
+	return nil
+}
+
+func validateReverseZones(zones []ReverseZonePolicy) error {
+	if len(zones) > len(rfc1918ReverseZones) {
 		return fmt.Errorf("%w: reverse_zones contains unsupported entries", ErrInvalidSettings)
 	}
-	reverseNetworks := make(map[string]struct{}, len(s.ReverseZones))
-	for policyIndex, policy := range s.ReverseZones {
+	reverseNetworks := make(map[string]struct{}, len(zones))
+	for policyIndex, policy := range zones {
 		if _, supported := rfc1918ReverseZones[policy.Network]; !supported {
 			return fmt.Errorf("%w: reverse_zones[%d].network is not a supported RFC1918 range", ErrInvalidSettings, policyIndex)
 		}
