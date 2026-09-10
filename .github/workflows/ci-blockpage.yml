@@ -27,6 +27,12 @@ permissions:
   contents: read
   packages: write
 
+# Found in review: repeated pushes to the same PR used to stack full runs
+# instead of superseding the stale one.
+concurrency:
+  group: ci-blockpage-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: foxly-it/rootguard-blockpage
@@ -37,6 +43,7 @@ jobs:
   # an unnamed check run literally called "build" - see ci-core.yml's
   # own "test" job for the identical class of finding.
   build:
+    timeout-minutes: 20
     name: Build and push blockpage image
     runs-on: ubuntu-latest
     steps:

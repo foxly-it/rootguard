@@ -8,8 +8,15 @@ on:
 permissions:
   contents: read
 
+# Found in review: repeated pushes to the same PR used to stack full runs
+# instead of superseding the stale one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     env:
       ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32

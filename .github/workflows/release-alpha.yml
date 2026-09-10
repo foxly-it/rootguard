@@ -49,6 +49,7 @@ env:
 
 jobs:
   version:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     outputs:
       value: ${{ steps.release.outputs.value }}
@@ -173,6 +174,7 @@ jobs:
 
   test:
     needs: version
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -216,6 +218,10 @@ jobs:
   # makes gitleaks/trivy/govulncheck/staticcheck an actual release-gate
   # requirement instead of something only trusted to have run at some
   # earlier point.
+  # No timeout-minutes here - a job that calls a reusable workflow (uses:)
+  # doesn't support that key. ci-security.yml's own three jobs each got
+  # their own timeout-minutes in this same round, which already bounds
+  # this call from hanging indefinitely.
   security:
     needs: version
     uses: ./.github/workflows/ci-security.yml
@@ -226,6 +232,7 @@ jobs:
 
   publish:
     needs: [version, test, security]
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -386,6 +393,7 @@ jobs:
   # build`.
   image-scan:
     needs: [version, publish]
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -435,6 +443,7 @@ jobs:
   # its own step below.)
   update-alpha-pins:
     needs: [version, publish, image-scan, smoke-test, upgrade-test]
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -1052,6 +1061,7 @@ jobs:
 
   smoke-test:
     needs: [version, publish, image-scan]
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -1194,6 +1204,7 @@ jobs:
   upgrade-test:
     name: Upgrade test, Linux ${{ matrix.arch }}
     needs: [version, publish, image-scan]
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:

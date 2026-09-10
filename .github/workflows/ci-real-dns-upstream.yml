@@ -22,8 +22,17 @@ on:
 permissions:
   contents: read
 
+# Found in review: guards against two runs overlapping (a stray manual
+# dispatch during the weekly cron window, say) - same fix as every other
+# workflow here, even though this one has no push/pull_request trigger to
+# stack up in the first place.
+concurrency:
+  group: ci-real-dns-upstream-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

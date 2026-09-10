@@ -51,6 +51,7 @@ env:
 
 jobs:
   version-and-changelog:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       # Found live: `main` requires 20 status checks on every push, not

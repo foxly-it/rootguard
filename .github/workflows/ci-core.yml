@@ -31,6 +31,12 @@ on:
 permissions:
   contents: read
 
+# Found in review: repeated pushes to the same PR used to stack full runs
+# instead of superseding the stale one.
+concurrency:
+  group: ci-core-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Found in review: this job id ("test") is identical across ci-core.yml,
   # ci-webapp.yml, and ci-updater.yml, each producing an unnamed check
@@ -42,6 +48,7 @@ jobs:
   # entry.
   test:
     name: Core unit tests
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -88,6 +95,7 @@ jobs:
   # only (mocked Run/Bootstrap) and already runs in the `test` job above via
   # plain `go test ./...`.
   updater-rollback-integration:
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
