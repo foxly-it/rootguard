@@ -130,17 +130,13 @@ jobs:
       - name: Wire the resolver up to the local DNSSEC test zone
         run: ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound-ci
 
+      - name: Wait for rootguard-unbound healthy
+        uses: ./.github/actions/wait-for-unbound-healthy
+        with:
+          container: rootguard-unbound-ci
+
       - name: Verify recursive DNS and DNSSEC
         run: |
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..30}; do
-            if test "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{end}}' rootguard-unbound-ci)" = "healthy"; then
-              break
-            fi
-            sleep 1
-          done
-          test "$(docker inspect --format '{{.State.Health.Status}}' rootguard-unbound-ci)" = "healthy"
           valid="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 good.rgtest-ci.internal A +dnssec +time=3 +tries=1)"
           grep -Eq 'flags:.* ad[ ;]' <<<"$valid"
           broken="$(docker exec rootguard-unbound-ci dig @127.0.0.1 -p 5335 bad.rgtest-ci.internal A +time=3 +tries=1)"
