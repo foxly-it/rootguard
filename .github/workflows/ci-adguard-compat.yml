@@ -23,9 +23,17 @@ on:
 permissions:
   contents: read
 
+# Found in review: repeated pushes to the same PR used to stack full runs
+# instead of superseding the stale one - same fix as every other CI
+# workflow here.
+concurrency:
+  group: ci-adguard-compat-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test AdGuard ${{ matrix.channel }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

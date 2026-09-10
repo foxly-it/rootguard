@@ -21,12 +21,19 @@ on:
 permissions:
   contents: read
 
+# Found in review: repeated pushes to the same PR used to stack full runs
+# instead of superseding the stale one.
+concurrency:
+  group: ci-attestation-proxy-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   IMAGE: ghcr.io/foxly-it/rootguard-attestation-proxy
 
 jobs:
   test:
     name: Attestation proxy unit tests
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -61,6 +68,7 @@ jobs:
 
   build:
     name: Build and push attestation proxy image
+    timeout-minutes: 20
     needs: test
     runs-on: ubuntu-latest
     permissions:

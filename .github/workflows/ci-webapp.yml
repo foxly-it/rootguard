@@ -23,6 +23,12 @@ on:
 permissions:
   contents: read
 
+# Found in review: repeated pushes to the same PR used to stack full runs
+# instead of superseding the stale one.
+concurrency:
+  group: ci-webapp-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: foxly-it/rootguard-webapp
@@ -33,6 +39,7 @@ jobs:
   # in two other workflows.
   test:
     name: WebApp backend and frontend tests
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -136,6 +143,7 @@ jobs:
   build:
     name: Build and push webapp image
     needs: test
+    timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:
       contents: read

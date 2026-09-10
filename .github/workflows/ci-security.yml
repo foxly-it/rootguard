@@ -23,8 +23,18 @@ on:
 permissions:
   contents: read
 
+# Deliberately no concurrency group here, unlike every other CI workflow -
+# found in review: this workflow is also invoked via workflow_call from
+# release-alpha.yml's own `security` job, pinned to a specific commit
+# (`ref`). A group keyed on github.ref would let an unrelated push-
+# triggered run on the same branch cancel-in-progress the release's own
+# invocation (or vice versa), silently dropping a release gate rather than
+# just wasting a redundant run - the failure mode a concurrency group is
+# meant to prevent elsewhere would become a release-breaking one here.
+
 jobs:
   gitleaks:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -45,6 +55,7 @@ jobs:
         run: gitleaks git --no-banner --config .gitleaks.toml .
 
   trivy:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -72,6 +83,7 @@ jobs:
           # explicitly - without it this job would always pass silently.
 
   go-security:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     strategy:
       matrix:

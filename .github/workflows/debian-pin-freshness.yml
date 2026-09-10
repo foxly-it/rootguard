@@ -21,8 +21,16 @@ permissions:
   contents: write
   pull-requests: write
 
+# Found in review: guards against two runs overlapping (a manual dispatch
+# during the daily cron window, say) both trying to push to/open the same
+# fix PR.
+concurrency:
+  group: debian-pin-freshness-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-and-fix:
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

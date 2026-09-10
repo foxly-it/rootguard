@@ -34,9 +34,16 @@ on:
 permissions:
   contents: read
 
+# Found in review: repeated pushes to the same PR used to stack full runs
+# instead of superseding the stale one.
+concurrency:
+  group: ci-unbound-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test ${{ matrix.arch }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -176,6 +183,7 @@ jobs:
   # wouldn't add real coverage - doubling this job's cost for no signal.
   scenario-tests:
     name: Guided-settings scenario tests
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -217,6 +225,7 @@ jobs:
   # its own condition below).
   detect-unbound-changes:
     if: github.event_name == 'pull_request'
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.check.outputs.changed }}
@@ -245,6 +254,7 @@ jobs:
     name: Build and push multi-arch image
     needs: [test, scenario-tests, detect-unbound-changes]
     if: always() && needs.test.result == 'success' && needs.scenario-tests.result == 'success' && (github.event_name != 'pull_request' || needs.detect-unbound-changes.outputs.changed == 'true')
+    timeout-minutes: 20
     runs-on: ubuntu-latest
     permissions:
       contents: read
