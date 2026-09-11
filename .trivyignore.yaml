@@ -482,6 +482,20 @@ vulnerabilities:
       dependency - see CVE-2019-16224's/CVE-2026-6653's identical
       statement above on why Unbound's own resolver process is
       unaffected.
+  - id: CVE-2026-74860
+    purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
+    expired_at: 2026-11-30
+    statement: >-
+      Found live, 2026-09-11 (second full code-check round, blocking
+      ci-unbound.yml on every unrelated PR). Trivy reports no fixed
+      version for trixie (Status: affected). Double-free/use-after-free
+      in libxml2's own Python bindings (python3-libxml2) - this image has
+      no Python interpreter or Python bindings package installed at all
+      (confirmed: no python/libxml2-python reference anywhere in the
+      Dockerfile), on top of the same "libxml2 arrives only as
+      bind9-libs' dependency, Unbound's own resolver process doesn't use
+      it" reasoning as CVE-2026-6653/CVE-2026-86140 above - doubly
+      unreachable here.
   - id: CVE-2026-8376
     purls: ["pkg:deb/debian/perl-base@5.40.1-6"]
     expired_at: 2026-11-30
