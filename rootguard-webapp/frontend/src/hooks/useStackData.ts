@@ -100,79 +100,63 @@ export function useStackData() {
   // show.
   const attestationProxyService = updaterUpdate?.services.find((service) => service.name === "attestation-proxy");
 
-  const startCheck = useCallback(async () => {
+  // attempt clears any stale error, runs action, and reports a new one on
+  // failure - the "setError(''); try {...} catch { setError(...) }"
+  // skeleton every mutation below shared (found in review). guard, when
+  // given, is checked first (e.g. a window.confirm) so a declined/blocked
+  // action never clears an error message still relevant to the user, and a
+  // confirm dialog is asked at most once, in the same order as before.
+  const attempt = useCallback(async (action: () => Promise<void>, fallback: string, guard?: () => boolean) => {
+    if (guard && !guard()) return;
     setError("");
     try {
-      const [nextUpdates, nextControlPlane, nextUpdaterUpdate] = await Promise.all([
-        checkUpdates(),
-        checkControlPlaneUpdates(),
-        checkUpdaterSelfUpdate(),
-      ]);
-      setUpdates(nextUpdates);
-      setControlPlane(nextControlPlane);
-      setUpdaterUpdate(nextUpdaterUpdate);
+      await action();
     } catch (cause) {
-      setError(errorMessage(cause, t("stack.updateCheckError")));
+      setError(errorMessage(cause, t(fallback)));
     }
   }, [t]);
 
-  const startControlPlaneUpdate = useCallback(async () => {
-    if (!window.confirm(t("stack.controlPlaneConfirm"))) return;
-    setError("");
-    try {
-      setControlPlane(await installControlPlaneUpdates());
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.controlPlaneStartError")));
-    }
-  }, [t]);
+  const startCheck = useCallback(() => attempt(async () => {
+    const [nextUpdates, nextControlPlane, nextUpdaterUpdate] = await Promise.all([
+      checkUpdates(),
+      checkControlPlaneUpdates(),
+      checkUpdaterSelfUpdate(),
+    ]);
+    setUpdates(nextUpdates);
+    setControlPlane(nextControlPlane);
+    setUpdaterUpdate(nextUpdaterUpdate);
+  }, "stack.updateCheckError"), [attempt]);
 
-  const startSelfUpdate = useCallback(async (service: "updater" | "attestation-proxy") => {
+  const startControlPlaneUpdate = useCallback(() => attempt(async () => {
+    setControlPlane(await installControlPlaneUpdates());
+  }, "stack.controlPlaneStartError", () => window.confirm(t("stack.controlPlaneConfirm"))), [t, attempt]);
+
+  const startSelfUpdate = useCallback((service: "updater" | "attestation-proxy") => {
     const confirmKey = service === "updater" ? "stack.updaterSelfUpdateConfirm" : "stack.attestationProxySelfUpdateConfirm";
-    if (!window.confirm(t(confirmKey))) return;
-    setError("");
-    try {
+    const errorKey = service === "updater" ? "stack.updaterSelfUpdateStartError" : "stack.attestationProxySelfUpdateStartError";
+    return attempt(async () => {
       setUpdaterUpdate(await installUpdaterSelfUpdate(service));
-    } catch (cause) {
-      const errorKey = service === "updater" ? "stack.updaterSelfUpdateStartError" : "stack.attestationProxySelfUpdateStartError";
-      setError(errorMessage(cause, t(errorKey)));
-    }
-  }, [t]);
+    }, errorKey, () => window.confirm(t(confirmKey)));
+  }, [t, attempt]);
 
-  const startUpdate = useCallback(async (service: UpdateServiceStatus) => {
-    const accepted = window.confirm(
-      t("stack.confirmUpdate", { service: service.display_name }),
-    );
-    if (!accepted) return;
-    setError("");
-    try {
-      setUpdates(await installServiceUpdate(service.name));
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.updateStartError")));
-    }
-  }, [t]);
+  const startUpdate = useCallback((service: UpdateServiceStatus) => attempt(async () => {
+    setUpdates(await installServiceUpdate(service.name));
+  }, "stack.updateStartError", () => window.confirm(t("stack.confirmUpdate", { service: service.display_name }))), [t, attempt]);
 
-  const refreshCleanupPreview = useCallback(async () => {
-    setError("");
-    try {
-      setCleanup(await fetchCleanupPreview());
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.cleanupPreviewError")));
-    }
-  }, [t]);
+  const refreshCleanupPreview = useCallback(() => attempt(async () => {
+    setCleanup(await fetchCleanupPreview());
+  }, "stack.cleanupPreviewError"), [attempt]);
 
-  const startManualCleanup = useCallback(async () => {
-    if (!cleanup?.resources.length || !window.confirm(t("stack.cleanupConfirm", { count: cleanup.resources.length, size: formatBytes(cleanup.estimated_bytes) }))) return;
+  const startManualCleanup = useCallback(() => {
+    if (!cleanup?.resources.length || !window.confirm(t("stack.cleanupConfirm", { count: cleanup.resources.length, size: formatBytes(cleanup.estimated_bytes) }))) {
+      return Promise.resolve();
+    }
     setRunningCleanup(true);
-    setError("");
-    try {
+    return attempt(async () => {
       await runManualCleanup();
       await Promise.all([load(), refreshCleanupPreview()]);
-    } catch (cause) {
-      setError(errorMessage(cause, t("stack.cleanupRunError")));
-    } finally {
-      setRunningCleanup(false);
-    }
-  }, [cleanup, t, load, refreshCleanupPreview]);
+    }, "stack.cleanupRunError").finally(() => setRunningCleanup(false));
+  }, [cleanup, t, load, refreshCleanupPreview, attempt]);
 
   const control = useCallback(async (name: ServiceInfo["name"], action: "start" | "stop" | "restart") => {
     if (action === "stop" && !window.confirm(t("stack.confirmStop", { service: name }))) return;
