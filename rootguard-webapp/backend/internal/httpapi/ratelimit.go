@@ -6,12 +6,12 @@ import (
 )
 
 // rateLimiter is a simple sliding-window counter, keyed by an arbitrary
-// string. The login/recovery limiters only ever call recordFailure for
-// actual failures, so a legitimate operator typing their own password
-// correctly is never affected; the destructive-action limiter (see
-// destructive.go) instead calls recordFailure for every attempt regardless
-// of outcome, since the thing being bounded there is request volume itself,
-// not repeated wrong guesses.
+// string. The login/recovery limiters only ever record a failure (via
+// endAttempt(key, true)) for actual failures, so a legitimate operator
+// typing their own password correctly is never affected; the
+// destructive-action limiter (see destructive.go) instead records one for
+// every attempt regardless of outcome, since the thing being bounded there
+// is request volume itself, not repeated wrong guesses.
 type rateLimiter struct {
 	mu         sync.Mutex
 	window     time.Duration
@@ -31,7 +31,7 @@ func newRateLimiter(window time.Duration, maxFailure int) *rateLimiter {
 
 // beginAttempt atomically combines a failure-limit check with reserving a
 // slot for one verification attempt - closing a timing gap a plain
-// separate-check-then-recordFailure() pattern has: many concurrent
+// separate-check-then-record-the-failure pattern has: many concurrent
 // requests could all observe zero recorded failures, all start their own
 // (for login/account, PBKDF2-based and genuinely expensive) verification in
 // parallel, and only get counted afterward once that work is already done,
@@ -59,8 +59,8 @@ func (rl *rateLimiter) beginAttempt(key string) bool {
 
 // endAttempt releases the slot a prior successful beginAttempt call
 // reserved. Pass failed=true to convert the reservation into a real,
-// window-tracked failure (the same effect recordFailure has); pass false to
-// simply release it without counting against the key.
+// window-tracked failure; pass false to simply release it without counting
+// against the key.
 func (rl *rateLimiter) endAttempt(key string, failed bool) {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -77,14 +77,6 @@ func (rl *rateLimiter) endAttempt(key string, failed bool) {
 	}
 }
 
-func (rl *rateLimiter) recordFailure(key string) {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
-	now := time.Now()
-	rl.pruneLocked(key, now)
-	rl.failures[key] = append(rl.failures[key], now)
-}
-
 // reset clears a key's failure history - called on a successful
 // authentication so a since-resolved typo doesn't count against a later,
 // unrelated attempt once the window would otherwise have expired anyway.
@@ -95,9 +87,9 @@ func (rl *rateLimiter) reset(key string) {
 }
 
 // sweep prunes every key, not just one that's currently being queried -
-// blocked/recordFailure only ever prune the single key they're called with,
-// so a key that's queried exactly once (e.g. an attacker source IP that
-// never returns) would otherwise sit in the map forever. Called
+// beginAttempt/endAttempt only ever prune the single key they're called
+// with, so a key that's queried exactly once (e.g. an attacker source IP
+// that never returns) would otherwise sit in the map forever. Called
 // periodically from a background goroutine (see auth.go) rather than on
 // every request, since it's O(distinct keys) and doesn't need per-request
 // freshness.

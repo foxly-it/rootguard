@@ -3,17 +3,24 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
 
+func decodeTargetOverridesForTest(t *testing.T, body string) (map[string]string, error) {
+	t.Helper()
+	request := httptest.NewRequest("POST", "/api/control-plane/check", strings.NewReader(body))
+	return decodeTargetOverrides(httptest.NewRecorder(), request)
+}
+
 func TestDecodeTargetOverridesHandlesMissingAndPresentBody(t *testing.T) {
-	overrides, err := decodeTargetOverrides(strings.NewReader(""))
+	overrides, err := decodeTargetOverridesForTest(t, "")
 	if err != nil || overrides != nil {
 		t.Fatalf("expected no overrides for an empty body, got %#v, err=%v", overrides, err)
 	}
 
-	overrides, err = decodeTargetOverrides(strings.NewReader(`{"target_images":{"core":"core:resolved"}}`))
+	overrides, err = decodeTargetOverridesForTest(t, `{"target_images":{"core":"core:resolved"}}`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,8 +30,34 @@ func TestDecodeTargetOverridesHandlesMissingAndPresentBody(t *testing.T) {
 }
 
 func TestDecodeTargetOverridesRejectsInvalidJSON(t *testing.T) {
-	if _, err := decodeTargetOverrides(strings.NewReader("{not json")); err == nil {
+	if _, err := decodeTargetOverridesForTest(t, "{not json"); err == nil {
 		t.Fatal("expected an error for invalid JSON")
+	}
+}
+
+// TestDecodeTargetOverridesRejectsOversizedBody is the regression test for
+// a real gap found in review: this was the only inbound JSON decode in the
+// whole repo with no size limit, letting an authenticated but malicious
+// caller force unbounded memory use during the 10s request read window.
+func TestDecodeTargetOverridesRejectsOversizedBody(t *testing.T) {
+	oversized := `{"target_images":{"core":"` + strings.Repeat("a", int(maxControlPlaneRequestBytes)) + `"}}`
+	if _, err := decodeTargetOverridesForTest(t, oversized); err == nil {
+		t.Fatal("expected an error for a body exceeding maxControlPlaneRequestBytes")
+	}
+}
+
+// TestDecodeTargetOverridesRejectsUnknownFields matches the strict-decode
+// contract every other request body in this repo already gets
+// (DisallowUnknownFields, no trailing data after the JSON value).
+func TestDecodeTargetOverridesRejectsUnknownFields(t *testing.T) {
+	if _, err := decodeTargetOverridesForTest(t, `{"target_images":{"core":"core:resolved"},"unexpected":true}`); err == nil {
+		t.Fatal("expected an error for an unknown top-level field")
+	}
+}
+
+func TestDecodeTargetOverridesRejectsTrailingData(t *testing.T) {
+	if _, err := decodeTargetOverridesForTest(t, `{"target_images":{"core":"core:resolved"}}{"more":true}`); err == nil {
+		t.Fatal("expected an error for trailing data after the JSON body")
 	}
 }
 
