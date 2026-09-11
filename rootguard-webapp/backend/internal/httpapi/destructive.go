@@ -1,6 +1,10 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/foxly-it/rootguard-webapp/backend/internal/api"
+)
 
 // statusRecorder captures the status code an inner handler writes so
 // guardDestructive can tell success from failure after the fact, without
@@ -66,7 +70,7 @@ func (a *SessionAuth) destructiveRateLimitGate(event string, next http.HandlerFu
 		if !a.destructiveLimiter.beginAttempt(key) {
 			username, _ := a.authenticatedUser(r)
 			a.recordAuditDetail(event+"_rate_limited", username, clientAddress(r), r.Method+" "+r.URL.Path)
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+			api.WriteJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 			return
 		}
 		defer a.destructiveLimiter.endAttempt(key, true)
@@ -110,7 +114,7 @@ func (a *SessionAuth) guardRestoreUpload(event string, next http.HandlerFunc) ht
 		if !a.restoreLimiter.beginAttempt(key) {
 			username, _ := a.authenticatedUser(r)
 			a.recordAuditDetail(event+"_rate_limited", username, clientAddress(r), r.Method+" "+r.URL.Path)
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+			api.WriteJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 			return
 		}
 		defer a.restoreLimiter.endAttempt(key, false)

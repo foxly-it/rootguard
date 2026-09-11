@@ -21,7 +21,7 @@ func HandlePutBackupSettings(w http.ResponseWriter, r *http.Request, core *corec
 		RetentionPerService int `json:"retention_per_service"`
 	}
 	defer r.Body.Close()
-	request, err := decodeJSON[putBackupSettingsRequest](w, r, 4<<10)
+	request, err := DecodeJSON[putBackupSettingsRequest](w, r, 4<<10)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -31,7 +31,7 @@ func HandlePutBackupSettings(w http.ResponseWriter, r *http.Request, core *corec
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, status)
+	WriteJSON(w, http.StatusOK, status)
 }
 
 func HandleCleanupPreview(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -47,7 +47,7 @@ func HandleBackupExport(w http.ResponseWriter, r *http.Request, core *coreclient
 		Passphrase string `json:"passphrase"`
 	}
 	defer r.Body.Close()
-	request, err := decodeJSON[backupExportRequest](w, r, 4<<10)
+	request, err := DecodeJSON[backupExportRequest](w, r, 4<<10)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -100,5 +100,5 @@ func HandleUpdateService(w http.ResponseWriter, r *http.Request, core *coreclien
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, status)
+	WriteJSON(w, http.StatusAccepted, status)
 }

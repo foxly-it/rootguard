@@ -22,7 +22,7 @@ func HandleSetAdGuardFiltering(w http.ResponseWriter, r *http.Request, core *cor
 	type request struct {
 		Enabled *bool `json:"enabled"`
 	}
-	input, err := decodeJSON[request](w, r, 1<<10)
+	input, err := DecodeJSON[request](w, r, 1<<10)
 	if err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
@@ -40,7 +40,7 @@ func HandleSetAdGuardFiltering(w http.ResponseWriter, r *http.Request, core *cor
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, status)
+	WriteJSON(w, http.StatusOK, status)
 }
 
 // adGuardProtectionDurations mirrors the same allowlist enforced on the
@@ -55,7 +55,7 @@ func HandleSetAdGuardProtection(w http.ResponseWriter, r *http.Request, core *co
 		Enabled         *bool `json:"enabled"`
 		DurationSeconds int64 `json:"duration_seconds"`
 	}
-	input, err := decodeJSON[request](w, r, 1<<10)
+	input, err := DecodeJSON[request](w, r, 1<<10)
 	if err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
@@ -77,5 +77,5 @@ func HandleSetAdGuardProtection(w http.ResponseWriter, r *http.Request, core *co
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, status)
+	WriteJSON(w, http.StatusOK, status)
 }

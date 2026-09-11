@@ -20,7 +20,7 @@ func HandleInstallationPreflight(w http.ResponseWriter, r *http.Request, core *c
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, report)
+	WriteJSON(w, http.StatusOK, report)
 }
 
 func HandleInstallationDeploy(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
@@ -33,12 +33,12 @@ func HandleInstallationDeploy(w http.ResponseWriter, r *http.Request, core *core
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, status)
+	WriteJSON(w, http.StatusAccepted, status)
 }
 
 func decodeInstallationConfig(w http.ResponseWriter, r *http.Request) (coreclient.InstallationConfig, bool) {
 	defer r.Body.Close()
-	config, err := decodeJSON[coreclient.InstallationConfig](w, r, 8<<10)
+	config, err := DecodeJSON[coreclient.InstallationConfig](w, r, 8<<10)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return coreclient.InstallationConfig{}, false

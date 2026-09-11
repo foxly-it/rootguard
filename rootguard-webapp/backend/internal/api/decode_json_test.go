@@ -16,7 +16,7 @@ type decodeJSONTestPayload struct {
 func TestDecodeJSONDecodesAValidBody(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"rootguard"}`))
-	value, err := decodeJSON[decodeJSONTestPayload](response, request, 1<<10)
+	value, err := DecodeJSON[decodeJSONTestPayload](response, request, 1<<10)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -28,7 +28,7 @@ func TestDecodeJSONDecodesAValidBody(t *testing.T) {
 func TestDecodeJSONRejectsUnknownFields(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"rootguard","surprise":true}`))
-	if _, err := decodeJSON[decodeJSONTestPayload](response, request, 1<<10); err == nil {
+	if _, err := DecodeJSON[decodeJSONTestPayload](response, request, 1<<10); err == nil {
 		t.Fatal("expected an unknown-field error, got nil")
 	}
 }
@@ -36,18 +36,18 @@ func TestDecodeJSONRejectsUnknownFields(t *testing.T) {
 func TestDecodeJSONRejectsTrailingData(t *testing.T) {
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"name":"rootguard"}{"name":"ignored-second-document"}`))
-	if _, err := decodeJSON[decodeJSONTestPayload](response, request, 1<<10); err == nil {
+	if _, err := DecodeJSON[decodeJSONTestPayload](response, request, 1<<10); err == nil {
 		t.Fatal("expected a trailing-data error, got nil")
 	}
 }
 
 // TestHandleSetAdGuardFilteringRejectsTrailingData is a regression test for
-// the shared decodeJSON helper (see helpers.go): every handler in this
+// the shared DecodeJSON helper (see helpers.go): every handler in this
 // package used to run its own bare decoder.Decode() call, and only the two
 // AdGuard handlers had a manual decoder.More() check added for it - the
 // rest (this package has a dozen such handlers) had no protection at all
 // against a body like {"enabled":true}{"extra":true} silently discarding
-// its second half. Picks one representative handler; decodeJSON itself is
+// its second half. Picks one representative handler; DecodeJSON itself is
 // unit-tested above and used identically everywhere else in this package.
 func TestHandleSetAdGuardFilteringRejectsTrailingData(t *testing.T) {
 	// Never actually reached - the handler must reject the request before
