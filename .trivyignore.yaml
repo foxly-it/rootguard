@@ -548,41 +548,48 @@ vulnerabilities:
   # framework (`event_rpcgen`/`event_tagging.c`) - it only uses
   # libevent's event-loop/socket-buffering primitives (event_base,
   # bufferevent). All four findings below are in exactly those two unused
-  # subsystems. Confirmed unfixed in trixie live (Debian Security
-  # Tracker) - no `<no-dsa>` classification exists yet either, this is
-  # simply too new; fixed only in forky/sid at 2.1.13-stable-1.
+  # subsystems.
+  #
+  # Updated 2026-09-11: the automated Debian-pin-freshness workflow bumped
+  # this package from 2.1.12-stable-10+b1 to 2.1.13-stable-1~deb13u1 (the
+  # old pin is no longer served by the live Debian repository at all).
+  # Confirmed live via the Debian Security Tracker that this is now
+  # exactly the trixie-security *fixed* version for all six libevent CVEs
+  # in this file - trivy's own vulnerability DB just hasn't caught up to
+  # that yet (still reports 2.1.13-stable-1~deb13u1 itself as affected,
+  # no fix version listed). Kept suppressed regardless, since the
+  # reachability reasoning below holds independently of whether the
+  # package itself is patched.
   - id: CVE-2026-63383
-    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.13-stable-1~deb13u1"]
     expired_at: 2026-11-30
     statement: >-
       event_tagging.c (evtag_unmarshal_header) - libevent's own RPC/
-      tagging framework, which Unbound never uses. Unfixed in trixie,
-      confirmed live - see the comment above this block.
+      tagging framework, which Unbound never uses - see the comment above
+      this block.
   - id: CVE-2026-63384
-    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.13-stable-1~deb13u1"]
     expired_at: 2026-11-30
     statement: >-
       event_tagging.c (evtag_unmarshal_header/evtag_unmarshal_string) -
       libevent's own RPC/tagging framework, which Unbound never uses -
       see CVE-2026-63383's identical statement above.
   - id: CVE-2026-63387
-    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.13-stable-1~deb13u1"]
     expired_at: 2026-11-30
     statement: >-
       evdns.c (evdns_server_request_format_response) - libevent's own
       bundled DNS server-response-formatting helper, which Unbound never
       uses (it implements DNS wire-format parsing entirely itself) - see
-      CVE-2026-63383's identical statement above on the unfixed-in-trixie
-      status.
+      CVE-2026-63383's identical statement above.
   - id: CVE-2026-63388
-    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.13-stable-1~deb13u1"]
     expired_at: 2026-11-30
     statement: >-
       bufferevent_sock.c, requires an AF_UNIX listener socket - RootGuard
       Unbound's own remote-control interface is TCP-only
       (`control-interface: 127.0.0.1`, confirmed live in unbound.conf),
-      never AF_UNIX. See CVE-2026-63383's identical statement above on
-      the unfixed-in-trixie status.
+      never AF_UNIX. See CVE-2026-63383's identical statement above.
   - id: CVE-2026-16742
     purls: ["pkg:deb/debian/libsystemd0@257.13-1~deb13u1"]
     expired_at: 2026-11-30
@@ -629,9 +636,10 @@ vulnerabilities:
   #    embedded-NUL / evhttp_header_is_valid_value's obsolete line-folding
   #    handling) - Unbound never links against or calls libevent's evhttp
   #    module, only the event-loop/socket-buffering primitives
-  #    (event_base, bufferevent), same reasoning as the existing block.
-  #    Confirmed unfixed in trixie live (Debian Security Tracker); fix
-  #    only in sid/forky at 2.1.13-stable-1.
+  #    (event_base, bufferevent), same reasoning as the existing block. See
+  #    that block's own 2026-09-11 update note on the version bump/purl
+  #    change and trivy's DB lag now that Debian has actually shipped the
+  #    fix.
   - id: CVE-2026-76642
     purls:
       - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1"
@@ -697,7 +705,7 @@ vulnerabilities:
       in trixie, this image never creates bind mounts at runtime - see the
       comment above this block.
   - id: CVE-2026-63382
-    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.13-stable-1~deb13u1"]
     expired_at: 2026-11-30
     statement: >-
       evhttp parser (http.c) request-desynchronization via malformed
@@ -705,7 +713,7 @@ vulnerabilities:
       client/server module, which Unbound never links against or calls -
       see the comment above this block.
   - id: CVE-2026-63385
-    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.12-stable-10%2Bb1"]
+    purls: ["pkg:deb/debian/libevent-2.1-7t64@2.1.13-stable-1~deb13u1"]
     expired_at: 2026-11-30
     statement: >-
       evhttp_decode_uri_internal/evhttp_header_is_valid_value (http.c) -

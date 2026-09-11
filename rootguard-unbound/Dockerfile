@@ -20,7 +20,7 @@ RUN apt-get update \
         build-essential=12.12 \
         ca-certificates=20250419 \
         curl=8.14.1-2+deb13u4 \
-        libevent-dev=2.1.12-stable-10+b1 \
+        libevent-dev=2.1.13-stable-1~deb13u1 \
         libexpat1-dev=2.8.3-1~deb13u1 \
         libssl-dev=3.5.7-1~deb13u2 \
         pkg-config=1.8.1-4 \
@@ -81,7 +81,7 @@ RUN apt-get update \
         bind9-dnsutils=1:9.20.26-1~deb13u1 \
         ca-certificates=20250419 \
         dns-root-data=2025080400~deb13u1 \
-        libevent-2.1-7t64=2.1.12-stable-10+b1 \
+        libevent-2.1-7t64=2.1.13-stable-1~deb13u1 \
         libexpat1=2.8.3-1~deb13u1 \
         libssl3t64=3.5.7-1~deb13u2 \
     # Found in review, round 14: the debian:13-slim base's own util-linux
