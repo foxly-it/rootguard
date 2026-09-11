@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -20,6 +19,8 @@ import (
 	"time"
 
 	"filippo.io/age"
+
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 )
 
 const SchemaVersion = 1
@@ -29,7 +30,7 @@ var (
 	ErrInvalidPassphrase = errors.New("backup passphrase must contain at least 12 characters")
 )
 
-type CommandRunner func(context.Context, ...string) ([]byte, error)
+type CommandRunner = dockercli.CommandRunner
 
 type Source struct {
 	ArchivePath string
@@ -72,7 +73,7 @@ type Exporter struct {
 
 func New(options Options) *Exporter {
 	if options.Run == nil {
-		options.Run = runDocker
+		options.Run = dockercli.Run
 	}
 	return &Exporter{dataDir: options.DataDir, localSources: options.LocalSources, containerSources: options.ContainerSources, run: options.Run}
 }
@@ -121,8 +122,10 @@ func (e *Exporter) Export(ctx context.Context, passphrase string, destination io
 		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
 			return err
 		}
-		if output, err := e.run(ctx, "cp", source.Container+":"+source.Path, target); err != nil {
-			return fmt.Errorf("copy %s from %s: %w: %s", source.Path, source.Container, err, strings.TrimSpace(string(output)))
+		// dockercli.Run's own error already carries the docker command and
+		// its output (see its doc comment) - not repeated here.
+		if _, err := e.run(ctx, "cp", source.Container+":"+source.Path, target); err != nil {
+			return fmt.Errorf("copy %s from %s: %w", source.Path, source.Container, err)
 		}
 	}
 	files, err := inventory(stage)
@@ -303,8 +306,4 @@ func validateArchivePath(path string) error {
 		return fmt.Errorf("unsafe backup archive path %q", path)
 	}
 	return nil
-}
-
-func runDocker(ctx context.Context, arguments ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, "docker", arguments...).CombinedOutput()
 }

@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 )
 
 const (
@@ -163,7 +165,7 @@ func realDockerSkippingPull(afterBackup func(destination string)) CommandRunner 
 	var backupDir string
 	return func(ctx context.Context, arguments ...string) ([]byte, error) {
 		if len(arguments) >= 3 && arguments[0] == "cp" && strings.HasPrefix(arguments[1], fixtureContainer+":") {
-			output, err := runDocker(ctx, arguments...)
+			output, err := dockercli.Run(ctx, arguments...)
 			if err == nil {
 				backupDir = arguments[2]
 			}
@@ -175,7 +177,7 @@ func realDockerSkippingPull(afterBackup func(destination string)) CommandRunner 
 			}
 			return []byte("skipped: local fixture image"), nil
 		}
-		return runDocker(ctx, arguments...)
+		return dockercli.Run(ctx, arguments...)
 	}
 }
 
