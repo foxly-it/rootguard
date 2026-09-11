@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 	"github.com/foxly-it/rootguard-core/internal/installer"
 )
 
@@ -18,7 +18,7 @@ var (
 	ErrRestoreFailed = errors.New("RootGuard backup restore failed")
 )
 
-type CommandRunner func(context.Context, ...string) ([]byte, error)
+type CommandRunner = dockercli.CommandRunner
 
 type Options struct {
 	DataDir        string
@@ -48,7 +48,7 @@ type PreviewResult struct {
 
 func New(options Options) *Manager {
 	if options.Run == nil {
-		options.Run = runDocker
+		options.Run = dockercli.Run
 	}
 	return &Manager{dataDir: options.DataDir, unboundDir: options.UnboundDir, adGuardDir: options.AdGuardDir,
 		adGuardAuthDir: options.AdGuardAuthDir, installer: options.Installer, run: options.Run}
@@ -112,9 +112,10 @@ func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installe
 			if _, err := os.Stat(item.source); os.IsNotExist(err) {
 				continue
 			}
-			output, err := m.run(ctx, "cp", item.source+string(os.PathSeparator)+".", item.container+":"+item.target)
-			if err != nil {
-				return fmt.Errorf("restore %s: %w: %s", item.target, err, strings.TrimSpace(string(output)))
+			// dockercli.Run's own error already carries the docker command
+			// and its output (see its doc comment) - not repeated here.
+			if _, err := m.run(ctx, "cp", item.source+string(os.PathSeparator)+".", item.container+":"+item.target); err != nil {
+				return fmt.Errorf("restore %s: %w", item.target, err)
 			}
 		}
 		if err := m.normalizeUnboundOwnership(ctx); err != nil {
@@ -148,9 +149,10 @@ func (m *Manager) normalizeUnboundOwnership(ctx context.Context) error {
 		{"rootguard-unbound-config", "/etc/unbound/unbound.d"},
 		{"rootguard-unbound-state", "/var/lib/unbound"},
 	} {
-		output, err := m.run(ctx, "run", "--rm", "--network", "none", "--user", "0:0", "--read-only", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--security-opt", "no-new-privileges:true", "--volume", volume.name+":"+volume.path, "--entrypoint", "/usr/bin/chown", image, "--recursive", "100:101", volume.path)
-		if err != nil {
-			return fmt.Errorf("normalize %s ownership: %w: %s", volume.name, err, strings.TrimSpace(string(output)))
+		// dockercli.Run's own error already carries the docker command and
+		// its output (see its doc comment) - not repeated here.
+		if _, err := m.run(ctx, "run", "--rm", "--network", "none", "--user", "0:0", "--read-only", "--cap-drop", "ALL", "--cap-add", "CHOWN", "--security-opt", "no-new-privileges:true", "--volume", volume.name+":"+volume.path, "--entrypoint", "/usr/bin/chown", image, "--recursive", "100:101", volume.path); err != nil {
+			return fmt.Errorf("normalize %s ownership: %w", volume.name, err)
 		}
 	}
 	return nil
@@ -222,8 +224,4 @@ func errorsJoin(errs ...error) error {
 		}
 	}
 	return nil
-}
-
-func runDocker(ctx context.Context, arguments ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, "docker", arguments...).CombinedOutput()
 }

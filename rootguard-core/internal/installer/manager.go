@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/foxly-it/rootguard-core/internal/atomicfile"
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 	"github.com/foxly-it/rootguard-core/internal/stack"
 )
 
@@ -104,7 +104,7 @@ type Status struct {
 	PersistErrorAt time.Time `json:"persist_error_at,omitempty"`
 }
 
-type CommandRunner func(context.Context, ...string) ([]byte, error)
+type CommandRunner = dockercli.CommandRunner
 type BootstrapFunc func(context.Context, string) error
 type RestoreFunc func(context.Context) error
 
@@ -175,7 +175,7 @@ type Manager struct {
 
 func NewManager(options Options) *Manager {
 	if options.Run == nil {
-		options.Run = runDocker
+		options.Run = dockercli.Run
 	}
 	if options.Bootstrap == nil {
 		options.Bootstrap = func(context.Context, string) error { return nil }
@@ -1326,13 +1326,4 @@ func cloneStatus(status Status) Status {
 	clone.Steps = make([]Step, len(status.Steps))
 	copy(clone.Steps, status.Steps)
 	return clone
-}
-
-func runDocker(ctx context.Context, arguments ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "docker", arguments...)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return output, fmt.Errorf("docker %s: %w: %s", strings.Join(arguments, " "), err, strings.TrimSpace(string(output)))
-	}
-	return output, nil
 }
