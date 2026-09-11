@@ -69,48 +69,8 @@ func main() {
 	mux.HandleFunc("GET /api/control-plane/status", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, manager.Status())
 	})
-	mux.HandleFunc("POST /api/control-plane/check", func(w http.ResponseWriter, r *http.Request) {
-		overrides, err := decodeTargetOverrides(r.Body)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		next, err := manager.StartCheck(overrides)
-		if errors.Is(err, errBusy) {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		if errors.Is(err, errTargetOverrideNotAllowlisted) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusAccepted, next)
-	})
-	mux.HandleFunc("POST /api/control-plane/update", func(w http.ResponseWriter, r *http.Request) {
-		overrides, err := decodeTargetOverrides(r.Body)
-		if err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		next, err := manager.StartUpdate(overrides)
-		if errors.Is(err, errBusy) {
-			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
-			return
-		}
-		if errors.Is(err, errTargetOverrideNotAllowlisted) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		writeJSON(w, http.StatusAccepted, next)
-	})
+	mux.HandleFunc("POST /api/control-plane/check", handleControlPlaneAction(manager.StartCheck))
+	mux.HandleFunc("POST /api/control-plane/update", handleControlPlaneAction(manager.StartUpdate))
 
 	server := &http.Server{
 		Addr:              ":8082",
