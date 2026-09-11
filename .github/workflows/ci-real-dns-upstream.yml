@@ -37,9 +37,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      # See ci-unbound.yml's identical step for the full rationale - same
+      # scope, so this and ci-unbound.yml's own builds warm each other's
+      # cache too.
       - name: Build validation image
         working-directory: rootguard-unbound
-        run: docker build -t rootguard-unbound:test .
+        run: docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:test .
 
       - name: Start resolver
         run: docker run --rm --detach --name rootguard-unbound-real-dns rootguard-unbound:test

@@ -59,9 +59,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      # See ci-core.yml's identical step for the full rationale. Same
+      # scope the "Build and push image" job below uses, so this and that
+      # job's cache warm each other - safe to share across this job's own
+      # amd64/arm64 matrix legs too, the same way that job's own single
+      # multi-platform build already shares one scope across both arches.
       - name: Build validation image
         working-directory: rootguard-unbound
-        run: docker build -t rootguard-unbound:test .
+        run: docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:test .
 
       # Found in review, round 14: this is one of the two published
       # images (Blockpage is the other, see ci-blockpage.yml) that
@@ -194,9 +202,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      # See the `test` job's identical step above for the full rationale -
+      # same scope, so a matrix leg there and this job's own build warm
+      # each other's cache too.
       - name: Build validation image
         working-directory: rootguard-unbound
-        run: docker build -t rootguard-unbound:test .
+        run: docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:test .
 
       # Found in review: this was still on setup-go v5 (GitHub already
       # warns about its Node.js 20 runtime, soon to be enforced as
@@ -282,11 +296,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Found in review: a plain `docker build` here, right before the
+      # real "Build and push image" step further down - which already
+      # uses buildx with the gha cache under this exact same scope - never
+      # populated or reused that cache, rebuilding every layer from
+      # scratch just to read the version string out of it. buildx --load
+      # with the same scope makes this build warm-start from (and warm)
+      # the real build's own cache instead.
       - name: Extract installed Unbound version
         id: version
         working-directory: rootguard-unbound
         run: |
-          docker build -t rootguard-unbound:versioncheck .
+          docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:versioncheck .
           VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:versioncheck -V 2>&1 | awk '/^Version / {print $2; exit}')"
           MAJORMINOR="$(echo "$VERSION" | cut -d'.' -f1,2)"
           echo "Detected upstream version: $VERSION"
