@@ -89,8 +89,8 @@ export function useUnboundData() {
     setError("");
   }
 
-  async function withBusy(action: () => Promise<void>, fallback: string) {
-    if (busy) return;
+  async function withBusy(action: () => Promise<void>, fallback: string, guard?: () => boolean) {
+    if (busy || (guard && !guard())) return;
     setBusy(true);
     clearFeedback();
     try {
@@ -135,11 +135,9 @@ export function useUnboundData() {
       .catch(() => undefined);
   }, diagnosticLogging?.active ? 10_000 : null);
 
-  async function selectPreset(preset: UnboundPreset) {
-    if (busy || !settings) return;
-    setBusy(true);
-    clearFeedback();
-    try {
+  function selectPreset(preset: UnboundPreset) {
+    return withBusy(async () => {
+      if (!settings) return;
       const proposed = {
         ...preset.settings,
         forward_zones: settings.forward_zones,
@@ -151,58 +149,35 @@ export function useUnboundData() {
       setSettings(proposed);
       setPreview(await previewUnboundSettings(proposed));
       setMessage(t("unbound.presetLoaded", { name: presetText(preset.id, "name", t, preset.name) }));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.presetError")));
-    } finally {
-      setBusy(false);
-    }
+    }, "unbound.presetError", () => !!settings);
   }
 
-  async function createPreview(event: FormEvent) {
+  function createPreview(event: FormEvent) {
     event.preventDefault();
-    if (!settings || busy) return;
-    setBusy(true);
-    clearFeedback();
-    try {
+    return withBusy(async () => {
+      if (!settings) return;
       setPreview(await previewUnboundSettings(settings));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.previewError")));
-    } finally {
-      setBusy(false);
-    }
+    }, "unbound.previewError", () => !!settings);
   }
 
-  async function applyPreview() {
-    if (!settings || busy || !preview?.changed) return;
-    setBusy(true);
-    clearFeedback();
-    try {
+  function applyPreview() {
+    return withBusy(async () => {
+      if (!settings) return;
       const updated = await updateUnboundSettings(settings);
       setSettings(updated);
       setPreview(null);
       await reload();
       setMessage(t("unbound.activated"));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.activateError")));
-    } finally {
-      setBusy(false);
-    }
+    }, "unbound.activateError", () => !!settings && !!preview?.changed);
   }
 
-  async function restore(entry: UnboundHistoryEntry) {
-    if (busy || !window.confirm(t("unbound.confirmRestore", { date: formatDate(entry.created_at) }))) return;
-    setBusy(true);
-    clearFeedback();
-    try {
+  function restore(entry: UnboundHistoryEntry) {
+    return withBusy(async () => {
       setSettings(await restoreUnboundVersion(entry.id));
       setPreview(null);
       await reload();
       setMessage(t("unbound.restored"));
-    } catch (err) {
-      setError(errorMessage(err, t("unbound.restoreError")));
-    } finally {
-      setBusy(false);
-    }
+    }, "unbound.restoreError", () => window.confirm(t("unbound.confirmRestore", { date: formatDate(entry.created_at) })));
   }
 
   function runDiagnostics() {
