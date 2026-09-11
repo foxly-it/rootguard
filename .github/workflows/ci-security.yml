@@ -3,7 +3,7 @@ name: Security Scans
 on:
   push:
     branches: [main]
-  pull_request:
+  pull_request: {}
   # workflow_call lets release-alpha.yml run these exact three jobs as
   # part of the release gate itself - found in review: a release cut
   # published images even though nothing in the release pipeline ever
@@ -93,6 +93,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
       - name: govulncheck
         working-directory: ${{ matrix.module }}
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
