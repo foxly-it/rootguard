@@ -75,8 +75,15 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      # Found in review: a plain `docker build` here re-ran every apt/go
+      # layer from scratch on every single run - buildx --load plus the
+      # gha cache backend gets the same locally loadable image (needed so
+      # trivy below can scan it) while actually reusing unchanged layers
+      # between runs. Same scope as this component would use if it had a
+      # dedicated push job, so a future one would share this cache too.
       - working-directory: rootguard-core
-        run: docker build -t rootguard-core:test .
+        run: docker buildx build --load --cache-from type=gha,scope=core --cache-to type=gha,mode=max,scope=core -t rootguard-core:test .
       # Found in review: nothing ever scanned the image this step just
       # built - see trivy-image-scan.sh's own header comment for the full
       # gap this closes.

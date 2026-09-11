@@ -93,7 +93,14 @@ jobs:
           load: true
           platforms: linux/amd64
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci
+          # Found in review: cache-from with no cache-to meant this step
+          # only ever consumed the cache the "Build and push" step below
+          # writes - which is skipped entirely on a PR (if: github.event_name
+          # != 'pull_request'), the one case that runs this step. A PR's
+          # scan build never warmed its own cache, so repeated pushes to
+          # the same PR rebuilt every layer from scratch every time.
           cache-from: type=gha,scope=blockpage
+          cache-to: type=gha,mode=max,scope=blockpage
 
       # Found in review, round 14: this is one of the two published
       # images (Unbound is the other, see ci-unbound.yml) that

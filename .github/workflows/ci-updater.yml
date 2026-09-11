@@ -70,8 +70,10 @@ jobs:
       # local daemon to scan even when it is pushed) - so a real,
       # single-platform, locally loaded build lives here instead,
       # purely to give trivy something to scan.
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+      # See ci-core.yml's identical step for the full rationale.
       - working-directory: rootguard-updater
-        run: docker build -t rootguard-updater:test .
+        run: docker buildx build --load --cache-from type=gha,scope=updater --cache-to type=gha,mode=max,scope=updater -t rootguard-updater:test .
       - run: ./scripts/ci/trivy-image-scan.sh rootguard-updater:test
 
   # See ci-blockpage.yml's identical job for the full rationale - this
