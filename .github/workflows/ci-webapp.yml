@@ -127,12 +127,18 @@ jobs:
         working-directory: rootguard-webapp/frontend
         run: npm run build
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
       # See ci-updater.yml's identical step for why this job needs its
       # own single-platform local build rather than reusing the `build`
-      # job's multi-arch buildx one.
+      # job's multi-arch buildx one. See ci-core.yml's identical step for
+      # why it's a buildx --load with a gha cache rather than a plain
+      # `docker build` - same scope the `build` job below already uses,
+      # so this and that job's cache warm each other.
       - name: Build image for scanning
         working-directory: rootguard-webapp
-        run: docker build -t rootguard-webapp:test .
+        run: docker buildx build --load --cache-from type=gha,scope=webapp --cache-to type=gha,mode=max,scope=webapp -t rootguard-webapp:test .
 
       # See ci-core.yml's identical step for the full gap this closes.
       - name: Scan image for vulnerabilities
