@@ -156,6 +156,14 @@ jobs:
           test "$(docker exec rootguard-unbound-ci unbound-control status | awk '/^verbosity:/ {print $2}')" = "0"
           test -z "$(docker image inspect rootguard-unbound:test --format '{{json .Config.ExposedPorts}}' | grep 8953 || true)"
 
+      # See ci-real-dns-upstream.yml's identical step - without this, a
+      # failure above (e.g. the healthcheck wait or a dig/unbound-control
+      # assertion) left no way to see what the resolver itself logged,
+      # only the test script's own pass/fail output.
+      - name: Show logs after failure
+        if: failure()
+        run: docker logs rootguard-unbound-ci
+
       - name: Stop resolver smoke-test container
         if: always()
         run: |
@@ -289,7 +297,6 @@ jobs:
         id: build-time
         run: echo "value=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
-      # 🏗 Build & Push Multi-Arch Image
       - name: Build and push image
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
