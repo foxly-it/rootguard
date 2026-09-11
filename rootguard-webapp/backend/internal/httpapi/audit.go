@@ -42,10 +42,22 @@ const (
 // "_failure", or "_rate_limited" to whichever of these matches the route
 // being guarded - see destructive.go.
 const (
-	auditUnboundSettingsApplied          = "unbound_settings_applied"
-	auditUnboundSettingsRestored         = "unbound_settings_restored"
-	auditUnboundImportApplied            = "unbound_import_applied"
-	auditUnboundCustomApplied            = "unbound_custom_applied"
+	auditUnboundSettingsApplied  = "unbound_settings_applied"
+	auditUnboundSettingsRestored = "unbound_settings_restored"
+	auditUnboundImportApplied    = "unbound_import_applied"
+	auditUnboundCustomApplied    = "unbound_custom_applied"
+	// auditUnboundCustomPreview/auditUnboundImportPreview: found in review -
+	// these two preview routes ran without any dest() wrapper at all, unlike
+	// every other route in this file including their own apply siblings
+	// (auditUnboundCustomApplied/auditUnboundImportApplied above). Both
+	// preview handlers hit the same applyMu-guarded, docker-exec-backed
+	// validateCombined() the apply handlers do (see
+	// rootguard-core/internal/unbound/custom.go), so they're exactly as
+	// expensive per request - a session could flood them to starve every
+	// other Unbound operation, the class of gap already fixed for
+	// /api/backups/restore/preview and the router-import discover routes.
+	auditUnboundCustomPreview            = "unbound_custom_preview"
+	auditUnboundImportPreview            = "unbound_import_preview"
 	auditUnboundDiagnosticLoggingStarted = "unbound_diagnostic_logging_started"
 	auditUnboundDiagnosticLoggingStopped = "unbound_diagnostic_logging_stopped"
 	auditServiceAction                   = "service_action"
