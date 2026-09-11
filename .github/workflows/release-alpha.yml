@@ -172,7 +172,33 @@ jobs:
           # candidate tag" comment in the publish job for why that matters.
           echo "candidate_tag=${version}-candidate-${SOURCE_REF:0:12}" >> "$GITHUB_OUTPUT"
 
+  # Found in review: a single setup-go (cache: false, no
+  # cache-dependency-path) covering three separate go.mod/go.sum files run
+  # sequentially - none of the three modules ever got module-download
+  # caching, and one setup-go step can't correctly cache three distinct
+  # go.sum files even with cache enabled. Matrixed the same way
+  # ci-security.yml's own go-security job already is, each module getting
+  # its own cache keyed to its own go.sum, and running in parallel instead
+  # of sequentially.
   test:
+    needs: version
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [rootguard-core, rootguard-updater, rootguard-webapp/backend]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.version.outputs.source_ref }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - run: go vet ./... && go test ./...
+        working-directory: ${{ matrix.module }}
+
+  test-frontend:
     needs: version
     timeout-minutes: 20
     runs-on: ubuntu-latest
@@ -180,16 +206,6 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ needs.version.outputs.source_ref }}
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
-        with:
-          go-version-file: rootguard-core/go.mod
-          cache: false
-      - run: go vet ./... && go test ./...
-        working-directory: rootguard-core
-      - run: go vet ./... && go test ./...
-        working-directory: rootguard-updater
-      - run: go vet ./... && go test ./...
-        working-directory: rootguard-webapp/backend
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
@@ -231,7 +247,7 @@ jobs:
       contents: read
 
   publish:
-    needs: [version, test, security]
+    needs: [version, test, test-frontend, security]
     timeout-minutes: 30
     runs-on: ubuntu-latest
     permissions:

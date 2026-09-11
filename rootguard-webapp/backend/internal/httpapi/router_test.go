@@ -3,7 +3,9 @@ package httpapi
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/foxly-it/rootguard-webapp/backend/internal/coreclient"
 )
@@ -58,6 +60,40 @@ func TestRouterMethodDispatch(t *testing.T) {
 			mux.ServeHTTP(allowed, httptest.NewRequest(tc.allowedMethod, tc.path, nil))
 			if allowed.Code == http.StatusMethodNotAllowed || allowed.Code == http.StatusNotFound {
 				t.Errorf("%s %s: expected the allowed method to reach the handler, got %d", tc.allowedMethod, tc.path, allowed.Code)
+			}
+		})
+	}
+}
+
+// TestUnboundPreviewRoutesAreRateLimited is the regression test for a real
+// gap found in review: /api/unbound/custom/preview and
+// /api/unbound/import/preview used to be registered as bare handlers with
+// no dest() wrapper at all, unlike every other route in this file including
+// their own apply siblings (PUT /api/unbound/custom, POST
+// /api/unbound/import) - despite hitting the exact same applyMu-guarded,
+// docker-exec-backed validateCombined() those apply routes do (see
+// rootguard-core/internal/unbound/custom.go/bundle.go), making them exactly
+// as expensive per request. A session could have flooded either one to
+// starve every other Unbound operation on the shared applyMu.
+func TestUnboundPreviewRoutesAreRateLimited(t *testing.T) {
+	core := coreclient.New("http://127.0.0.1:1", "test-token")
+
+	for _, path := range []string{"/api/unbound/custom/preview", "/api/unbound/import/preview"} {
+		t.Run(path, func(t *testing.T) {
+			auth := newTestSessionAuth()
+			auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
+			mux := NewRouter(core, auth)
+
+			first := httptest.NewRecorder()
+			mux.ServeHTTP(first, httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}")))
+			if first.Code == http.StatusTooManyRequests {
+				t.Fatalf("expected the first request to reach the handler, got 429 immediately")
+			}
+
+			second := httptest.NewRecorder()
+			mux.ServeHTTP(second, httptest.NewRequest(http.MethodPost, path, strings.NewReader("{}")))
+			if second.Code != http.StatusTooManyRequests {
+				t.Fatalf("expected the second request to be rate-limited once the shared budget was exhausted, got %d", second.Code)
 			}
 		})
 	}

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/foxly-it/rootguard-core/internal/atomicfile"
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 	"github.com/foxly-it/rootguard-core/internal/stack"
 )
 
@@ -104,7 +104,7 @@ type Status struct {
 	PersistErrorAt time.Time `json:"persist_error_at,omitempty"`
 }
 
-type CommandRunner func(context.Context, ...string) ([]byte, error)
+type CommandRunner = dockercli.CommandRunner
 type BootstrapFunc func(context.Context, string) error
 type RestoreFunc func(context.Context) error
 
@@ -175,7 +175,7 @@ type Manager struct {
 
 func NewManager(options Options) *Manager {
 	if options.Run == nil {
-		options.Run = runDocker
+		options.Run = dockercli.Run
 	}
 	if options.Bootstrap == nil {
 		options.Bootstrap = func(context.Context, string) error { return nil }
@@ -241,6 +241,16 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	if status.State != StateInstalled {
 		return nil
 	}
+	return m.connectCoreToDNSNetwork(ctx)
+}
+
+// connectCoreToDNSNetwork attaches the controller container to the private
+// DNS network - shared by Reconcile (after an update recreated the
+// controller), deploy, and restoreDeploy (right after the stack itself
+// comes up), since all three need the exact same connect-and-tolerate-
+// already-attached behavior. Docker preserves a manual network attachment
+// on restart, but not when Compose replaces the controller container.
+func (m *Manager) connectCoreToDNSNetwork(ctx context.Context) error {
 	address, err := coreAddress(m.dnsNetworkCIDR)
 	if err != nil {
 		return err
@@ -249,7 +259,24 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 	if err == nil || strings.Contains(strings.ToLower(string(output)), "already exists") {
 		return nil
 	}
-	return fmt.Errorf("reconnect RootGuard controller to DNS network: %w: %s", err, strings.TrimSpace(string(output)))
+	return fmt.Errorf("connect RootGuard controller to DNS network: %w: %s", err, strings.TrimSpace(string(output)))
+}
+
+// reloadBlockpageConfig re-renders blockpage's nginx config (now that Core
+// has published its AdGuard auth token) and reloads nginx in place, rather
+// than restarting the container: a restart tears down and re-creates its
+// network endpoint, racing AdGuard's dynamically-assigned address for the
+// static IP blockpage needs - a reload has no such networking side effect
+// and keeps the blockpage continuously reachable. Shared by deploy and
+// restoreDeploy, both of which only call this when config.BlockpageEnabled.
+func (m *Manager) reloadBlockpageConfig(ctx context.Context) error {
+	if _, err := m.run(ctx, "exec", "rootguard-blockpage", "sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"); err != nil {
+		return fmt.Errorf("render blockpage nginx config with its AdGuard auth token: %w", err)
+	}
+	if _, err := m.run(ctx, "exec", "rootguard-blockpage", "nginx", "-s", "reload"); err != nil {
+		return fmt.Errorf("reload blockpage nginx to pick up its AdGuard auth token: %w", err)
+	}
+	return nil
 }
 
 func (m *Manager) Preflight(ctx context.Context, config Config) Preflight {
@@ -588,12 +615,8 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 	}
 	_ = m.setStep("start", "done", "Restored DNS containers are running")
 	_ = m.setStep("connect", "running", "Connecting the controller to the private DNS network")
-	coreIP, err := coreAddress(m.dnsNetworkCIDR)
-	if err != nil {
+	if err := m.connectCoreToDNSNetwork(ctx); err != nil {
 		return fail("connect", err)
-	}
-	if output, runErr := m.run(ctx, "network", "connect", "--ip", coreIP, "rootguard-dns", m.coreContainer); runErr != nil && !strings.Contains(strings.ToLower(string(output)), "already exists") {
-		return fail("connect", runErr)
 	}
 	_ = m.setStep("connect", "done", "Controller is connected to the private DNS network")
 	_ = m.setStep("bootstrap", "running", "Waiting for Unbound and verifying restored AdGuard Home")
@@ -608,10 +631,7 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 		return fail("bootstrap", err)
 	}
 	if config.BlockpageEnabled {
-		if _, err = m.run(ctx, "exec", "rootguard-blockpage", "sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"); err != nil {
-			return fail("bootstrap", err)
-		}
-		if _, err = m.run(ctx, "exec", "rootguard-blockpage", "nginx", "-s", "reload"); err != nil {
+		if err := m.reloadBlockpageConfig(ctx); err != nil {
 			return fail("bootstrap", err)
 		}
 	}
@@ -662,14 +682,8 @@ func (m *Manager) deploy(config Config) {
 	_ = m.setStep("start", "done", "DNS containers were created")
 
 	_ = m.setStep("connect", "running", "Connecting the controller to the private DNS network")
-	coreIP, err := coreAddress(m.dnsNetworkCIDR)
-	if err != nil {
+	if err := m.connectCoreToDNSNetwork(ctx); err != nil {
 		m.fail("connect", err)
-		return
-	}
-	if output, err := m.run(ctx, "network", "connect", "--ip", coreIP, "rootguard-dns", m.coreContainer); err != nil &&
-		!strings.Contains(strings.ToLower(string(output)), "already exists") {
-		m.fail("connect", fmt.Errorf("connect RootGuard controller to DNS network: %w: %s", err, strings.TrimSpace(string(output))))
 		return
 	}
 	_ = m.setStep("connect", "done", "Controller is connected to the private DNS network")
@@ -688,18 +702,8 @@ func (m *Manager) deploy(config Config) {
 		return
 	}
 	if config.BlockpageEnabled {
-		// Re-render blockpage's nginx config (now that Core has published its
-		// AdGuard auth token) and reload nginx in place, rather than
-		// restarting the container: a restart tears down and re-creates its
-		// network endpoint, racing AdGuard's dynamically-assigned address for
-		// the static IP blockpage needs - a reload has no such networking
-		// side effect and keeps the blockpage continuously reachable.
-		if _, err := m.run(ctx, "exec", "rootguard-blockpage", "sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"); err != nil {
-			m.fail("bootstrap", fmt.Errorf("render blockpage nginx config with its AdGuard auth token: %w", err))
-			return
-		}
-		if _, err := m.run(ctx, "exec", "rootguard-blockpage", "nginx", "-s", "reload"); err != nil {
-			m.fail("bootstrap", fmt.Errorf("reload blockpage nginx to pick up its AdGuard auth token: %w", err))
+		if err := m.reloadBlockpageConfig(ctx); err != nil {
+			m.fail("bootstrap", err)
 			return
 		}
 	}
@@ -1326,13 +1330,4 @@ func cloneStatus(status Status) Status {
 	clone.Steps = make([]Step, len(status.Steps))
 	copy(clone.Steps, status.Steps)
 	return clone
-}
-
-func runDocker(ctx context.Context, arguments ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "docker", arguments...)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return output, fmt.Errorf("docker %s: %w: %s", strings.Join(arguments, " "), err, strings.TrimSpace(string(output)))
-	}
-	return output, nil
 }

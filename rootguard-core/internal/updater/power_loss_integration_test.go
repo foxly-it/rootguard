@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 )
 
 // TestUpdateHelperProcess is never run directly by the normal test suite (it
@@ -66,7 +68,7 @@ func helperCommandRunner(touch func(name string)) CommandRunner {
 			touch("backup-done")
 			return []byte("skipped: local fixture image"), nil
 		}
-		return runDocker(ctx, arguments...)
+		return dockercli.Run(ctx, arguments...)
 	}
 }
 

@@ -293,9 +293,14 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleGetUnboundCustom(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/unbound/custom/preview", func(w http.ResponseWriter, r *http.Request) {
+	// dest(), not a bare handler - found in review: this ran without any
+	// rate limit, but hits the same applyMu-guarded, docker-exec-backed
+	// validateCombined() its rate-limited PUT sibling below does (see
+	// rootguard-core/internal/unbound/custom.go), so it's exactly as
+	// expensive per request.
+	mux.HandleFunc("POST /api/unbound/custom/preview", dest(auditUnboundCustomPreview, func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePreviewUnboundCustom(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("PUT /api/unbound/custom", dest(auditUnboundCustomApplied, func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePutUnboundCustom(w, r, core)
@@ -309,9 +314,13 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleGetUnboundExport(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/unbound/import/preview", func(w http.ResponseWriter, r *http.Request) {
+	// dest(), not a bare handler - same reasoning as
+	// /api/unbound/custom/preview above (see PreviewBundle in
+	// rootguard-core/internal/unbound/bundle.go, same applyMu +
+	// validateCombined() cost).
+	mux.HandleFunc("POST /api/unbound/import/preview", dest(auditUnboundImportPreview, func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePreviewUnboundImport(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("POST /api/unbound/import", dest(auditUnboundImportApplied, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleApplyUnboundImport(w, r, core)

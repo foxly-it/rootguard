@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/foxly-it/rootguard-core/internal/atomicfile"
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 	"github.com/foxly-it/rootguard-core/internal/stack"
 )
 
@@ -29,7 +29,7 @@ var (
 	ErrUnknownService = errors.New("unknown update service")
 )
 
-type CommandRunner func(context.Context, ...string) ([]byte, error)
+type CommandRunner = dockercli.CommandRunner
 type VerifyFunc func(context.Context, string) error
 
 // AttestationVerifierFunc gates activation, not just display - see
@@ -165,7 +165,7 @@ type Manager struct {
 
 func NewManager(options Options) *Manager {
 	if options.Run == nil {
-		options.Run = runDocker
+		options.Run = dockercli.Run
 	}
 	if options.ComposeProject == "" {
 		options.ComposeProject = DefaultComposeProject
@@ -975,13 +975,4 @@ func cloneStatus(status Status) Status {
 	clone.Services = append([]ServiceStatus(nil), status.Services...)
 	clone.History = append([]HistoryEntry(nil), status.History...)
 	return clone
-}
-
-func runDocker(ctx context.Context, arguments ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "docker", arguments...)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return output, fmt.Errorf("docker %s: %w: %s", strings.Join(arguments, " "), err, strings.TrimSpace(string(output)))
-	}
-	return output, nil
 }
