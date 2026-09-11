@@ -32,5 +32,5 @@ func HandleUpdaterSelfUpdateInstall(w http.ResponseWriter, r *http.Request, core
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusAccepted, status)
+	WriteJSON(w, http.StatusAccepted, status)
 }

@@ -44,5 +44,5 @@ func HandleServiceAction(w http.ResponseWriter, r *http.Request, core *coreclien
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, response)
+	WriteJSON(w, http.StatusOK, response)
 }

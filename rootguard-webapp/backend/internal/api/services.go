@@ -33,5 +33,5 @@ func HandleServiceLogs(w http.ResponseWriter, r *http.Request, core *coreclient.
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	writeJSON(w, http.StatusOK, logs)
+	WriteJSON(w, http.StatusOK, logs)
 }

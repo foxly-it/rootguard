@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
+func WriteJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
@@ -23,7 +23,7 @@ func proxyCore[T any](w http.ResponseWriter, r *http.Request, status int, fn fun
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, status, result)
+	WriteJSON(w, status, result)
 }
 
 // proxyFixed is proxyCore's counterpart for the handlers that report a
@@ -35,25 +35,37 @@ func proxyFixed[T any](w http.ResponseWriter, r *http.Request, errStatus int, fn
 		http.Error(w, err.Error(), errStatus)
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	WriteJSON(w, http.StatusOK, result)
 }
 
-// decodeJSON decodes exactly one JSON value of type T from r's body,
+// DecodeJSON decodes exactly one JSON value of type T from r's body,
 // rejecting unknown fields and any trailing data after that value - a bare
 // Decode() call silently ignores everything past the first JSON value, so
 // a body like {"enabled":true}{"anything"} would otherwise decode
 // successfully with the second part just discarded. Replaces what used to
 // be an identical decoder/DisallowUnknownFields/Decode block repeated at
 // every handler in this package.
-func decodeJSON[T any](w http.ResponseWriter, r *http.Request, maxBytes int64) (T, error) {
+func DecodeJSON[T any](w http.ResponseWriter, r *http.Request, maxBytes int64) (T, error) {
 	var value T
+	err := DecodeJSONInto(w, r, maxBytes, &value)
+	return value, err
+}
+
+// DecodeJSONInto is DecodeJSON's out-parameter counterpart, for callers
+// decoding into an existing/shared struct value instead of a fresh local
+// one - found in review: rootguard-webapp/backend/internal/httpapi had its
+// own byte-identical copy of this exact strict-decode logic
+// (decodeStrictJSON), duplicated because httpapi's handlers commonly
+// decode into a pre-declared `var input someRequest` rather than taking
+// DecodeJSON's return value directly.
+func DecodeJSONInto(w http.ResponseWriter, r *http.Request, maxBytes int64, v any) error {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&value); err != nil {
-		return value, err
+	if err := decoder.Decode(v); err != nil {
+		return err
 	}
 	if decoder.More() {
-		return value, errors.New("unexpected trailing data after JSON body")
+		return errors.New("unexpected trailing data after JSON body")
 	}
-	return value, nil
+	return nil
 }

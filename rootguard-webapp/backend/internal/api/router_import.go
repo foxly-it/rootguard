@@ -14,7 +14,7 @@ type fritzBoxDiscoverRequest struct {
 
 func HandleFritzBoxDiscover(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	defer r.Body.Close()
-	request, err := decodeJSON[fritzBoxDiscoverRequest](w, r, 4<<10)
+	request, err := DecodeJSON[fritzBoxDiscoverRequest](w, r, 4<<10)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -24,7 +24,7 @@ func HandleFritzBoxDiscover(w http.ResponseWriter, r *http.Request, core *corecl
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	WriteJSON(w, http.StatusOK, result)
 }
 
 type reverseDNSDiscoverRequest struct {
@@ -33,7 +33,7 @@ type reverseDNSDiscoverRequest struct {
 
 func HandleReverseDNSDiscover(w http.ResponseWriter, r *http.Request, core *coreclient.Client) {
 	defer r.Body.Close()
-	request, err := decodeJSON[reverseDNSDiscoverRequest](w, r, 4<<10)
+	request, err := DecodeJSON[reverseDNSDiscoverRequest](w, r, 4<<10)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -43,5 +43,5 @@ func HandleReverseDNSDiscover(w http.ResponseWriter, r *http.Request, core *core
 		writeCoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, result)
+	WriteJSON(w, http.StatusOK, result)
 }

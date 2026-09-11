@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/foxly-it/rootguard-webapp/backend/internal/api"
 )
 
 const sessionCookieName = "rootguard_session"
@@ -223,7 +225,7 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 
 		if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/adguard-ui/") {
 			if _, ok := a.authenticatedUser(r); !ok {
-				writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+				api.WriteJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
 				return
 			}
 		}
@@ -235,7 +237,7 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if r.Method == http.MethodGet {
-		writeJSON(w, http.StatusOK, map[string]bool{"enabled": a.recoveryEnabled})
+		api.WriteJSON(w, http.StatusOK, map[string]bool{"enabled": a.recoveryEnabled})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -243,7 +245,7 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.recoveryEnabled {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "recovery_disabled"})
+		api.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "recovery_disabled"})
 		return
 	}
 
@@ -251,7 +253,7 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	limiterKey := rateLimitKey(r)
 	if !a.recoveryLimiter.beginAttempt(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
-		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+		api.WriteJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
 	}
 
@@ -265,8 +267,8 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	defer func() { a.recoveryLimiter.endAttempt(limiterKey, failedAttempt) }()
 
 	var input passwordReset
-	if err := decodeStrictJSON(w, r, 8<<10, &input); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+	if err := api.DecodeJSONInto(w, r, 8<<10, &input); err != nil {
+		api.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
 	tokenHash := sha256.Sum256([]byte(input.RecoveryToken))
@@ -275,11 +277,11 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	if !tokenValid {
 		a.recordAudit(auditRecoveryFailure, "", remoteIP)
 		time.Sleep(250 * time.Millisecond)
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_recovery_token"})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_recovery_token"})
 		return
 	}
 	if len(input.NewPassword) < 12 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "weak_password"})
+		api.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "weak_password"})
 		return
 	}
 
@@ -320,7 +322,7 @@ func (a *SessionAuth) handleRecovery(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 	a.recoveryLimiter.reset(limiterKey)
 	a.recordAudit(auditRecoverySuccess, "", remoteIP)
-	writeJSON(w, http.StatusOK, map[string]bool{"reset": true})
+	api.WriteJSON(w, http.StatusOK, map[string]bool{"reset": true})
 }
 
 // handleAccount lets the currently logged-in operator change their own
@@ -339,11 +341,11 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
 		return
 	}
 	if _, ok := a.authenticatedUser(r); !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
 		return
 	}
 	currentToken := cookie.Value
@@ -352,7 +354,7 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 	limiterKey := rateLimitKey(r)
 	if !a.loginLimiter.beginAttempt(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
-		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+		api.WriteJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
 	}
 	// Several validation checks below can return before the password is
@@ -364,21 +366,21 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 	defer func() { a.loginLimiter.endAttempt(limiterKey, failedAttempt) }()
 
 	var input accountUpdate
-	if err := decodeStrictJSON(w, r, 8<<10, &input); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+	if err := api.DecodeJSONInto(w, r, 8<<10, &input); err != nil {
+		api.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
 	newUsername := strings.TrimSpace(input.NewUsername)
 	if newUsername == "" && input.NewPassword == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "nothing_to_update"})
+		api.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "nothing_to_update"})
 		return
 	}
 	if len(newUsername) > 128 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "username_too_long"})
+		api.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "username_too_long"})
 		return
 	}
 	if input.NewPassword != "" && len(input.NewPassword) < 12 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "weak_password"})
+		api.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "weak_password"})
 		return
 	}
 
@@ -397,7 +399,7 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 		// session itself is invalid" and clears the local login state on
 		// it, so a 401 here would silently sign a correctly-logged-in
 		// operator out just for mistyping their current password.
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "invalid_current_password"})
+		api.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "invalid_current_password"})
 		return
 	}
 	a.loginLimiter.reset(limiterKey)
@@ -477,7 +479,7 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 			a.expectedPasswordHash, a.passwordSalt = newPasswordHashApplied, newPasswordSaltApplied
 			a.mu.Unlock()
 			a.recordAuditDetail(auditAccountPartial, resultUsername, remoteIP, "credentials changed, session invalidation failed")
-			writeJSON(w, http.StatusInternalServerError, map[string]string{
+			api.WriteJSON(w, http.StatusInternalServerError, map[string]string{
 				"error":    "partial_update",
 				"username": resultUsername,
 			})
@@ -499,7 +501,7 @@ func (a *SessionAuth) handleAccount(w http.ResponseWriter, r *http.Request) {
 		detail = "password"
 	}
 	a.recordAuditDetail(auditAccountUpdated, resultUsername, remoteIP, detail)
-	writeJSON(w, http.StatusOK, map[string]any{"updated": true, "username": resultUsername})
+	api.WriteJSON(w, http.StatusOK, map[string]any{"updated": true, "username": resultUsername})
 }
 
 // setSessionCookie writes the session cookie shared shape used both to set
@@ -531,14 +533,14 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	// beginAttempt must call endAttempt exactly once.
 	if !a.loginLimiter.beginAttempt(limiterKey) {
 		a.recordAudit(auditLoginRateLimited, "", remoteIP)
-		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+		api.WriteJSON(w, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
 		return
 	}
 
 	var input credentials
-	if err := decodeStrictJSON(w, r, 8<<10, &input); err != nil {
+	if err := api.DecodeJSONInto(w, r, 8<<10, &input); err != nil {
 		a.loginLimiter.endAttempt(limiterKey, false)
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
+		api.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_request"})
 		return
 	}
 
@@ -556,7 +558,7 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if !valid {
 		a.recordAudit(auditLoginFailure, input.Username, remoteIP)
 		time.Sleep(250 * time.Millisecond)
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_credentials"})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid_credentials"})
 		return
 	}
 	a.loginLimiter.reset(limiterKey)
@@ -593,7 +595,7 @@ func (a *SessionAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	a.setSessionCookie(w, r, token, expiresAt, int(a.ttl.Seconds()))
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": input.Username})
+	api.WriteJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": input.Username})
 }
 
 func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -632,7 +634,7 @@ func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
 			a.recordAudit(auditLogout, entry.Username, clientAddress(r))
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"authenticated": false})
+	api.WriteJSON(w, http.StatusOK, map[string]any{"authenticated": false})
 }
 
 func (a *SessionAuth) handleSession(w http.ResponseWriter, r *http.Request) {
@@ -643,10 +645,10 @@ func (a *SessionAuth) handleSession(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	username, ok := a.authenticatedUser(r)
 	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": username})
+	api.WriteJSON(w, http.StatusOK, map[string]any{"authenticated": true, "username": username})
 }
 
 func (a *SessionAuth) handleSessions(w http.ResponseWriter, r *http.Request) {
@@ -655,7 +657,7 @@ func (a *SessionAuth) handleSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, ok := a.authenticatedUser(r); !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -682,7 +684,7 @@ func (a *SessionAuth) handleSessions(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].CreatedAt.After(entries[j].CreatedAt) })
-	writeJSON(w, http.StatusOK, entries)
+	api.WriteJSON(w, http.StatusOK, entries)
 }
 
 func (a *SessionAuth) handleRevokeSession(w http.ResponseWriter, r *http.Request) {
@@ -691,7 +693,7 @@ func (a *SessionAuth) handleRevokeSession(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if _, ok := a.authenticatedUser(r); !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -743,7 +745,7 @@ func (a *SessionAuth) handleRevokeSession(w http.ResponseWriter, r *http.Request
 		return
 	}
 	a.recordAudit(auditSessionRevoked, revokedUsername, clientAddress(r))
-	writeJSON(w, http.StatusOK, map[string]bool{"revoked": true})
+	api.WriteJSON(w, http.StatusOK, map[string]bool{"revoked": true})
 }
 
 func (a *SessionAuth) handleAudit(w http.ResponseWriter, r *http.Request) {
@@ -752,11 +754,11 @@ func (a *SessionAuth) handleAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, ok := a.authenticatedUser(r); !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
+		api.WriteJSON(w, http.StatusUnauthorized, map[string]any{"authenticated": false})
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, a.auditSnapshot())
+	api.WriteJSON(w, http.StatusOK, a.auditSnapshot())
 }
 
 func (a *SessionAuth) authenticatedUser(r *http.Request) (string, bool) {
@@ -1013,27 +1015,8 @@ func rateLimitKey(r *http.Request) string {
 	return host
 }
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(value)
-}
-
-// decodeStrictJSON decodes exactly one JSON value from r's body into v,
-// rejecting unknown fields and any trailing data after that value. A bare
-// Decode() call silently ignores everything past the first JSON value, so
-// a body like {"password":"x"}{"anything"} would otherwise decode
-// successfully with the second part just discarded - decoder.More()
-// catches that the same way a second Decode() call returning something
-// other than io.EOF would.
-func decodeStrictJSON(w http.ResponseWriter, r *http.Request, maxBytes int64, v any) error {
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(v); err != nil {
-		return err
-	}
-	if decoder.More() {
-		return errors.New("unexpected trailing data after JSON body")
-	}
-	return nil
-}
+// writeJSON/decodeStrictJSON used to be defined here, byte-identical (resp.
+// logically identical) to internal/api's own writeJSON/decodeJSON - found
+// in review. Both now call api.WriteJSON/api.DecodeJSONInto directly (see
+// helpers.go in that package); httpapi already imports internal/api via
+// router.go, so no new module dependency.
