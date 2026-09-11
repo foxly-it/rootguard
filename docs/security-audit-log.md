@@ -4013,3 +4013,94 @@ internal DNS-chain check already passed, but the host's published port
 journal for that exact run confirms `export_ok`/`restore_ok` both true
 and DNS healthy again by the very next probe cycle. All three drills
 since (08-28, 09-04) came back clean.
+
+## Second full-repo review: security, duplication, simplification, CI (2026-09-11)
+
+Same methodology as the first full-repo review that produced
+[rootguard#549](https://github.com/foxly-it/rootguard/issues/549) (4
+parallel background agents, each covering the whole current repo rather
+than a diff, explicitly excluding everything #549 and this log already
+covered), but this time worked the full list instead of filing it as a
+follow-up issue. 2 security + 8 duplication + 9 simplification + 16 CI
+findings; a representative sample of each category spot-verified
+directly against the code before trusting any of it. One security fix
+(the other real finding from round 1, `DELETE /api/auth/sessions/{id}`
+bypassing `guardDestructive`, was #549's own headline item and out of
+scope here - already tracked there), the mechanical duplication/CI fixes,
+and a real simplification gap in the previous refactoring round all
+landed as separate PRs, one per logical fix as always:
+
+- **Security:** [rootguard#566](https://github.com/foxly-it/rootguard/pull/566)
+  (rootguard-updater's control-plane endpoints were missing the
+  `http.MaxBytesReader`/`DisallowUnknownFields`/trailing-data strict-JSON
+  contract every other decode site in the repo already enforces),
+  [rootguard#567](https://github.com/foxly-it/rootguard/pull/567)
+  (`/api/unbound/custom/preview` and `/api/unbound/import/preview` had no
+  rate limit at all, unlike every other mutating route).
+- **Duplication:** [rootguard#570](https://github.com/foxly-it/rootguard/pull/570)
+  (`writeJSON`/`decodeJSON` existed as byte-identical copies in
+  `rootguard-webapp/backend`'s `api` and `httpapi` packages),
+  [rootguard#571](https://github.com/foxly-it/rootguard/pull/571)
+  (`CommandRunner`/`runDocker` existed as 4 near-identical copies across
+  `rootguard-core`'s own internal packages - consolidated into
+  `internal/dockercli`, keeping the error-wrapping variant since
+  `installer.classifyDeploymentError` actually depends on the command and
+  output being folded into `err.Error()`, not just cosmetic).
+- **Simplification:** [rootguard#572](https://github.com/foxly-it/rootguard/pull/572)
+  (`installer.Manager`'s `deploy`/`restoreDeploy`/`Reconcile` each had
+  their own copy of the "connect controller to DNS network" and
+  "reload blockpage config" logic), [rootguard#573](https://github.com/foxly-it/rootguard/pull/573)
+  (`AdGuard.tsx` was the one main page never given the `useXData()` hook
+  extraction Overview/Stack/Unbound already got in an earlier round - a
+  real gap, not a new finding; two existing hooks' unused-`withBusy`-helper
+  gaps closed alongside it).
+- **CI:** [rootguard#574](https://github.com/foxly-it/rootguard/pull/574)
+  (hygiene: `pull_request: {}` consistency, an orphaned `set -x`, the
+  repo's one stray emoji, a missing failure-log dump, a missing
+  `cache-dependency-path`, release-alpha.yml's `test` job finally getting
+  per-module Go caching instead of one `setup-go` covering three
+  different `go.sum` files), [rootguard#575](https://github.com/foxly-it/rootguard/pull/575)
+  (round 1's own "biggest lever" - no Docker layer cache anywhere in the
+  repo - closed for the 8 remaining plain `docker build` test-image
+  sites, reusing release-alpha.yml's own per-component cache scopes).
+
+**Investigated, confirmed no fix needed:**
+- **smoke-test/upgrade-test depending on `image-scan`** (release-alpha.yml):
+  real trade-off, not a bug - `image-scan` is a fast, cheap, all-parallel
+  matrix (12 legs, registry-only scans, no local pull), so gating the much
+  longer smoke-test/upgrade-test runs behind it costs a few minutes but
+  fails fast on a HIGH/CRITICAL CVE before burning a real deploy+health-check
+  cycle on an image already known to be bad. Left as-is.
+- **`actions/attest` asymmetry** (only `ci-webapp.yml`'s own rolling
+  main-push build attests its image; `ci-core.yml`/`ci-updater.yml`/
+  `ci-unbound.yml`/`ci-attestation-proxy.yml`/`ci-blockpage.yml`'s
+  equivalent rolling builds don't): confirmed benign against
+  `docs/threat-model.md`'s own existing claim - "local builds, mutable
+  tags (`:latest` etc.)... explicitly receive no RootGuard trust
+  approval" - these rolling images are never consumed by any activation/
+  update path regardless of whether they're attested, only
+  `release-alpha.yml`'s own digest-pinned release images are (and those
+  already all get attested, matrix-wide). Not worth the extra CI cost to
+  either add attestation to the other five or remove it from webapp.
+- **`release-version-bump.yml`'s `contents: write` permission**: already
+  known from #549, re-surfaced by this round's own CI agent independently
+  - not a new finding, still deferred.
+
+**Deliberately not touched - real, cross-module duplication, same call as
+`atomicfile`'s own precedent above:**
+- **`inspectContainer`/`inspectImage`/`busyLocked`/`verifyWithRetry`**
+  between `rootguard-core/internal/updater` and `rootguard-updater`
+  (methods on `*Manager` vs `*manager`, otherwise near-identical bodies -
+  compared line by line, no behavioral drift between the copies).
+- **`requireSecretStrength`/`placeholderPrefix`**, byte-identical across
+  `rootguard-core/cmd/rootguard`, `rootguard-updater`, and
+  `rootguard-webapp/backend/cmd/rootguard-webapp` (compared all three,
+  identical down to the doc comment in two of the three).
+
+Both span separate Go modules - this repo's own architectural constraint
+(no shared `internal/` package across module boundaries, see
+`atomicfile`'s identical reasoning above and `CLAUDE.md`) still applies,
+and both were checked line-by-line for the kind of hidden behavioral
+divergence that made the `atomicfile`/`writeAtomic` case worth fixing
+anyway despite that same constraint - found none. Left as documented,
+intentional duplication.
