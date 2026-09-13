@@ -168,6 +168,16 @@ services:
     networks:
       - control
       - edge
+    # Found in review: missing here despite compose.yaml (dev) having it.
+    # The distroless runtime image has neither wget nor a shell - unlike
+    # core/updater's docker:29-cli base, there's nothing here for a
+    # "CMD wget ..." style check to exec. rootguard-webapp itself
+    # implements -healthcheck for exactly this (see cmd/rootguard-webapp).
+    healthcheck:
+      test: ["CMD", "/app/rootguard-webapp", "-healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   updater:
     build:

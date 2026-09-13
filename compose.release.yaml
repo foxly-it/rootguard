@@ -169,6 +169,18 @@ services:
     networks:
       - control
       - edge
+    # Found in review: missing here despite compose.yaml (dev) and
+    # compose.integration.yaml both having it - the one public entrypoint
+    # had no health state at all in the file this release actually ships.
+    # The distroless runtime image has neither wget nor a shell - unlike
+    # core/updater's docker:29-cli base, there's nothing here for a
+    # "CMD wget ..." style check to exec. rootguard-webapp itself
+    # implements -healthcheck for exactly this (see cmd/rootguard-webapp).
+    healthcheck:
+      test: ["CMD", "/app/rootguard-webapp", "-healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   updater:
     image: "${ROOTGUARD_UPDATER_IMAGE:-ghcr.io/foxly-it/rootguard-updater:1.0.0-rc.5@sha256:7d25460e77be5ebd9ab7feea63a5d3fe2dcc7ab0330506c8da5ce290a257ab90}"
