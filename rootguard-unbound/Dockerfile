@@ -19,7 +19,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential=12.12 \
         ca-certificates=20250419 \
-        curl=8.14.1-2+deb13u4 \
+        curl=8.14.1-2+deb13u5 \
         libevent-dev=2.1.13-stable-1~deb13u1 \
         libexpat1-dev=2.8.3-1~deb13u1 \
         libssl-dev=3.5.7-1~deb13u2 \
