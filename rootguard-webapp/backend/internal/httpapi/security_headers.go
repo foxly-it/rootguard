@@ -16,7 +16,17 @@ import (
 // recompute this with:
 //
 //	sha256sum of the exact bytes between <script> and </script>, base64-encoded
-const themeScriptCSPHash = "sha256-+C0x7/zuFuw+CpbiMSrto5eJiTTTdncf3epdtyCvJS0="
+//
+// Found in review: this constant was wrong (hashed against a value that
+// excluded the newline right after <script>, which CSP's own hash
+// computation includes - browsers only strip that leading newline for
+// <pre>/<textarea>/<listing>, never for <script>), so the inline script
+// was CSP-blocked in every browser, silently reintroducing the flash it
+// exists to prevent. TestThemeScriptCSPHashMatchesFrontendSource's own
+// regex had the identical off-by-one (its capture group excluded that
+// same newline), so it kept validating the wrong hash instead of
+// catching the drift - fixed alongside this constant.
+const themeScriptCSPHash = "sha256-rUwzmYmZ65UUDUdsvtGmH+VbjCs9hTp6ySp/JZ3EuWI="
 
 // contentSecurityPolicy locks script execution down to same-origin files
 // plus the one hashed inline script above - the actual XSS-relevant
