@@ -95,8 +95,16 @@ server {
         # Any upstream failure (AdGuard down, missing/rejected token,
         # timeout) collapses to one uniform "unavailable" response so the
         # page has a single fallback branch instead of a status-code matrix.
+        # proxy_intercept_errors only intercepts codes listed in error_page
+        # below - found in review: 400 was reachable and fell through
+        # unintercepted (Core's blockpageReasonHandler returns it for a
+        # malformed/invalid Host, adguard.ErrInvalidBlockpageHost - e.g. an
+        # HTTP/1.0 request with no Host header at all), leaking Core's raw
+        # JSON error body straight to the client instead of the intended
+        # uniform fallback. 405/429 added alongside for the same reason,
+        # even though nothing in this stack currently triggers them here.
         proxy_intercept_errors on;
-        error_page 401 403 404 500 502 503 504 = @reason_unavailable;
+        error_page 400 401 403 404 405 429 500 502 503 504 = @reason_unavailable;
     }
 
     location @reason_unavailable {
