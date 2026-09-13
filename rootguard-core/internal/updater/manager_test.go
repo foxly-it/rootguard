@@ -423,6 +423,65 @@ func TestFailedRollbackRefusesTamperedBackupInsteadOfRestoringIt(t *testing.T) {
 	}
 }
 
+// TestRollbackSurvivesAnAlreadyCanceledParentContext is the regression
+// test for a round-3 correctness-review finding: rollback used to run on
+// whatever ctx update() passed straight through - the same 15-minute
+// budget already partly spent by the verifyWithRetry loop that just
+// discovered the health check keeps failing. If that budget was what ran
+// out, every docker call rollback makes would be refused outright
+// (exec.CommandContext won't even start a process against an
+// already-expired context). Calls rollback directly with a parent context
+// that's already canceled before rollback even starts, standing in for
+// "update()'s ctx was already exhausted" without needing to actually wait
+// out a real 15-minute deadline.
+func TestRollbackSurvivesAnAlreadyCanceledParentContext(t *testing.T) {
+	dataDir := t.TempDir()
+	composeDir := t.TempDir()
+	writeEmptyComposeFixture(t, composeDir)
+	backupDir := t.TempDir()
+	spec := ServiceSpec{Name: "test", DisplayName: "Test", Container: "rootguard-test", TargetImage: "test:latest"}
+	if err := writeBackupManifest(backupDir, spec); err != nil {
+		t.Fatal(err)
+	}
+
+	var mu sync.Mutex
+	var sawCanceledContext bool
+	manager := NewManager(Options{
+		DataDir: dataDir, ComposeDir: composeDir,
+		VerifyAttempts: 1, RetryDelay: time.Millisecond,
+		Services: []ServiceSpec{spec},
+		Run: func(ctx context.Context, _ ...string) ([]byte, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if ctx.Err() != nil {
+				sawCanceledContext = true
+			}
+			return []byte("ok"), nil
+		},
+		Verify: func(ctx context.Context, _ string) error {
+			mu.Lock()
+			defer mu.Unlock()
+			if ctx.Err() != nil {
+				sawCanceledContext = true
+			}
+			return nil
+		},
+	})
+
+	parent, cancelParent := context.WithCancel(context.Background())
+	cancelParent()
+
+	if err := manager.rollback(parent, spec, "sha256:old", backupDir, nil); err != nil {
+		t.Fatalf("expected rollback to succeed against a fresh, detached context, got %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if sawCanceledContext {
+		t.Fatal("expected rollback to detach from the already-canceled parent context, but a call saw it canceled")
+	}
+}
+
 func copyDirForTest(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
