@@ -47,21 +47,52 @@
   // toggle button stayed permanently dead until the stale value was
   // manually cleared. Falls back to "system" for anything not one of
   // the three real modes instead of trusting the stored value blindly.
+  //
+  // Found in review, round 2: reading (or even just accessing) the
+  // localStorage property itself throws a SecurityError in several real
+  // configurations (site data blocked, "block all cookies", private/
+  // lockdown browsing modes) - not just an invalid value, the property
+  // access never returns at all. Since this ran before btn's click
+  // listener was registered, the same "toggle permanently dead" failure
+  // as above, through a trigger the earlier fix didn't cover. Guarded so
+  // a throw degrades to "toggle still works, choice just isn't
+  // remembered across reloads" instead.
   function storedMode() {
-    var stored = localStorage.getItem("rootguard.blockpage.theme");
-    return modes.indexOf(stored) !== -1 ? stored : "system";
+    try {
+      var stored = localStorage.getItem("rootguard.blockpage.theme");
+      return modes.indexOf(stored) !== -1 ? stored : "system";
+    } catch (e) {
+      return "system";
+    }
   }
 
+  function rememberMode(mode) {
+    try {
+      localStorage.setItem("rootguard.blockpage.theme", mode);
+    } catch (e) {
+      // Storage unavailable - currentMode below still tracks the choice
+      // for the rest of this page view, it just won't survive a reload.
+    }
+  }
+
+  // Tracked in memory rather than re-reading storage on every click: if
+  // storage is blocked, rememberMode above silently never persists a
+  // choice, so re-deriving "current" from storedMode() on each click
+  // would keep landing back on "system" and the toggle could only ever
+  // cycle between its first two modes, never reaching the third.
+  var currentMode = storedMode();
+
   function applyTheme(mode) {
+    currentMode = mode;
     if (mode === "system") root.removeAttribute("data-theme");
     else root.setAttribute("data-theme", mode);
     while (btn.firstChild) btn.removeChild(btn.firstChild);
     btn.appendChild(icons[mode]);
-    localStorage.setItem("rootguard.blockpage.theme", mode);
+    rememberMode(mode);
   }
 
-  applyTheme(storedMode());
+  applyTheme(currentMode);
   btn.addEventListener("click", function () {
-    applyTheme(modes[(modes.indexOf(storedMode()) + 1) % modes.length]);
+    applyTheme(modes[(modes.indexOf(currentMode) + 1) % modes.length]);
   });
 })();
