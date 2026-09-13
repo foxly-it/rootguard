@@ -73,7 +73,14 @@ func TestThemeScriptCSPHashMatchesFrontendSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading frontend/index.html: %v", err)
 	}
-	match := regexp.MustCompile(`(?s)<script>\n(.*?)</script>`).FindSubmatch(content)
+	// Found in review: the newline right after <script> belongs *inside*
+	// the capture group - CSP hashes the element's full text content, and
+	// the newline-stripping the HTML spec grants <pre>/<textarea>/<listing>
+	// never applies to <script>. With it outside the group (as this used
+	// to be written), this test hashed one byte short of what a browser
+	// actually hashes, so it kept validating a wrong themeScriptCSPHash
+	// instead of catching the drift it exists to catch.
+	match := regexp.MustCompile(`(?s)<script>(.*?)</script>`).FindSubmatch(content)
 	if match == nil {
 		t.Fatal("could not find the inline theme script in frontend/index.html")
 	}
