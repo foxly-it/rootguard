@@ -324,6 +324,46 @@ func TestImportRoutesUnmatchedPrivateDomainToTheGlobalList(t *testing.T) {
 	}
 }
 
+// TestImportDedupsPrivateDomainAlreadyInGlobalList is the regression test
+// for a round-3 correctness-review finding: re-importing a private-domain
+// directive whose domain was already in the active settings used to
+// append it a second time with no dedup - unlike mergeZonesByName's own
+// re-import idempotency for forward/local zones - producing a
+// PrivateDomains list that Validate() immediately rejects as a duplicate,
+// with no way for the operator to tell which line caused it.
+func TestImportDedupsPrivateDomainAlreadyInGlobalList(t *testing.T) {
+	current := DefaultSettings()
+	current.PrivateDomains = []string{"corp.example."}
+	content := "server:\n    private-domain: \"corp.example.\"\n"
+	result, err := ImportUnboundConf(current, "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.PrivateDomains) != 1 {
+		t.Fatalf("expected the re-imported domain to be deduped, got %+v", result.Settings.PrivateDomains)
+	}
+	if err := result.Settings.Validate(); err != nil {
+		t.Fatalf("expected the merged settings to validate cleanly, got %v", err)
+	}
+}
+
+// TestImportDedupsPrivateDomainRepeatedWithinSameFile covers the second
+// confirmed trigger for the same finding: a single imported file naming
+// the same private-domain twice (legal, if redundant, Unbound config).
+func TestImportDedupsPrivateDomainRepeatedWithinSameFile(t *testing.T) {
+	content := "server:\n    private-domain: \"corp.example.\"\n    private-domain: \"corp.example.\"\n"
+	result, err := ImportUnboundConf(DefaultSettings(), "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Settings.PrivateDomains) != 1 {
+		t.Fatalf("expected the duplicated line to be deduped, got %+v", result.Settings.PrivateDomains)
+	}
+	if err := result.Settings.Validate(); err != nil {
+		t.Fatalf("expected the merged settings to validate cleanly, got %v", err)
+	}
+}
+
 func TestImportOffersUnmatchedDomainInsecureForExpertAdoption(t *testing.T) {
 	content := "server:\n    domain-insecure: \"no-such-zone.example.\"\n"
 	result, err := ImportUnboundConf(DefaultSettings(), "", content)
