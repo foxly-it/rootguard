@@ -572,8 +572,28 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 	created := false
 	fail := func(phase string, err error) error {
 		if created {
-			_, _ = m.run(ctx, "network", "disconnect", "-f", "rootguard-dns", m.coreContainer)
-			_, _ = m.run(ctx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "down", "--volumes", "--remove-orphans")
+			// Found in review: this used to clean up on the same ctx that
+			// got restoreDeploy called in the first place - parent is the
+			// HTTP request context (api/backup_restore.go's r.Context()),
+			// so a client that closes the tab or drops the connection
+			// mid-restore cancels the very ctx this cleanup needs to run
+			// on, and dockercli.Run's exec.CommandContext refuses to even
+			// start a process against an already-canceled context. Both
+			// errors were then silently discarded via `_, _ =`, leaving
+			// the created containers/volumes/network attachment behind
+			// with no diagnostic - and RestorePreflight then permanently
+			// refuses every retry as "not clean" until someone runs
+			// `docker compose down -v` by hand. A cleanup must not be at
+			// the mercy of whatever canceled the operation it's cleaning
+			// up after - same fix as unbound.rollbackFailedApply's
+			// identical class of bug (WithoutCancel keeps any deadline-
+			// independent values, drops only the cancellation/deadline;
+			// paired with its own bounded timeout so it still can't hang
+			// forever if something is genuinely stuck).
+			cleanupCtx, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), 60*time.Second)
+			defer cancelCleanup()
+			_, _ = m.run(cleanupCtx, "network", "disconnect", "-f", "rootguard-dns", m.coreContainer)
+			_, _ = m.run(cleanupCtx, "compose", "--project-name", "rootguard-dns", "-f", composePath, "down", "--volumes", "--remove-orphans")
 		}
 		m.fail(phase, err)
 		return err
