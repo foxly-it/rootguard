@@ -233,6 +233,59 @@ func (m *Manager) Status() Status {
 	return cloneStatus(m.status)
 }
 
+// StatusSynced is Status, but first resyncs current_id/current_image
+// against whatever container is actually running - found live
+// (rootguard#328): this manager only ever updated those fields itself,
+// after a check/update it performed. A container recreated by any other
+// path (a plain `docker compose up -d` after editing an image pin, a
+// manual `docker rm`+recreate) left the cached identity permanently
+// stale - reporting the *previous* image as current, with
+// update_available computed against that stale value - until someone
+// explicitly triggered a check. Used by the HTTP status read path (both
+// /api/updates and /api/updater-updates share updateStatusHandler and
+// this same Manager type); Status itself is unchanged for callers that
+// only need a cheap busy-check.
+func (m *Manager) StatusSynced(ctx context.Context) Status {
+	m.resyncCurrentIdentities(ctx)
+	return m.Status()
+}
+
+// resyncCurrentIdentities is a cheap, local docker inspect per managed
+// service - no pull, no network, unlike check() - so it's safe to run on
+// every status read rather than only from the explicit check/update
+// flows. Best-effort throughout: a service whose container doesn't exist
+// yet (Optional, or simply not installed), or any other inspect failure,
+// is left untouched rather than clobbering a real error/pending state
+// with a spurious one. Skipped entirely while a check/update is already
+// in flight - that will produce a fresher, fully-verified status on its
+// own shortly, and resyncing concurrently here would race its own writes
+// to the same service entries.
+func (m *Manager) resyncCurrentIdentities(ctx context.Context) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.busyLocked() {
+		return
+	}
+	changed := false
+	for i, service := range m.status.Services {
+		spec, ok := m.specs[service.Name]
+		if !ok {
+			continue
+		}
+		currentImage, currentID, err := m.inspectContainer(ctx, spec)
+		if err != nil || currentID == "" || currentID == service.CurrentID {
+			continue
+		}
+		m.status.Services[i].CurrentImage = currentImage
+		m.status.Services[i].CurrentID = currentID
+		m.status.Services[i].UpdateAvailable = service.CandidateID != "" && currentID != service.CandidateID
+		changed = true
+	}
+	if changed {
+		_ = m.persistLocked()
+	}
+}
+
 func (m *Manager) RunExclusive(message string, operation func() error) error {
 	m.mu.Lock()
 	if m.busyLocked() {

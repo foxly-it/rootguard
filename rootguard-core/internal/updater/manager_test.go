@@ -1107,3 +1107,72 @@ func TestLoadTreatsNullImagesJSONAsEmptyNotNil(t *testing.T) {
 		t.Fatalf("expected selectImage to succeed against a freshly loaded nil selection, got: %v", err)
 	}
 }
+
+// TestStatusSyncedResyncsCurrentIdentityAfterExternalContainerRecreation
+// is the regression test for rootguard#328: this manager only ever
+// updated current_id/current_image itself, after a check/update it
+// performed - a container recreated by any other path (a plain
+// `docker compose up -d` after editing an image pin, a manual
+// `docker rm`+recreate) left the cached identity permanently stale,
+// with update_available computed against that stale value, until
+// someone explicitly triggered a check.
+func TestStatusSyncedResyncsCurrentIdentityAfterExternalContainerRecreation(t *testing.T) {
+	inspectImage := "adguard/adguardhome:v1|sha256:old"
+	manager := NewManager(Options{
+		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
+		Services: []ServiceSpec{{
+			Name: "adguard", DisplayName: "AdGuard Home", Container: "rootguard-adguard",
+			TargetImage: "adguard/adguardhome:latest",
+		}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			switch arguments[0] {
+			case "inspect":
+				return []byte(inspectImage), nil
+			case "pull":
+				return []byte("pulled"), nil
+			case "image":
+				return []byte("sha256:new"), nil
+			default:
+				return nil, errors.New("unexpected command")
+			}
+		},
+	})
+
+	if _, err := manager.StartCheck(); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	before := manager.Status().Services[0]
+	if before.CurrentID != "sha256:old" || !before.UpdateAvailable {
+		t.Fatalf("unexpected initial state: %#v", before)
+	}
+
+	// The container gets recreated out-of-band (outside StartUpdate) onto
+	// the exact image this manager's own last check already identified as
+	// the candidate - the manager itself never sees this happen.
+	inspectImage = "adguard/adguardhome:v2|sha256:new"
+
+	stale := manager.Status().Services[0]
+	if stale.CurrentID != "sha256:old" {
+		t.Fatalf("expected the plain, unsynced Status() to still report the stale identity, got %#v", stale)
+	}
+
+	synced := manager.StatusSynced(context.Background()).Services[0]
+	if synced.CurrentID != "sha256:new" {
+		t.Fatalf("expected StatusSynced to resync the current identity, got %#v", synced)
+	}
+	if synced.UpdateAvailable {
+		t.Fatalf("expected update_available to be recomputed against the resynced identity (now matching the candidate), got %#v", synced)
+	}
+
+	// The resync also persists - a restart between the external
+	// recreation and the next explicit check must not revert to the
+	// stale identity.
+	reloaded := NewManager(Options{DataDir: manager.dataDir, ComposeDir: t.TempDir(), Services: []ServiceSpec{{
+		Name: "adguard", DisplayName: "AdGuard Home", Container: "rootguard-adguard",
+		TargetImage: "adguard/adguardhome:latest",
+	}}})
+	if got := reloaded.Status().Services[0].CurrentID; got != "sha256:new" {
+		t.Fatalf("expected the resynced identity to have persisted to disk, got %q", got)
+	}
+}
