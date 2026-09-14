@@ -118,8 +118,19 @@ resolve_release_pin_commit() {
   # Must touch only the paths the real pin-commit step ever writes -
   # defense in depth against a forged or corrupted commit that happens
   # to match both the message and the parentage checks above.
+  #
+  # Each alternative anchored at both ends (`$`, not just `^`), and
+  # site/ turned into site/.* to keep matching everything under that
+  # directory now that the whole group is - found in a v1.0.0
+  # correctness review: unanchored at the end, "README.md" also matched
+  # any path merely *starting* with those bytes (README.mdx,
+  # README.md.bak, a README.md/ directory), and likewise for the other
+  # three literal names - exactly the forged-or-corrupted-commit case
+  # this check exists to catch could smuggle an out-of-scope file past
+  # it by naming it that way. Confirmed live against both the
+  # unanchored and anchored patterns.
   local out_of_scope
-  out_of_scope="$(git diff --name-only "${source_ref}" "${candidate}" | grep -Ev '^(compose\.release\.yaml|\.env\.release\.example|site/|README\.md)' || true)"
+  out_of_scope="$(git diff --name-only "${source_ref}" "${candidate}" | grep -Ev '^(compose\.release\.yaml|\.env\.release\.example|site/.*|README\.md)$' || true)"
   if [[ -n "$out_of_scope" ]]; then
     echo "${candidate} touches paths outside compose.release.yaml/.env.release.example/site/README.md - refusing to treat it as this release's own pin commit: ${out_of_scope}" >&2
     return 1

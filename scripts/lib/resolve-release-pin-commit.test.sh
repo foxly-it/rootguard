@@ -152,6 +152,21 @@ git checkout -q main
 git branch -D out-of-scope >/dev/null
 assert_rejects "$source_ref" "$version" main "right message and parentage, but touches an out-of-scope path"
 
+# --- Scenario 7a: right message, direct child of SOURCE_REF, but the
+# extra out-of-scope path is merely *prefixed* by an allowed name -
+# regression test for a v1.0.0 correctness review finding: the scope
+# check's own regex was anchored at the start only, so
+# "compose.release.yaml.evil" (or "README.mdx", "site" without the
+# trailing slash matched too since site/ itself was also unanchored)
+# read as "starts with an allowed name" and slipped through as in-scope,
+# defeating the exact defense-in-depth this check exists to provide. ---
+git checkout -q -b out-of-scope-prefix "$source_ref"
+commit "$pin_message" compose.release.yaml "compose.release.yaml.evil" >/dev/null
+git branch -f main out-of-scope-prefix
+git checkout -q main
+git branch -D out-of-scope-prefix >/dev/null
+assert_rejects "$source_ref" "$version" main "right message and parentage, but the extra path is only prefixed by an allowed name"
+
 # --- Scenario 7b: right message, direct child of SOURCE_REF, touches
 # compose.release.yaml/.env.release.example/site/*.html *and* README.md -
 # found live cutting 1.0.0-rc.3: README.md joined bump-site-versions.sh's
