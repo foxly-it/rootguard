@@ -889,9 +889,17 @@ func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custo
 			configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
 	}
 	m.resetDiagnosticLoggingState(settings.LogVerbosity)
-	if err := m.recordSnapshot(settings, config, []byte(custom)); err != nil {
-		return fmt.Errorf("record active unbound version: %w", err)
-	}
+	// Best-effort: by this point the new config is already written,
+	// unbound-checkconf validated it, the container restarted onto it,
+	// and waitReady confirmed it's actually serving - the real apply has
+	// fully succeeded. recordSnapshot only maintains the version-history
+	// UI's own bookkeeping; found in a v1.0.0 correctness review that a
+	// failure here (a disk-write hiccup, a full history directory) used
+	// to be returned as this function's own error, which every caller
+	// treats as "the apply failed" and reports as a 500 - misleading an
+	// operator into thinking their settings were never applied and
+	// Unbound never restarted, when both already happened.
+	_ = m.recordSnapshot(settings, config, []byte(custom))
 	return nil
 }
 

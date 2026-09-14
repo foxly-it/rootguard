@@ -211,12 +211,22 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 		candidate.LocalZones = mergeZonesByName(candidate.LocalZones, localZones, func(z LocalZone) string { return z.Name })
 	}
 	if len(privateDomains) > 0 {
-		candidate.PrivateDomains = append(append([]string{}, candidate.PrivateDomains...), privateDomains...)
+		candidate.PrivateDomains = mergePrivateDomains(candidate.PrivateDomains, privateDomains, candidate.ForwardZones)
 	}
-	for i := range candidate.ReverseZones {
-		if mode, ok := reversePolicies[candidate.ReverseZones[i].Network]; ok {
-			candidate.ReverseZones[i].Mode = mode
+	if len(reversePolicies) > 0 {
+		// Copied before mutating, same as every other slice field above -
+		// found in a v1.0.0 correctness review: candidate := current is a
+		// shallow copy, so candidate.ReverseZones started out aliasing
+		// current.ReverseZones's backing array; mutating elements in place
+		// silently rewrote the caller's own Settings value too, wherever it
+		// still held one.
+		reverseZones := append([]ReverseZonePolicy{}, candidate.ReverseZones...)
+		for i := range reverseZones {
+			if mode, ok := reversePolicies[reverseZones[i].Network]; ok {
+				reverseZones[i].Mode = mode
+			}
 		}
+		candidate.ReverseZones = reverseZones
 	}
 	if networkMode != "" {
 		candidate.NetworkMode = networkMode
@@ -506,6 +516,50 @@ func parseLocalZoneValue(value string) (name, zoneType string, ok bool) {
 		return "", "", false
 	}
 	return name, zoneType, true
+}
+
+// mergePrivateDomains folds incoming private-domain entries into existing,
+// skipping anything that would make the result fail validatePrivateDomains
+// (settings.go) - found in review: the caller used to blindly append,
+// producing a Settings that PreviewBundle's own Validate() call
+// immediately rejected right back, with no way for the operator to tell
+// which line caused it. Two cases validatePrivateDomains rejects:
+//   - an exact duplicate, whether already present from an earlier
+//     import/edit or repeated twice within the same imported file
+//     (mirrors mergeZonesByName's own re-import idempotency below, just
+//     for a plain string list rather than a named struct)
+//   - a domain that also names an AllowPrivateAddresses forward zone,
+//     since the two directives contradict each other
+//
+// Silently drops a conflicting entry rather than erroring the whole
+// import, matching mergeZonesByName's own "merge what's mergeable" style -
+// a config with the conflict already present in a forward zone (allowed
+// on its own) or imported private-domain lines repeated verbatim are both
+// legal Unbound config, just redundant once combined.
+func mergePrivateDomains(existing, incoming []string, forwardZones []ForwardZone) []string {
+	seen := make(map[string]struct{}, len(existing))
+	for _, domain := range existing {
+		seen[domain] = struct{}{}
+	}
+	merged := append([]string{}, existing...)
+	for _, domain := range incoming {
+		if _, duplicate := seen[domain]; duplicate {
+			continue
+		}
+		conflict := false
+		for _, zone := range forwardZones {
+			if zone.AllowPrivateAddresses && zone.Name == domain {
+				conflict = true
+				break
+			}
+		}
+		if conflict {
+			continue
+		}
+		seen[domain] = struct{}{}
+		merged = append(merged, domain)
+	}
+	return merged
 }
 
 // mergeZonesByName folds incoming zones into existing by name: a name that's

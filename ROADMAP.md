@@ -1212,23 +1212,25 @@ same day" entry.
 
 RootGuard 1.0 ships when:
 
-- [ ] thirty-day continuous DNS test with update and restore exercises
+- [x] thirty-day continuous DNS test with update and restore exercises
       passes clean, run against the published `1.0.0-rc.1` candidate itself
       rather than gating the RC's own existence - a longer-running
       endurance test is exactly what an RC period is for, and this specific
       test exercises the update/backup/restore machinery generically, not
       any one build, so it doesn't need to precede the RC to be meaningful.
-      **In progress**, started 2026-08-14 on a dedicated host
+      Ran 2026-08-14 through 2026-09-14 on a dedicated host
       (`scripts/soak/*.sh` + systemd timers, see that directory's README).
-      Live status as of 2026-09-09 (day 26): 3285+ probes, 94% cumulative
-      pass rate - every failure is the identical, already-classified
-      transient DNSSEC-timeout jitter (never a resolve/block/api failure),
-      confirmed not a RootGuard defect; 5 update exercises, all clean; 4
-      backup/restore drills, 3 clean restores and 1 with a post-restore
-      DNS-check failure matching the already-tracked
-      [#443](https://github.com/foxly-it/rootguard/issues/443) flake, not
-      a new cause. Closes with the final `report.sh` rollup around
-      2026-09-13 ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
+      Final `report.sh` rollup: 4175 probes, 95% cumulative pass rate - all
+      197 failures are the identical, already-classified transient
+      DNSSEC-timeout jitter (`dnssec_reject_ok:false`, resolve/block/api
+      always `true`), confirmed not a RootGuard defect and no new failure
+      class across the full run; 10 update exercises (4 `success`, 6
+      `no_change`), zero failures; 5 backup/restore drills, all clean
+      restores, zero fallbacks used, one post-restore DNS-check failure
+      (2026-08-21) matching the already-tracked
+      [#443](https://github.com/foxly-it/rootguard/issues/443) flake, not a
+      new cause. Gate passes clean
+      ([rootguard#271](https://github.com/foxly-it/rootguard/issues/271)).
 - [x] installation, DNS operation, configuration, upgrades, and restore are
       repeatable on every supported platform - clean install, upgrade
       (`upgrade-test`), and backup/restore all now run on the identical

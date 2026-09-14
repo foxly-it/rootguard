@@ -413,7 +413,6 @@ func (m *Manager) install(ctx context.Context) (Credentials, error) {
 	if err := writeCredentials(tempPath, credentials); err != nil {
 		return Credentials{}, err
 	}
-	defer os.Remove(tempPath)
 
 	installRequest := map[string]any{
 		"web":      map[string]any{"ip": "0.0.0.0", "port": 80},
@@ -422,6 +421,27 @@ func (m *Manager) install(ctx context.Context) (Credentials, error) {
 		"password": credentials.Password,
 	}
 	if err := m.request(ctx, http.MethodPost, m.installerURL+"/control/install/configure", installRequest, nil, nil); err != nil {
+		// Found in review: this used to unconditionally os.Remove(tempPath)
+		// via a defer, on every error return including this one - deleting
+		// the only record of the password credentials.json would otherwise
+		// have received, even when the failure is ambiguous about whether
+		// AdGuard actually applied it. A *statusError means a real HTTP
+		// response came back, just a bad one - AdGuard explicitly rejected
+		// the request, so it was never applied and there's nothing to lose
+		// by discarding the staged password. Anything else (timeout,
+		// connection reset, ...) means the client never learned what
+		// happened server-side; AdGuard's own /control/install/configure
+		// writes AdGuardHome.yaml and rebinds its listeners before this
+		// call could even return, so "the request timed out" and "AdGuard
+		// already applied it and stopped answering install endpoints" are
+		// indistinguishable from here. Leaving the staged file in place
+		// keeps the password recoverable instead of destroying the one
+		// thing that could still unlock a now-configured-but-uncredentialed
+		// AdGuard.
+		var statusErr *httpStatusError
+		if errors.As(err, &statusErr) {
+			_ = os.Remove(tempPath)
+		}
 		return Credentials{}, fmt.Errorf("configure adguard: %w", err)
 	}
 	if err := os.Rename(tempPath, filepath.Join(m.dataDir, "credentials.json")); err != nil {
@@ -569,6 +589,19 @@ func filterReasonBlocks(reason string) bool {
 	}
 }
 
+// httpStatusError means AdGuard actually answered the request - just with
+// a non-2xx status - as opposed to a transport-level failure (timeout,
+// connection reset) where the request's fate on AdGuard's own side is
+// unknown. install()'s own credentials cleanup relies on this distinction.
+type httpStatusError struct {
+	statusCode int
+	body       string
+}
+
+func (e *httpStatusError) Error() string {
+	return fmt.Sprintf("adguard returned %d: %s", e.statusCode, e.body)
+}
+
 func (m *Manager) request(ctx context.Context, method, url string, body, result any, credentials *Credentials) error {
 	var requestBody io.Reader
 	if body != nil {
@@ -595,7 +628,7 @@ func (m *Manager) request(ctx context.Context, method, url string, body, result 
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		message, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
-		return fmt.Errorf("adguard returned %d: %s", response.StatusCode, strings.TrimSpace(string(message)))
+		return &httpStatusError{statusCode: response.StatusCode, body: strings.TrimSpace(string(message))}
 	}
 	if result != nil {
 		if err := json.NewDecoder(response.Body).Decode(result); err != nil {
