@@ -220,7 +220,19 @@ export default function Backups() {
           <p>{t("stack.restoreSummary", { date: formatDate(restorePreview.created_at), count: restorePreview.file_count, size: formatBytes(restorePreview.expanded_bytes) })}</p>
           <div className="encrypted-export-fields">
             <label><span>{t("stack.restoreAddress")}</span><input value={restorePreview.preflight.config.dns_bind_address} onChange={(event) => setRestorePreview({...restorePreview, preflight: {...restorePreview.preflight, ready: false, config: {...restorePreview.preflight.config, dns_bind_address: event.target.value}}})} /></label>
-            <label><span>{t("stack.restorePort")}</span><input type="number" min={1} max={65535} value={restorePreview.preflight.config.dns_port} onChange={(event) => setRestorePreview({...restorePreview, preflight: {...restorePreview.preflight, ready: false, config: {...restorePreview.preflight.config, dns_port: event.target.valueAsNumber}}})} /></label>
+            <label><span>{t("stack.restorePort")}</span><input type="number" min={1} max={65535} value={restorePreview.preflight.config.dns_port} onChange={(event) => {
+              // valueAsNumber is NaN while the field is empty (e.g. the
+              // operator selects-all and deletes to type a new port) -
+              // found in a v1.0.0 correctness review: this used to store
+              // NaN straight into config.dns_port, which JSON.stringify
+              // silently turns into null on the next preview/restore
+              // request. Keeping the last valid port instead means the
+              // field can look momentarily blank while typing without
+              // ever corrupting the actual submitted config.
+              const port = event.target.valueAsNumber;
+              if (Number.isNaN(port)) return;
+              setRestorePreview({...restorePreview, preflight: {...restorePreview.preflight, ready: false, config: {...restorePreview.preflight.config, dns_port: port}}});
+            }} /></label>
           </div>
           {!restorePreview.preflight.ready && <button className="rg-button rg-button-secondary" type="button" disabled={busy} onClick={previewRestore}>{t("stack.restoreRecheck")}</button>}
           {!restorePreview.preflight.ready && <p className="encrypted-export-warning">{t("stack.restoreBlocked")}</p>}
