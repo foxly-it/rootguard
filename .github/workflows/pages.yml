@@ -43,6 +43,21 @@ jobs:
           pulls="$(gh api "repos/$REPOSITORY/pulls?state=open&per_page=100")"
           commits="$(gh api "repos/$REPOSITORY/commits?per_page=5")"
 
+          # Generated into a scratch file first, not straight into
+          # site/project-data.json - found in a v1.0.0 correctness
+          # review: a plain "> site/project-data.json" redirect truncates
+          # the destination the moment the shell opens it, before jq
+          # itself runs at all. This step's own continue-on-error: true
+          # means a jq runtime error on a malformed API response (a
+          # transient rate-limit/auth hiccup returning something that
+          # isn't the expected shape) wouldn't fail the workflow - it
+          # would truncate the live, publicly-deployed file to zero
+          # bytes and then deploy exactly that, breaking the site's
+          # project-data section until the next successful run (every 6h
+          # per this workflow's own schedule). Only overwritten via `mv`
+          # once jq has actually produced non-empty output, so a failed
+          # generation instead just leaves the previous, still-good
+          # committed copy in place.
           jq -n \
             --arg generated_at "$(date -u +%FT%TZ)" \
             --argjson releases "$releases" \
@@ -77,7 +92,13 @@ jobs:
                 )][0]) // ""),
                 highlights: ([.body | split("\n")[] | select(startswith("- ")) | ltrimstr("- ")][0:4])
               }))
-            }' > site/project-data.json
+            }' > site/project-data.json.new
+          if [ -s site/project-data.json.new ]; then
+            mv site/project-data.json.new site/project-data.json
+          else
+            echo "::warning::generated project-data.json was empty - keeping the previous committed copy"
+            rm -f site/project-data.json.new
+          fi
 
       - name: Upload website
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
