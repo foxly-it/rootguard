@@ -7,7 +7,7 @@ import Logs from "./Logs";
 import * as client from "../api/client";
 
 const services: client.ServiceInfo[] = [
-  { name: "core", displayName: "Core", description: "", status: "running", health: "healthy", restartCount: 0 },
+  { name: "core", displayName: "Core", description: "", status: "running", health: "healthy", restartCount: 0, immutable: true, metadata: "complete", attestation: "verified" },
 ];
 
 const logs: client.ServiceLogs = {
