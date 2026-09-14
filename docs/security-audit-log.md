@@ -4104,3 +4104,156 @@ and both were checked line-by-line for the kind of hidden behavioral
 divergence that made the `atomicfile`/`writeAtomic` case worth fixing
 anyway despite that same constraint - found none. Left as documented,
 intentional duplication.
+
+## Third full-repo review: correctness, for 1.0.0 (2026-09-14)
+
+Explicitly scoped to correctness rather than security/duplication/style
+this time - "v1.0.0 must be error-free" - since the first two full-repo
+rounds already worked those angles hard. 5 parallel background agents,
+split by component (core, webapp backend, webapp frontend,
+unbound/blockpage, scripts/CI) rather than by finding category, each
+covering the whole current repo. Every HIGH and most MEDIUM findings were
+personally verified against the real, current code before any fix -
+direct reads, independent Go/Python computations, live Playwright browser
+checks, live DNS queries, `docker compose config` renders, and
+`errors.As`/type-based checks - not trusted from the agents' reports
+alone. One fix per PR as always, each with a regression test confirmed to
+fail without the fix and pass with it (`git stash` toggling the fix on
+and off against the same test).
+
+- **Correctness - crashes and data loss:** [rootguard#595](https://github.com/foxly-it/rootguard/pull/595)
+  (the updater's `load()` left `m.selected` `nil` when a persisted
+  `state.json`/`images.json` serialized an empty selection as JSON
+  `null`, panicking on the very next `selectImage` call),
+  [rootguard#594](https://github.com/foxly-it/rootguard/pull/594)
+  (`ImportUnboundConf`'s `candidate := current` aliased
+  `current.ReverseZones`'s backing array; mutating it in place silently
+  rewrote the caller's own `Settings` value too, unlike every other slice
+  field in the same function which already copies defensively),
+  [rootguard#596](https://github.com/foxly-it/rootguard/pull/596)
+  (a restore refused with `ErrNotClean` - before ever touching any local
+  directory - still ran its "rollback" step anyway, overwriting an
+  untouched directory with a `copyDirectory`-produced 0600/0700 copy of
+  itself and silently stripping its real permissions),
+  [rootguard#591](https://github.com/foxly-it/rootguard/pull/591)
+  (importing the same `private-domain`/`domain-insecure` line twice, or
+  one already present in the global list, duplicated it in
+  `PrivateDomains` instead of deduping).
+- **Correctness - misreported state:** [rootguard#597](https://github.com/foxly-it/rootguard/pull/597)
+  (Unbound `Apply`'s post-activation history-snapshot write was a hard
+  error even though the real config write/restart/health-check had
+  already fully succeeded by that point - every HTTP caller mapped it to
+  a 500, misleading an operator into thinking their settings were never
+  applied), [rootguard#603](https://github.com/foxly-it/rootguard/pull/603)
+  (a disabled Blockpage's permanently-missing container was reported as
+  a fresh service error on every single update check, forever - added an
+  `Optional` `ServiceSpec` flag, closes
+  [rootguard#547](https://github.com/foxly-it/rootguard/issues/547)),
+  [rootguard#598](https://github.com/foxly-it/rootguard/pull/598)
+  (`HandleServiceAction` was the one Core-proxying handler in its package
+  still flattening every error to a bare 500 instead of using the shared
+  `writeCoreError`, misrepresenting an operator's own bad input - an
+  unknown service name, a conflicting action - as a server failure),
+  [rootguard#604](https://github.com/foxly-it/rootguard/pull/604)
+  (every single-method API route returned 404 instead of 405 on the
+  wrong method: this router's own SPA-fallback `"/"` pattern matches
+  every method unconditionally, so Go's automatic 405 synthesis - which
+  only fires when nothing else matches - never actually triggers here;
+  fixed via `mux.Handler` introspection rather than touching any of the
+  57 route registrations, closes
+  [rootguard#552](https://github.com/foxly-it/rootguard/issues/552)).
+- **Correctness - context/cancellation:** [rootguard#581](https://github.com/foxly-it/rootguard/pull/581)
+  (`restoreDeploy`'s failure-cleanup ran on the same request context it
+  was cleaning up after - a canceled/timed-out request killed its own
+  rollback mid-flight), [rootguard#586](https://github.com/foxly-it/rootguard/pull/586)
+  (the same gap in `rootguard-core`'s updater `rollback()`), both fixed
+  with the established `context.WithTimeout(context.WithoutCancel(ctx),
+  ...)` pattern, [rootguard#589](https://github.com/foxly-it/rootguard/pull/589)
+  (a restore's local-directory rollback never re-normalized Unbound
+  volume ownership the way the success path does, leaving a failed
+  restore's config unreadable by the `unbound` user),
+  [rootguard#590](https://github.com/foxly-it/rootguard/pull/590)
+  (AdGuard install deleted its staged credentials file even when the
+  configure step's failure was ambiguous - a transport error with an
+  unknown server-side outcome - risking data loss for a configure that
+  may have actually succeeded server-side; distinguished via a new
+  `httpStatusError` type and `errors.As`),
+  [rootguard#593](https://github.com/foxly-it/rootguard/pull/593)
+  (the updater's `checkAttestationProxyReachable` had drifted into a
+  weaker, stale copy of Core's own hardened version despite a comment
+  claiming they were identical - brought back in sync).
+- **Webapp frontend:** [rootguard#599](https://github.com/foxly-it/rootguard/pull/599)
+  (`useStackData`'s recurring poll and on-demand reloads could overlap;
+  whichever resolved last always won even if it was the older, stale
+  request - added a sequence guard), [rootguard#600](https://github.com/foxly-it/rootguard/pull/600)
+  (`ContentModal`'s focus-management effect depended on `onClose`
+  directly - a fresh closure identity on every unrelated parent
+  re-render yanked focus back to the close button away from whatever the
+  user was actually doing inside the modal),
+  [rootguard#601](https://github.com/foxly-it/rootguard/pull/601)
+  (the Unbound Expert Editor's suggestion-completion always stripped the
+  line's indentation before splicing in a catalog example, but only
+  restored it for a single-line example - `forward-zone:`/`stub-zone:`,
+  both multi-line in Core's own catalog, silently deleted real content).
+- **Blockpage/CSP:** [rootguard#579](https://github.com/foxly-it/rootguard/pull/579)
+  (the inline theme script's CSP hash had drifted from the actual
+  frontend source, confirmed live via Playwright against both the bug
+  and the fix), [rootguard#580](https://github.com/foxly-it/rootguard/pull/580)
+  (the standalone AdGuard bootstrap endpoint rotated its token without
+  reloading the blockpage config that depends on it),
+  [rootguard#583](https://github.com/foxly-it/rootguard/pull/583)
+  (the blockpage's reload button had no working handler at all - an
+  inline `onclick` CSP hashes don't cover - plus hardening its theme/meta
+  JS against `localStorage` and `AbortSignal` availability edge cases).
+- **CI/infra:** [rootguard#584](https://github.com/foxly-it/rootguard/pull/584)
+  (the Unbound healthcheck only checked `dig`'s exit code, which reflects
+  transport success, not the DNS response itself - SERVFAIL/REFUSED all
+  exit 0; switched to asserting non-empty `+short` output),
+  [rootguard#585](https://github.com/foxly-it/rootguard/pull/585)
+  (`ROOTGUARD_ADMIN_USER`/`WEB_BIND`/`WEB_PORT` were missing from Core's
+  own environment block, breaking a self-triggered compose
+  re-invocation's ability to pass them through),
+  [rootguard#587](https://github.com/foxly-it/rootguard/pull/587)
+  (the webapp service had no `healthcheck:` block at all in
+  `compose.release.yaml`/`compose.integration.yaml`, unlike every other
+  managed service), [rootguard#588](https://github.com/foxly-it/rootguard/pull/588)
+  (the soak test's own backup-restore drill deployed with Blockpage
+  disabled, unlike the real Setup wizard's default - confirmed live
+  against the setup component before fixing).
+- **Docs:** [rootguard#602](https://github.com/foxly-it/rootguard/pull/602)
+  (the 30-day soak test's final `report.sh` rollup - 4175 probes, 95%
+  pass rate, no new failure class; 10 update exercises, zero failures; 5
+  backup/restore drills, zero fallbacks - recorded in `ROADMAP.md`,
+  closing [rootguard#271](https://github.com/foxly-it/rootguard/issues/271)
+  and the last open 1.0.0 gate item).
+
+**Also fixed along the way, not from the review itself:** cutting this
+round's own PR queue exposed that the automated Debian-pin-refresh PR
+([rootguard#578](https://github.com/foxly-it/rootguard/pull/578)) had
+also picked up two HIGH `libpcre2-8-0` CVEs (transitively pulled into the
+Unbound image, never pinned) that re-ran CI kept reproducing identically
+- not mirror lag, but the image's own GHA layer cache
+(`--cache-from type=gha,scope=unbound`) keying purely on each `RUN`
+instruction's literal text, so an unpinned package never forces a
+rebuild against a current mirror snapshot. Fixed by adding the same kind
+of explicit pin already used for the util-linux family a few lines below
+it in the same Dockerfile.
+
+**Investigated, confirmed not (yet) a live bug:** the frontend recovery
+flow's fallback error message ("The recovery key is invalid or the reset
+failed") already covers the ambiguous case of a genuine 500 arriving as
+non-JSON body honestly in its own wording, rather than actually claiming
+the token was wrong - not the clear-cut bug it first looked like on a
+closer read; left as-is.
+
+**Not yet fixed, tracked for a follow-up pass:** the remaining webapp
+findings from this round (raw i18n keys in the audit-log UI - roughly 62
+untranslated event names, a silent failed service restart on the
+Overview page, a language-switch draft loss in the Unbound Expert
+Editor, `Logs.tsx`'s object-URL revoke timing, a NaN restore-preview
+port field), the unbound/blockpage `docker-entrypoint.sh` findings
+(missing `set -e`, a weak trust-anchor existence-only guard, a
+non-atomic root.key copy), and roughly a dozen LOW-severity CI/script
+findings (`wait_for_installed`'s missing `|| true` on a transient
+hiccup, an ambiguous pin-commit lookup in `release-alpha.yml`, a
+zero-byte `project-data.json` risk in `pages.yml`, and several more).
