@@ -59,13 +59,33 @@ trust_anchor="$(cat "${out_dir}/trust-anchor")"
 # the auto-detected Linux gateway path is completely unaffected.
 gateway_ip="${DNSSEC_TEST_AUTHORITY_IP:-}"
 if [[ -z "$gateway_ip" ]]; then
+  # docker inspect's own failure (container doesn't exist, daemon
+  # unreachable) is caught explicitly here, separately from the pipe
+  # below - found in a v1.0.0 correctness review: with the whole
+  # "docker inspect | grep | sort | head" chain as one pipeline, `set -e`
+  # aborted the script the instant docker inspect failed, before the
+  # friendly, actionable "-z" error message two lines down ever had a
+  # chance to run for that case.
+  networks="$(docker inspect "$container" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{"\n"}}{{end}}')" || {
+    echo "::error::docker inspect ${container} failed - is the container running?" >&2
+    exit 1
+  }
   # Sorted for determinism - Go template range over a map (here,
   # NetworkSettings.Networks) iterates in random key order, so an
   # unsorted first-match on a multi-network container (every compose
   # service here has one) would pick a different network from run to
   # run. A network with no gateway of its own (e.g. an internal-only
   # network) renders empty and is filtered out below.
-  gateway_ip="$(docker inspect "$container" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{"\n"}}{{end}}' | grep -v '^$' | sort | head -1)"
+  #
+  # `|| true` on this second pipe too - found alongside the fix above:
+  # grep -v exits 1 when it filters out every line (a container whose
+  # only network genuinely has no gateway renders nothing else), which
+  # under pipefail poisons this whole assignment's exit status the exact
+  # same way docker inspect's own failure did - the "-z" check below was
+  # never actually reachable for *either* of the two cases its own error
+  # message claims to cover, only discovered once the first one was
+  # fixed and this one still aborted the script identically.
+  gateway_ip="$(printf '%s\n' "$networks" | grep -v '^$' | sort | head -1)" || true
 fi
 if [[ -z "$gateway_ip" ]]; then
   echo "::error::${container} has no network gateway IP - can't reach the local DNSSEC test authority from inside it (set DNSSEC_TEST_AUTHORITY_IP to override, e.g. on Docker Desktop)" >&2

@@ -51,6 +51,12 @@ jobs:
       - name: Test resolve-release-pin-commit.sh's retry detection
         run: ./scripts/lib/resolve-release-pin-commit.test.sh
 
+      # Found in a v1.0.0 correctness review: both of inject.sh's own
+      # error messages were unreachable - a single pipeline meant set -e
+      # abort the script before either ever printed.
+      - name: Test inject.sh's error paths
+        run: ./scripts/ci/dnssec-test-zone/inject.test.sh
+
   # Found in review: see unit-tests' own comment above - this used to be
   # two more sequential steps ahead of validate's Docker-based test,
   # independent of it and of unit-tests above.
