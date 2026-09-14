@@ -541,6 +541,21 @@ func bootstrapAdGuardHandler(manager *adguard.Manager, installer *installer.Mana
 			writeError(w, http.StatusBadGateway, err)
 			return
 		}
+		// Found in review: Bootstrap rotates blockpage's service token
+		// whenever blockPageIP is non-empty, on the documented assumption
+		// that whoever calls it reloads blockpage right after (see
+		// adguard.Manager's own comment on publishBlockpageServiceToken).
+		// deploy/restoreDeploy already do that; this standalone bootstrap
+		// endpoint (the AdGuard page's own "Finish setup"/"Apply best
+		// practices" button, reachable on an already-installed stack) never
+		// did, leaving blockpage authenticating with a token Core had
+		// already replaced.
+		if blockPageIP != "" {
+			if err := installer.ReloadBlockpageConfig(r.Context()); err != nil {
+				writeError(w, http.StatusBadGateway, err)
+				return
+			}
+		}
 		writeJSON(w, http.StatusOK, status)
 	}
 }
