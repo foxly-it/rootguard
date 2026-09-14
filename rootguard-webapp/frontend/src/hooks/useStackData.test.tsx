@@ -157,4 +157,52 @@ describe("useStackData", () => {
     expect(result.current.runningCleanup).toBe(false);
     expect(vi.mocked(client.fetchUpdateStatus).mock.calls.length).toBeGreaterThan(reloadsBefore);
   });
+
+  // Regression test for a v1.0.0 correctness review finding: a slower,
+  // superseded load() used to overwrite a newer one's result if it
+  // happened to resolve last, even though it was issued first.
+  it("does not let a slower, superseded load() overwrite a newer one's result", async () => {
+    const pending: Array<(status: client.UpdateStatus) => void> = [];
+    vi.spyOn(client, "fetchUpdateStatus").mockImplementation(
+      () => new Promise((resolve) => { pending.push(resolve); }),
+    );
+    vi.spyOn(client, "serviceAction").mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useStackData(), { wrapper });
+    await flush();
+    expect(pending.length).toBe(1);
+    pending[0]({ ...idleUpdates, message: "initial" });
+    await flush();
+    expect(result.current.updates?.message).toBe("initial");
+
+    // Two overlapping loads, triggered by two overlapping control() calls -
+    // each awaits serviceAction (resolves immediately) before calling
+    // load(), so a couple of microtask flushes get both of their
+    // fetchUpdateStatus calls in flight without either one's load()
+    // completing yet.
+    let firstControl!: Promise<void>;
+    await act(async () => {
+      firstControl = result.current.control("adguard", "restart");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    let secondControl!: Promise<void>;
+    await act(async () => {
+      secondControl = result.current.control("unbound", "restart");
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(pending.length).toBe(3);
+
+    // The newer (second) load resolves first with fresh data; the older
+    // (first) load, still in flight, resolves after it with stale data.
+    await act(async () => {
+      pending[2]({ ...idleUpdates, message: "fresh" });
+      await Promise.resolve();
+      pending[1]({ ...idleUpdates, message: "stale" });
+      await Promise.all([firstControl, secondControl]);
+    });
+
+    expect(result.current.updates?.message).toBe("fresh");
+  });
 });
