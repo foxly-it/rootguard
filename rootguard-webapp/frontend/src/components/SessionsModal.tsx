@@ -5,7 +5,18 @@ import { fetchAuditLog, fetchSessions, revokeSession, type AuditEvent, type Sess
 import { useI18n } from "../i18n";
 import "../styles/sessions.css";
 
-const WARNING_AUDIT_EVENTS = new Set<AuditEvent["event"]>(["login_failure", "login_rate_limited", "recovery_failure", "account_update_failure", "account_update_partial"]);
+// Derived from the event string's own suffix rather than a hardcoded set
+// of names - found in a v1.0.0 correctness review: the previous
+// finite Set only ever listed the 5 auth-specific failure/rate-limited/
+// partial events, so all 48 equivalent "_failure"/"_rate_limited"
+// variants the 24 destructive-action base events can also produce (see
+// DestructiveAuditEvent in api/client.ts) rendered as plain, unhighlighted
+// entries indistinguishable from a routine success. Suffix-based means a
+// future audit event needs no matching update here to be flagged
+// correctly.
+function isWarningAuditEvent(event: AuditEvent["event"]): boolean {
+  return event.endsWith("_failure") || event.endsWith("_rate_limited") || event.endsWith("_partial");
+}
 
 export default function SessionsModal({ open, onClose, returnFocusTo }: { open: boolean; onClose: () => void; returnFocusTo?: RefObject<Element | null> }) {
   const { t, locale } = useI18n();
@@ -118,7 +129,7 @@ export default function SessionsModal({ open, onClose, returnFocusTo }: { open: 
       {auditEvents && auditEvents.length > 0 && (
         <ul className="audit-list">
           {auditEvents.map((event) => (
-            <li key={`${event.timestamp}-${event.event}-${event.remote_ip}`} className={WARNING_AUDIT_EVENTS.has(event.event) ? "audit-entry warning" : "audit-entry"}>
+            <li key={`${event.timestamp}-${event.event}-${event.remote_ip}`} className={isWarningAuditEvent(event.event) ? "audit-entry warning" : "audit-entry"}>
               <i aria-hidden="true" />
               <div>
                 <strong>{t(`sessions.activity.${event.event}`)}</strong>
