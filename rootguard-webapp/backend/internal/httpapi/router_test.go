@@ -16,17 +16,15 @@ import (
 // verbatim across the file, while newer routes here already used the
 // pattern).
 //
-// Verified while writing this test, not assumed: the wrong method here
-// gets 404, not net/http's own auto-generated 405. That auto-405 only
-// fires when nothing else would match the request; this file's SPA-
+// Originally verified (and asserted) that the wrong method got a bare 404
+// here instead of net/http's own auto-generated 405: that auto-405 only
+// fires when nothing else would match the request, and this file's SPA-
 // fallback catch-all ("/", at the end of NewRouter) matches every path
-// under every method, so it wins ahead of the 405 rule and returns its own
-// 404 for anything under /api/ it doesn't recognize. This is not new: every
-// other single-method route already using the plain "METHOD /path" form
-// before this change (e.g. "GET /api/installation") behaves identically -
-// confirmed against this same file before converting anything. These 9
-// routes now match that already-established, already-shipped file
-// convention instead of diverging from it with their own explicit 405.
+// under every method, so it won ahead of the 405 rule. Fixed in a v1.0.0
+// correctness review (#552) via methodMismatchAllowed, which the catch-all
+// now consults directly instead of relying on ServeMux's own (here,
+// unreachable) 405 synthesis - this test now asserts the corrected 405
+// response instead of documenting the old 404 as intended.
 func TestRouterMethodDispatch(t *testing.T) {
 	core := coreclient.New("http://127.0.0.1:1", "test-token")
 	auth := newTestSessionAuth()
@@ -52,8 +50,11 @@ func TestRouterMethodDispatch(t *testing.T) {
 		t.Run(tc.path, func(t *testing.T) {
 			denied := httptest.NewRecorder()
 			mux.ServeHTTP(denied, httptest.NewRequest(tc.deniedMethod, tc.path, nil))
-			if denied.Code != http.StatusNotFound {
-				t.Errorf("%s %s: expected 404 (this file's established convention for a wrong method, see the SPA-fallback comment above), got %d", tc.deniedMethod, tc.path, denied.Code)
+			if denied.Code != http.StatusMethodNotAllowed {
+				t.Errorf("%s %s: expected 405 for a registered path hit with the wrong method, got %d", tc.deniedMethod, tc.path, denied.Code)
+			}
+			if allow := denied.Header().Get("Allow"); !strings.Contains(allow, tc.allowedMethod) {
+				t.Errorf("%s %s: expected Allow header to name %s, got %q", tc.deniedMethod, tc.path, tc.allowedMethod, allow)
 			}
 
 			allowed := httptest.NewRecorder()
@@ -62,6 +63,21 @@ func TestRouterMethodDispatch(t *testing.T) {
 				t.Errorf("%s %s: expected the allowed method to reach the handler, got %d", tc.allowedMethod, tc.path, allowed.Code)
 			}
 		})
+	}
+}
+
+// TestRouterReturnsNotFoundForAGenuinelyUnknownAPIPath confirms
+// methodMismatchAllowed's fix didn't turn every unmatched /api/ path into
+// a 405 - a path with no route at all, under any method, must still 404.
+func TestRouterReturnsNotFoundForAGenuinelyUnknownAPIPath(t *testing.T) {
+	core := coreclient.New("http://127.0.0.1:1", "test-token")
+	auth := newTestSessionAuth()
+	mux := NewRouter(core, auth)
+
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/this-path-does-not-exist", nil))
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for a genuinely unknown API path, got %d", recorder.Code)
 	}
 }
 
