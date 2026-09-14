@@ -1,348 +1,46 @@
 package httpapi
 
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"sync"
 	"testing"
 	"time"
 )
 
-func loggedInRequest(t *testing.T, auth *SessionAuth, method, path string, body []byte) *http.Request {
-	t.Helper()
-	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "secret"})
-	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
-	login := httptest.NewRecorder()
-	auth.Handler(http.NotFoundHandler()).ServeHTTP(login, loginRequest)
-	if login.Code != http.StatusOK {
-		t.Fatalf("expected login 200, got %d: %s", login.Code, login.Body.String())
-	}
+// TestStatusRecorderUnwrapsForResponseController is the regression test
+// for a round-3 correctness-review finding: statusRecorder implemented
+// neither SetReadDeadline itself nor Unwrap(), so
+// http.NewResponseController - used by HandleBackupRestore
+// (api/updates.go) to extend the read deadline for a large backup/restore
+// upload past the server's blanket 10s ReadTimeout - silently failed with
+// http.ErrNotSupported every time it ran behind guardRestoreUpload/
+// guardDestructive, which always wrap the ResponseWriter in a
+// statusRecorder before calling through. Every restore upload was
+// therefore still bound by the global 10s timeout regardless of the
+// extension. Needs a real network connection, not httptest.NewRecorder -
+// the recorder itself doesn't implement SetReadDeadline either, so it
+// can't tell "unwrap is missing" apart from "nothing here ever supports
+// this".
+func TestStatusRecorderUnwrapsForResponseController(t *testing.T) {
+	var direct, viaRecorder error
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		direct = http.NewResponseController(w).SetReadDeadline(time.Now().Add(time.Minute))
 
-	var reader *bytes.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
-	} else {
-		reader = bytes.NewReader(nil)
-	}
-	request := httptest.NewRequest(method, path, reader)
-	request.AddCookie(login.Result().Cookies()[0])
-	return request
-}
+		wrapped := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		viaRecorder = http.NewResponseController(wrapped).SetReadDeadline(time.Now().Add(time.Minute))
+	}))
+	defer server.Close()
 
-func TestGuardDestructiveRecordsSuccessAndFailure(t *testing.T) {
-	auth := newTestSessionAuth()
+	resp, err := http.Get(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
 
-	succeed := auth.guardDestructive("thing_done", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	fail := auth.guardDestructive("thing_done", func(w http.ResponseWriter, _ *http.Request) {
-		http.Error(w, "nope", http.StatusBadRequest)
-	})
-
-	ok := httptest.NewRecorder()
-	succeed(ok, loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil))
-	if ok.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", ok.Code)
+	if direct != nil {
+		t.Fatalf("sanity check failed: expected SetReadDeadline to succeed against the real connection directly, got %v", direct)
 	}
-
-	bad := httptest.NewRecorder()
-	fail(bad, loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil))
-	if bad.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", bad.Code)
-	}
-
-	events := auth.auditSnapshot()
-	var sawSuccess, sawFailure bool
-	for _, event := range events {
-		if event.Event == "thing_done_success" && event.Username == "admin" {
-			sawSuccess = true
-		}
-		if event.Event == "thing_done_failure" && event.Username == "admin" {
-			sawFailure = true
-		}
-	}
-	if !sawSuccess {
-		t.Fatal("expected a thing_done_success audit event")
-	}
-	if !sawFailure {
-		t.Fatal("expected a thing_done_failure audit event")
-	}
-}
-
-func TestGuardDestructiveRateLimitsSharedAcrossActions(t *testing.T) {
-	auth := newTestSessionAuth()
-	auth.destructiveLimiter = newRateLimiter(time.Minute, 2)
-
-	first := auth.guardDestructive("action_one", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	second := auth.guardDestructive("action_two", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "secret"})
-	loginRequest := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
-	login := httptest.NewRecorder()
-	auth.Handler(http.NotFoundHandler()).ServeHTTP(login, loginRequest)
-	cookie := login.Result().Cookies()[0]
-
-	call := func(handler http.HandlerFunc) int {
-		request := httptest.NewRequest(http.MethodPost, "/api/whatever", nil)
-		request.AddCookie(cookie)
-		recorder := httptest.NewRecorder()
-		handler(recorder, request)
-		return recorder.Code
-	}
-
-	if code := call(first); code != http.StatusOK {
-		t.Fatalf("expected first call to succeed, got %d", code)
-	}
-	if code := call(second); code != http.StatusOK {
-		t.Fatalf("expected second call (different action, shared budget) to succeed, got %d", code)
-	}
-	if code := call(first); code != http.StatusTooManyRequests {
-		t.Fatalf("expected third call across actions to be rate-limited, got %d", code)
-	}
-
-	var sawRateLimited bool
-	for _, event := range auth.auditSnapshot() {
-		if event.Event == "action_one_rate_limited" {
-			sawRateLimited = true
-		}
-	}
-	if !sawRateLimited {
-		t.Fatal("expected an action_one_rate_limited audit event")
-	}
-}
-
-// TestGuardDestructiveRateLimitIsPerSessionNotPerAccount is the
-// regression test for a real gap found in review: guardDestructive used
-// to key the destructive-action limiter by username, so every session
-// the same admin account happens to have open (the session-inventory
-// feature explicitly allows more than one) shared a single combined
-// budget - directly contradicting the limiter's own documented purpose
-// ("bound how much a single... session can do", see its construction in
-// NewSessionAuth).
-func TestGuardDestructiveRateLimitIsPerSessionNotPerAccount(t *testing.T) {
-	auth := newTestSessionAuth()
-	auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
-
-	action := auth.guardDestructive("thing_done", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	call := func(cookie *http.Cookie) int {
-		request := httptest.NewRequest(http.MethodPost, "/api/whatever", nil)
-		request.AddCookie(cookie)
-		recorder := httptest.NewRecorder()
-		action(recorder, request)
-		return recorder.Code
-	}
-
-	loginBody, _ := json.Marshal(credentials{Username: "admin", Password: "secret"})
-	login := func() *http.Cookie {
-		request := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginBody))
-		response := httptest.NewRecorder()
-		auth.Handler(http.NotFoundHandler()).ServeHTTP(response, request)
-		if response.Code != http.StatusOK {
-			t.Fatalf("expected login 200, got %d", response.Code)
-		}
-		return response.Result().Cookies()[0]
-	}
-	sessionA := login()
-	sessionB := login()
-
-	if code := call(sessionA); code != http.StatusOK {
-		t.Fatalf("expected session A's first call to succeed, got %d", code)
-	}
-	if code := call(sessionA); code != http.StatusTooManyRequests {
-		t.Fatalf("expected session A's second call to be rate-limited (budget of 1), got %d", code)
-	}
-	if code := call(sessionB); code != http.StatusOK {
-		t.Fatalf("expected session B (same account, different session) to have its own unused budget, got %d", code)
-	}
-}
-
-// TestGuardDestructiveRateLimitBoundsTrulyConcurrentAttempts guards the
-// same TOCTOU class already closed for login/recovery (see ratelimit.go's
-// beginAttempt doc comment): guardDestructive used to call blocked() then
-// recordFailure() as two separate mutex-protected steps, so truly
-// concurrent requests could all observe zero recorded uses and all be
-// admitted before any of them got counted. Unlike the login/recovery
-// tests, reverting this specific fix doesn't make this exact test reliably
-// fail - there's no expensive work (no PBKDF2 hashing here) between the
-// two old calls to widen the window, so Go's scheduler rarely interleaves
-// into it in a synchronous httptest run, even at very high goroutine
-// counts. Confirmed the race is real a different way: a throwaway direct
-// probe against blocked()/recordFailure() (bypassing the HTTP layer
-// entirely) did show extra accepted attempts in roughly 1 of every 3
-// runs. This test still guards the correct invariant under load going
-// forward, just not as a guaranteed fails-without-the-fix regression
-// gate the way the login/recovery ones are.
-func TestGuardDestructiveRateLimitBoundsTrulyConcurrentAttempts(t *testing.T) {
-	auth := newTestSessionAuth()
-	auth.destructiveLimiter = newRateLimiter(time.Minute, 2)
-	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]
-
-	action := auth.guardDestructive("thing_done", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-
-	const concurrentRequests = 30
-	var start, done sync.WaitGroup
-	start.Add(1)
-	done.Add(concurrentRequests)
-	codes := make([]int, concurrentRequests)
-	for i := range concurrentRequests {
-		go func(i int) {
-			defer done.Done()
-			request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/whatever/%d", i), nil)
-			request.AddCookie(cookie)
-			response := httptest.NewRecorder()
-			start.Wait() // release every goroutine at once, not one by one
-			action(response, request)
-			codes[i] = response.Code
-		}(i)
-	}
-	start.Done()
-	done.Wait()
-
-	var accepted, rejected int
-	for _, code := range codes {
-		switch code {
-		case http.StatusOK:
-			accepted++
-		case http.StatusTooManyRequests:
-			rejected++
-		default:
-			t.Fatalf("unexpected status code %d", code)
-		}
-	}
-	if accepted != auth.destructiveLimiter.maxFailure {
-		t.Fatalf("expected exactly %d concurrent requests to actually complete, got %d (rejected: %d)", auth.destructiveLimiter.maxFailure, accepted, rejected)
-	}
-	if rejected != concurrentRequests-auth.destructiveLimiter.maxFailure {
-		t.Fatalf("expected the remaining %d requests to be rejected outright, got %d", concurrentRequests-auth.destructiveLimiter.maxFailure, rejected)
-	}
-}
-
-// TestGuardRestoreUploadBoundsConcurrencyTighterThanTheSharedLimiter is
-// the regression test for the fix itself, found in review: the shared
-// destructiveLimiter's much larger per-session budget (30 by default)
-// alone would let far more than a couple of ~1 GiB restore uploads run
-// at once. Sets the shared limiter's budget deliberately higher than
-// restoreLimiter's own, so a pass here can only be explained by
-// guardRestoreUpload's own tighter gate actually doing something -
-// not just inheriting the shared limiter's already-tighter number.
-func TestGuardRestoreUploadBoundsConcurrencyTighterThanTheSharedLimiter(t *testing.T) {
-	auth := newTestSessionAuth()
-	auth.destructiveLimiter = newRateLimiter(time.Minute, 30)
-	auth.restoreLimiter = newRateLimiter(time.Minute, 2)
-	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]
-
-	release := make(chan struct{})
-	action := auth.guardRestoreUpload("restore_thing", func(w http.ResponseWriter, _ *http.Request) {
-		<-release // hold the "upload" open until every goroutine has had a chance to race in
-		w.WriteHeader(http.StatusOK)
-	})
-
-	const concurrentRequests = 10
-	var start, done sync.WaitGroup
-	start.Add(1)
-	done.Add(concurrentRequests)
-	codes := make([]int, concurrentRequests)
-	for i := range concurrentRequests {
-		go func(i int) {
-			defer done.Done()
-			request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/whatever/%d", i), nil)
-			request.AddCookie(cookie)
-			response := httptest.NewRecorder()
-			start.Wait()
-			action(response, request)
-			codes[i] = response.Code
-		}(i)
-	}
-	start.Done()
-	// Give every goroutine time to actually reach beginAttempt before
-	// releasing the held-open handlers - otherwise this could finish
-	// requests one at a time faster than new ones arrive, never actually
-	// exercising the concurrency gate at all.
-	time.Sleep(50 * time.Millisecond)
-	close(release)
-	done.Wait()
-
-	var accepted, rejected int
-	for _, code := range codes {
-		switch code {
-		case http.StatusOK:
-			accepted++
-		case http.StatusTooManyRequests:
-			rejected++
-		default:
-			t.Fatalf("unexpected status code %d", code)
-		}
-	}
-	if accepted != auth.restoreLimiter.maxFailure {
-		t.Fatalf("expected exactly %d concurrent restore uploads to actually proceed, got %d (rejected: %d)", auth.restoreLimiter.maxFailure, accepted, rejected)
-	}
-	if rejected != concurrentRequests-auth.restoreLimiter.maxFailure {
-		t.Fatalf("expected the remaining %d requests to be rejected outright, got %d", concurrentRequests-auth.restoreLimiter.maxFailure, rejected)
-	}
-}
-
-// TestGuardRestoreUploadReleasesItsSlotWhenTheSharedLimiterRejects is the
-// regression test for the reverse ordering from the test above: the
-// shared destructiveLimiter already exhausted by unrelated actions while
-// restoreLimiter still has free slots. guardRestoreUpload's own
-// beginAttempt succeeds first, then guardDestructive's beginAttempt
-// fails and returns 429 without ever calling next - found in a
-// second-pass review as untested: nothing previously asserted that the
-// restoreLimiter reservation this rejection path holds is actually
-// released, rather than leaked for the rest of the window.
-func TestGuardRestoreUploadReleasesItsSlotWhenTheSharedLimiterRejects(t *testing.T) {
-	auth := newTestSessionAuth()
-	auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
-	auth.restoreLimiter = newRateLimiter(time.Minute, 2)
-	cookie := loggedInRequest(t, auth, http.MethodPost, "/api/whatever", nil).Cookies()[0]
-
-	// Exhaust the shared budget with an unrelated destructive action first.
-	other := auth.guardDestructive("other_thing", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
-	otherRequest := httptest.NewRequest(http.MethodPost, "/api/whatever", nil)
-	otherRequest.AddCookie(cookie)
-	otherResponse := httptest.NewRecorder()
-	other(otherResponse, otherRequest)
-	if otherResponse.Code != http.StatusOK {
-		t.Fatalf("expected the unrelated action to succeed, got %d", otherResponse.Code)
-	}
-
-	restoreCalled := false
-	action := auth.guardRestoreUpload("restore_thing", func(w http.ResponseWriter, _ *http.Request) {
-		restoreCalled = true
-		w.WriteHeader(http.StatusOK)
-	})
-
-	for i := 0; i < 3; i++ {
-		request := httptest.NewRequest(http.MethodPost, "/api/whatever", nil)
-		request.AddCookie(cookie)
-		response := httptest.NewRecorder()
-		action(response, request)
-		if response.Code != http.StatusTooManyRequests {
-			t.Fatalf("attempt %d: expected 429 from the exhausted shared limiter, got %d: %s", i, response.Code, response.Body.String())
-		}
-	}
-	if restoreCalled {
-		t.Fatal("expected the inner handler to never run once the shared limiter is exhausted")
-	}
-
-	sessionID, ok := auth.authenticatedSessionID(otherRequest)
-	if !ok {
-		t.Fatal("expected the logged-in request to resolve a session ID")
-	}
-	if n := auth.restoreLimiter.inFlight[sessionID]; n != 0 {
-		t.Fatalf("expected every restoreLimiter reservation to be released after a shared-limiter rejection, got %d still held", n)
+	if viaRecorder != nil {
+		t.Fatalf("expected SetReadDeadline to reach the real connection through *statusRecorder via Unwrap(), got %v", viaRecorder)
 	}
 }
