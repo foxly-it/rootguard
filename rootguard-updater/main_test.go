@@ -381,3 +381,62 @@ func waitForState(t *testing.T, manager *manager, expected string) status {
 	t.Fatalf("manager did not reach state %s: %#v", expected, manager.Status())
 	return status{}
 }
+
+// TestStatusSyncedResyncsCurrentIdentityAfterExternalContainerRecreation
+// is the regression test for rootguard#328 (found in the sibling
+// rootguard-core/internal/updater.Manager, same underlying bug here):
+// this manager only ever updated current_id/current_image itself, after
+// a check/update it performed - a container recreated by any other path
+// (a plain `docker compose up -d` after editing an image pin, a manual
+// `docker rm`+recreate) left the cached identity permanently stale until
+// someone explicitly triggered a check.
+func TestStatusSyncedResyncsCurrentIdentityAfterExternalContainerRecreation(t *testing.T) {
+	current := map[string]string{"rootguard-core": "sha256:core-old", "rootguard-webapp": "sha256:web-old"}
+	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
+	run := func(_ context.Context, arguments ...string) ([]byte, error) {
+		switch {
+		case arguments[0] == "inspect":
+			container := arguments[len(arguments)-1]
+			return []byte(container + ":old|" + current[container]), nil
+		case arguments[0] == "image":
+			image := arguments[len(arguments)-1]
+			return []byte(candidates[image]), nil
+		case arguments[0] == "pull":
+			return []byte("ok"), nil
+		default:
+			t.Fatalf("unexpected docker command: %v", arguments)
+			return nil, nil
+		}
+	}
+	manager := newManager(t.TempDir(), "/compose.yaml", "rootguard", testSpecs(), run)
+	if _, err := manager.StartCheck(nil); err != nil {
+		t.Fatal(err)
+	}
+	before := waitForState(t, manager, stateIdle)
+	if before.Services[0].CurrentID != "sha256:core-old" || !before.Services[0].UpdateAvailable {
+		t.Fatalf("unexpected initial state: %#v", before.Services[0])
+	}
+
+	// Core gets recreated out-of-band onto the exact image this
+	// manager's own last check already identified as the candidate - the
+	// manager itself never sees this happen.
+	current["rootguard-core"] = "sha256:core-new"
+
+	stale := manager.Status().Services[0]
+	if stale.CurrentID != "sha256:core-old" {
+		t.Fatalf("expected the plain, unsynced Status() to still report the stale identity, got %#v", stale)
+	}
+
+	synced := manager.StatusSynced(context.Background()).Services[0]
+	if synced.CurrentID != "sha256:core-new" {
+		t.Fatalf("expected StatusSynced to resync the current identity, got %#v", synced)
+	}
+	if synced.UpdateAvailable {
+		t.Fatalf("expected update_available to be recomputed against the resynced identity (now matching the candidate), got %#v", synced)
+	}
+
+	reloaded := newManager(manager.dataDir, "/compose.yaml", "rootguard", testSpecs(), run)
+	if got := reloaded.Status().Services[0].CurrentID; got != "sha256:core-new" {
+		t.Fatalf("expected the resynced identity to have persisted to disk, got %q", got)
+	}
+}

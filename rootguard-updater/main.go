@@ -66,8 +66,8 @@ func main() {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
-	mux.HandleFunc("GET /api/control-plane/status", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, manager.Status())
+	mux.HandleFunc("GET /api/control-plane/status", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, manager.StatusSynced(r.Context()))
 	})
 	mux.HandleFunc("POST /api/control-plane/check", handleControlPlaneAction(manager.StartCheck))
 	mux.HandleFunc("POST /api/control-plane/update", handleControlPlaneAction(manager.StartUpdate))
