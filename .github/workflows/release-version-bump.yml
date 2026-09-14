@@ -77,6 +77,16 @@ jobs:
           VERSION_OVERRIDE: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          # Sourced up front, not just before require_semver below - found
+          # in a v1.0.0 correctness review: the tag filter two lines down
+          # hand-wrote its own, looser SemVer-shaped regex (real SemVer
+          # 2.0 forbids a leading zero in a numeric identifier, e.g.
+          # "v1.02.3" - this pattern accepted it) instead of sharing
+          # $SEMVER_PATTERN the way this exact review category exists to
+          # fix, one more hand-kept copy silently drifting from the
+          # canonical grammar the same way the three release-alpha.yml
+          # sites once did.
+          source scripts/lib/semver-validate.sh
           # Matches any RootGuard release tag, not just today's
           # "v0.1.0-(alpha|beta).N" scheme - sorted by actual tag creation
           # time (reliable regardless of version scheme, unlike trusting an
@@ -84,9 +94,14 @@ jobs:
           # own history for why that distinction matters), so this keeps
           # finding the right "latest" tag across a future base-version
           # change (0.2.0, 1.0.0-rc.1, a bare 1.0.0, ...) without further
-          # changes here.
+          # changes here. The exact `grep -E "^v${SEMVER_PATTERN#^}"`
+          # construction release-alpha.yml's own three sites already
+          # share (and scripts/lib/semver-validate.test.sh already
+          # covers generically) - "v" plus $SEMVER_PATTERN's own grammar
+          # minus its leading "^", re-anchored right after the "v"
+          # instead.
           latest_tag="$(git for-each-ref 'refs/tags/v*' --sort=-creatordate --format='%(refname:short)' \
-            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$' | head -1 || true)"
+            | grep -E "^v${SEMVER_PATTERN#^}" | head -1 || true)"
           if [ -z "$latest_tag" ]; then
             echo "No existing release tag found" >&2
             exit 1
@@ -108,10 +123,10 @@ jobs:
           # had already produced a real commit on main, a real tag, and a
           # real GitHub Release that needed undoing by hand. require_semver
           # enforces the same SemVer 2.0 grammar as release-alpha.yml's own
-          # gate - shared via scripts/lib/semver-validate.sh now instead of
-          # a hand-kept duplicate, since this exact incident is what a
-          # future silent drift between the two copies would risk again.
-          source scripts/lib/semver-validate.sh
+          # gate - shared via scripts/lib/semver-validate.sh (sourced up
+          # top already) instead of a hand-kept duplicate, since this
+          # exact incident is what a future silent drift between the two
+          # copies would risk again.
           require_semver "$next_version"
           if [ -z "$(git log "${latest_tag}"..HEAD --oneline)" ] && [ -z "$VERSION_OVERRIDE" ]; then
             echo "No commits since ${latest_tag} - nothing to release" >&2
