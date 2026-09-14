@@ -99,3 +99,85 @@ func TestManagerRestoresVerifiedDataThroughCleanInstaller(t *testing.T) {
 		}
 	}
 }
+
+// TestFailedPreflightLeavesLocalDirectoriesUntouched is the regression test
+// for a v1.0.0 correctness review finding: ErrNotClean means
+// m.installer.Restore refused before ever invoking the restoreData
+// callback (RestorePreflight failed), so none of the local directories
+// were ever actually replaced. The rollback step used to run
+// unconditionally on any restoreErr anyway, "restoring" each target from
+// the backup this function had just staged of that same, never-touched
+// directory - copyDirectory always writes 0600/0700 regardless of the
+// original mode, so this pointless rollback silently stripped the
+// target's real permissions for no reason.
+func TestFailedPreflightLeavesLocalDirectoriesUntouched(t *testing.T) {
+	installation := t.TempDir()
+	status := `{"state":"installed","config":{"dns_bind_address":"192.0.2.10","dns_port":53,"adguard_channel":"stable","blockpage_enabled":false}}`
+	if err := os.WriteFile(filepath.Join(installation, "status.json"), []byte(status), 0600); err != nil {
+		t.Fatal(err)
+	}
+	unbound := t.TempDir()
+	if err := os.WriteFile(filepath.Join(unbound, "settings.json"), []byte("archived"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	service := t.TempDir()
+	if err := os.WriteFile(filepath.Join(service, "state"), []byte("service-state"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	credentials := t.TempDir()
+	if err := os.WriteFile(filepath.Join(credentials, "credentials.json"), []byte(`{"username":"rootguard","password":"secret"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	adguard := t.TempDir()
+	if err := os.WriteFile(filepath.Join(adguard, "AdGuardHome.yaml"), []byte("schema_version: 29"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	exporter := backupexport.New(backupexport.Options{DataDir: t.TempDir(), LocalSources: []backupexport.Source{
+		{ArchivePath: "rootguard/installation", Path: installation},
+		{ArchivePath: "rootguard/unbound", Path: unbound},
+		{ArchivePath: "rootguard/adguard", Path: credentials},
+		{ArchivePath: "services/adguard/config", Path: adguard},
+		{ArchivePath: "services/unbound/state", Path: service},
+	}})
+	var encrypted bytes.Buffer
+	if err := exporter.Export(context.Background(), testPassphrase, &encrypted); err != nil {
+		t.Fatal(err)
+	}
+
+	// Every managed resource reports as present (inspect succeeds, no
+	// "not found"/"no such" in its output) - RestorePreflight's own
+	// resource-absence checks all fail, so Ready is false and Restore
+	// refuses with ErrNotClean before ever calling restoreDeploy.
+	docker := func(_ context.Context, arguments ...string) ([]byte, error) {
+		if len(arguments) >= 2 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
+			return []byte("already exists"), nil
+		}
+		return nil, nil
+	}
+	installerManager := installer.NewManager(installer.Options{
+		DataDir: t.TempDir(), CoreContainer: "rootguard-core", DNSNetworkCIDR: "172.29.53.0/24", Run: docker,
+		AttestationVerifier: func(context.Context, string, string) error { return nil },
+	})
+	target := t.TempDir()
+	targetFile := filepath.Join(target, "settings.json")
+	if err := os.WriteFile(targetFile, []byte("original"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manager := New(Options{DataDir: t.TempDir(), UnboundDir: target, AdGuardDir: t.TempDir(), AdGuardAuthDir: t.TempDir(), Installer: installerManager, Run: docker})
+	_, err := manager.Restore(context.Background(), RestoreRequest{Passphrase: testPassphrase, Archive: bytes.NewReader(encrypted.Bytes())})
+	if !errors.Is(err, installer.ErrNotClean) {
+		t.Fatalf("expected ErrNotClean, got %v", err)
+	}
+
+	data, err := os.ReadFile(targetFile)
+	if err != nil || string(data) != "original" {
+		t.Fatalf("expected untouched local data to survive a refused restore, got %q %v", data, err)
+	}
+	info, err := os.Stat(targetFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0644 {
+		t.Fatalf("expected the untouched file's original mode 0644 to survive, got %o - a pointless rollback overwrote it", info.Mode().Perm())
+	}
+}

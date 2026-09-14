@@ -123,7 +123,17 @@ func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installe
 		}
 		return nil
 	})
-	if restoreErr != nil {
+	// ErrNotClean means m.installer.Restore refused before ever invoking
+	// restoreData (RestorePreflight failed, or the installer wasn't in a
+	// restorable state) - found in a v1.0.0 correctness review: none of
+	// the local directories above were ever touched in that case, so
+	// "rolling back" by overwriting item.target with the backup copy this
+	// function just staged of that same, untouched directory achieves
+	// nothing except a pointless, permission-losing rewrite (copyDirectory
+	// always writes 0600/0700, see normalizeUnboundOwnership's own
+	// comment below) of data that never needed restoring in the first
+	// place.
+	if restoreErr != nil && !errors.Is(restoreErr, installer.ErrNotClean) {
 		for index, item := range local {
 			if err := replaceDirectory(filepath.Join(rollback, fmt.Sprintf("%d", index)), item.target); err != nil {
 				return status, fmt.Errorf("%w; roll back local restore data: %v", restoreErr, err)
