@@ -538,3 +538,48 @@ func newTestManager(t *testing.T) *Manager {
 	}
 	return manager
 }
+
+// TestApplySucceedsEvenWhenPostActivationSnapshotFails is the regression
+// test for a v1.0.0 correctness review finding: by the time the
+// post-activation recordSnapshot call runs, the new config has already
+// been written, unbound-checkconf has already validated it, the container
+// has already restarted onto it, and waitReady has already confirmed it's
+// serving - the real apply has fully succeeded. recordSnapshot only
+// maintains the version-history UI's own bookkeeping, but a failure there
+// used to be returned as Apply's own error, which every HTTP caller maps
+// to a 500 - misleading an operator into thinking their settings were
+// never applied when they actually were.
+func TestApplySucceedsEvenWhenPostActivationSnapshotFails(t *testing.T) {
+	manager := newTestManager(t)
+
+	first := DefaultSettings()
+	first.Threads = 4
+	if err := manager.Apply(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+
+	// The history directory now holds the baseline + first-apply entries.
+	// Making it read-only doesn't block the *next* apply's pre-change
+	// snapshot (recordSnapshot dedups against an unchanged history[0] and
+	// never needs to write), only the post-activation one below, which
+	// records settings that genuinely differ and must write a new file.
+	historyDir := filepath.Join(manager.hostConfigDir, "history")
+	if err := os.Chmod(historyDir, 0555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(historyDir, 0700) })
+
+	second := DefaultSettings()
+	second.Threads = 8
+	if err := manager.Apply(context.Background(), second); err != nil {
+		t.Fatalf("expected Apply to succeed despite the post-activation snapshot write failing, got: %v", err)
+	}
+
+	loaded, err := manager.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Threads != 8 {
+		t.Fatalf("expected the new settings to be genuinely active despite the snapshot failure, got: %+v", loaded)
+	}
+}
