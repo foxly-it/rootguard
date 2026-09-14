@@ -56,6 +56,10 @@ type ServiceSpec struct {
 	ResolveTarget       func(ctx context.Context) (string, error)
 	BackupPaths         []string
 	OwnershipMigrations []VolumeOwnershipMigration
+	// Optional means this service's container legitimately might not
+	// exist at all on some installations (Blockpage can be disabled) -
+	// see check()'s own comment for the bug this guards against.
+	Optional bool
 }
 
 type VolumeOwnershipMigration struct {
@@ -305,6 +309,22 @@ func (m *Manager) check() {
 		targetImage := resolveTargetImage(ctx, spec)
 		currentImage, currentID, err := m.inspectContainer(ctx, spec)
 		if err != nil {
+			// Found in a v1.0.0 correctness review: an Optional service
+			// (Blockpage, which can be disabled at install time) has no
+			// container at all on such an installation, so this same
+			// "docker inspect" failure is the expected, permanent steady
+			// state, not a transient problem - reporting it as an Error
+			// every single check permanently showed a red error status for
+			// a feature the operator deliberately turned off. Only the
+			// specific "container doesn't exist" case is treated this way;
+			// any other inspect failure (a real Docker problem) still
+			// surfaces normally, optional or not.
+			detail := strings.ToLower(err.Error())
+			missing := strings.Contains(detail, "no such") || strings.Contains(detail, "not found")
+			if spec.Optional && missing {
+				m.setServiceResult(service, ServiceStatus{TargetImage: targetImage, CheckedAt: time.Now().UTC()})
+				continue
+			}
 			m.setServiceResult(service, ServiceStatus{TargetImage: targetImage, Error: err.Error(), CheckedAt: time.Now().UTC()})
 			continue
 		}
