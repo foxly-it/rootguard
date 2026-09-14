@@ -111,6 +111,51 @@ func (m *manager) Status() status {
 	return cloneStatus(m.status)
 }
 
+// StatusSynced is Status, but first resyncs current_id/current_image
+// against whatever container is actually running - same fix as
+// rootguard-core/internal/updater.Manager.StatusSynced, found live in
+// that sibling module (rootguard#328): this manager only ever updated
+// those fields itself, after a check/update it performed, so a
+// container recreated by any other path (a plain `docker compose up -d`
+// after editing an image pin, a manual `docker rm`+recreate) left the
+// cached identity permanently stale - reporting the *previous* image as
+// current, with update_available computed against that stale value -
+// until someone explicitly triggered a check. A cheap, local docker
+// inspect per managed service (no pull, no network, unlike check()), so
+// it's safe to run on every status read. Skipped while a check/update is
+// already in flight - that will produce a fresher, fully-verified status
+// on its own shortly, and resyncing concurrently here would race its own
+// writes to the same service entries.
+func (m *manager) StatusSynced(ctx context.Context) status {
+	m.mu.Lock()
+	if !m.busyLocked() {
+		containers := make(map[string]string, len(m.specs))
+		for _, spec := range m.specs {
+			containers[spec.Name] = spec.Container
+		}
+		changed := false
+		for i, service := range m.status.Services {
+			container, ok := containers[service.Name]
+			if !ok {
+				continue
+			}
+			currentImage, currentID, err := m.inspectContainer(ctx, container)
+			if err != nil || currentID == "" || currentID == service.CurrentID {
+				continue
+			}
+			m.status.Services[i].CurrentImage = currentImage
+			m.status.Services[i].CurrentID = currentID
+			m.status.Services[i].UpdateAvailable = service.CandidateID != "" && currentID != service.CandidateID
+			changed = true
+		}
+		if changed {
+			_ = m.persistLocked()
+		}
+	}
+	m.mu.Unlock()
+	return m.Status()
+}
+
 // StartCheck begins a check. targetImages optionally overrides a
 // service's static TargetImage pin for this run only (e.g. a live
 // release resolved by rootguard-core, which - unlike this network-
