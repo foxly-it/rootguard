@@ -279,35 +279,42 @@ function initializeInstallDemoReveal() {
   observer.observe(terminal);
 }
 
-// One-time confetti burst over the status panel to mark the 1.0 release.
-// Only runs on pages that have the panel (index.html), respects
-// prefers-reduced-motion (styles.css also disables the animations
-// themselves as a second layer), and plays at most once per browser via
-// localStorage rather than on every page load/reload.
+// Viewport-wide emoji confetti plus a short toast to mark the 1.0 release.
+// Runs once per browser (localStorage) on whichever page loads first, and
+// is skipped entirely under prefers-reduced-motion - nothing here carries
+// any information, it's purely decorative.
 function initializeReleaseCelebration() {
-  const panel = document.querySelector(".project-status-panel");
-  if (!panel) return;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (localStorage.getItem("rootguard-seen-1.0-celebration")) return;
   localStorage.setItem("rootguard-seen-1.0-celebration", "1");
 
-  panel.classList.add("just-shipped");
+  const panel = document.querySelector(".project-status-panel");
+  if (panel) panel.classList.add("just-shipped");
 
-  const colors = ["#72c483", "#f6c85f", "#a98bea"];
+  const emoji = ["🎉", "🛡️", "✨", "🎊"];
   const confetti = document.createElement("div");
   confetti.className = "release-confetti";
-  for (let i = 0; i < 26; i++) {
-    const piece = document.createElement("i");
+  confetti.setAttribute("aria-hidden", "true");
+  for (let i = 0; i < 40; i++) {
+    const piece = document.createElement("span");
     piece.className = "confetti-piece";
+    piece.textContent = emoji[i % emoji.length];
     piece.style.left = `${Math.random() * 100}%`;
-    piece.style.background = colors[i % colors.length];
-    piece.style.animationDelay = `${Math.random() * 300}ms`;
-    piece.style.setProperty("--drift", `${Math.random() * 80 - 40}px`);
+    piece.style.animationDelay = `${Math.random() * 700}ms`;
+    piece.style.setProperty("--drift", `${Math.random() * 160 - 80}px`);
     piece.style.setProperty("--spin", `${Math.random() * 360 - 180}deg`);
     confetti.appendChild(piece);
   }
-  panel.appendChild(confetti);
-  setTimeout(() => confetti.remove(), 2500);
+  document.body.appendChild(confetti);
+  setTimeout(() => confetti.remove(), 3600);
+
+  const toast = document.createElement("div");
+  toast.className = "release-toast";
+  toast.setAttribute("role", "status");
+  const message = currentLanguage === "de" ? "RootGuard 1.0 ist endlich da!" : "RootGuard 1.0 is finally here!";
+  toast.innerHTML = `<span class="emoji" aria-hidden="true">🎉</span><span>${message}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4300);
 }
 
 const backToTopButton = initializeBackToTop();
