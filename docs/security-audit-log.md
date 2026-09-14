@@ -4246,14 +4246,72 @@ non-JSON body honestly in its own wording, rather than actually claiming
 the token was wrong - not the clear-cut bug it first looked like on a
 closer read; left as-is.
 
-**Not yet fixed, tracked for a follow-up pass:** the remaining webapp
-findings from this round (raw i18n keys in the audit-log UI - roughly 62
-untranslated event names, a silent failed service restart on the
-Overview page, a language-switch draft loss in the Unbound Expert
-Editor, `Logs.tsx`'s object-URL revoke timing, a NaN restore-preview
-port field), the unbound/blockpage `docker-entrypoint.sh` findings
-(missing `set -e`, a weak trust-anchor existence-only guard, a
-non-atomic root.key copy), and roughly a dozen LOW-severity CI/script
-findings (`wait_for_installed`'s missing `|| true` on a transient
-hiccup, an ambiguous pin-commit lookup in `release-alpha.yml`, a
-zero-byte `project-data.json` risk in `pages.yml`, and several more).
+## Round 3, follow-up pass: the remaining findings (2026-09-14)
+
+Closed out every finding left open at the end of round 3 above, same
+one-fix-per-PR discipline and fail-without/pass-with regression tests
+throughout:
+
+- **Webapp:** [rootguard#606](https://github.com/foxly-it/rootguard/pull/606)
+  (Overview's service restart had no `catch` at all - a failed restart
+  rejected silently, with `busyService` just clearing again and zero
+  indication anything went wrong), [rootguard#607](https://github.com/foxly-it/rootguard/pull/607)
+  (the Unbound Expert Editor's data-loading effect depended on `t`
+  directly, whose identity changes on every locale switch - switching
+  the UI language silently discarded an in-progress draft),
+  [rootguard#608](https://github.com/foxly-it/rootguard/pull/608)
+  (the restore preview's port field stored `NaN` - `valueAsNumber` while
+  the field is momentarily empty - which also force-invalidated an
+  otherwise-still-valid preview), [rootguard#609](https://github.com/foxly-it/rootguard/pull/609)
+  (the diagnostic report download revoked its object URL in the same
+  tick as `anchor.click()`, racing the browser's own asynchronous blob
+  read - broken most notably in Safari), [rootguard#617](https://github.com/foxly-it/rootguard/pull/617)
+  (the audit log only ever translated the 10 auth-specific events, not
+  the 72 real combinations the 24 destructive-action base events can
+  also produce - shown as raw, untranslated key text; the "warning"
+  highlight also moved from a stale 5-name hardcoded list to a suffix
+  check so a future event needs no matching update here).
+- **Unbound:** [rootguard#610](https://github.com/foxly-it/rootguard/pull/610)
+  (`docker-entrypoint.sh` had no `set -e`, a trust-anchor guard that only
+  checked file existence - not that it was non-empty - and a non-atomic
+  copy straight to the final path; all three compound into the same
+  failure mode, a crash mid-copy producing a corrupt trust anchor that's
+  never repaired).
+- **CI/scripts:** [rootguard#611](https://github.com/foxly-it/rootguard/pull/611)
+  (`wait_for_installed`'s retry loop aborted the whole script on a single
+  transient `curl` failure instead of tolerating it, defeating the
+  loop's own purpose), [rootguard#612](https://github.com/foxly-it/rootguard/pull/612)
+  (`pages.yml`'s `> site/project-data.json` redirect truncates the live,
+  publicly-deployed file before `jq` even runs - combined with
+  `continue-on-error: true`, a malformed API response could deploy a
+  zero-byte file; reproduced live), [rootguard#613](https://github.com/foxly-it/rootguard/pull/613)
+  (`inject.sh`'s two friendly error messages were both unreachable dead
+  code - `set -e` aborted the script before either ever printed, for
+  both the "docker inspect failed" and "genuinely no gateway" cases -
+  confirmed live, messageless termination in both, before the fix),
+  [rootguard#614](https://github.com/foxly-it/rootguard/pull/614)
+  (`release-version-bump.yml`'s tag filter hand-wrote a fourth
+  SemVer-shaped regex instead of sharing `$SEMVER_PATTERN`, looser than
+  real SemVer 2.0 - it accepted a leading zero like `v1.02.3`),
+  [rootguard#615](https://github.com/foxly-it/rootguard/pull/615)
+  (`resolve-release-pin-commit.sh`'s path-scope defense-in-depth check
+  was anchored at the start only - `README.md` also matched
+  `README.mdx`, letting exactly the forged-or-corrupted-commit case it
+  exists to catch slip past it), [rootguard#616](https://github.com/foxly-it/rootguard/pull/616)
+  (the digest-pin assertion in `ci.yml`/`release-alpha.yml` was missing
+  `ROOTGUARD_UPDATER_UPDATE_IMAGE` and
+  `ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE` - both real, digest-pinned
+  values, silently unchecked).
+
+**Investigated, could not confirm as live bugs:** three LOW-severity
+items from the original round-3 list - "an `exit 1`-inside-a-command-
+substitution bug", "a missing `| head -1` in `ci.yml`", and "an
+ambiguous pin-commit lookup in `release-alpha.yml`" beyond what
+rootguard#615 already covers - were searched for exhaustively (every
+`.sh` file in the repo plus all 17 workflow files, including a
+bracket-aware parse for any `exit N` literally nested inside a `$(...)`
+substitution) and not found. Left as-is rather than making a
+speculative change with no confirmed defect behind it - consistent with
+this whole review's own verify-before-fixing discipline.
+
+With this pass, every confirmed round-3 finding is resolved.
