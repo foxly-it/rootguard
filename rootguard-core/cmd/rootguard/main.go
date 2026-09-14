@@ -240,6 +240,13 @@ func main() {
 				ResolveTarget: func(ctx context.Context) (string, error) {
 					return updater.ResolveLatestReleaseImage(ctx, githubClient, "blockpage")
 				},
+				// Blockpage can be disabled at install time
+				// (installer.Config.BlockpageEnabled), in which case no
+				// rootguard-blockpage container ever exists - found in
+				// review: without this, every check on such an
+				// installation permanently reported a Docker inspect
+				// failure as a service error, forever.
+				Optional: true,
 			},
 		},
 		Verify: func(ctx context.Context, service string) error {

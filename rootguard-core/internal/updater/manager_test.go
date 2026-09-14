@@ -985,6 +985,92 @@ func TestLoadMigratesLegacyStatusAndImagesJSON(t *testing.T) {
 	}
 }
 
+// TestCheckDoesNotReportAPersistentErrorForAMissingOptionalServiceContainer
+// is the regression test for a v1.0.0 correctness review finding: Blockpage
+// can be disabled at install time, in which case its container never
+// exists at all - this exact "docker inspect" failure is the expected,
+// permanent steady state for such an installation, not a transient
+// problem. Reporting it as a service Error on every single check
+// permanently showed a red error status for a feature the operator
+// deliberately turned off.
+func TestCheckDoesNotReportAPersistentErrorForAMissingOptionalServiceContainer(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
+		Services: []ServiceSpec{{
+			Name: "blockpage", DisplayName: "Blockpage", Container: "rootguard-blockpage",
+			TargetImage: "ghcr.io/foxly-it/rootguard-blockpage:latest", Optional: true,
+		}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "inspect" {
+				return []byte("Error: No such container: rootguard-blockpage"), errors.New("exit status 1: Error: No such container: rootguard-blockpage")
+			}
+			return nil, errors.New("unexpected command")
+		},
+	})
+	if _, err := manager.StartCheck(); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	service := manager.Status().Services[0]
+	if service.Error != "" {
+		t.Fatalf("expected no error for an optional service's missing container, got %+v", service)
+	}
+}
+
+// A mandatory (non-Optional) service with the exact same missing-container
+// error must still surface it - Optional is what gates the suppression,
+// not "any missing container is fine".
+func TestCheckStillReportsAMissingContainerForAMandatoryService(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
+		Services: []ServiceSpec{{
+			Name: "core", DisplayName: "RootGuard Core", Container: "rootguard-core",
+			TargetImage: "ghcr.io/foxly-it/rootguard-core:latest",
+		}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "inspect" {
+				return []byte("Error: No such container: rootguard-core"), errors.New("exit status 1: Error: No such container: rootguard-core")
+			}
+			return nil, errors.New("unexpected command")
+		},
+	})
+	if _, err := manager.StartCheck(); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	service := manager.Status().Services[0]
+	if service.Error == "" {
+		t.Fatal("expected a mandatory service's missing container to still be reported as an error")
+	}
+}
+
+// An Optional service's inspect failure that is *not* "container missing"
+// (a real Docker problem) must still surface normally - Optional only
+// suppresses the one specific, permanently-expected case.
+func TestCheckStillReportsANonMissingContainerErrorForAnOptionalService(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
+		Services: []ServiceSpec{{
+			Name: "blockpage", DisplayName: "Blockpage", Container: "rootguard-blockpage",
+			TargetImage: "ghcr.io/foxly-it/rootguard-blockpage:latest", Optional: true,
+		}},
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			if arguments[0] == "inspect" {
+				return nil, errors.New("Cannot connect to the Docker daemon")
+			}
+			return nil, errors.New("unexpected command")
+		},
+	})
+	if _, err := manager.StartCheck(); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	service := manager.Status().Services[0]
+	if service.Error == "" {
+		t.Fatal("expected a real (non-missing-container) Docker error to still be reported even for an optional service")
+	}
+}
+
 // TestLoadTreatsNullSelectedInStateJSONAsEmptyNotNil is the regression test
 // for a v1.0.0 correctness review finding: a state.json written while
 // nothing had ever been selected serializes "selected" as JSON null (Go's
