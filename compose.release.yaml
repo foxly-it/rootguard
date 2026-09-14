@@ -108,12 +108,24 @@ services:
       # literally named compose.yaml in whichever directory it's pointed at.
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard
-      # Core never reads these two - they exist only so `docker compose -f
-      # compose.yaml ... up -d --no-deps updater` can interpolate the whole
+      # Core never reads these five - they exist only so `docker compose -f
+      # compose.yaml ... up -d --no-deps updater` (and, one hop further,
+      # `... up -d --no-deps core webapp`) can interpolate the whole
       # compose file, which also references them for the webapp service.
-      # Same reason the updater service carries them.
+      # Same reason the updater service carries them. Found in review:
+      # only the two `${VAR:?...}` ones were carried here - the three
+      # `${VAR:-default}` ones below were missed, so a self-update-
+      # triggered `up -d --no-deps webapp` silently re-created it with
+      # ROOTGUARD_WEB_BIND=0.0.0.0/ROOTGUARD_WEB_PORT=8080/
+      # ROOTGUARD_ADMIN_USER=admin regardless of whatever an operator had
+      # actually set in .env (e.g. binding to 127.0.0.1 behind a reverse
+      # proxy, see docs/https-reverse-proxy.md) - it fails loudly instead
+      # for the two required ones, silently for these three optional ones.
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
       ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
+      ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
+      ROOTGUARD_WEB_BIND: "${ROOTGUARD_WEB_BIND:-0.0.0.0}"
+      ROOTGUARD_WEB_PORT: "${ROOTGUARD_WEB_PORT:-8080}"
       # Propagates the real host checkout directory into `docker compose -f
       # /opt/rootguard/compose.yaml ...` re-invocations (self-update and the
       # control-plane update both do this from inside a container). Without
