@@ -3,6 +3,99 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.0] - 2026-09-14
+
+### CI
+
+- Docker-Layer-Cache für alle Multi-Arch-Builds + Go-Modul-Cache-Fix ([#551](https://github.com/foxly-it/rootguard/pull/551))
+- Timeout-minutes und concurrency-Gruppen ergänzen ([#558](https://github.com/foxly-it/rootguard/pull/558))
+- Wait-Loops in wiederverwendbare Composite Actions extrahieren ([#559](https://github.com/foxly-it/rootguard/pull/559))
+- Trivy-Install-Logik in install-trivy.sh vereinheitlichen ([#560](https://github.com/foxly-it/rootguard/pull/560))
+- Unabhängige Checks in ci.yml parallelisieren ([#561](https://github.com/foxly-it/rootguard/pull/561))
+- CVE-2026-74860 (libxml2) unterdruecken ([#568](https://github.com/foxly-it/rootguard/pull/568))
+- Kleinere Hygiene-Funde aus dem zweiten Review-Durchlauf beheben ([#574](https://github.com/foxly-it/rootguard/pull/574))
+- Docker-Layer-Cache für alle bisher ungecachten Image-Scans ergänzen ([#575](https://github.com/foxly-it/rootguard/pull/575))
+
+### Changed
+
+- Router.go auf Go-1.22-Method-Pattern vereinheitlichen ([#553](https://github.com/foxly-it/rootguard/pull/553))
+- Gemeinsamen useInterval-Hook fürs Frontend-Polling ([#554](https://github.com/foxly-it/rootguard/pull/554))
+- Validate() in unbound/settings.go aufteilen ([#556](https://github.com/foxly-it/rootguard/pull/556))
+- DNS-/Blockpage-Port-Check in Preflight() zusammenfassen ([#557](https://github.com/foxly-it/rootguard/pull/557))
+- Overview.tsx auf useOverviewData()-Hook umstellen ([#562](https://github.com/foxly-it/rootguard/pull/562))
+- Stack.tsx auf useStackData()-Hook umstellen ([#563](https://github.com/foxly-it/rootguard/pull/563))
+- Unbound.tsx auf useUnboundData()-Hook umstellen ([#564](https://github.com/foxly-it/rootguard/pull/564))
+- Connect/blockpage-reload zwischen deploy und restoreDeploy dedupen ([#572](https://github.com/foxly-it/rootguard/pull/572))
+- Docker-CLI-Runner in rootguard-core dedupen ([#571](https://github.com/foxly-it/rootguard/pull/571))
+- AdGuard.tsx auf useAdGuardData()-Hook umstellen, withBusy-Lücken in Unbound/Stack-Hooks schließen ([#573](https://github.com/foxly-it/rootguard/pull/573))
+- JSON-Helfer zwischen api- und httpapi-Package dedupen ([#570](https://github.com/foxly-it/rootguard/pull/570))
+
+### Documentation
+
+- Zweite Review-Runde (Sicherheit, Duplizierung, Simplification, CI) protokollieren ([#576](https://github.com/foxly-it/rootguard/pull/576))
+- Record the 30-day soak test's final result in ROADMAP.md ([#602](https://github.com/foxly-it/rootguard/pull/602))
+- Record the third full-repo review (correctness, for 1.0.0) ([#605](https://github.com/foxly-it/rootguard/pull/605))
+- Record round 3's follow-up pass in the security audit log ([#618](https://github.com/foxly-it/rootguard/pull/618))
+
+### Fixed
+
+- Rate-limit DELETE /api/auth/sessions/{id} ([#550](https://github.com/foxly-it/rootguard/pull/550))
+- Correct the inline theme script's CSP hash ([#579](https://github.com/foxly-it/rootguard/pull/579))
+- Reload blockpage after the standalone AdGuard bootstrap endpoint rotates its token ([#580](https://github.com/foxly-it/rootguard/pull/580))
+- Run restoreDeploy's cleanup on a context detached from the request ([#581](https://github.com/foxly-it/rootguard/pull/581))
+- Implement Unwrap() on statusRecorder so ResponseController works through it ([#582](https://github.com/foxly-it/rootguard/pull/582))
+- Pass ROOTGUARD_ADMIN_USER/WEB_BIND/WEB_PORT into Core's own environment for compose re-invocation ([#585](https://github.com/foxly-it/rootguard/pull/585))
+- Detach rollback from update's own context in rootguard-core's updater ([#586](https://github.com/foxly-it/rootguard/pull/586))
+- Enable blockpage in the soak backup-restore drill's deploy config ([#588](https://github.com/foxly-it/rootguard/pull/588))
+- Don't delete staged AdGuard credentials on an ambiguous configure failure ([#590](https://github.com/foxly-it/rootguard/pull/590))
+- Bring attestation-proxy reachability check back in sync with Core ([#593](https://github.com/foxly-it/rootguard/pull/593))
+- Stop updater's load() from leaving m.selected nil ([#595](https://github.com/foxly-it/rootguard/pull/595))
+- Propagate Core's own status code from HandleServiceAction ([#598](https://github.com/foxly-it/rootguard/pull/598))
+- Stop ContentModal from stealing focus on unrelated re-renders ([#600](https://github.com/foxly-it/rootguard/pull/600))
+- Unblock the blockpage's reload button and harden its JS against CSP/storage/API edge cases ([#583](https://github.com/foxly-it/rootguard/pull/583))
+- Add the missing webapp healthcheck to compose.release.yaml/compose.integration.yaml ([#587](https://github.com/foxly-it/rootguard/pull/587))
+- Re-normalize Unbound volume ownership after a restore rollback ([#589](https://github.com/foxly-it/rootguard/pull/589))
+- Stop the Expert Editor from deleting indentation on multi-line suggestions ([#601](https://github.com/foxly-it/rootguard/pull/601))
+- Stop reporting a permanent error for a disabled Blockpage ([#603](https://github.com/foxly-it/rootguard/pull/603))
+- Return 405 instead of 404 for a registered path hit with the wrong method ([#604](https://github.com/foxly-it/rootguard/pull/604))
+- Stop a slower, superseded load() from overwriting a newer one ([#599](https://github.com/foxly-it/rootguard/pull/599))
+- Make the Unbound healthcheck actually check the DNS response, not just dig's exit code ([#584](https://github.com/foxly-it/rootguard/pull/584))
+- Dedup private-domain entries during unbound.conf import ([#591](https://github.com/foxly-it/rootguard/pull/591))
+- Stop ImportUnboundConf from mutating the caller's ReverseZones ([#594](https://github.com/foxly-it/rootguard/pull/594))
+- Stop restore from rolling back untouched local directories on ErrNotClean ([#596](https://github.com/foxly-it/rootguard/pull/596))
+- Make Unbound Apply's post-activation snapshot best-effort ([#597](https://github.com/foxly-it/rootguard/pull/597))
+- Surface a visible error when Overview's service restart fails ([#606](https://github.com/foxly-it/rootguard/pull/606))
+- Stop the Expert Editor from discarding drafts on a language switch ([#607](https://github.com/foxly-it/rootguard/pull/607))
+- Stop the restore preview's port field from storing NaN ([#608](https://github.com/foxly-it/rootguard/pull/608))
+- Tolerate a transient curl failure in wait_for_installed ([#611](https://github.com/foxly-it/rootguard/pull/611))
+- Defer revoking the diagnostic report's object URL ([#609](https://github.com/foxly-it/rootguard/pull/609))
+- Harden docker-entrypoint.sh's setup and trust-anchor init ([#610](https://github.com/foxly-it/rootguard/pull/610))
+- Stop pages.yml from deploying a zero-byte project-data.json ([#612](https://github.com/foxly-it/rootguard/pull/612))
+- Make inject.sh's error messages actually reachable ([#613](https://github.com/foxly-it/rootguard/pull/613))
+- Stop release-version-bump.yml's tag filter using its own SemVer regex ([#614](https://github.com/foxly-it/rootguard/pull/614))
+- Cover 2 missing env vars in the digest-pin assertion ([#616](https://github.com/foxly-it/rootguard/pull/616))
+- Anchor resolve-release-pin-commit.sh's path-scope regex ([#615](https://github.com/foxly-it/rootguard/pull/615))
+- Translate the 72 destructive-action audit log events ([#617](https://github.com/foxly-it/rootguard/pull/617))
+- Resync current_id on every updater status read ([#619](https://github.com/foxly-it/rootguard/pull/619))
+- Resync current_id on every control-plane status read ([#620](https://github.com/foxly-it/rootguard/pull/620))
+
+### Maintenance
+
+- Refresh drifted Debian package pins ([#577](https://github.com/foxly-it/rootguard/pull/577))
+- Refresh drifted Debian package pins ([#578](https://github.com/foxly-it/rootguard/pull/578))
+- Bump golang.org/x/mod in /rootguard-updater ([#592](https://github.com/foxly-it/rootguard/pull/592))
+
+### Other
+
+- Toten BackupRestorePreview-Struct entfernen ([#555](https://github.com/foxly-it/rootguard/pull/555))
+- Rate-Limit auf Unbound-Custom-/Import-Preview ergänzen ([#567](https://github.com/foxly-it/rootguard/pull/567))
+- Toten Code entfernen (Backend + Frontend) ([#569](https://github.com/foxly-it/rootguard/pull/569))
+- Updater-Control-Plane-Endpunkte absichern und dedupen ([#566](https://github.com/foxly-it/rootguard/pull/566))
+
+### Testing
+
+- Doppelte Test-Fixture-Bootstraps zusammenfassen ([#565](https://github.com/foxly-it/rootguard/pull/565))
+
 ## [1.0.0-rc.5] - 2026-09-09
 
 ### Documentation
