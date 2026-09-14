@@ -439,3 +439,91 @@ func newTestManagerWithDir(handler http.Handler, dir, blockpageAuthDir string) *
 	})
 	return manager
 }
+
+// installUpToConfigure serves the two steps install() runs before
+// /control/install/configure (readiness poll, address check) with a fixed
+// success response, so both regression tests below only need to control
+// what happens to that one specific call.
+func installUpToConfigure(t *testing.T, configure http.HandlerFunc) *Manager {
+	t.Helper()
+	dir := t.TempDir()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/control/install/get_addresses":
+			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": map[string]any{}})
+		case "/control/install/check_config":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"web": map[string]any{"status": "", "can_autofix": false},
+				"dns": map[string]any{"status": "", "can_autofix": false},
+			})
+		case "/control/install/configure":
+			configure(w, r)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	return newTestManagerWithDir(handler, dir, t.TempDir())
+}
+
+// TestInstallKeepsStagedCredentialsAfterAmbiguousConfigureFailure is the
+// regression test for a round-3 correctness-review finding: install()
+// used to unconditionally os.Remove the staged .credentials.json.tmp on
+// every error return from the configure call, including a transport-level
+// failure where AdGuard's own side of the request is unknown - its
+// /control/install/configure writes AdGuardHome.yaml and rebinds its
+// listeners before the response is even sent, so "the client's request
+// timed out" and "AdGuard already applied it and stopped answering
+// install endpoints" are indistinguishable here. Deleting the only record
+// of the password in that case left AdGuard configured with a credential
+// nobody holds, permanently. Simulates that by having the configure call's
+// RoundTrip return a transport error directly (never producing an HTTP
+// response at all), and asserts the staged file survives.
+func TestInstallKeepsStagedCredentialsAfterAmbiguousConfigureFailure(t *testing.T) {
+	dir := t.TempDir()
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/control/install/get_addresses":
+			_ = json.NewEncoder(w).Encode(map[string]any{"interfaces": map[string]any{}})
+		case "/control/install/check_config":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"web": map[string]any{"status": "", "can_autofix": false},
+				"dns": map[string]any{"status": "", "can_autofix": false},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	manager := NewManager("http://adguard-installer", "http://adguard", dir, "rootguard-unbound:5335", t.TempDir())
+	manager.http.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path == "/control/install/configure" {
+			return nil, errors.New("simulated transport failure (timeout/connection reset)")
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder.Result(), nil
+	})
+
+	if _, err := manager.install(context.Background()); err == nil {
+		t.Fatal("expected install to fail")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".credentials.json.tmp")); err != nil {
+		t.Fatalf("expected the staged credentials to survive an ambiguous configure failure, got %v", err)
+	}
+}
+
+// TestInstallDiscardsStagedCredentialsAfterDefiniteConfigureRejection is
+// the counterpart to the test above: a real HTTP error response (AdGuard
+// explicitly rejecting the request) means it was never applied, so the
+// staged credentials are safe - and correct - to discard.
+func TestInstallDiscardsStagedCredentialsAfterDefiniteConfigureRejection(t *testing.T) {
+	manager := installUpToConfigure(t, func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "invalid configuration", http.StatusBadRequest)
+	})
+
+	if _, err := manager.install(context.Background()); err == nil {
+		t.Fatal("expected install to fail")
+	}
+	if _, err := os.Stat(filepath.Join(manager.dataDir, ".credentials.json.tmp")); !os.IsNotExist(err) {
+		t.Fatalf("expected the staged credentials to be discarded after a definite rejection, got err=%v", err)
+	}
+}

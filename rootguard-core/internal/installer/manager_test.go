@@ -1033,3 +1033,64 @@ func TestRestoreRefusesActivationWhenAttestationFails(t *testing.T) {
 		t.Fatalf("expected Restore to fail closed on a failed attestation, got %v", err)
 	}
 }
+
+// TestRestoreDeployCleansUpEvenAfterTheRequestContextDies is the
+// regression test for a round-3 correctness-review finding:
+// restoreDeploy's own cleanup (network disconnect + compose down, run
+// whenever a later step fails after "create" already succeeded) used to
+// run on the same ctx passed in from the caller - which, in production,
+// is the HTTP request context (api/backup_restore.go's r.Context()). A
+// client that drops the connection mid-restore cancels that exact ctx,
+// and dockercli.Run's exec.CommandContext refuses to even start a
+// process against an already-canceled context - so the cleanup silently
+// did nothing, leaving created containers/volumes/network attachment
+// behind. Simulates that by canceling the parent context from inside
+// restoreData (the step that runs right after "create", exactly where
+// production's created=true already holds) and asserting the two
+// cleanup commands still see a live, uncanceled context.
+func TestRestoreDeployCleansUpEvenAfterTheRequestContextDies(t *testing.T) {
+	parent, cancelParent := context.WithCancel(context.Background())
+	defer cancelParent()
+
+	var mu sync.Mutex
+	var cleanupCommandsWithLiveContext int
+	manager := NewManager(Options{
+		DataDir:        t.TempDir(),
+		CoreContainer:  "rootguard-core",
+		UnboundImage:   "rootguard-unbound:test",
+		AdGuardImage:   "adguard:test",
+		DNSNetworkCIDR: "172.29.53.0/24",
+		Run: func(ctx context.Context, arguments ...string) ([]byte, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if len(arguments) >= 2 && arguments[1] == "inspect" {
+				return []byte("no such resource"), errors.New("exit status 1")
+			}
+			isCleanupCommand := len(arguments) >= 2 &&
+				((arguments[0] == "network" && arguments[1] == "disconnect") ||
+					(arguments[0] == "compose" && arguments[len(arguments)-1] == "--remove-orphans"))
+			if isCleanupCommand && ctx.Err() == nil {
+				cleanupCommandsWithLiveContext++
+			}
+			return []byte("ok"), nil
+		},
+	})
+
+	_, err := manager.Restore(parent, Config{DNSBindAddress: "192.168.1.2", DNSPort: 53},
+		func(context.Context) error {
+			// Mirrors a client disconnecting mid-restore: the request
+			// context dies exactly at the point production's created is
+			// already true.
+			cancelParent()
+			return errors.New("client disconnected")
+		})
+	if err == nil || !strings.Contains(err.Error(), "client disconnected") {
+		t.Fatalf("expected Restore to surface the restoreData error, got %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if cleanupCommandsWithLiveContext != 2 {
+		t.Fatalf("expected both cleanup commands (network disconnect, compose down) to run with a live context, got %d", cleanupCommandsWithLiveContext)
+	}
+}
