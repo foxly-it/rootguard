@@ -47,6 +47,30 @@ import (
 // Also serves the frontend SPA.
 // =====================================================
 
+// methodMismatchAllowed reports which of the standard HTTP methods (other
+// than r's own) would resolve to a real, specific route on mux for r's
+// exact path - as opposed to falling through to the SPA catch-all "/"
+// pattern that every unmatched path (including a genuinely nonexistent
+// API path) also resolves to. Used by the catch-all handler below to
+// distinguish "this path exists, just not for this method" (405) from
+// "this path plain doesn't exist" (404) - see its own call site comment
+// (#552) for why Go's ServeMux can't synthesize that distinction
+// automatically here.
+func methodMismatchAllowed(mux *http.ServeMux, r *http.Request) []string {
+	var allowed []string
+	for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
+		if method == r.Method {
+			continue
+		}
+		probe := *r
+		probe.Method = method
+		if _, pattern := mux.Handler(&probe); pattern != "" && pattern != "/" {
+			allowed = append(allowed, method)
+		}
+	}
+	return allowed
+}
+
 func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 
 	mux := http.NewServeMux()
@@ -362,6 +386,24 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 
 		// If request is API → ignore
 		if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
+			// Found in review (#552): every route above is registered
+			// under a single method ("GET /api/dashboard", ...), which
+			// Go's own ServeMux would normally turn into an automatic 405
+			// for a request to the same path with a different method -
+			// but only when no *other* pattern also matches the request
+			// unconditionally. This handler's own "/" pattern always
+			// does (it matches every method, by design, for the SPA
+			// fallback below), so that automatic behavior never actually
+			// fires for any route in this whole router: a wrong-method
+			// request to a real, single-method API route landed here and
+			// got a bare 404 instead of a 405. methodMismatchAllowed
+			// probes mux directly to tell that case apart from a
+			// genuinely unmatched path.
+			if allowed := methodMismatchAllowed(mux, r); len(allowed) > 0 {
+				w.Header().Set("Allow", strings.Join(allowed, ", "))
+				http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			http.NotFound(w, r)
 			return
 		}

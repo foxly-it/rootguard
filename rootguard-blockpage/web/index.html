@@ -132,7 +132,7 @@
         <h1 id="headline">Diese Seite ist blockiert.</h1>
         <p class="lead" id="lead">RootGuard hat diese Anfrage über AdGuard Home gefiltert, bevor eine Verbindung zustande kam.</p>
         <div class="actions">
-          <button class="btn primary" type="button" onclick="location.reload()">
+          <button class="btn primary" type="button" id="reload-button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 4v6h-6"/></svg>
             Erneut prüfen
           </button>
@@ -170,6 +170,7 @@
     </p>
   </main>
 
+  <script src="/actions.js"></script>
   <script src="/meta.js"></script>
   <script src="/theme.js"></script>
 </body>

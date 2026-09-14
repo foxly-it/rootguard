@@ -49,8 +49,14 @@ jobs:
       # See ci-blockpage.yml's identical check for the full rationale -
       # added on both sides so a drift introduced from either component's
       # own PR fails loudly here instead of silently going unnoticed.
-      - name: Check theme.js stays in sync with the real blockpage's copy
-        run: diff rootguard-blockpage/web/theme.js rootguard-webapp/frontend/public/blockpage-preview/theme.js
+      # actions.js added alongside theme.js once it existed too (found in
+      # review: the reload button's inline onclick was CSP-blocked, moved
+      # into this shared, byte-for-byte-copied script for the same reason
+      # theme.js already lives here).
+      - name: Check theme.js/actions.js stay in sync with the real blockpage's copies
+        run: |
+          diff rootguard-blockpage/web/theme.js rootguard-webapp/frontend/public/blockpage-preview/theme.js
+          diff rootguard-blockpage/web/actions.js rootguard-webapp/frontend/public/blockpage-preview/actions.js
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
