@@ -197,15 +197,24 @@ export function useOverviewData() {
   // hitting Core for a full service/Docker inspect every single second.
   useInterval(loadStatus, visible ? 20_000 : null);
 
+  // Found in a v1.0.0 correctness review: this had no catch at all - a
+  // failed restart (Core rejects the service name, the container never
+  // comes back up, a network error) rejected the promise this function
+  // returns with nothing awaiting it (the button's own onClick fires it
+  // fire-and-forget), so the operator saw the button simply stop being
+  // busy again with zero indication anything had gone wrong.
   const restart = useCallback(async (service: ServiceInfo["name"]) => {
     setBusyService(service);
     try {
       await serviceAction(service, "restart");
       await refreshAll();
+      setError("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t("overview.restartError", { name: service }));
     } finally {
       setBusyService("");
     }
-  }, [refreshAll]);
+  }, [refreshAll, t]);
 
   return {
     dashboard,

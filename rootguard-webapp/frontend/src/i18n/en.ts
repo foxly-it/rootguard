@@ -458,6 +458,7 @@ export const en: LocaleDefinition = {
     "overview.chartNow": "Now",
     "overview.chartSecondsAgo": "{seconds}s ago",
     "overview.restartService": "Restart {name}",
+    "overview.restartError": "{name} could not be restarted.",
     "overview.queries": "DNS queries",
     "overview.blocked": "Blocked",
     "overview.blockRate": "Filter rate",

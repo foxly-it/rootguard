@@ -139,4 +139,22 @@ describe("useOverviewData", () => {
     expect(result.current.busyService).toBe("");
     expect(vi.mocked(client.fetchInstallationStatus).mock.calls.length).toBeGreaterThan(statusCallsBefore);
   });
+
+  // Regression test for a v1.0.0 correctness review finding: restart had
+  // no catch at all, so a failed restart rejected the promise with
+  // nothing awaiting it (the button's own onClick fires it fire-and-
+  // forget) and the operator saw zero indication anything had gone
+  // wrong - busyService just silently cleared again.
+  it("restart surfaces a visible error when the service action fails", async () => {
+    vi.spyOn(client, "serviceAction").mockRejectedValueOnce(new Error("adguard is not eligible for attestation verification"));
+    const { result } = renderHook(() => useOverviewData(), { wrapper });
+    await flush();
+
+    await act(async () => {
+      await result.current.restart("adguard");
+    });
+
+    expect(result.current.busyService).toBe("");
+    expect(result.current.error).toBe("adguard is not eligible for attestation verification");
+  });
 });
