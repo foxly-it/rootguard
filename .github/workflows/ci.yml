@@ -138,7 +138,14 @@ jobs:
           docker compose -f compose.release.yaml config --quiet
           model="$(docker compose -f compose.release.yaml config --format json)"
           test "$(jq -r 'any(.services[]; has("build"))' <<<"$model")" = false
-          test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
+          # Found in a v1.0.0 correctness review: this list was missing
+          # ROOTGUARD_UPDATER_UPDATE_IMAGE and
+          # ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE - both real,
+          # digest-pinned fallback values Core's own environment sets
+          # (compose.release.yaml) for the updater/attestation-proxy
+          # self-update paths, silently unchecked by this assertion the
+          # same way every other pinned image reference here is.
+          test "$(jq -r '[.services[].image, .services.core.environment.ROOTGUARD_UNBOUND_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_BETA_IMAGE, .services.core.environment.ROOTGUARD_UNBOUND_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ADGUARD_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_IMAGE, .services.core.environment.ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_UPDATER_UPDATE_IMAGE, .services.core.environment.ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_CORE_UPDATE_IMAGE, .services.updater.environment.ROOTGUARD_WEBAPP_UPDATE_IMAGE] | all(contains("@sha256:"))' <<<"$model")" = true
           test "$(jq -r '[.services[].image] | any(test("(^|:)latest(@|$)"))' <<<"$model")" = false
 
       - name: Build RootGuard stack
