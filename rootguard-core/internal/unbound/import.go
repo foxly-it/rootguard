@@ -213,10 +213,20 @@ func ImportUnboundConf(current Settings, currentCustom string, content string) (
 	if len(privateDomains) > 0 {
 		candidate.PrivateDomains = mergePrivateDomains(candidate.PrivateDomains, privateDomains, candidate.ForwardZones)
 	}
-	for i := range candidate.ReverseZones {
-		if mode, ok := reversePolicies[candidate.ReverseZones[i].Network]; ok {
-			candidate.ReverseZones[i].Mode = mode
+	if len(reversePolicies) > 0 {
+		// Copied before mutating, same as every other slice field above -
+		// found in a v1.0.0 correctness review: candidate := current is a
+		// shallow copy, so candidate.ReverseZones started out aliasing
+		// current.ReverseZones's backing array; mutating elements in place
+		// silently rewrote the caller's own Settings value too, wherever it
+		// still held one.
+		reverseZones := append([]ReverseZonePolicy{}, candidate.ReverseZones...)
+		for i := range reverseZones {
+			if mode, ok := reversePolicies[reverseZones[i].Network]; ok {
+				reverseZones[i].Mode = mode
+			}
 		}
+		candidate.ReverseZones = reverseZones
 	}
 	if networkMode != "" {
 		candidate.NetworkMode = networkMode
