@@ -262,14 +262,22 @@ func (m *Manager) connectCoreToDNSNetwork(ctx context.Context) error {
 	return fmt.Errorf("connect RootGuard controller to DNS network: %w: %s", err, strings.TrimSpace(string(output)))
 }
 
-// reloadBlockpageConfig re-renders blockpage's nginx config (now that Core
+// ReloadBlockpageConfig re-renders blockpage's nginx config (now that Core
 // has published its AdGuard auth token) and reloads nginx in place, rather
 // than restarting the container: a restart tears down and re-creates its
 // network endpoint, racing AdGuard's dynamically-assigned address for the
 // static IP blockpage needs - a reload has no such networking side effect
-// and keeps the blockpage continuously reachable. Shared by deploy and
-// restoreDeploy, both of which only call this when config.BlockpageEnabled.
-func (m *Manager) reloadBlockpageConfig(ctx context.Context) error {
+// and keeps the blockpage continuously reachable. Used by deploy and
+// restoreDeploy (both only call this when config.BlockpageEnabled) and,
+// exported, by the standalone AdGuard-bootstrap HTTP handler - found in
+// review: that handler calls adguard.Manager.Bootstrap directly, which
+// rotates blockpage's service token unconditionally whenever a blockpage
+// IP is passed, on the documented assumption that whoever calls it
+// reloads blockpage right after (see publishBlockpageServiceToken's own
+// comment) - true for deploy/restoreDeploy, not true for that handler,
+// which left blockpage authenticating with a token Core had already
+// replaced.
+func (m *Manager) ReloadBlockpageConfig(ctx context.Context) error {
 	if _, err := m.run(ctx, "exec", "rootguard-blockpage", "sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"); err != nil {
 		return fmt.Errorf("render blockpage nginx config with its AdGuard auth token: %w", err)
 	}
@@ -631,7 +639,7 @@ func (m *Manager) restoreDeploy(parent context.Context, config Config, restoreDa
 		return fail("bootstrap", err)
 	}
 	if config.BlockpageEnabled {
-		if err := m.reloadBlockpageConfig(ctx); err != nil {
+		if err := m.ReloadBlockpageConfig(ctx); err != nil {
 			return fail("bootstrap", err)
 		}
 	}
@@ -702,7 +710,7 @@ func (m *Manager) deploy(config Config) {
 		return
 	}
 	if config.BlockpageEnabled {
-		if err := m.reloadBlockpageConfig(ctx); err != nil {
+		if err := m.ReloadBlockpageConfig(ctx); err != nil {
 			m.fail("bootstrap", err)
 			return
 		}
