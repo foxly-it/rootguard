@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   checkControlPlaneUpdates,
   checkUpdates,
@@ -41,7 +41,19 @@ export function useStackData() {
   const [services, setServices] = useState<ServiceInfo[]>([]);
   const [error, setError] = useState("");
 
+  // Found in a v1.0.0 correctness review: load() runs both on the
+  // recurring poll (every 1.5-10s, see useInterval below) and on-demand
+  // after a mutation (control, startManualCleanup) - nothing stopped two
+  // calls from overlapping, and whichever's Promise.all happened to
+  // settle last always won, even if it was the *older* of the two
+  // in-flight requests (a poll tick fired, then a slower response from an
+  // even earlier poll tick finally arrives and overwrites it with stale
+  // data). loadSequence tags every call so a load() that's since been
+  // superseded by a newer one discards its own result instead of
+  // applying it.
+  const loadSequence = useRef(0);
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     try {
       const [nextUpdates, nextControlPlane, nextUpdaterUpdate, nextServices] = await Promise.all([
         fetchUpdateStatus(),
@@ -49,12 +61,14 @@ export function useStackData() {
         fetchUpdaterSelfUpdateStatus(),
         fetchServices(),
       ]);
+      if (sequence !== loadSequence.current) return;
       setUpdates(nextUpdates);
       setControlPlane(nextControlPlane);
       setUpdaterUpdate(nextUpdaterUpdate);
       setServices(nextServices);
       setError("");
     } catch (cause) {
+      if (sequence !== loadSequence.current) return;
       setError(errorMessage(cause, t("stack.statusLoadError")));
     }
   }, [t]);
