@@ -129,6 +129,21 @@ func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installe
 				return status, fmt.Errorf("%w; roll back local restore data: %v", restoreErr, err)
 			}
 		}
+		// Found in review: copyDirectory (used by both replaceDirectory
+		// calls above) always writes 0600/0700 regardless of the source's
+		// own mode, so the rolled-back files land root-owned (whatever
+		// UID this process runs as) at 0600 - unreadable by the unbound
+		// user (uid 100) Unbound's own container runs as. The success
+		// path above doesn't have this problem only because it happens to
+		// call normalizeUnboundOwnership right after its own restoreData
+		// succeeds, which chowns these same files to 100:101 - 0600 is
+		// perfectly readable once the owner actually matches. Rolling
+		// back never got the same treatment. Best-effort: if the
+		// rootguard-unbound container doesn't exist yet (restoreErr came
+		// from before "create" ever ran), there's nothing to chown for
+		// and nothing to protect either - not worth masking the real
+		// restoreErr over.
+		_ = m.normalizeUnboundOwnership(ctx)
 	}
 	if restoreErr != nil && !errors.Is(restoreErr, installer.ErrNotClean) {
 		return status, fmt.Errorf("%w: %v", ErrRestoreFailed, restoreErr)
