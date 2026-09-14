@@ -19,7 +19,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential=12.12 \
         ca-certificates=20250419 \
-        curl=8.14.1-2+deb13u4 \
+        curl=8.14.1-2+deb13u5 \
         libevent-dev=2.1.13-stable-1~deb13u1 \
         libexpat1-dev=2.8.3-1~deb13u1 \
         libssl-dev=3.5.7-1~deb13u2 \
@@ -83,7 +83,24 @@ RUN apt-get update \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.13-stable-1~deb13u1 \
         libexpat1=2.8.3-1~deb13u1 \
+        libpcre2-8-0=10.46-1~deb13u2 \
         libssl3t64=3.5.7-1~deb13u2 \
+    # Found in a v1.0.0 correctness review: libpcre2-8-0 (transitively
+    # pulled in, not one of the packages this list previously named)
+    # carried two HIGH CVEs (CVE-2026-86145, CVE-2026-89161), fixed by
+    # Debian in 10.46-1~deb13u2 - already the current trixie version,
+    # confirmed live against packages.debian.org, not merely a
+    # trixie-security-only fix. The unpinned package didn't pick up the
+    # fix on its own even after a same-day rebuild: this RUN
+    # instruction's own cache scope in ci-unbound.yml
+    # (`--cache-from type=gha,scope=unbound`) keys purely on this
+    # command's literal text, so as long as no pinned version on this
+    # line changes, Buildx keeps reusing the layer from whenever it was
+    # last actually executed against a live mirror - "apt-get update"
+    # inside a cached layer never truly re-runs. Same root cause as the
+    # util-linux family below; explicit pin added for the same reason:
+    # it's the only way to force this layer to rebuild against a
+    # current mirror snapshot.
     # Found in review, round 14: the debian:13-slim base's own util-linux
     # family (transitively present, not one of the packages listed above -
     # confirmed live these 9 binary packages all build from the one
