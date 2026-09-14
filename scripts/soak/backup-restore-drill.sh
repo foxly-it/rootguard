@@ -51,7 +51,16 @@ wait_installed() {
   return 1
 }
 
-deploy_config='{"dns_bind_address":"0.0.0.0","dns_port":53}'
+# blockpage_enabled:true matches install_stack's own config
+# (verification-common.sh) and the Setup wizard's own default - found in
+# review: without it, every fresh_install/restore here silently deployed
+# with blockpage disabled (BlockpageEnabled's Go zero value), and since
+# managed_containers/teardown_primary above explicitly tear rootguard-
+# blockpage down on every drill, the very first run of this script
+# permanently removed it for the rest of the 30-day soak window - with
+# probe.sh's own NXDOMAIN/0.0.0.0-both-count-as-blocked check (see its
+# own comment) never flagging the degradation as a failure.
+deploy_config='{"dns_bind_address":"0.0.0.0","dns_port":53,"blockpage_enabled":true}'
 
 fresh_install() {
   docker compose -f "${ROOTGUARD_SOAK_DIR}/compose.release.yaml" up -d
