@@ -30,13 +30,25 @@ export default function ContentModal({ open, title, eyebrow, closeLabel, size = 
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<Element | null>(null);
 
+  // Read through a ref rather than depending on onClose directly below -
+  // found in a v1.0.0 correctness review: most callers pass an inline
+  // () => setOpen(false) closure, a fresh function identity on every
+  // parent re-render. With onClose in the effect's own dependency array,
+  // any unrelated parent re-render while the modal stayed open reran this
+  // effect's cleanup (which returns focus to the original trigger) and
+  // setup (which immediately refocuses the close button) - yanking focus
+  // away from whatever the user was actually interacting with inside the
+  // modal (a textarea mid-edit, a link) on every such re-render.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     if (!open) return;
     triggerRef.current = returnFocusTo?.current ?? document.activeElement;
     closeButtonRef.current?.focus();
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") { onClose(); return; }
+      if (event.key === "Escape") { onCloseRef.current(); return; }
       if (event.key !== "Tab" || !panelRef.current) return;
       // A dialog is a keyboard dead end otherwise - Tab must cycle within
       // it, not leak into whatever the backdrop is covering.
@@ -60,7 +72,7 @@ export default function ContentModal({ open, title, eyebrow, closeLabel, size = 
       document.body.classList.remove("modal-open");
       (triggerRef.current as HTMLElement | null)?.focus?.();
     };
-  }, [onClose, open, returnFocusTo]);
+  }, [open, returnFocusTo]);
 
   if (!open) return null;
   return createPortal((
