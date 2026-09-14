@@ -177,6 +177,52 @@ else
 fi
 rm -f "${docker_log}" "${cookie}" "${archive}"
 
+# 7. wait_for_installed must tolerate a single transient curl failure
+# (the WebApp momentarily not accepting connections) instead of letting
+# set -e abort the whole script - regression test for a v1.0.0
+# correctness review finding. curl fails on its first call, then
+# reports "installed" on the second; sleep is faked to a no-op so the
+# test doesn't actually wait.
+#
+# The call counter lives in a file, not a plain variable: curl runs as
+# the first stage of a pipe (curl | jq) inside wait_for_installed, and
+# bash runs every non-last pipeline stage in its own subshell - a plain
+# variable increment there would vanish the moment that subshell exits,
+# leaving every call looking like the first one (confirmed live while
+# writing this test).
+docker_log="$(mktemp)"
+cookie="$(mktemp)"
+archive="$(mktemp)"
+call_counter="$(mktemp)"
+echo 0 > "${call_counter}"
+set +e
+(
+  set -Eeuo pipefail
+  compose_file=/dev/null web_port=1 dns_port=1
+  cookie_file="${cookie}" archive_file="${archive}"
+  curl() {
+    local calls
+    calls="$(($(cat "${call_counter}") + 1))"
+    echo "${calls}" > "${call_counter}"
+    if [[ "${calls}" -eq 1 ]]; then
+      return 7
+    fi
+    echo '{"state":"installed"}'
+  }
+  sleep() { :; }
+  # shellcheck source=verification-common.sh
+  . "${script_dir}/verification-common.sh"
+  wait_for_installed
+)
+exit_code=$?
+set -e
+if [[ "${exit_code}" == 0 ]]; then
+  pass "wait_for_installed tolerates a single transient curl failure"
+else
+  fail "wait_for_installed tolerates a single transient curl failure: expected exit 0, got ${exit_code}"
+fi
+rm -f "${docker_log}" "${cookie}" "${archive}" "${call_counter}"
+
 if (( failures > 0 )); then
   echo "${failures} test(s) failed" >&2
   exit 1
