@@ -48,9 +48,20 @@ export default function UnboundExpertEditor({ id, version, baseConfig, onActivat
     setPreview(null);
   }, []);
 
+  // t read through a ref, not depended on directly below - found in a
+  // v1.0.0 correctness review: t's identity changes on every locale
+  // switch (I18nProvider's own useCallback depends on locale), so with t
+  // in this effect's dependency array, switching the app's language
+  // reran load() and silently discarded whatever the operator had typed
+  // into the draft textarea, reloading the last-saved server content
+  // over it - the effect only actually needs to reload when the active
+  // version changes, not when the UI language does.
+  const tRef = useRef(t);
+  useEffect(() => { tRef.current = t; }, [t]);
+
   useEffect(() => {
-    load().catch((err: unknown) => setError(errorMessage(err, t("expert.loadError"))));
-  }, [load, t, version]);
+    load().catch((err: unknown) => setError(errorMessage(err, tRef.current("expert.loadError"))));
+  }, [load, version]);
 
   useEffect(() => {
     if (!open) setFullscreen(false);
