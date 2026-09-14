@@ -498,11 +498,29 @@ func (m *Manager) attachCleanup(cleanup CleanupResult) {
 }
 
 func (m *Manager) rollback(
-	ctx context.Context,
+	parent context.Context,
 	spec ServiceSpec,
 	oldID, backupDir string,
 	previousOwnership []previousVolumeOwnership,
 ) error {
+	// Found in review: this used to run on whatever ctx the caller passed
+	// straight through - update()'s own 15-minute budget for the whole
+	// operation, already partly spent by the verifyWithRetry loop that
+	// just discovered the health check keeps failing (up to ~5.5 minutes
+	// at the default 30 attempts/1s delay). If that's what exhausted it,
+	// every docker call below would be refused outright
+	// (exec.CommandContext won't even start a process against an
+	// already-expired context), or this function's own verifyWithRetry
+	// call at the end would fail before a real attempt. A rollback must
+	// not be at the mercy of whatever exhausted the operation it's
+	// cleaning up after - same fix as installer.restoreDeploy's and
+	// unbound.rollbackFailedApply's identical class of bug: detach from
+	// the caller's cancellation/deadline and give rollback its own
+	// bounded budget instead (10 minutes: comfortably covers this
+	// function's own verifyWithRetry call, plus the ownership/image-
+	// select/compose-up/backup-restore work ahead of it).
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), 10*time.Minute)
+	defer cancel()
 	if err := m.restoreVolumeOwnership(ctx, previousOwnership, oldID); err != nil {
 		return fmt.Errorf("restore volume ownership: %w", err)
 	}
@@ -868,6 +886,15 @@ func (m *Manager) load() {
 		if json.Unmarshal(data, &state) == nil && state.Status.State != "" {
 			m.status = state.Status
 			m.selected = state.Selected
+			if m.selected == nil {
+				// A state.json written while nothing had been selected yet
+				// serializes "selected" as either absent or JSON null,
+				// which unmarshals to a nil map here - found in a v1.0.0
+				// correctness review: selectImage's m.selected[service] =
+				// image would then panic (assignment to entry in nil map)
+				// on this instance's very first selection.
+				m.selected = map[string]string{}
+			}
 			return
 		}
 	}
@@ -889,6 +916,9 @@ func (m *Manager) load() {
 	}
 	if data, err := os.ReadFile(filepath.Join(m.dataDir, "images.json")); err == nil {
 		_ = json.Unmarshal(data, &m.selected)
+		if m.selected == nil {
+			m.selected = map[string]string{}
+		}
 	}
 	if loadedLegacyStatus {
 		_ = m.persistLocked()
