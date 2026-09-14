@@ -36,11 +36,11 @@ DNS-Filterung, rekursive DNS-Auflösung und DNSSEC-Validierung.
 [Roadmap](https://rootguard.foxly.de/roadmap.html) ·
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
-> [!IMPORTANT]
-> RootGuard befindet sich in der öffentlichen Release-Candidate-Phase vor 1.0.
-> Die Version ist zum Ausprobieren und für reproduzierbare Rückmeldungen
-> gedacht. Sie ist noch nicht für den Einsatz als einziger DNS-Dienst in einer
-> Produktivumgebung vorgesehen.
+> [!NOTE]
+> RootGuard 1.0 ist erschienen. Kernpfade, Updates mit Rollback und
+> unveränderliche, attestierte Releases sind produktionsreif - wie bei jeder
+> Netzwerkinfrastruktur empfiehlt sich trotzdem, Backups und einen
+> alternativen DNS-Weg bereitzuhalten.
 
 ## Warum RootGuard?
 
@@ -67,9 +67,9 @@ Geräte im Netzwerk → AdGuard Home → Unbound → DNS-Hierarchie
 
 ## Quick Start
 
-Voraussetzung ist ein Rechner mit Docker Compose v2. Die öffentliche
-Release-Candidate-Phase verwendet fertige Images für `amd64` und `arm64`; ein
-lokaler Build ist nicht notwendig.
+Voraussetzung ist ein Rechner mit Docker Compose v2. RootGuard verwendet
+fertige Images für `amd64` und `arm64`; ein lokaler Build ist nicht
+notwendig.
 
 ```sh
 mkdir rootguard && cd rootguard
@@ -198,10 +198,11 @@ and DNSSEC validation.
 [Roadmap](https://rootguard.foxly.de/roadmap.html) ·
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
-> [!IMPORTANT]
-> RootGuard is in public release-candidate testing ahead of 1.0, intended for
-> evaluation and reproducible feedback. It is not yet recommended as the only
-> DNS service for a production network.
+> [!NOTE]
+> RootGuard 1.0 has shipped. Core paths, updates with rollback, and
+> immutable, attested releases are production-ready - as with any network
+> infrastructure, keep backups and an alternative DNS path available
+> regardless.
 
 ### Why RootGuard?
 
@@ -228,9 +229,8 @@ Network devices → AdGuard Home → Unbound → DNS hierarchy
 
 ### Quick start
 
-RootGuard requires Docker Compose v2. The public release-candidate phase
-provides ready-made `amd64` and `arm64` container images, so no local build is
-required.
+RootGuard requires Docker Compose v2. It provides ready-made `amd64` and
+`arm64` container images, so no local build is required.
 
 ```sh
 mkdir rootguard && cd rootguard
