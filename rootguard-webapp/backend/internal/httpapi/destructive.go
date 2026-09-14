@@ -19,6 +19,22 @@ func (rec *statusRecorder) WriteHeader(status int) {
 	rec.ResponseWriter.WriteHeader(status)
 }
 
+// Unwrap lets http.NewResponseController see through statusRecorder to the
+// real underlying ResponseWriter - found in review: without it, any
+// SetReadDeadline/SetWriteDeadline/Flush/Hijack call against a
+// statusRecorder-wrapped writer fails with http.ErrNotSupported instead of
+// reaching the real connection, since statusRecorder itself implements
+// none of those. The concrete case this broke: HandleBackupRestore's own
+// 10-minute SetReadDeadline extension (updates.go, meant to give a large
+// backup archive upload more than the server's blanket 10s ReadTimeout)
+// silently failed every time it ran behind guardRestoreUpload/
+// guardDestructive, which always wrap w in a statusRecorder before calling
+// through - so every restore upload was still bound by the global 10s
+// timeout regardless.
+func (rec *statusRecorder) Unwrap() http.ResponseWriter {
+	return rec.ResponseWriter
+}
+
 // destructiveLimiterKey resolves the key every destructive-action limiter
 // (destructiveLimiter, restoreLimiter) is keyed by - shared by
 // guardDestructive and guardRestoreUpload, found in a second-pass review
