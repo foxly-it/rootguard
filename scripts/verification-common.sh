@@ -133,8 +133,16 @@ wait_for_login() {
 wait_for_installed() {
   local state=""
   for _ in {1..90}; do
+    # `|| state=""` - found in a v1.0.0 correctness review: both callers
+    # run under `set -Eeuo pipefail`, so a single transient curl failure
+    # (the WebApp momentarily not accepting connections mid-restart, a
+    # dropped connection) aborted this whole script immediately instead
+    # of being tolerated by the retry loop it's sitting in, defeating the
+    # loop's entire purpose. An empty state falls through both
+    # comparisons below to the same sleep-and-retry path a genuine
+    # in-progress state already takes.
     state="$(curl --fail --silent --cookie "${cookie_file}" \
-      "http://127.0.0.1:${web_port}/api/installation" | jq -r .state)"
+      "http://127.0.0.1:${web_port}/api/installation" | jq -r .state)" || state=""
     [[ "${state}" == "installed" ]] && return 0
     if [[ "${state}" == "failed" ]]; then
       echo "Installation failed" >&2
