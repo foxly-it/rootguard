@@ -41,7 +41,14 @@ func HandleServiceAction(w http.ResponseWriter, r *http.Request, core *coreclien
 
 	response, err := core.ServiceAction(r.Context(), serviceName, action)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// Found in a v1.0.0 correctness review: every other Core-proxying
+		// handler in this package already uses writeCoreError (see
+		// unbound.go) to propagate Core's own 4xx status instead of
+		// flattening it - an unknown service name or a conflicting action
+		// Core itself rejects with 400/404/409 used to come back as a
+		// bare 500 here, misrepresenting an operator's own bad input as a
+		// server-side failure.
+		writeCoreError(w, err)
 		return
 	}
 	WriteJSON(w, http.StatusOK, response)
