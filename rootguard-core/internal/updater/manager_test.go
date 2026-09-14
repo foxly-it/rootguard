@@ -984,3 +984,40 @@ func TestLoadMigratesLegacyStatusAndImagesJSON(t *testing.T) {
 		t.Fatalf("expected the reloaded manager to read the migrated state.json, got %+v", reloaded.Status())
 	}
 }
+
+// TestLoadTreatsNullSelectedInStateJSONAsEmptyNotNil is the regression test
+// for a v1.0.0 correctness review finding: a state.json written while
+// nothing had ever been selected serializes "selected" as JSON null (Go's
+// zero value for an empty map), which unmarshals straight into m.selected -
+// leaving it nil instead of the empty map NewManager otherwise starts with.
+// selectImage's m.selected[service] = image then panics (assignment to
+// entry in nil map) on this instance's very first selection.
+func TestLoadTreatsNullSelectedInStateJSONAsEmptyNotNil(t *testing.T) {
+	dataDir := t.TempDir()
+	state := `{"status":{"state":"idle","message":"","services":[],"updated_at":"2026-08-29T00:00:00Z"},"selected":null}`
+	if err := os.WriteFile(filepath.Join(dataDir, "state.json"), []byte(state), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := NewManager(Options{DataDir: dataDir})
+	if err := manager.selectImage("core", "rootguard-core:new"); err != nil {
+		t.Fatalf("expected selectImage to succeed against a freshly loaded nil selection, got: %v", err)
+	}
+}
+
+// TestLoadTreatsNullImagesJSONAsEmptyNotNil is the same regression, for the
+// legacy images.json migration path instead of state.json.
+func TestLoadTreatsNullImagesJSONAsEmptyNotNil(t *testing.T) {
+	dataDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dataDir, "status.json"), []byte(`{"state":"idle","message":"","services":[],"updated_at":"2026-08-29T00:00:00Z"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDir, "images.json"), []byte("null"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := NewManager(Options{DataDir: dataDir})
+	if err := manager.selectImage("core", "rootguard-core:new"); err != nil {
+		t.Fatalf("expected selectImage to succeed against a freshly loaded nil selection, got: %v", err)
+	}
+}

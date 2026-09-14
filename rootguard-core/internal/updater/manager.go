@@ -866,6 +866,15 @@ func (m *Manager) load() {
 		if json.Unmarshal(data, &state) == nil && state.Status.State != "" {
 			m.status = state.Status
 			m.selected = state.Selected
+			if m.selected == nil {
+				// A state.json written while nothing had been selected yet
+				// serializes "selected" as either absent or JSON null,
+				// which unmarshals to a nil map here - found in a v1.0.0
+				// correctness review: selectImage's m.selected[service] =
+				// image would then panic (assignment to entry in nil map)
+				// on this instance's very first selection.
+				m.selected = map[string]string{}
+			}
 			return
 		}
 	}
@@ -887,6 +896,9 @@ func (m *Manager) load() {
 	}
 	if data, err := os.ReadFile(filepath.Join(m.dataDir, "images.json")); err == nil {
 		_ = json.Unmarshal(data, &m.selected)
+		if m.selected == nil {
+			m.selected = map[string]string{}
+		}
 	}
 	if loadedLegacyStatus {
 		_ = m.persistLocked()
