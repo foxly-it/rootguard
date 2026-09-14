@@ -117,9 +117,52 @@ export async function updateAccount(input: { current_password: string; new_usern
   return request<AccountUpdateResult>("/api/auth/account", { method: "POST", body: JSON.stringify(input) });
 }
 
+// DestructiveAuditBase mirrors the base event names
+// rootguard-webapp/backend/internal/httpapi/audit.go's own "Destructive-
+// action base event names" const block declares - guardDestructive
+// there always appends exactly one of "_success"/"_failure"/
+// "_rate_limited" to whichever of these a route is guarded with (see
+// destructive.go), so every one of the resulting 72 combinations is a
+// real, reachable event `/api/auth/audit` can return alongside the 10
+// auth-specific ones below.
+//
+// Found in a v1.0.0 correctness review: this type only ever declared the
+// 10 auth-specific events, even though this same endpoint returns every
+// one of these too - none of them had a translation either (see
+// sessions.activity.* in i18n/en.ts), so the audit log showed the raw
+// "sessions.activity.<event>" key text for any destructive action ever
+// taken.
+type DestructiveAuditBase =
+  | "unbound_settings_applied"
+  | "unbound_settings_restored"
+  | "unbound_import_applied"
+  | "unbound_custom_applied"
+  | "unbound_custom_preview"
+  | "unbound_import_preview"
+  | "unbound_diagnostic_logging_started"
+  | "unbound_diagnostic_logging_stopped"
+  | "service_action"
+  | "service_update_started"
+  | "backup_settings_changed"
+  | "cleanup_run"
+  | "backup_export"
+  | "backup_restore_preview"
+  | "backup_restore"
+  | "control_plane_update_install"
+  | "updater_self_update_install"
+  | "installation_deploy"
+  | "adguard_bootstrap"
+  | "adguard_filtering_toggled"
+  | "adguard_protection_toggled"
+  | "fritzbox_discover"
+  | "unbound_forward_check"
+  | "reverse_dns_discover";
+
+export type DestructiveAuditEvent = `${DestructiveAuditBase}_success` | `${DestructiveAuditBase}_failure` | `${DestructiveAuditBase}_rate_limited`;
+
 export interface AuditEvent {
   timestamp: string;
-  event: "login_success" | "login_failure" | "login_rate_limited" | "logout" | "recovery_success" | "recovery_failure" | "session_revoked" | "account_updated" | "account_update_failure" | "account_update_partial";
+  event: "login_success" | "login_failure" | "login_rate_limited" | "logout" | "recovery_success" | "recovery_failure" | "session_revoked" | "account_updated" | "account_update_failure" | "account_update_partial" | DestructiveAuditEvent;
   username?: string;
   remote_ip: string;
 }
