@@ -84,7 +84,16 @@ export default function Logs() {
     anchor.href = href;
     anchor.download = `rootguard-${logs.service}-diagnostics.txt`;
     anchor.click();
-    URL.revokeObjectURL(href);
+    // Deferred, not immediate - found in a v1.0.0 correctness review:
+    // anchor.click() only *starts* the browser's download of the blob:
+    // URL, it doesn't read it synchronously within this call. Revoking
+    // the URL in the very same tick raced that read in some browsers
+    // (most notably Safari), intermittently producing an empty or failed
+    // download. A 0ms setTimeout defers the revoke to a later macrotask,
+    // after the browser has had a chance to actually start reading it -
+    // the same well-established pattern used by every blob-download
+    // library (e.g. FileSaver.js) for exactly this race.
+    setTimeout(() => URL.revokeObjectURL(href), 0);
   }
 
   return (
