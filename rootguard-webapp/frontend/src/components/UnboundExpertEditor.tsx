@@ -12,6 +12,7 @@ import {
 import "../styles/unbound-expert.css";
 import { useI18n } from "../i18n";
 import { errorMessage } from "../utils/errors";
+import { computeSuggestionInsertion } from "../utils/suggestionInsertion";
 import ContentModal from "./ContentModal";
 
 const templates = [
@@ -108,11 +109,7 @@ export default function UnboundExpertEditor({ id, version, baseConfig, onActivat
   }
 
   function insertSuggestion(reference: UnboundDirectiveReference) {
-    const start = Math.max(0, cursor - prefix.length);
-    const indentation = draft.slice(draft.lastIndexOf("\n", start - 1) + 1, start).match(/^\s*/)?.[0] ?? "";
-    const example = reference.example.includes("\n") ? reference.example : indentation + reference.example.trimStart();
-    const next = draft.slice(0, start - indentation.length) + example + draft.slice(cursor);
-    const nextCursor = start - indentation.length + example.length;
+    const { next, nextCursor } = computeSuggestionInsertion(draft, cursor, prefix, reference.example);
     setDraft(next);
     setPreview(null);
     requestAnimationFrame(() => {
