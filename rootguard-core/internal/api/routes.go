@@ -231,8 +231,8 @@ func selfUpdateInstallHandler(manager *updater.Manager, controlPlane *controlpla
 }
 
 func updateStatusHandler(manager *updater.Manager) http.HandlerFunc {
-	return func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, manager.Status())
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, manager.StatusSynced(r.Context()))
 	}
 }
 
