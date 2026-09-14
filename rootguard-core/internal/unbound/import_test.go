@@ -760,3 +760,43 @@ func TestImportOfTheSameFileTwiceIsIdempotent(t *testing.T) {
 		t.Fatalf("expected re-importing the identical file to stay at 1 zone, got %+v", second.Settings.LocalZones)
 	}
 }
+
+// TestImportDoesNotMutateTheCallersReverseZonesSlice is the regression
+// test for a v1.0.0 correctness review finding: candidate := current is a
+// shallow copy, so candidate.ReverseZones started out aliasing the caller's
+// own ReverseZones backing array. Applying a reverse-zone policy update by
+// index (candidate.ReverseZones[i].Mode = ...) silently rewrote the
+// caller's original Settings value too, wherever it still held one -
+// unlike every other slice field in Settings, which this same function
+// already defensively copies before mutating.
+func TestImportDoesNotMutateTheCallersReverseZonesSlice(t *testing.T) {
+	original := DefaultSettings()
+	content := "server:\n    local-zone: \"10.in-addr.arpa.\" transparent\n"
+
+	result, err := ImportUnboundConf(original, "", content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	finding := findingFor(t, result.Findings, "local-zone")
+	if finding.Disposition != ImportGuided {
+		t.Fatalf("expected the clean reverse-zone override to be guided, got %+v", finding)
+	}
+
+	var candidateMode, originalMode string
+	for _, zone := range result.Settings.ReverseZones {
+		if zone.Network == "10.0.0.0/8" {
+			candidateMode = zone.Mode
+		}
+	}
+	for _, zone := range original.ReverseZones {
+		if zone.Network == "10.0.0.0/8" {
+			originalMode = zone.Mode
+		}
+	}
+	if candidateMode != reverseModeTransparent {
+		t.Fatalf("expected the candidate's 10.0.0.0/8 policy to become transparent, got %q", candidateMode)
+	}
+	if originalMode != reverseModeNXDOMAIN {
+		t.Fatalf("expected the caller's own Settings value to stay untouched (nxdomain), got %q - candidate.ReverseZones is still aliasing it", originalMode)
+	}
+}
