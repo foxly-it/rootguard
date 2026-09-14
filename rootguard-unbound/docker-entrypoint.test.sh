@@ -56,7 +56,12 @@ fi
 if [[ "$(cat "$ROOT_KEY_PATH")" != "fresh-reference-trust-anchor" ]]; then
   fail "fresh install: root.key content should match the reference source"
 fi
-mode="$(stat -f '%Lp' "$ROOT_KEY_PATH" 2>/dev/null || stat -c '%a' "$ROOT_KEY_PATH")"
+# GNU stat (Linux CI runners) first, BSD/macOS stat as the fallback -
+# found while making this test pass on Linux: GNU's `-f` means something
+# else entirely ("filesystem status", not "format"), so it exits 0 with
+# unrelated output instead of failing over to the BSD form when tried
+# first.
+mode="$(stat -c '%a' "$ROOT_KEY_PATH" 2>/dev/null || stat -f '%Lp' "$ROOT_KEY_PATH")"
 if [[ "$mode" != "640" ]]; then
   fail "fresh install: expected root.key mode 640, got $mode"
 fi
