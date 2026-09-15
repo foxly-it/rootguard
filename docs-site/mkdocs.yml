@@ -1,0 +1,107 @@
+site_name: RootGuard Docs
+site_url: https://rootguard.foxly.de/docs/
+site_description: RootGuard Dokumentation - Installation, Konfiguration, Betrieb und Sicherheit.
+repo_url: https://github.com/foxly-it/rootguard
+repo_name: foxly-it/rootguard
+edit_uri: edit/main/docs-site/docs/
+docs_dir: docs
+site_dir: ../site/docs
+copyright: "© Mark Schenk · Foxly IT"
+
+theme:
+  name: material
+  logo: assets/rootguard-icon.svg
+  favicon: assets/rootguard-icon.svg
+  font: false
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Helles Design
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dunkles Design
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - content.action.edit
+
+extra_css:
+  - assets/extra.css
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      languages:
+        - locale: de
+          default: true
+          name: Deutsch
+          build: true
+        - locale: en
+          name: English
+          build: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/foxly-it/rootguard
+
+nav:
+  - Home: index.md
+  - Erste Schritte:
+      - Voraussetzungen: getting-started/requirements.md
+      - Plattformen: getting-started/platforms.md
+      - Installation: getting-started/installation.md
+      - Erste Einrichtung: getting-started/first-setup.md
+      - Router & Clients: getting-started/router-and-clients.md
+  - WebGUI:
+      - Überblick: webgui/overview.md
+      - Unbound: webgui/unbound.md
+      - AdGuard Home: webgui/adguard.md
+      - Updates & Rollback: webgui/updates-and-rollback.md
+  - Sicherheit:
+      - Vertrauensgrenzen: security/trust-boundaries.md
+  - Betrieb:
+      - Nützliche Befehle: operations/useful-commands.md
+      - Fehlerbehebung: operations/troubleshooting.md
+  - Referenz:
+      - Umgebungsvariablen: reference/environment-variables.md
+  - Über:
+      - Lizenz: about/license.md

@@ -1,6 +1,8 @@
 .DS_Store
 .env
 !.env.release.example
+.venv-mkdocs/
+site/docs/
 
 # AI assistant tooling (local workflow only, not part of the public repo)
 .claude/

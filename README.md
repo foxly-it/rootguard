@@ -32,7 +32,7 @@ DNS-Filterung, rekursive DNS-Auflösung und DNSSEC-Validierung.
 [![Website](https://img.shields.io/badge/website-rootguard.foxly.de-72c483)](https://rootguard.foxly.de/)
 
 [Website](https://rootguard.foxly.de/) ·
-[Handbuch](https://rootguard.foxly.de/docs.html) ·
+[Handbuch](https://rootguard.foxly.de/docs/) ·
 [Roadmap](https://rootguard.foxly.de/roadmap.html) ·
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
@@ -98,7 +98,7 @@ als experimentell gekennzeichneten AdGuard-Home-Beta wählen. Beta kann Fehler
 enthalten; DNS-Auflösung und Blocking dürfen deshalb nicht als ausfallsicher
 betrachtet werden.
 Die vollständigen Voraussetzungen, Router-Einrichtung und Fehlerbehebung stehen
-im [Handbuch](https://rootguard.foxly.de/docs.html#quickstart).
+im [Handbuch](https://rootguard.foxly.de/docs/getting-started/installation/).
 
 ## Was ist enthalten?
 
@@ -114,7 +114,7 @@ Die [Live-Produktansicht](https://rootguard.foxly.de/) zeigt die aktuelle
 Oberfläche. Architektur, Vertrauensgrenzen und Update-Abläufe sind bewusst aus
 diesem Einstieg ausgelagert:
 
-- [Installation und Betrieb](https://rootguard.foxly.de/docs.html)
+- [Installation und Betrieb](https://rootguard.foxly.de/docs/)
 - [Architektur](docs/architecture.md)
 - [Aktueller Projektstand](docs/project-state.md)
 - [Roadmap bis 1.0](ROADMAP.md)
@@ -194,7 +194,7 @@ self-hosted Docker Compose stack for network-wide DNS filtering, recursive DNS,
 and DNSSEC validation.
 
 [Website](https://rootguard.foxly.de/) ·
-[Documentation](https://rootguard.foxly.de/docs.html) ·
+[Documentation](https://rootguard.foxly.de/docs/) ·
 [Roadmap](https://rootguard.foxly.de/roadmap.html) ·
 [Releases](https://github.com/foxly-it/rootguard/releases)
 
@@ -257,7 +257,7 @@ Open `http://<docker-host-ip>:8080/login` and follow the guided setup. The setup
 offers the recommended Stable channel and an explicitly experimental
 AdGuard Home Beta channel. Beta may contain bugs; DNS resolution and blocking
 must not be treated as fail-safe when it is selected. See the
-[installation guide](https://rootguard.foxly.de/docs.html#quickstart) for
+[installation guide](https://rootguard.foxly.de/docs/getting-started/installation/) for
 requirements, router configuration, upgrades, and troubleshooting.
 
 ### Included components
