@@ -15,21 +15,16 @@ theme:
   font: false
   icon:
     repo: fontawesome/brands/github
+  # Single dark scheme, no light/dark toggle - matching the main
+  # rootguard.foxly.de site, which has no light theme either. Trying to
+  # support both meant the header (styled to match the main site's dark
+  # look) clashed hard against a white light-mode body for anyone whose
+  # system defaults to light - simpler and more consistent to just not
+  # offer a light mode at all.
   palette:
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/weather-sunny
-        name: Helles Design
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: custom
-      accent: custom
-      toggle:
-        icon: material/weather-night
-        name: Dunkles Design
+    scheme: slate
+    primary: custom
+    accent: custom
   features:
     - navigation.tabs
     - navigation.sections
@@ -85,29 +80,15 @@ extra:
 
 nav:
   - Home: index.md
-  - Erste Schritte:
-      - Voraussetzungen: getting-started/requirements.md
-      - Plattformen: getting-started/platforms.md
-      - Installation: getting-started/installation.md
-      - Erste Einrichtung: getting-started/first-setup.md
-      - Router & Clients: getting-started/router-and-clients.md
+  - Erste Schritte: getting-started.md
   - WebGUI:
-      - Überblick: webgui/overview.md
+      - Überblick: webgui.md
       - Unbound: webgui/unbound.md
-      - AdGuard Home: webgui/adguard.md
-      - Updates & Rollback: webgui/updates-and-rollback.md
   - Anwendungsbeispiele:
-      - Lokale DNS-Zonen: guides/local-dns-zones.md
-      - Conditional Forwarding: guides/conditional-forwarding.md
-      - FRITZ!Box-Import: guides/fritzbox-import.md
-      - Private Domains & Reverse DNS: guides/private-domains-reverse-dns.md
+      - Unbound: guides/unbound-examples.md
       - HTTPS über einen Reverse-Proxy: guides/https-reverse-proxy.md
-  - Sicherheit:
-      - Vertrauensgrenzen: security/trust-boundaries.md
-      - Bedrohungsmodell: security/threat-model.md
-  - Betrieb:
-      - Nützliche Befehle: operations/useful-commands.md
-      - Fehlerbehebung: operations/troubleshooting.md
+  - Sicherheit: security/threat-model.md
+  - Betrieb: operations.md
   - Referenz:
       - Umgebungsvariablen: reference/environment-variables.md
   - Über:

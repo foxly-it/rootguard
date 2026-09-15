@@ -14,4 +14,4 @@ RootGuard kombiniert AdGuard Home als Netzwerkfilter mit Unbound als eigenem rek
 | [Attestation Proxy](https://github.com/foxly-it/rootguard/tree/main/rootguard-attestation-proxy) | TRUST | Enger Egress-Pfad für signierte Release-Prüfungen, selbst per Update-Kanal verwaltet |
 
 !!! tip "Schnell loslegen"
-    Neu hier? Weiter mit [Voraussetzungen](getting-started/requirements.md) und [Installation](getting-started/installation.md).
+    Neu hier? Weiter mit [Erste Schritte](getting-started.md).
