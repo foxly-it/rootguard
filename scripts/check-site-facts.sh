@@ -69,8 +69,13 @@ while IFS= read -r reference; do
   target="${reference#*|}"
   # Only local, root- or file-relative references - never external URLs,
   # mailto:, or fragment-only anchors (#section), which aren't files here.
+  # docs/ is also skipped: it's the MkDocs site built separately by
+  # pages.yml (docs-site/), not a file committed to this repo, so it's
+  # deliberately absent from the checkout this fast, dependency-free
+  # check runs against. Its own links are verified by `mkdocs build
+  # --strict` in pages.yml instead.
   case "${target}" in
-    http://*|https://*|mailto:*|tel:*|\#*|"") continue ;;
+    http://*|https://*|mailto:*|tel:*|\#*|""|docs/*) continue ;;
   esac
   target="${target%%#*}"
   resolved="site/${target#/}"
