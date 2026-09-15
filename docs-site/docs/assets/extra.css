@@ -1,4 +1,17 @@
 /* RootGuard brand colors, matching site/styles.css's root custom properties. */
+/*
+ * --md-primary-bg-color is the text/icon color Material draws ON TOP of
+ * the green primary swatch itself (the "primary" button, the mobile nav
+ * repo box) - it stays dark here because #72c483/#5aa86c are light-ish
+ * greens (measured contrast against light text is under 2.5:1, well
+ * below WCAG's 3:1 floor for UI text; dark text against them is >7:1).
+ *
+ * The header/tabs bar is a different case: it's overridden below to a
+ * dark navy background (matching site/styles.css's .topbar) rather than
+ * Material's default green header, so it needs its OWN light text color
+ * instead of reusing this variable - seeded a dark navy bg with dark
+ * primary-bg-color text once already and it was unreadable.
+ */
 [data-md-color-primary="custom"] {
   --md-primary-fg-color: #72c483;
   --md-primary-fg-color--light: #8fd39c;
@@ -19,9 +32,27 @@
   --md-hue: 200;
 }
 
+/*
+ * Most header/tabs content (title, hamburger/search-toggle buttons, tab
+ * links) inherits color from these two rules via `color: inherit` /
+ * `color: currentcolor` in Material's own CSS, so setting it here is
+ * enough for those. The two exceptions below (the search clear-icon and
+ * the placeholder) read --md-primary-bg-color directly instead of
+ * inheriting, so they need their own explicit override to the same
+ * light color rather than the dark one that variable holds above.
+ */
 .md-header,
 .md-tabs {
   background-color: #0a0f14;
+  color: #e7edf2;
+}
+
+.md-search__input + .md-search__icon {
+  color: #e7edf2;
+}
+
+.md-search__input::placeholder {
+  color: #9aa7b0;
 }
 
 .md-nav__title,
