@@ -1,5 +1,7 @@
 # Configure the resolver safely
 
+![Unbound overview with live diagnostics](../assets/screenshots/unbound-overview.png)
+
 ## Profiles and settings
 
 Balanced, Privacy, Resilience, and Performance only load a draft. QNAME minimization, prefetch, serve-expired, cache TTLs, and threads are explained and previewed before activation.

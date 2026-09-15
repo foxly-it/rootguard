@@ -14,6 +14,8 @@ Der geführte Assistent unter **Unbound → Lokale Zonen** erzeugt A-, AAAA- und
 | `printer.home.lan` | `192.168.178.30` | – | ja |
 | `ap1.home.lan` | `192.168.178.40` | `fd00::40` | ja |
 
+![Ausgefülltes Formular für die home.lan-Zone](../assets/screenshots/unbound-local-zone.png)
+
 1. Öffne **Unbound → Lokale Zonen** und lege die Zone `home.lan` an.
 2. Füge pro Host einen Eintrag mit Name und Adresse(n) hinzu.
 3. Aktiviere „PTR-Eintrag ableiten" pro Host. RootGuard leitet automatisch die passende Reverse-Zone ab - vorausgesetzt, die Adresse ist über alle geführten Zonen hinweg eindeutig.
