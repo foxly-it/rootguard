@@ -9,8 +9,6 @@
 - Dokumentiertes Threat Model sowie automatisierte Dependency-, Container-, Secret- und Static-Analysis-Scans in der CI
 
 !!! note "HTTPS"
-    RootGuard terminiert bewusst kein eigenes TLS - das übernimmt ein etablierter Reverse Proxy davor. Die Dokumentation deckt die zwei Voraussetzungen (Host-Header-Weiterleitung, `X-Forwarded-Proto`) und Beispielkonfigurationen für Caddy, Zoraxy, Nginx Proxy Manager und HAProxy ab.
+    RootGuard terminiert bewusst kein eigenes TLS - das übernimmt ein etablierter Reverse Proxy davor. [HTTPS über einen Reverse-Proxy](../guides/https-reverse-proxy.md) deckt die zwei Voraussetzungen (Host-Header-Weiterleitung, `X-Forwarded-Proto`) und Beispielkonfigurationen für Caddy, Zoraxy, Nginx Proxy Manager und HAProxy ab.
 
-    [HTTPS-Anleitung öffnen ↗](https://github.com/foxly-it/rootguard/blob/main/docs/https-reverse-proxy.md){: target="_blank" rel="noopener" }
-
-[Vollständiges Threat Model öffnen ↗](https://github.com/foxly-it/rootguard/blob/main/docs/threat-model.md){: target="_blank" rel="noopener" }
+[Vollständiges Bedrohungsmodell öffnen](../security/threat-model.md)
