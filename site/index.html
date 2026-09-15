@@ -118,8 +118,37 @@
         </div>
       </section>
 
+      <section id="facts" class="facts-band">
+        <div class="section-head reveal">
+          <p class="eyebrow" data-de="Warum RootGuard" data-en="Why RootGuard">Warum RootGuard</p>
+          <h2 data-de="Vertrauen, das sich nachprüfen lässt." data-en="Trust you can verify.">Vertrauen, das sich nachprüfen lässt.</h2>
+        </div>
+        <div class="grid facts-grid">
+          <article class="card fact-card reveal">
+            <span class="fact-icon tone-green" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+            <h3 data-de="AGPL-3.0 · Open Source" data-en="AGPL-3.0 · open source">AGPL-3.0 · Open Source</h3>
+            <p data-de="Vollständig quelloffen. Jede Zeile Code lässt sich einsehen und prüfen." data-en="Fully open source. Every line of code can be inspected and audited.">Vollständig quelloffen. Jede Zeile Code lässt sich einsehen und prüfen.</p>
+          </article>
+          <article class="card fact-card reveal">
+            <span class="fact-icon tone-purple" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg></span>
+            <h3 data-de="Läuft bei dir zu Hause" data-en="Runs in your own home">Läuft bei dir zu Hause</h3>
+            <p data-de="Kein Cloud-Dienst, keine Telemetrie. Deine DNS-Anfragen verlassen nie dein Netzwerk." data-en="No cloud service, no telemetry. Your DNS queries never leave your network.">Kein Cloud-Dienst, keine Telemetrie. Deine DNS-Anfragen verlassen nie dein Netzwerk.</p>
+          </article>
+          <article class="card fact-card reveal">
+            <span class="fact-icon tone-yellow" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <h3 data-de="Signiert &amp; attestiert" data-en="Signed &amp; attested">Signiert &amp; attestiert</h3>
+            <p data-de="Jedes Release wird per Cosign gegen die echte GitHub-Build-Herkunft geprüft, bevor es aktiviert wird." data-en="Every release is verified via Cosign against real GitHub build provenance before activation.">Jedes Release wird per Cosign gegen die echte GitHub-Build-Herkunft geprüft, bevor es aktiviert wird.</p>
+          </article>
+          <article class="card fact-card reveal">
+            <span class="fact-icon tone-green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s7-3.5 7-9V5l-7-2.5L5 5v7c0 5.5 7 9 7 9Z"/></svg></span>
+            <h3>DNSSEC</h3>
+            <p data-de="Unbound validiert jede Antwort kryptografisch und verwirft manipulierte Signaturen." data-en="Unbound cryptographically validates every answer and rejects tampered signatures.">Unbound validiert jede Antwort kryptografisch und verwirft manipulierte Signaturen.</p>
+          </article>
+        </div>
+      </section>
+
       <section id="quickstart" class="home-quickstart">
-        <div class="quickstart-copy">
+        <div class="quickstart-copy reveal">
           <p class="eyebrow">Quick Start · Ein Befehl</p>
           <h2 data-de="In wenigen Minuten startklar." data-en="Up and running in minutes.">In wenigen Minuten startklar.</h2>
           <p class="section-lead" data-de="Ein Rechner im Heimnetz genügt. Das Installationsskript prüft Docker und installiert es bei Bedarf (Debian/Ubuntu), lädt das fertige Release, erzeugt die beiden Sicherheitsschlüssel automatisch und fragt nur nach Benutzername und Passwort für die WebGUI." data-en="One computer on your home network is enough. The install script checks for Docker and installs it if needed (Debian/Ubuntu), downloads the ready-made release, generates both security keys automatically, and only asks for a WebGUI username and password.">Ein Rechner im Heimnetz genügt. Das Installationsskript prüft Docker und installiert es bei Bedarf (Debian/Ubuntu), lädt das fertige Release, erzeugt die beiden Sicherheitsschlüssel automatisch und fragt nur nach Benutzername und Passwort für die WebGUI.</p>
@@ -144,7 +173,7 @@
       </section>
 
       <section id="install-demo" class="install-demo-section">
-        <div class="install-demo-copy">
+        <div class="install-demo-copy reveal">
           <p class="eyebrow" data-de="Live-Vorschau" data-en="Live preview">Live-Vorschau</p>
           <h2 data-de="So läuft die Installation ab." data-en="Here's what the install looks like.">So läuft die Installation ab.</h2>
           <p class="section-lead" data-de="Der Installer gibt reale Statusmeldungen aus - hier eine originalgetreue Beispiel-Sitzung, kein geschöntes Marketing-Transkript. Läuft Docker schon, entfällt der Installationsschritt einfach." data-en="The installer prints real status messages - this is a faithful example session, not a polished marketing transcript. If Docker is already installed, that step is simply skipped.">Der Installer gibt reale Statusmeldungen aus - hier eine originalgetreue Beispiel-Sitzung, kein geschöntes Marketing-Transkript. Läuft Docker schon, entfällt der Installationsschritt einfach.</p>
@@ -170,14 +199,47 @@
         </div>
       </section>
 
+      <section id="showcase" class="showcase">
+        <div class="section-head reveal">
+          <p class="eyebrow" data-de="Live aus der Oberfläche" data-en="Live from the interface">Live aus der Oberfläche</p>
+          <h2 data-de="So sieht dein DNS-Schutz aus." data-en="This is what your DNS protection looks like.">So sieht dein DNS-Schutz aus.</h2>
+          <p class="section-lead" data-de="Echte Bildschirmfotos einer laufenden RootGuard-1.0-Installation - keine Mockups." data-en="Real screenshots of a running RootGuard 1.0 installation - no mockups.">Echte Bildschirmfotos einer laufenden RootGuard-1.0-Installation - keine Mockups.</p>
+        </div>
+        <div class="showcase-layout reveal">
+          <div class="showcase-tabs" role="tablist" aria-label="Ansicht wählen">
+            <button type="button" class="showcase-tab active" data-target="dashboard" data-url="rootguard.local/dashboard" role="tab" aria-selected="true">
+              <b>Dashboard</b><span data-de="Status, DNSSEC und Live-Metriken auf einen Blick." data-en="Status, DNSSEC, and live metrics at a glance.">Status, DNSSEC und Live-Metriken auf einen Blick.</span>
+            </button>
+            <button type="button" class="showcase-tab" data-target="unbound" data-url="rootguard.local/unbound" role="tab" aria-selected="false">
+              <b>Unbound</b><span data-de="Geführte Resolver-Konfiguration mit Live-Diagnose." data-en="Guided resolver configuration with live diagnostics.">Geführte Resolver-Konfiguration mit Live-Diagnose.</span>
+            </button>
+            <button type="button" class="showcase-tab" data-target="adguard" data-url="rootguard.local/adguard" role="tab" aria-selected="false">
+              <b>AdGuard Home</b><span data-de="Geschützte Filterverwaltung ohne öffentlichen Port." data-en="Protected filter management, no public port.">Geschützte Filterverwaltung ohne öffentlichen Port.</span>
+            </button>
+            <button type="button" class="showcase-tab" data-target="stack" data-url="rootguard.local/stack" role="tab" aria-selected="false">
+              <b>Stack &amp; Updates</b><span data-de="Digest-verifizierte Images mit automatischem Rollback." data-en="Digest-verified images with automatic rollback.">Digest-verifizierte Images mit automatischem Rollback.</span>
+            </button>
+          </div>
+          <div class="showcase-frame">
+            <div class="window-head"><span></span><span></span><span></span><b id="showcase-url">rootguard.local/dashboard</b></div>
+            <div class="showcase-images">
+              <img class="showcase-image active" data-key="dashboard" src="assets/screenshots/dashboard.png" alt="RootGuard Dashboard mit Live-Status" width="1440" height="900" loading="lazy">
+              <img class="showcase-image" data-key="unbound" src="assets/screenshots/unbound.png" alt="Unbound-Konfiguration mit Live-Diagnose" width="1440" height="900" loading="lazy">
+              <img class="showcase-image" data-key="adguard" src="assets/screenshots/adguard.png" alt="AdGuard-Home-Verwaltung" width="1440" height="900" loading="lazy">
+              <img class="showcase-image" data-key="stack" src="assets/screenshots/stack-updates.png" alt="Stack &amp; Updates mit Digest-Verifizierung" width="1440" height="900" loading="lazy">
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="features">
         <p class="eyebrow" data-de="Was RootGuard für dich übernimmt" data-en="What RootGuard does for you">Was RootGuard für dich übernimmt</p>
         <h2 data-de="Einfacher Schutz für alle Geräte." data-en="Simple protection for every device.">Einfacher Schutz für alle Geräte.</h2>
         <p class="section-lead" data-de="RootGuard bündelt bewährte Open-Source-Technik in einer verständlichen Oberfläche. Du behältst die Kontrolle, ohne jedes technische Detail kennen zu müssen." data-en="RootGuard combines proven open-source technology in one approachable interface. You stay in control without having to understand every technical detail.">RootGuard bündelt bewährte Open-Source-Technik in einer verständlichen Oberfläche. Du behältst die Kontrolle, ohne jedes technische Detail kennen zu müssen.</p>
         <div class="grid feature-grid feature-grid-simple">
-          <article class="card"><span class="icon feature-code">01</span><h3 data-de="Stört weniger" data-en="Fewer distractions">Stört weniger</h3><p data-de="Werbung und bekannte Tracker werden zentral blockiert, bevor sie deine Geräte erreichen." data-en="Ads and known trackers are blocked centrally before they reach your devices.">Werbung und bekannte Tracker werden zentral blockiert, bevor sie deine Geräte erreichen.</p></article>
-          <article class="card"><span class="icon feature-code">02</span><h3 data-de="Schützt deine Anfragen" data-en="Protects your queries">Schützt deine Anfragen</h3><p data-de="DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft." data-en="DNS queries are handled by your own stack and checked for tampering with DNSSEC.">DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft.</p></article>
-          <article class="card"><span class="icon feature-code">03</span><h3 data-de="Bleibt unter deiner Kontrolle" data-en="Stays under your control">Bleibt unter deiner Kontrolle</h3><p data-de="Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host." data-en="Dashboard, configuration, and updates run on your own Docker host.">Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host.</p></article>
+          <article class="card reveal"><span class="fact-icon tone-purple" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg></span><h3 data-de="Stört weniger" data-en="Fewer distractions">Stört weniger</h3><p data-de="Werbung und bekannte Tracker werden zentral blockiert, bevor sie deine Geräte erreichen." data-en="Ads and known trackers are blocked centrally before they reach your devices.">Werbung und bekannte Tracker werden zentral blockiert, bevor sie deine Geräte erreichen.</p></article>
+          <article class="card reveal"><span class="fact-icon tone-green" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span><h3 data-de="Schützt deine Anfragen" data-en="Protects your queries">Schützt deine Anfragen</h3><p data-de="DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft." data-en="DNS queries are handled by your own stack and checked for tampering with DNSSEC.">DNS-Anfragen werden im eigenen Stack verarbeitet und mit DNSSEC auf Manipulation geprüft.</p></article>
+          <article class="card reveal"><span class="fact-icon tone-yellow" aria-hidden="true"><svg viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg></span><h3 data-de="Bleibt unter deiner Kontrolle" data-en="Stays under your control">Bleibt unter deiner Kontrolle</h3><p data-de="Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host." data-en="Dashboard, configuration, and updates run on your own Docker host.">Dashboard, Konfiguration und Updates laufen auf deinem eigenen Docker-Host.</p></article>
         </div>
         <p class="feature-more"><a class="text-link" href="docs/" data-de="Technik, Architektur und Sicherheitsmodell in den Docs →" data-en="Technology, architecture, and security model in the documentation →">Technik, Architektur und Sicherheitsmodell in den Docs →</a></p>
       </section>
@@ -194,7 +256,7 @@
           </div>
         </div>
 
-        <aside class="project-hero-panel project-status-panel">
+        <aside class="project-hero-panel project-status-panel reveal">
           <span>PROJECT STATE · 2026-09-14</span>
           <strong data-de="1.0 · Stable" data-en="1.0 · Stable">1.0 · Stable</strong>
           <p data-de="RootGuard 1.0 ist da: Kernpfade, Updates mit Rollback und unveränderliche, attestierte Releases sind produktionsreif. Der 30-tägige Dauertest ist sauber durchgelaufen, die Migrations-Dokumentation ist fertig." data-en="RootGuard 1.0 has arrived: core paths, updates with rollback, and immutable, attested releases are production-ready. The 30-day endurance test passed clean, and migration documentation is complete.">RootGuard 1.0 ist da: Kernpfade, Updates mit Rollback und unveränderliche, attestierte Releases sind produktionsreif. Der 30-tägige Dauertest ist sauber durchgelaufen, die Migrations-Dokumentation ist fertig.</p>
@@ -225,7 +287,7 @@
         </div>
       </section>
 
-      <section class="home-final-cta">
+      <section class="home-final-cta reveal">
         <div><p class="eyebrow" data-de="Alles Weitere in den Docs" data-en="Everything else in the documentation">Alles Weitere in den Docs</p><h2 data-de="Du möchtest tiefer einsteigen?" data-en="Want to go deeper?">Du möchtest tiefer einsteigen?</h2><p data-de="Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert." data-en="Installation, router setup, configuration, updates, security, and troubleshooting are covered in one clear documentation hub.">Installation, Router-Einrichtung, Konfiguration, Updates, Sicherheit und Fehlerbehebung sind zentral und verständlich dokumentiert.</p></div>
         <div class="actions"><a class="button" href="docs/" data-de="Docs öffnen" data-en="Open documentation">Docs öffnen</a><a class="button secondary" href="roadmap.html" data-de="Roadmap ansehen" data-en="View roadmap">Roadmap ansehen</a></div>
       </section>

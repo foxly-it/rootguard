@@ -317,6 +317,82 @@ function initializeReleaseCelebration() {
   setTimeout(() => toast.remove(), 4300);
 }
 
+// Shared fade+rise reveal for any .reveal element, replacing a bespoke
+// observer per section. Delay is staggered per sibling group (elements
+// sharing the same parent, e.g. cards in the same grid) rather than
+// globally, so unrelated sections don't inherit each other's timing. A
+// no-op under prefers-reduced-motion: styles.css never applies the
+// opacity:0 rule there in the first place, so there's nothing to reveal.
+function initializeScrollReveal() {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const elements = [...document.querySelectorAll(".reveal")];
+  if (!elements.length) return;
+
+  const groups = new Map();
+  elements.forEach((el) => {
+    const siblings = groups.get(el.parentElement) || [];
+    siblings.push(el);
+    groups.set(el.parentElement, siblings);
+  });
+  groups.forEach((siblings) => {
+    siblings.forEach((el, index) => {
+      el.style.transitionDelay = `${index * 90}ms`;
+    });
+  });
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      entry.target.classList.add("revealed");
+      observer.unobserve(entry.target);
+    });
+  }, { threshold: 0.15 });
+  elements.forEach((el) => observer.observe(el));
+}
+
+// Tabbed real-screenshot showcase (the "See it in action" section). Only
+// runs on pages that have it (index.html). Auto-advances every 6s unless
+// reduced motion is preferred, in which case it just shows the first tab
+// and waits for manual clicks - no timer fighting that preference.
+function initializeScreenshotShowcase() {
+  const section = document.querySelector(".showcase");
+  if (!section) return;
+  const tabs = [...section.querySelectorAll(".showcase-tab")];
+  const images = [...section.querySelectorAll(".showcase-image")];
+  const urlLabel = document.getElementById("showcase-url");
+  if (!tabs.length || !images.length) return;
+
+  function activate(target) {
+    tabs.forEach((tab) => {
+      const active = tab.dataset.target === target;
+      tab.classList.toggle("active", active);
+      tab.setAttribute("aria-selected", String(active));
+    });
+    images.forEach((img) => img.classList.toggle("active", img.dataset.key === target));
+    const activeTab = tabs.find((tab) => tab.dataset.target === target);
+    if (activeTab && urlLabel) urlLabel.textContent = activeTab.dataset.url;
+  }
+
+  let timer = null;
+  function restartAutoAdvance() {
+    clearInterval(timer);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    timer = setInterval(() => {
+      const currentIndex = tabs.findIndex((tab) => tab.classList.contains("active"));
+      const next = tabs[(currentIndex + 1) % tabs.length];
+      activate(next.dataset.target);
+    }, 6000);
+  }
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      activate(tab.dataset.target);
+      restartAutoAdvance();
+    });
+  });
+  restartAutoAdvance();
+}
+
 const backToTopButton = initializeBackToTop();
 
 function setLanguage(language, persist = true) {
@@ -350,6 +426,8 @@ initializeManualNavigation();
 initializeInstallCopyButton();
 initializeInstallDemoReveal();
 initializeReleaseCelebration();
+initializeScrollReveal();
+initializeScreenshotShowcase();
 
 fetch("project-data.json", { cache: "no-cache" })
   .then((response) => {
