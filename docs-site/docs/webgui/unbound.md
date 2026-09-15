@@ -12,17 +12,29 @@ IPv4 ist der kompatible Standard. Dual Stack und IPv6-only werden erst freigegeb
 
 Der geführte Assistent erzeugt A-, AAAA- und CNAME-Einträge ohne manuelle Unbound-Syntax. Für eindeutige A-/AAAA-Adressen kann er passende PTR-Einträge ableiten. Er erkennt parallele Änderungen und verwendet dieselbe Checkconf-, Versions- und Rollback-Kette.
 
+!!! example "Anwendungsbeispiel"
+    Eine vollständige, durchgerechnete Zone (`home.lan` mit A-, AAAA- und abgeleiteten PTR-Einträgen) findest du unter [Lokale DNS-Zonen](../guides/local-dns-zones.md).
+
 ## Geräte aus der FRITZ!Box importieren
 
 Findet Hosts über die FRITZ!Box (TR-064) oder begrenzte Reverse-DNS-Abfragen in ausgewählten privaten IPv4- oder Unicast-IPv6-Netzen (max. 256 Adressen je Präfix und insgesamt). Zugangsdaten für die FRITZ!Box sind nur nötig, wenn TR-064-Anfragen eine Anmeldung verlangen, werden ausschließlich für diese eine Abfrage verwendet und nie gespeichert. Gefundene Geräte werden vor der Übernahme einzeln ausgewählt und umbenennbar - nichts wird automatisch importiert. Übernommene Hosts durchlaufen dieselbe Vorschau-, Checkconf- und Aktivierungskette wie die geführten lokalen Zonen.
+
+!!! example "Anwendungsbeispiel"
+    Schritt-für-Schritt-Anleitung unter [Geräte aus der FRITZ!Box importieren](../guides/fritzbox-import.md), inklusive der router-unabhängigen Reverse-DNS-Alternative.
 
 ## Private Domains und Reverse DNS
 
 Private Domains werden als geprüfte Liste verwaltet. Für `10/8`, `172.16/12` und `192.168/16` wählst du getrennt zwischen sicherem NXDOMAIN und transparenter öffentlicher Weiterauflösung. NXDOMAIN ist die Voreinstellung; RootGuard warnt sichtbar, bevor ein privater Rückwärts-Lookup nach außen gelangen kann.
 
+!!! example "Anwendungsbeispiel"
+    Ein durchgerechnetes Beispiel findest du unter [Private Domains und Reverse DNS](../guides/private-domains-reverse-dns.md).
+
 ## Conditional Forwarding
 
 Mehrere interne Zonen lassen sich an geordnete IPv4- und IPv6-DNS-Server weiterleiten. RootGuard normalisiert Zonennamen und Adressen, blockiert Schleifen und gibt die Aktivierung erst frei, wenn jedes Ziel die konfigurierte Zone mit NOERROR und einem SOA-Eintrag bestätigt. Rekursiver Fallback, unsignierte private Zonen und private RFC1918-Antworten besitzen getrennte, klar erklärte Opt-ins; DNSSEC und Rebinding-Schutz bleiben sonst aktiv.
+
+!!! example "Anwendungsbeispiel"
+    Ein durchgerechnetes Weiterleitungsbeispiel findest du unter [Conditional Forwarding](../guides/conditional-forwarding.md).
 
 ## Expertenmodus und Live-Konfiguration
 

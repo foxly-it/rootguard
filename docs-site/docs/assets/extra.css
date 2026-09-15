@@ -43,7 +43,10 @@
  */
 .md-header,
 .md-tabs {
-  background-color: #0a0f14;
+  /* Matches site/styles.css's --bg exactly, instead of the darker,
+     harsher tone used before - the header should feel like the same
+     surface as the rest of the dark site, not a separate near-black bar. */
+  background-color: #0d1218;
   color: #e7edf2;
 }
 

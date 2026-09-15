@@ -96,8 +96,15 @@ nav:
       - Unbound: webgui/unbound.md
       - AdGuard Home: webgui/adguard.md
       - Updates & Rollback: webgui/updates-and-rollback.md
+  - Anwendungsbeispiele:
+      - Lokale DNS-Zonen: guides/local-dns-zones.md
+      - Conditional Forwarding: guides/conditional-forwarding.md
+      - FRITZ!Box-Import: guides/fritzbox-import.md
+      - Private Domains & Reverse DNS: guides/private-domains-reverse-dns.md
+      - HTTPS über einen Reverse-Proxy: guides/https-reverse-proxy.md
   - Sicherheit:
       - Vertrauensgrenzen: security/trust-boundaries.md
+      - Bedrohungsmodell: security/threat-model.md
   - Betrieb:
       - Nützliche Befehle: operations/useful-commands.md
       - Fehlerbehebung: operations/troubleshooting.md
