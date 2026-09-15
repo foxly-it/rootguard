@@ -1,5 +1,7 @@
 # Resolver sicher konfigurieren
 
+![Unbound-Übersicht mit Live-Diagnose](../assets/screenshots/unbound-overview.png)
+
 ## Profile und Einstellungen
 
 Balanced, Privacy, Resilience und Performance laden ausschließlich einen Entwurf. QNAME-Minimierung, Prefetch, Serve Expired, Cache-TTLs und Threads werden erklärt und vor der Aktivierung als Änderungsvorschau dargestellt.

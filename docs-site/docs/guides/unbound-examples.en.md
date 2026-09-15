@@ -14,6 +14,8 @@ The guided assistant under **Unbound → Local zones** creates A, AAAA, and CNAM
 | `printer.home.lan` | `192.168.178.30` | – | yes |
 | `ap1.home.lan` | `192.168.178.40` | `fd00::40` | yes |
 
+![Filled-in form for the home.lan zone](../assets/screenshots/unbound-local-zone.png)
+
 1. Open **Unbound → Local zones** and create the zone `home.lan`.
 2. Add one entry per host with its name and address(es).
 3. Enable "Derive PTR record" per host. RootGuard automatically derives the matching reverse zone - provided the address is unambiguous across all guided zones.
