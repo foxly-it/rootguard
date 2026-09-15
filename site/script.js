@@ -361,6 +361,20 @@ function initializeScreenshotShowcase() {
   const images = [...section.querySelectorAll(".showcase-image")];
   const urlLabel = document.getElementById("showcase-url");
   if (!tabs.length || !images.length) return;
+  const AUTO_ADVANCE_MS = 6000;
+
+  // Instantly snaps every tab's countdown bar back to empty. Called
+  // before starting the next fill so repeated activations (auto-advance
+  // or a manual click) each restart from zero instead of visually
+  // jumping backwards from wherever the previous fill had reached.
+  function resetProgressBars() {
+    tabs.forEach((tab) => {
+      const fill = tab.querySelector(".showcase-tab-progress-fill");
+      if (!fill) return;
+      fill.style.transition = "none";
+      fill.style.width = "0";
+    });
+  }
 
   function activate(target) {
     tabs.forEach((tab) => {
@@ -371,6 +385,17 @@ function initializeScreenshotShowcase() {
     images.forEach((img) => img.classList.toggle("active", img.dataset.key === target));
     const activeTab = tabs.find((tab) => tab.dataset.target === target);
     if (activeTab && urlLabel) urlLabel.textContent = activeTab.dataset.url;
+
+    resetProgressBars();
+    const fill = activeTab && activeTab.querySelector(".showcase-tab-progress-fill");
+    if (fill && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      // Force layout so the width:0 reset above is committed before
+      // transitioning - otherwise the browser can coalesce both style
+      // writes into one and skip straight to the end state.
+      void fill.offsetWidth;
+      fill.style.transition = `width ${AUTO_ADVANCE_MS}ms linear`;
+      fill.style.width = "100%";
+    }
   }
 
   let timer = null;
@@ -381,7 +406,7 @@ function initializeScreenshotShowcase() {
       const currentIndex = tabs.findIndex((tab) => tab.classList.contains("active"));
       const next = tabs[(currentIndex + 1) % tabs.length];
       activate(next.dataset.target);
-    }, 6000);
+    }, AUTO_ADVANCE_MS);
   }
 
   tabs.forEach((tab) => {
@@ -390,6 +415,7 @@ function initializeScreenshotShowcase() {
       restartAutoAdvance();
     });
   });
+  activate(tabs[0].dataset.target);
   restartAutoAdvance();
 }
 
