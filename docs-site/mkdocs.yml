@@ -15,16 +15,29 @@ theme:
   font: false
   icon:
     repo: fontawesome/brands/github
-  # Single dark scheme, no light/dark toggle - matching the main
-  # rootguard.foxly.de site, which has no light theme either. Trying to
-  # support both meant the header (styled to match the main site's dark
-  # look) clashed hard against a white light-mode body for anyone whose
-  # system defaults to light - simpler and more consistent to just not
-  # offer a light mode at all.
+  # Dark by default (matches the main rootguard.foxly.de site, follows
+  # the OS preference), with an explicit light scheme for accessibility -
+  # some readers need light-on-dark or dark-on-light specifically,
+  # regardless of what the rest of the site looks like. extra.css scopes
+  # the dark-navy header/seamless-body treatment to [data-md-color-
+  # scheme="slate"] only; the light scheme keeps Material's own default
+  # green-primary header instead of trying to force a seamless white
+  # header with no wayfinding value.
   palette:
-    scheme: slate
-    primary: custom
-    accent: custom
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Helles Design
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dunkles Design
   features:
     - navigation.tabs
     - navigation.sections

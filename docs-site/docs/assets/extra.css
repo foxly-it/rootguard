@@ -2,15 +2,10 @@
 /*
  * --md-primary-bg-color is the text/icon color Material draws ON TOP of
  * the green primary swatch itself (the "primary" button, the mobile nav
- * repo box) - it stays dark here because #72c483/#5aa86c are light-ish
+ * repo box, and - in light mode only, see below - the header/tabs bar
+ * itself) - it stays dark here because #72c483/#5aa86c are light-ish
  * greens (measured contrast against light text is under 2.5:1, well
  * below WCAG's 3:1 floor for UI text; dark text against them is >7:1).
- *
- * The header/tabs bar is a different case: it's overridden below to a
- * dark navy background (matching site/styles.css's .topbar) rather than
- * Material's default green header, so it needs its OWN light text color
- * instead of reusing this variable - seeded a dark navy bg with dark
- * primary-bg-color text once already and it was unreadable.
  */
 [data-md-color-primary="custom"] {
   --md-primary-fg-color: #72c483;
@@ -26,33 +21,29 @@
   --md-accent-bg-color: #07110a;
 }
 
+/*
+ * Dark scheme only: header/tabs share the exact page background instead
+ * of Material's default green header - no seam between header and page,
+ * matching how the main site's own .topbar has no background of its own
+ * and just sits on the body. Light scheme deliberately keeps Material's
+ * own default green-primary header (dark text via --md-primary-bg-color
+ * above already gives >7:1 contrast there) - there's no main-site light
+ * mode to match against, and a plain white-on-white header had no
+ * wayfinding value, so the brand-green header is the better default.
+ */
 [data-md-color-scheme="slate"] {
   --md-default-bg-color: #0d1218;
   --md-default-fg-color: #e7edf2;
   --md-hue: 200;
 }
 
-/*
- * Most header/tabs content (title, hamburger/search-toggle buttons, tab
- * links) inherits color from these two rules via `color: inherit` /
- * `color: currentcolor` in Material's own CSS, so setting it here is
- * enough for those. The two exceptions below (the search clear-icon and
- * the placeholder) read --md-primary-bg-color directly instead of
- * inheriting, so they need their own explicit override to the same
- * light color rather than the dark one that variable holds above.
- */
-.md-header,
-.md-tabs {
-  /* Same tone as --md-default-bg-color (site/styles.css's --bg) - no
-     seam between header and page, matching how the main site's own
-     .topbar has no background of its own and just sits on the body. A
-     lighter or darker bar than the page looked wrong both ways; the fix
-     was removing the boundary, not picking a third shade. */
+[data-md-color-scheme="slate"] .md-header,
+[data-md-color-scheme="slate"] .md-tabs {
   background-color: #0d1218;
   color: #e7edf2;
 }
 
-.md-tabs {
+[data-md-color-scheme="slate"] .md-tabs {
   /* The main site has no separate header/tabs seam to replicate here
      since it has no second nav row - a hairline in the same --border
      tone it uses for its own card/panel edges keeps the sticky header
@@ -60,11 +51,18 @@
   border-bottom: 1px solid #2b3945;
 }
 
-.md-search__input + .md-search__icon {
+/*
+ * These two search-bar elements read --md-primary-bg-color directly
+ * instead of inheriting .md-header's own color, so in slate mode (dark
+ * navy header) they need their own light override; in the default light
+ * scheme the dark value from --md-primary-bg-color above is already
+ * correct against that scheme's green header, so this stays slate-only.
+ */
+[data-md-color-scheme="slate"] .md-search__input + .md-search__icon {
   color: #e7edf2;
 }
 
-.md-search__input::placeholder {
+[data-md-color-scheme="slate"] .md-search__input::placeholder {
   color: #9aa7b0;
 }
 
