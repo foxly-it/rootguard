@@ -98,7 +98,7 @@ als experimentell gekennzeichneten AdGuard-Home-Beta wählen. Beta kann Fehler
 enthalten; DNS-Auflösung und Blocking dürfen deshalb nicht als ausfallsicher
 betrachtet werden.
 Die vollständigen Voraussetzungen, Router-Einrichtung und Fehlerbehebung stehen
-im [Handbuch](https://rootguard.foxly.de/docs/getting-started/installation/).
+im [Handbuch](https://rootguard.foxly.de/docs/getting-started/).
 
 ## Was ist enthalten?
 
@@ -257,7 +257,7 @@ Open `http://<docker-host-ip>:8080/login` and follow the guided setup. The setup
 offers the recommended Stable channel and an explicitly experimental
 AdGuard Home Beta channel. Beta may contain bugs; DNS resolution and blocking
 must not be treated as fail-safe when it is selected. See the
-[installation guide](https://rootguard.foxly.de/docs/getting-started/installation/) for
+[installation guide](https://rootguard.foxly.de/docs/getting-started/) for
 requirements, router configuration, upgrades, and troubleshooting.
 
 ### Included components

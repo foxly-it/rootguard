@@ -157,7 +157,7 @@
             <li><span>02</span><div><b data-de="Zugang festlegen" data-en="Set your login">Zugang festlegen</b><small data-de="Nur Benutzername und Passwort werden abgefragt." data-en="Only a username and password are asked for.">Nur Benutzername und Passwort werden abgefragt.</small></div></li>
             <li><span>03</span><div><b data-de="Stack läuft" data-en="Stack is running">Stack läuft</b><small data-de="Weboberfläche öffnen und dem geführten Setup folgen." data-en="Open the web interface and follow guided setup.">Weboberfläche öffnen und dem geführten Setup folgen.</small></div></li>
           </ol>
-          <a class="text-link" href="docs/getting-started/installation/" data-de="Lieber Schritt für Schritt? Manuelle Installation →" data-en="Prefer step by step? Manual installation →">Lieber Schritt für Schritt? Manuelle Installation →</a>
+          <a class="text-link" href="docs/getting-started/#installation" data-de="Lieber Schritt für Schritt? Manuelle Installation →" data-en="Prefer step by step? Manual installation →">Lieber Schritt für Schritt? Manuelle Installation →</a>
         </div>
         <div class="quickstart-command">
           <div class="terminal-head">
@@ -209,15 +209,19 @@
           <div class="showcase-tabs" role="tablist" aria-label="Ansicht wählen">
             <button type="button" class="showcase-tab active" data-target="dashboard" data-url="rootguard.local/dashboard" role="tab" aria-selected="true">
               <b>Dashboard</b><span data-de="Status, DNSSEC und Live-Metriken auf einen Blick." data-en="Status, DNSSEC, and live metrics at a glance.">Status, DNSSEC und Live-Metriken auf einen Blick.</span>
+              <i class="showcase-tab-progress" aria-hidden="true"><i class="showcase-tab-progress-fill"></i></i>
             </button>
             <button type="button" class="showcase-tab" data-target="unbound" data-url="rootguard.local/unbound" role="tab" aria-selected="false">
               <b>Unbound</b><span data-de="Geführte Resolver-Konfiguration mit Live-Diagnose." data-en="Guided resolver configuration with live diagnostics.">Geführte Resolver-Konfiguration mit Live-Diagnose.</span>
+              <i class="showcase-tab-progress" aria-hidden="true"><i class="showcase-tab-progress-fill"></i></i>
             </button>
             <button type="button" class="showcase-tab" data-target="adguard" data-url="rootguard.local/adguard" role="tab" aria-selected="false">
               <b>AdGuard Home</b><span data-de="Geschützte Filterverwaltung ohne öffentlichen Port." data-en="Protected filter management, no public port.">Geschützte Filterverwaltung ohne öffentlichen Port.</span>
+              <i class="showcase-tab-progress" aria-hidden="true"><i class="showcase-tab-progress-fill"></i></i>
             </button>
             <button type="button" class="showcase-tab" data-target="stack" data-url="rootguard.local/stack" role="tab" aria-selected="false">
               <b>Stack &amp; Updates</b><span data-de="Digest-verifizierte Images mit automatischem Rollback." data-en="Digest-verified images with automatic rollback.">Digest-verifizierte Images mit automatischem Rollback.</span>
+              <i class="showcase-tab-progress" aria-hidden="true"><i class="showcase-tab-progress-fill"></i></i>
             </button>
           </div>
           <div class="showcase-frame">
@@ -257,10 +261,16 @@
         </div>
 
         <aside class="project-hero-panel project-status-panel reveal">
-          <span>PROJECT STATE · 2026-09-14</span>
-          <strong data-de="1.0 · Stable" data-en="1.0 · Stable">1.0 · Stable</strong>
-          <p data-de="RootGuard 1.0 ist da: Kernpfade, Updates mit Rollback und unveränderliche, attestierte Releases sind produktionsreif. Der 30-tägige Dauertest ist sauber durchgelaufen, die Migrations-Dokumentation ist fertig." data-en="RootGuard 1.0 has arrived: core paths, updates with rollback, and immutable, attested releases are production-ready. The 30-day endurance test passed clean, and migration documentation is complete.">RootGuard 1.0 ist da: Kernpfade, Updates mit Rollback und unveränderliche, attestierte Releases sind produktionsreif. Der 30-tägige Dauertest ist sauber durchgelaufen, die Migrations-Dokumentation ist fertig.</p>
-          <div class="project-progress"><div><i style="width:100%"></i></div><small data-de="Aktuelle Version: 1.0.0" data-en="Current version: 1.0.0">Aktuelle Version: 1.0.0</small></div>
+          <div class="project-status-copy">
+            <span>PROJECT STATE · 2026-09-14</span>
+            <strong data-de="1.0 · Stable" data-en="1.0 · Stable">1.0 · Stable</strong>
+            <p data-de="RootGuard 1.0 ist da: Kernpfade, Updates mit Rollback und unveränderliche, attestierte Releases sind produktionsreif. Der 30-tägige Dauertest ist sauber durchgelaufen, die Migrations-Dokumentation ist fertig." data-en="RootGuard 1.0 has arrived: core paths, updates with rollback, and immutable, attested releases are production-ready. The 30-day endurance test passed clean, and migration documentation is complete.">RootGuard 1.0 ist da: Kernpfade, Updates mit Rollback und unveränderliche, attestierte Releases sind produktionsreif. Der 30-tägige Dauertest ist sauber durchgelaufen, die Migrations-Dokumentation ist fertig.</p>
+          </div>
+          <div class="project-progress">
+            <b class="project-progress-value">100%</b>
+            <div><i style="--progress:100%"></i></div>
+            <small data-de="Aktuelle Version: 1.0.0" data-en="Current version: 1.0.0">Aktuelle Version: 1.0.0</small>
+          </div>
         </aside>
 
         <div class="project-metrics" aria-label="GitHub project metrics">
