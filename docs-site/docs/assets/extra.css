@@ -43,11 +43,21 @@
  */
 .md-header,
 .md-tabs {
-  /* Matches site/styles.css's --bg exactly, instead of the darker,
-     harsher tone used before - the header should feel like the same
-     surface as the rest of the dark site, not a separate near-black bar. */
+  /* Same tone as --md-default-bg-color (site/styles.css's --bg) - no
+     seam between header and page, matching how the main site's own
+     .topbar has no background of its own and just sits on the body. A
+     lighter or darker bar than the page looked wrong both ways; the fix
+     was removing the boundary, not picking a third shade. */
   background-color: #0d1218;
   color: #e7edf2;
+}
+
+.md-tabs {
+  /* The main site has no separate header/tabs seam to replicate here
+     since it has no second nav row - a hairline in the same --border
+     tone it uses for its own card/panel edges keeps the sticky header
+     scannable against page content without a hard color change. */
+  border-bottom: 1px solid #2b3945;
 }
 
 .md-search__input + .md-search__icon {

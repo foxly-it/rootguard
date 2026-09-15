@@ -69,4 +69,4 @@ HAProxy reicht den `Host`-Header in dieser Grundkonfiguration bereits unverände
 
 ## Siehe auch
 
-- [Vertrauensgrenzen](../security/trust-boundaries.md) und [Threat Model](../security/threat-model.md) - die Browser-/Session-Vertrauensgrenze im Detail.
+- [Bedrohungsmodell](../security/threat-model.md) - die Browser-/Session-Vertrauensgrenze im Detail.

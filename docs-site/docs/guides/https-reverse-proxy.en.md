@@ -69,4 +69,4 @@ HAProxy already passes the `Host` header through unchanged in this basic configu
 
 ## See also
 
-- [Trust boundaries](../security/trust-boundaries.md) and the [threat model](../security/threat-model.md) - the browser/session trust boundary in detail.
+- [Threat model](../security/threat-model.md) - the browser/session trust boundary in detail.
