@@ -345,7 +345,7 @@ export const en: LocaleDefinition = {
     "stack.check": "Check for updates",
     "stack.checking": "Checking…",
     "stack.managed": "Managed services",
-    "stack.runningCount": "{count} / 5 running",
+    "stack.runningCount": "{count} / {total} running",
     "stack.available": "Available updates",
     "stack.found": "{count} found",
     "stack.none": "None known",

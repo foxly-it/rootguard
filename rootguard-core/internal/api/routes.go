@@ -661,6 +661,8 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 		serviceRuntimeResponse("updater", "RootGuard Updater", "Independent control-plane update helper", status.Updater),
 		serviceRuntimeResponse("adguard", "AdGuard Home", "DNS filtering, blocklists and client policies", status.AdGuard),
 		serviceRuntimeResponse("unbound", "Unbound DNS", "Recursive resolver with DNSSEC validation", status.Unbound),
+		serviceRuntimeResponse("blockpage", "RootGuard Blockpage", "Landing page shown for blocked requests", status.Blockpage),
+		serviceRuntimeResponse("attestation-proxy", "Attestation Proxy", "Egress bridge for release signature verification", status.AttestationProxy),
 	})
 }
 

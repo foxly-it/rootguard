@@ -79,7 +79,7 @@ export default function Stack() {
       )}
 
       <section className="stack-summary">
-        <Summary icon={<ServerCog />} label={t("stack.managed")} value={t("stack.runningCount", { count: services.filter((s) => s.status === "running").length })} />
+        <Summary icon={<ServerCog />} label={t("stack.managed")} value={t("stack.runningCount", { count: services.filter((s) => s.status === "running").length, total: services.length })} />
         <Summary icon={<Download />} label={t("stack.available")} value={available ? t("stack.found", { count: available }) : t("stack.none")} />
         <Summary icon={<Archive />} label={t("stack.protection")} value={t("stack.backup")} />
         <Summary icon={<RotateCcw />} label={t("stack.failure")} value={t("stack.rollback")} />
@@ -149,6 +149,7 @@ export default function Stack() {
                 name={t("stack.attestationProxyName")}
                 updateLabel={attestationProxyService.update_available ? t("stack.update") : attestationProxyService.checked_at ? t("stack.current") : t("stack.unchecked")}
                 updateAvailable={attestationProxyService.update_available}
+                runtime={services.find((runtime) => runtime.name === "attestation-proxy")}
                 fallbackImage={attestationProxyService.current_image}
                 onUpdate={() => startSelfUpdate("attestation-proxy")}
                 updating={updaterUpdate?.state === "updating"}

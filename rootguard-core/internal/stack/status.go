@@ -109,15 +109,17 @@ func CheckStackAttestations(ctx context.Context, status *StackStatus) {
 		info *ContainerInfo
 	}
 	// AdGuard has no RootGuard signing policy (third-party image) and stays
-	// permanently not_applicable - core, webapp, updater, and unbound are
-	// all published by the same release-alpha.yml matrix build and do have
-	// real policies in attestationPolicies, so they must actually be
-	// checked rather than assumed not_applicable.
+	// permanently not_applicable - every other service is published by the
+	// same release-alpha.yml matrix build and does have a real policy in
+	// attestationPolicies, so it must actually be checked rather than
+	// assumed not_applicable.
 	targets := []target{
 		{"core", &status.Core},
 		{"webapp", &status.WebApp},
 		{"updater", &status.Updater},
 		{"unbound", &status.Unbound},
+		{"blockpage", &status.Blockpage},
+		{"attestation-proxy", &status.AttestationProxy},
 	}
 	var wait sync.WaitGroup
 	for _, item := range targets {
@@ -132,21 +134,25 @@ func CheckStackAttestations(ctx context.Context, status *StackStatus) {
 }
 
 type StackStatus struct {
-	Core    ContainerInfo `json:"core"`
-	WebApp  ContainerInfo `json:"webapp"`
-	Updater ContainerInfo `json:"updater"`
-	AdGuard ContainerInfo `json:"adguard"`
-	Unbound ContainerInfo `json:"unbound"`
+	Core             ContainerInfo `json:"core"`
+	WebApp           ContainerInfo `json:"webapp"`
+	Updater          ContainerInfo `json:"updater"`
+	AdGuard          ContainerInfo `json:"adguard"`
+	Unbound          ContainerInfo `json:"unbound"`
+	Blockpage        ContainerInfo `json:"blockpage"`
+	AttestationProxy ContainerInfo `json:"attestation_proxy"`
 }
 
 func CheckStackStatus() StackStatus {
 
 	return StackStatus{
-		Core:    inspectContainer("rootguard-core"),
-		WebApp:  inspectContainer("rootguard-webapp"),
-		Updater: inspectContainer("rootguard-updater"),
-		AdGuard: inspectContainer("rootguard-adguard"),
-		Unbound: inspectContainer("rootguard-unbound"),
+		Core:             inspectContainer("rootguard-core"),
+		WebApp:           inspectContainer("rootguard-webapp"),
+		Updater:          inspectContainer("rootguard-updater"),
+		AdGuard:          inspectContainer("rootguard-adguard"),
+		Unbound:          inspectContainer("rootguard-unbound"),
+		Blockpage:        inspectContainer("rootguard-blockpage"),
+		AttestationProxy: inspectContainer("rootguard-attestation-proxy"),
 	}
 }
 
