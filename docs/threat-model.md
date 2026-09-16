@@ -56,11 +56,22 @@ single trust boundary in the system.
   issue their own Docker API calls instead of the intended narrow
   operations would lead directly to host compromise - there is no second
   line of defense between "code bug in Core" and "full Docker access".
-- Concrete planned hardening step: a dedicated `docker-socket-proxy`
-  sidecar that holds the socket itself and only lets a narrowly
-  allowlisted subset of the Docker API through, while Core and Updater
-  themselves run unprivileged. Not yet implemented - see the comments in
-  `rootguard-core/Dockerfile` and `rootguard-updater/Dockerfile`.
+- Concrete hardening step, in progress: `rootguard-docker-proxy`, a
+  purpose-built proxy that holds the socket itself, allow-lists Docker
+  API calls by exact method+path, and inspects the request body of every
+  call that can grant new capability (container create, exec create,
+  network connect) - rejecting `Privileged`, host namespace sharing, and
+  any bind/mount outside RootGuard's own named volumes, not just toggling
+  resource types on or off. Landed as a standalone, unit-tested component
+  (see `rootguard-docker-proxy/README.md`); not yet wired into
+  `compose.release.yaml`/Core/Updater, so this residual risk still
+  applies until that follow-up ships (tracked in `ROADMAP.md`'s
+  Post-1.0/Future section). Once wired, Core and Updater themselves run
+  unprivileged; the proxy itself still needs root or the host's
+  docker-group GID (see the comments in `rootguard-core/Dockerfile`,
+  `rootguard-updater/Dockerfile`, and `rootguard-docker-proxy/Dockerfile`)
+  - the improvement is concentrating that requirement into one small,
+  exhaustively tested component instead of two large, feature-rich ones.
 
 ### 2. Browser / authenticated user
 

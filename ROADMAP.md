@@ -1299,6 +1299,21 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       a bootstrapper process outside the stack itself, or a clearly guided,
       manual pre-update compose refresh step surfaced in the WebGUI before
       the image swap runs.
+- [ ] Close the Docker-socket host-takeover risk named in
+      `docs/threat-model.md`'s actor 1 ("Docker socket holders"): a bug in
+      Core or the Updater that lets an attacker issue their own Docker API
+      calls currently leads directly to host compromise, no second line of
+      defense. `rootguard-docker-proxy`, a purpose-built, request-body-
+      filtering Docker Engine API proxy, has landed as a standalone,
+      unit-tested component, but is not yet wired into
+      `compose.release.yaml`/Core/Updater - that follow-up (removing their
+      direct `/var/run/docker.sock` mount, routing through the proxy,
+      adding a `ROOTGUARD_DOCKER_PROXY_URL` preflight check following the
+      `rootguard-attestation-proxy` precedent above) is still open. A
+      second, host-level phase is planned after that: rootless-Docker-
+      daemon compatibility verification and documentation, using the
+      existing backup/restore feature as the migration path for existing
+      installations rather than a new tool.
 
 ## How we work with this roadmap
 

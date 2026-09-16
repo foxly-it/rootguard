@@ -59,12 +59,24 @@ Abstand größte Einzel-Vertrauensgrenze im System.
   vorgesehenen engen Operationen abzusetzen, würde direkt zur
   Host-Kompromittierung führen - es gibt keine zweite Verteidigungslinie
   zwischen „Code-Fehler in Core" und „voller Docker-Zugriff".
-- Konkreter geplanter Härtungsschritt: ein dediziertes
-  `docker-socket-proxy`-Sidecar, das den Socket selbst hält und nur eine
-  eng allowlistete Teilmenge der Docker-API durchlässt, während Core und
-  Updater selbst unprivilegiert laufen. Noch nicht umgesetzt - siehe die
-  Kommentare in `rootguard-core/Dockerfile` und
-  `rootguard-updater/Dockerfile`.
+- Konkreter Härtungsschritt, in Arbeit: `rootguard-docker-proxy`, ein
+  eigens gebauter Proxy, der den Socket selbst hält, Docker-API-Aufrufe
+  exakt nach Methode+Pfad allowlistet und zusätzlich den Request-Body
+  jedes Aufrufs prüft, der neue Fähigkeiten verleihen könnte (Container
+  erstellen, Exec erstellen, Netzwerk verbinden) - er lehnt `Privileged`,
+  geteilte Host-Namespaces und jeden Bind/Mount außerhalb von RootGuards
+  eigenen benannten Volumes ab, statt nur Ressourcentypen pauschal an-
+  oder abzuschalten. Als eigenständige, unit-getestete Komponente
+  gelandet (siehe `rootguard-docker-proxy/README.md`); noch nicht in
+  `compose.release.yaml`/Core/Updater eingebunden, das Restrisiko gilt
+  also bis zu diesem Folgeschritt weiter (nachverfolgt in `ROADMAP.md`s
+  Post-1.0/Future-Abschnitt). Sobald eingebunden, laufen Core und Updater
+  selbst unprivilegiert; der Proxy selbst braucht weiterhin root oder die
+  Docker-Gruppen-GID des Hosts (siehe die Kommentare in
+  `rootguard-core/Dockerfile`, `rootguard-updater/Dockerfile` und
+  `rootguard-docker-proxy/Dockerfile`) - die Verbesserung besteht darin,
+  diese Notwendigkeit auf eine kleine, gründlich getestete Komponente zu
+  konzentrieren statt auf zwei große, funktionsreiche.
 
 ### 2. Browser / authentifizierter Nutzer
 
