@@ -104,14 +104,6 @@ export function useStackData() {
   );
   const updaterRuntime = services.find((service) => service.name === "updater");
   const updaterService = updaterUpdate?.services.find((service) => service.name === "updater");
-  // No matching entry in `services` (Core's own dashboard inspection stays
-  // scoped to its existing 5-service allowlist, see servicesHandler in
-  // rootguard-core - out of scope for rootguard#481, which is purely about
-  // the update *mechanism*) - ControlPlaneService's `runtime` prop is
-  // already optional and falls back to `fallbackImage`/"not inspected" for
-  // exactly this case, so the card still works, just without live
-  // running/immutability/attestation-badge detail the allowlisted services
-  // show.
   const attestationProxyService = updaterUpdate?.services.find((service) => service.name === "attestation-proxy");
 
   // attempt clears any stale error, runs action, and reports a new one on

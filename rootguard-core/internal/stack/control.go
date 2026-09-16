@@ -13,8 +13,9 @@ var (
 )
 
 var serviceContainers = map[string]string{
-	"adguard": "rootguard-adguard",
-	"unbound": "rootguard-unbound",
+	"adguard":   "rootguard-adguard",
+	"unbound":   "rootguard-unbound",
+	"blockpage": "rootguard-blockpage",
 }
 
 var execCommandContext = exec.CommandContext

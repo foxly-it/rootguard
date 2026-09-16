@@ -23,11 +23,13 @@ var (
 // bounded, redacted tail is allowed for every managed component, while browser
 // lifecycle actions remain restricted to the DNS data plane.
 var logContainers = map[string]string{
-	"core":    "rootguard-core",
-	"webapp":  "rootguard-webapp",
-	"updater": "rootguard-updater",
-	"adguard": "rootguard-adguard",
-	"unbound": "rootguard-unbound",
+	"core":              "rootguard-core",
+	"webapp":            "rootguard-webapp",
+	"updater":           "rootguard-updater",
+	"adguard":           "rootguard-adguard",
+	"unbound":           "rootguard-unbound",
+	"blockpage":         "rootguard-blockpage",
+	"attestation-proxy": "rootguard-attestation-proxy",
 }
 
 type ServiceLogs struct {

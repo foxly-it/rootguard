@@ -12,7 +12,9 @@ import {
   RefreshCw,
   Server,
   ServerCog,
+  ShieldAlert,
   ShieldCheck,
+  Waypoints,
 } from "lucide-react";
 import { type ServiceInfo } from "../api/client";
 import "../styles/dashboard.css";
@@ -27,6 +29,8 @@ const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
   updater: ServerCog,
   adguard: Filter,
   unbound: ShieldCheck,
+  blockpage: ShieldAlert,
+  "attestation-proxy": Waypoints,
 };
 
 export default function Overview() {
