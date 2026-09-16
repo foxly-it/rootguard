@@ -784,6 +784,10 @@ misconfigurations:
       # hardcoded. See the comment above EXPOSE in each Dockerfile.
       - "rootguard-core/Dockerfile"
       - "rootguard-updater/Dockerfile"
+      # This is the one container that holds the real Docker socket on
+      # Core/Updater's behalf, for the exact same reason - see the
+      # comment above EXPOSE in its Dockerfile.
+      - "rootguard-docker-proxy/Dockerfile"
       # Stock nginx's own `user nginx;` directive already drops worker
       # processes to non-root; the master needs root for cache/pid file
       # creation under this image's read-only+tmpfs mount setup. See the
