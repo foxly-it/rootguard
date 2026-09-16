@@ -496,6 +496,55 @@ vulnerabilities:
       bind9-libs' dependency, Unbound's own resolver process doesn't use
       it" reasoning as CVE-2026-6653/CVE-2026-86140 above - doubly
       unreachable here.
+  # Found live, 2026-09-16 (scheduled ci-unbound.yml run on main, no code
+  # change involved). Five new libxml2 findings at the exact same
+  # already-suppressed version above - confirmed individually, live,
+  # against the Debian Security Tracker: all five show "vulnerable" for
+  # both trixie and trixie-security, fixed only in forky/sid at
+  # 2.15.4+dfsg-1 (no trixie point release exists to pin to instead).
+  # Same reachability reasoning as every other libxml2 entry above -
+  # libxml2 arrives only as bind9-libs' own dependency (bind9-dnsutils,
+  # for `dig` in health checks/diagnostics), Unbound's own resolver
+  # process never uses it.
+  - id: CVE-2026-86138
+    purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
+    expired_at: 2026-11-30
+    statement: >-
+      Integer overflow and resultant heap-based buffer overflow in
+      xmlDictAddQString (dict.c) - unfixed in trixie (confirmed live) -
+      see CVE-2019-16224's identical reachability statement above.
+  - id: CVE-2026-86139
+    purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
+    expired_at: 2026-11-30
+    statement: >-
+      Integer overflow in xmlURIEscapeStr (uri.c) - unfixed in trixie
+      (confirmed live) - see CVE-2019-16224's identical reachability
+      statement above.
+  - id: CVE-2026-86142
+    purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
+    expired_at: 2026-11-30
+    statement: >-
+      Heap-based buffer overflow in xmlXPtrEvalXPtrPart from xpointer
+      length saturation - unfixed in trixie (confirmed live) - see
+      CVE-2019-16224's identical reachability statement above.
+  - id: CVE-2026-86143
+    purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
+    expired_at: 2026-11-30
+    statement: >-
+      Negative lengths reaching xmlIO write callbacks from an
+      xmlOutputWriteCallback/xmlBufUse inconsistency - unfixed in trixie
+      (confirmed live) - see CVE-2019-16224's identical reachability
+      statement above.
+  - id: CVE-2026-86144
+    purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
+    expired_at: 2026-11-30
+    statement: >-
+      xmlXIncludeProcess/xmlXIncludeProcessTree not propagating
+      parseFlags (e.g. XML_PARSE_NONET), relevant to XXE/SSRF for callers
+      with a custom network-capable resource loader - unfixed in trixie
+      (confirmed live). This image never calls libxml2's XInclude
+      processing at all - see CVE-2019-16224's identical reachability
+      statement above.
   - id: CVE-2026-8376
     purls: ["pkg:deb/debian/perl-base@5.40.1-6"]
     expired_at: 2026-11-30
