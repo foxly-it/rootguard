@@ -70,3 +70,4 @@ HAProxy already passes the `Host` header through unchanged in this basic configu
 ## See also
 
 - [Threat model](../security/threat-model.md) - the browser/session trust boundary in detail.
+- [Getting started with RootGuard](../getting-started.en.md) - if you're still at the beginning.

@@ -70,3 +70,4 @@ HAProxy reicht den `Host`-Header in dieser Grundkonfiguration bereits unverände
 ## Siehe auch
 
 - [Bedrohungsmodell](../security/threat-model.md) - die Browser-/Session-Vertrauensgrenze im Detail.
+- [Erste Schritte mit RootGuard](../getting-started.md) - falls du noch am Anfang stehst.
