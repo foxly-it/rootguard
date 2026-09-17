@@ -26,7 +26,7 @@ func TestUpdateEnforcesBackupRetentionAfterLifecycle(t *testing.T) {
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
 			case "image":
 				return []byte("sha256:old"), nil

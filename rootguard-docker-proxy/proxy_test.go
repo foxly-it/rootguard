@@ -61,9 +61,14 @@ func TestAllowedCalls(t *testing.T) {
 		{"versioned ping", "GET", "/v1.51/_ping", ""},
 		{"pull known image", "POST", "/images/create?fromImage=ghcr.io%2Ffoxly-it%2Frootguard-core&tag=1.0.0", ""},
 		{"pull adguard", "POST", "/images/create?fromImage=adguard%2Fadguardhome&tag=v0.107.79", ""},
+		{"pull adguard, docker.io-qualified", "POST", "/images/create?fromImage=docker.io%2Fadguard%2Fadguardhome&tag=v0.107.79", ""},
 		{"image inspect", "GET", "/images/ghcr.io%2Ffoxly-it%2Frootguard-core/json", ""},
 		{"container inspect", "GET", "/containers/rootguard-core/json", ""},
 		{"ps", "GET", "/containers/json", ""},
+		{"daemon info", "GET", "/info", ""},
+		{"container stats", "GET", "/containers/rootguard-core/stats", ""},
+		{"container create from a resolved bare digest", "POST", "/containers/create",
+			`{"Image":"sha256:` + strings.Repeat("a", 64) + `","HostConfig":{}}`},
 		{"cp out", "GET", "/containers/rootguard-adguard/archive?path=%2Fopt%2Fadguardhome%2Fconf", ""},
 		{"cp in", "PUT", "/containers/rootguard-adguard/archive?path=%2Fopt%2Fadguardhome%2Fconf", ""},
 		{"restart", "POST", "/containers/rootguard-unbound/restart", ""},
@@ -121,8 +126,7 @@ func TestRejectedCalls(t *testing.T) {
 		target string
 		body   string
 	}{
-		{"not on the allowlist at all", "GET", "/info", ""},
-		{"swarm", "GET", "/swarm", ""},
+		{"not on the allowlist at all", "GET", "/swarm", ""},
 		{"plugins", "POST", "/plugins/pull", ""},
 		{"secrets", "GET", "/secrets", ""},
 		{"build", "POST", "/build", ""},
@@ -137,6 +141,8 @@ func TestRejectedCalls(t *testing.T) {
 			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"PidMode":"host"}}`},
 		{"unknown image", "POST", "/containers/create",
 			`{"Image":"docker.io/attacker/evil","HostConfig":{}}`},
+		{"digest-shaped tag on an unknown bare repository", "POST", "/containers/create",
+			`{"Image":"sha256:` + strings.Repeat("a", 63) + `x","HostConfig":{}}`},
 		{"arbitrary host bind mount", "POST", "/containers/create",
 			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"Binds":["/:/hostroot"]}}`},
 		{"arbitrary host bind mount, etc passwd", "POST", "/containers/create",

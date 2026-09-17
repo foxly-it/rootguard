@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -32,10 +33,35 @@ var knownImageRepositories = map[string]bool{
 	"adguard/adguardhome":                          true,
 }
 
+// bareDigestImageRef matches a resolved, content-addressable image
+// reference with no repository at all - "sha256:" followed by exactly 64
+// hex characters, what a container's own .Image/.Config.Image field and
+// `docker image inspect --format {{.Id}}` return. rootguard-core's own
+// port-probe (installer/manager.go's probeHostPortBusy) and volume-
+// ownership-migration helpers (updater/manager.go) deliberately reuse an
+// already-pulled image this way to avoid a redundant pull - found live
+// wiring this proxy into the real stack, when validateContainerCreate
+// rejected it because stripImageRef's tag-splitting logic read the
+// "sha256" prefix as if it were a bare, slash-free repository name.
+// Always allowed regardless of knownImageRepositories: Docker can only
+// ever create a container from a digest it already has cached, and the
+// only way image content enters this proxy's daemon at all is the
+// repository-checked /images/create path below - no build/commit/load
+// endpoint is on this allowlist - so a bare digest is transitively
+// already vetted by the time anything could reference it this way.
+var bareDigestImageRef = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+
 // stripImageRef reduces "repo:tag", "repo@sha256:...", or a bare "repo"
 // down to just the repository part, so a digest/tag change (expected
 // every release) never requires touching knownImageRepositories.
 func stripImageRef(ref string) string {
+	// docker compose normalizes a bare Docker Hub reference like
+	// "adguard/adguardhome" to its fully-qualified "docker.io/adguard/..."
+	// form before issuing the real /images/create call - found live
+	// wiring this proxy into the real stack. Every other known repository
+	// is already registry-qualified (ghcr.io/...), so this is the only
+	// one that needed it.
+	ref = strings.TrimPrefix(ref, "docker.io/")
 	if i := strings.Index(ref, "@"); i != -1 {
 		ref = ref[:i]
 	}
@@ -132,9 +158,11 @@ func validateContainerCreate(_ *http.Request, body []byte) error {
 		return fmt.Errorf("invalid container-create body: %w", err)
 	}
 
-	repo := stripImageRef(c.Image)
-	if !knownImageRepositories[repo] {
-		return fmt.Errorf("image repository %q is not on the allowlist", repo)
+	if !bareDigestImageRef.MatchString(c.Image) {
+		repo := stripImageRef(c.Image)
+		if !knownImageRepositories[repo] {
+			return fmt.Errorf("image repository %q is not on the allowlist", repo)
+		}
 	}
 
 	hc := c.HostConfig

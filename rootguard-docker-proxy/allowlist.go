@@ -46,6 +46,16 @@ var rules = []rule{
 	{method: "GET", pattern: regexp.MustCompile(`^/_ping$`)},
 	{method: "HEAD", pattern: regexp.MustCompile(`^/_ping$`)},
 
+	// Found live wiring this proxy into the real stack (a real guided-setup
+	// deploy and self-update run, exactly the validation the package doc
+	// comment said was still outstanding): `docker compose` itself queries
+	// daemon capabilities via GET /info before certain operations, and
+	// polls each service's GET /containers/{id}/stats for its own startup
+	// progress display - neither is issued by RootGuard's own code
+	// directly, both are read-only and grant no capability.
+	{method: "GET", pattern: regexp.MustCompile(`^/info$`)},
+	{method: "GET", pattern: regexp.MustCompile(`^/containers/[^/]+/stats$`)},
+
 	// docker pull / docker compose pull (Core + Updater)
 	{method: "POST", pattern: regexp.MustCompile(`^/images/create$`), validate: validateImageCreate},
 
