@@ -67,12 +67,23 @@ var rules = []rule{
 	{method: "GET", pattern: regexp.MustCompile(`^/containers/[^/]+/json$`)},
 	{method: "GET", pattern: regexp.MustCompile(`^/containers/json$`)},
 
-	// docker cp, both directions (Core: backup export/restore, update rollback)
+	// docker cp, both directions (Core: backup export/restore, update rollback).
+	// HEAD is docker cp's own preflight - found live wiring this proxy
+	// into the real stack: the CLI checks the target path's existence/
+	// mode via HEAD before the real GET/PUT, read-only and grants nothing
+	// beyond what GET already would.
 	{method: "GET", pattern: regexp.MustCompile(`^/containers/[^/]+/archive$`)},
+	{method: "HEAD", pattern: regexp.MustCompile(`^/containers/[^/]+/archive$`)},
 	{method: "PUT", pattern: regexp.MustCompile(`^/containers/[^/]+/archive$`)},
 
 	// docker restart (Core: backup restore)
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/restart$`)},
+	// docker compose down's own per-service stop, issued before removal -
+	// found live wiring this proxy into the real stack (Core's backup-
+	// restore cleanup path runs `compose ... down --volumes
+	// --remove-orphans`, installer/manager.go). Grants nothing beyond
+	// what restart already does to an existing container.
+	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/stop$`)},
 
 	// docker run (Core: one-off chown-helper and self-image-verification
 	// containers) and docker compose up's own per-service container
@@ -106,6 +117,12 @@ var rules = []rule{
 	// docker network connect (Core only: joining rootguard-dns) - the
 	// third capability-granting call.
 	{method: "POST", pattern: regexp.MustCompile(`^/networks/[^/]+/connect$`), validate: validateNetworkConnect},
+	// docker network disconnect (Core: backup-restore cleanup, detaching
+	// itself from rootguard-dns before recreating it) - found live wiring
+	// this proxy into the real stack. Unlike connect, disconnect only
+	// ever removes an existing association, never grants one, so no body
+	// validator is needed.
+	{method: "POST", pattern: regexp.MustCompile(`^/networks/[^/]+/disconnect$`)},
 
 	// docker compose's own network/volume bookkeeping for the guided-setup
 	// DNS-stack bootstrap (create/pull/create in installer/manager.go) -
