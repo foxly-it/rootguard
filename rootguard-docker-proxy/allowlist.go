@@ -83,10 +83,25 @@ var rules = []rule{
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/wait$`)},
 	{method: "DELETE", pattern: regexp.MustCompile(`^/containers/[^/]+$`)},
 
+	// docker run without -d (Core's chown-helper and port-probe containers,
+	// installer/manager.go and updater/manager.go) attaches to relay the
+	// container's own output back to the CLI's stdout - found live wiring
+	// this proxy into the real stack. Body-validated: an attach that also
+	// requests stdin would let the caller write arbitrary data into the
+	// container's stdin stream, which none of these fixed, non-interactive
+	// entrypoints (chown/stat/true) need and none of Core's own `docker
+	// run` invocations request (-i is never passed).
+	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/attach$`), validate: validateAttach},
+
 	// docker exec (Core only: reloading rootguard-blockpage) - the second
 	// capability-granting call, hence the body validator.
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/exec$`), validate: validateExecCreate},
 	{method: "POST", pattern: regexp.MustCompile(`^/exec/[^/]+/start$`)},
+	// docker exec's own exit-code check after running - found live wiring
+	// this proxy into the real stack. Read-only, grants nothing: {id} here
+	// is an exec instance ID only reachable by having already passed
+	// validateExecCreate above.
+	{method: "GET", pattern: regexp.MustCompile(`^/exec/[^/]+/json$`)},
 
 	// docker network connect (Core only: joining rootguard-dns) - the
 	// third capability-granting call.

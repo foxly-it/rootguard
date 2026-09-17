@@ -178,7 +178,13 @@ func validateContainerCreate(_ *http.Request, body []byte) error {
 		return fmt.Errorf("device mappings are not allowed")
 	}
 	for _, capName := range hc.CapAdd {
-		if !knownCapAdd[strings.ToUpper(capName)] {
+		// Found live wiring this proxy into the real stack: this Docker
+		// version sends the kernel-style "CAP_CHOWN" form in the actual
+		// API request body, not the short "CHOWN" form compose.release.yaml's
+		// own cap_add: [CHOWN, ...] YAML and knownCapAdd both use -
+		// normalize before comparing rather than doubling every entry.
+		normalized := strings.TrimPrefix(strings.ToUpper(capName), "CAP_")
+		if !knownCapAdd[normalized] {
 			return fmt.Errorf("capability %q is not on the allowlist", capName)
 		}
 	}
@@ -217,6 +223,20 @@ func validateMounts(mounts []mount) error {
 		if !knownVolumeNames[m.Source] {
 			return fmt.Errorf("mount source %q is not an allow-listed named volume", m.Source)
 		}
+	}
+	return nil
+}
+
+// validateAttach covers `POST /containers/{id}/attach` - see allowlist.go's
+// comment on this rule for why it's needed at all. Docker takes stdin/
+// stdout/stderr/stream from the query string, not the body. Rejecting
+// stdin=1/true is the entire security boundary here: without it, nothing
+// else about this call can grant a new capability or reach a new
+// container, since {id} must already reference something that exists.
+func validateAttach(r *http.Request, _ []byte) error {
+	switch r.URL.Query().Get("stdin") {
+	case "1", "true":
+		return fmt.Errorf("attach with stdin is not allowed")
 	}
 	return nil
 }

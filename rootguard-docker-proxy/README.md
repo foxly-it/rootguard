@@ -52,18 +52,26 @@ sends - see `validate.go`.
   `rootguard-updater/docker.go`), not a guess at what the Docker API
   offers in general. No Swarm, Plugins, Secrets, Services, Nodes, Build,
   Commit, Session, or Configs endpoints exist in the allowlist at all.
-- **Body-validated for the three capability-granting calls**
-  (`validate.go`):
+- **Body- or query-validated for four calls that can grant new capability
+  or reach new data** (`validate.go`):
   - `POST /containers/create` - rejects `Privileged`, `NetworkMode`/
     `PidMode`/`IpcMode`/`UTSMode: host`, any `Devices`, any `CapAdd`
-    outside `{CHOWN, SETUID, SETGID}`, and any bind/mount whose source
+    outside `{CHOWN, SETUID, SETGID}` (accepting either the short or the
+    kernel-style `CAP_`-prefixed form), and any bind/mount whose source
     isn't one of RootGuard's own named volumes (an arbitrary host path is
     exactly the primitive this proxy exists to close off) or whose
-    `Image` isn't one of RootGuard's own known image repositories.
+    `Image` isn't one of RootGuard's own known image repositories (a
+    resolved, already-cached bare content digest is exempt from the
+    repository check - see `stripImageRef`'s doc comment for why that's
+    still safe).
   - `POST /containers/{id}/exec` - only `rootguard-blockpage`, only the
     two literal commands Core's own code ever sends.
   - `POST /networks/{id}/connect` - only `rootguard-dns`, only
     RootGuard's own containers.
+  - `POST /containers/{id}/attach` - rejects a request for `stdin`,
+    needed by Core's own foreground `docker run` invocations (the chown
+    helper, the port-probe container) to relay output back to the CLI,
+    but never to write into a container.
 - **Not a caller-authentication boundary.** Core and the Updater both sit
   on the same `control` network and aren't distinguished from each other
   at the proxy level - this is a known, documented scope limit, not an
