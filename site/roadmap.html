@@ -3,27 +3,32 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Der RootGuard-Fahrplan vom aktuellen Release-Candidate-Stand bis zum stabilen 1.0 Release.">
+  <meta name="description" content="Der RootGuard-Fahrplan von Alpha bis zum stabilen 1.0-Release - alle Meilensteine erreicht.">
   <meta name="theme-color" content="#0d1218">
-  <meta property="og:title" content="RootGuard Roadmap bis 1.0">
-  <meta property="og:description" content="Release-Gates, Unbound-Prioritäten, Sicherheit, Recovery und Eignung für Produktivumgebungen.">
+  <meta property="og:title" content="RootGuard Roadmap - 1.0 ist da">
+  <meta property="og:description" content="Release-Gates, Unbound-Prioritäten, Sicherheit und Recovery - vom Alpha-Stack bis zur stabilen Docker-Appliance, alle Meilensteine erreicht.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://rootguard.foxly.de/roadmap.html">
-  <title>RootGuard Roadmap bis 1.0</title>
+  <meta property="og:image" content="https://rootguard.foxly.de/assets/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://rootguard.foxly.de/assets/og-image.png">
+  <title>RootGuard Roadmap - 1.0 ist da</title>
   <link rel="canonical" href="https://rootguard.foxly.de/roadmap.html">
   <link rel="icon" href="rootguard-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="project.css">
 </head>
-<body data-title-de="RootGuard Roadmap bis 1.0" data-title-en="RootGuard roadmap to 1.0"
-      data-description-de="Der RootGuard-Fahrplan vom aktuellen Release-Candidate-Stand bis zum stabilen 1.0 Release."
-      data-description-en="The RootGuard roadmap from the current release-candidate state to a stable 1.0 release.">
+<body data-title-de="RootGuard Roadmap - 1.0 ist da" data-title-en="RootGuard roadmap - 1.0 has arrived"
+      data-description-de="Der RootGuard-Fahrplan von Alpha bis zum stabilen 1.0-Release - alle Meilensteine erreicht."
+      data-description-en="The RootGuard roadmap from alpha to a stable 1.0 release - every milestone delivered.">
   <a class="skip-link" href="#roadmap">Zum Inhalt springen</a>
   <div class="wrap">
     <header class="topbar">
       <a class="brand" href="index.html" aria-label="RootGuard Startseite"><img class="brand-logo" src="rootguard-icon.svg" alt=""><span>Root<span>Guard</span></span></a>
       <div class="nav-group">
-        <nav class="links" aria-label="Hauptnavigation"><a class="nav-home" href="index.html" aria-label="Startseite" title="Startseite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1.0.1 0 1 1H9a1 1.0.1 0 1-1v-4a1 1.0.1 1 1-1h2a1 1.0.1 1 1 1v4a1 1.0.1 0 1 1h2.5a1 1.0.1 0 1-1v-9"/></svg></a><details class="nav-dropdown active"><summary aria-current="page" data-de="Menü" data-en="Menu">Menü</summary><div class="nav-dropdown-menu"><a href="index.html#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a><a href="docs/" data-de="Docs" data-en="Documentation">Docs</a><a class="active" href="roadmap.html" aria-current="page">Roadmap</a></div></details><div class="language-switch nav-language" aria-label="Sprache"><button class="lang-button" id="btn-de" type="button" data-language="de">DE</button><button class="lang-button" id="btn-en" type="button" data-language="en">EN</button></div></nav>
+        <nav class="links" aria-label="Hauptnavigation"><a class="nav-home" href="index.html" aria-label="Startseite" title="Startseite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9a1 1 0 0 0 1 1H9a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1h2.5a1 1 0 0 0 1-1v-9"/></svg></a><a href="index.html#quickstart" data-de="Schnellstart" data-en="Quick start">Schnellstart</a><a href="docs/" data-de="Docs" data-en="Documentation">Docs</a><a class="active" href="roadmap.html" aria-current="page">Roadmap</a><div class="language-switch nav-language" aria-label="Sprache"><button class="lang-button" id="btn-de" type="button" data-language="de">DE</button><button class="lang-button" id="btn-en" type="button" data-language="en">EN</button></div></nav>
         <a class="github-button" href="https://github.com/foxly-it/rootguard" target="_blank" rel="noopener noreferrer" aria-label="RootGuard auf GitHub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .7a11.3 11.3 0 0 0-3.6 22c.6.1.8-.2.8-.5v-2c-3.3.7-4-1.4-4-1.4-.5-1.4-1.3-1.8-1.3-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.4 11.4 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5A11.3 11.3 0 0 0 12 .7Z"/></svg></a>
       </div>
     </header>

@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://rootguard.foxly.de/sitemap.xml
+Sitemap: https://rootguard.foxly.de/docs/sitemap.xml
