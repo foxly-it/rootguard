@@ -1,6 +1,18 @@
 # RootGuard project state
 
-Last updated: 2026-08-29
+Last updated: 2026-09-17
+
+**1.0.0 shipped 2026-09-14; 1.0.1 (a patch release) shipped 2026-09-17.**
+Every milestone this file's own "Remaining production milestones" section
+below once tracked is now complete - see `ROADMAP.md`'s own `1.0.0`
+section (kept current) for the authoritative checklist, and
+`docs/release-history.md`/`CHANGELOG.md` for what actually shipped in
+each release. This file's session-narrative sections below (chronological,
+oldest first) stop being actively maintained somewhere around the
+2026-08-29 mark - a lot of real work landed between then and 1.0.0 that
+was never backfilled here (91 PRs, per a same-day audit on 2026-09-16);
+`CHANGELOG.md` and `git log` are the authoritative record for that window,
+not this file's own narrative.
 
 This file is the persistent handover for future development sessions. Read it
 before repeating repository-wide discovery.
@@ -8,7 +20,7 @@ before repeating repository-wide discovery.
 ## Repository layout
 
 `foxly-it/rootguard` is a monorepo coordinating deployment, documentation,
-CI, and website, alongside six independently buildable component
+CI, and website, alongside seven independently buildable component
 directories (each with its own Dockerfile and path-filtered CI workflow):
 
 - `rootguard-core/` owns privileged orchestration and configuration.
@@ -22,6 +34,12 @@ directories (each with its own Dockerfile and path-filtered CI workflow):
   checks reach GHCR/Sigstore from the fully internet-isolated `control`
   network - self-update managed via its own dedicated channel since
   2026-09-03.
+- `rootguard-docker-proxy/` (joined 2026-09-16, PR #632) is a purpose-built,
+  request-body-filtering Docker Engine API proxy, closing the host-takeover
+  risk documented in `docs/threat-model.md`'s actor 1. Shipped as a
+  standalone, unit-tested component; not yet wired into
+  `compose.release.yaml`/Core/Updater - see `ROADMAP.md`'s Post-1.0/Future
+  section for the follow-up status.
 
 These were four separate repositories included as Git submodules until the
 monorepo migration (see "Delivered and verified" below); their full commit
@@ -1012,6 +1030,12 @@ the Docker cleanup inventory until requested
 ([rootguard#206](https://github.com/foxly-it/rootguard/pull/206)).
 
 ## Remaining production milestones
+
+**SUPERSEDED as of 1.0.0 (2026-09-14): nothing is "remaining" anymore -**
+every milestone below shipped, and `ROADMAP.md`'s own `1.0.0` section
+records the final closing checklist. Kept here as historical
+sequencing/prioritisation narrative for how 0.1-0.9 were actually reached,
+not as a current status source - check `ROADMAP.md` for that.
 
 Cross-referenced against `ROADMAP.md` on 2026-08-11 (supersedes the previous
 narrative version of this section, which had drifted from the actual
