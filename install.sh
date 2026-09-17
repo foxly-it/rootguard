@@ -50,6 +50,36 @@ done
 log() { printf '>> %s\n' "$*"; }
 die() { printf 'FEHLER: %s\n' "$*" >&2; exit 1; }
 
+# Checked before anything else. The documented "curl -fsSL ... | bash"
+# invocation already requires curl to exist just to fetch this script, but
+# anyone who obtained it a different way (wget, git clone, copy-paste)
+# reaches this point with curl still missing - every later download here
+# (dockerinstall.sh, the GitHub releases API, compose.release.yaml/.env)
+# depends on it, so a raw "curl: command not found" deep into the script
+# is a worse failure mode than catching it here with something actionable.
+#
+# sudo is only actually needed to install/run Docker as a non-root user -
+# found live on a fresh, minimal Debian 13 container logged in as root by
+# default, with neither curl nor sudo preinstalled: requiring sudo
+# unconditionally would force installing a package that user structurally
+# doesn't need just to satisfy this check. as_root() below picks sudo only
+# when actually running as a non-root user.
+check_prerequisites() {
+  command -v curl >/dev/null 2>&1 \
+    || die "curl ist nicht installiert. Bitte zuerst installieren (z. B. 'apt update && apt install -y curl' unter Debian/Ubuntu) und install.sh erneut ausführen."
+  if [ "$(id -u)" != "0" ] && ! command -v sudo >/dev/null 2>&1; then
+    die "sudo ist nicht installiert und dieses Skript läuft nicht als root. Bitte entweder 'apt update && apt install -y sudo' ausführen oder install.sh direkt als root starten."
+  fi
+}
+
+as_root() {
+  if [ "$(id -u)" = "0" ]; then
+    "$@"
+  else
+    sudo "$@"
+  fi
+}
+
 # curl | bash means this script's own stdin is the download pipe, not the
 # terminal - a plain `read` here would read from that (already-exhausted)
 # pipe and either hang or silently get empty input. /dev/tty is the actual
@@ -284,7 +314,7 @@ docker_present() {
   command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
 }
 
-# Runs the actual `docker` calls below - falls back to sudo automatically:
+# Runs the actual `docker` calls below - falls back to as_root automatically:
 # either Docker was just installed (group membership needs a fresh login
 # to take effect, so the current shell isn't in the docker group yet even
 # right after --add-user), or it was already present but this user was
@@ -293,13 +323,12 @@ docker_cmd() {
   if docker info >/dev/null 2>&1; then
     docker "$@"
   else
-    sudo docker "$@"
+    as_root docker "$@"
   fi
 }
 
 install_docker() {
   log "Docker wurde nicht gefunden - Installation über Foxly dockerinstall wird gestartet."
-  command -v sudo >/dev/null 2>&1 || die "sudo wird benötigt, um Docker zu installieren."
   command -v sha256sum >/dev/null 2>&1 || die "sha256sum wird benötigt, um den Docker-Installer zu verifizieren."
   local installer actual_sha256
   installer="$(mktemp)"
@@ -315,13 +344,15 @@ install_docker() {
     die "Docker-Installer hat eine unerwartete Prüfsumme (erwartet ${DOCKERINSTALL_SHA256}, erhalten ${actual_sha256}) - Installation abgebrochen."
   fi
   chmod +x "$installer"
-  sudo "$installer" install --non-interactive --no-hello --add-user="$(id -un)" \
+  as_root "$installer" install --non-interactive --no-hello --add-user="$(id -un)" \
     || die "Docker-Installation fehlgeschlagen. Manuelle Anleitung: https://docs.docker.com/engine/install/"
   log "Docker wurde installiert."
 }
 
 main() {
-  # Checked first, before anything else runs - so a pre-existing target
+  check_prerequisites
+
+  # Checked next, before anything else runs - so a pre-existing target
   # directory aborts immediately instead of after check_ports and a
   # potentially real Docker installation, which would otherwise leave a
   # system with Docker just installed for nothing on a retry.
