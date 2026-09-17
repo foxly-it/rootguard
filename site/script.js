@@ -1,11 +1,11 @@
 const translations = {
   de: {
-    title: "RootGuard – DNS-Schutz unter deiner Kontrolle",
-    description: "RootGuard vereint AdGuard Home, Unbound und eine sichere Weboberfläche zu einem selbst betriebenen DNS-Schutz für dein Netzwerk."
+    title: "RootGuard: AdGuard Home & Unbound per Docker verwaltet",
+    description: "RootGuard verbindet AdGuard Home und Unbound in Docker-Containern und verwaltet beide über eine gemeinsame Weboberfläche – dein selbst gehosteter DNS-Schutz."
   },
   en: {
-    title: "RootGuard – DNS protection under your control",
-    description: "RootGuard combines AdGuard Home, Unbound, and a secure web interface into self-hosted DNS protection for your network."
+    title: "RootGuard: AdGuard Home & Unbound managed via Docker",
+    description: "RootGuard runs AdGuard Home and Unbound in Docker containers, managed together through one shared web interface – your self-hosted DNS protection."
   }
 };
 
@@ -166,36 +166,6 @@ function initializeManualNavigation() {
   window.addEventListener("scroll", scheduleUpdate, { passive: true });
   window.addEventListener("resize", scheduleUpdate);
   scheduleUpdate();
-}
-
-function initializeHeaderNavigation() {
-  const dropdowns = [...document.querySelectorAll(".nav-dropdown")];
-  if (!dropdowns.length) return;
-
-  dropdowns.forEach((dropdown) => {
-    dropdown.addEventListener("toggle", () => {
-      if (!dropdown.open) return;
-      dropdowns.forEach((other) => {
-        if (other !== dropdown) other.open = false;
-      });
-    });
-    dropdown.querySelectorAll("a").forEach((link) => {
-      link.addEventListener("click", () => { dropdown.open = false; });
-    });
-  });
-
-  document.addEventListener("click", (event) => {
-    if (event.target.closest(".nav-dropdown")) return;
-    dropdowns.forEach((dropdown) => { dropdown.open = false; });
-  });
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape") return;
-    const openDropdown = dropdowns.find((dropdown) => dropdown.open);
-    if (!openDropdown) return;
-    openDropdown.open = false;
-    openDropdown.querySelector("summary")?.focus();
-  });
 }
 
 function initializeBackToTop() {
@@ -447,7 +417,6 @@ document.querySelectorAll(".lang-button").forEach((button) => {
 document.getElementById("year").textContent = new Date().getFullYear();
 const preferred = localStorage.getItem("rootguard-language") || (navigator.language.startsWith("de") ? "de" : "en");
 setLanguage(preferred, false);
-initializeHeaderNavigation();
 initializeManualNavigation();
 initializeInstallCopyButton();
 initializeInstallDemoReveal();

@@ -29,6 +29,32 @@ latest_version="$(rootguard_current_version)"
 # ...") is a historical fact, not a current-version claim, and must never
 # be bumped.
 historical_reference_pattern="([Aa]b |Starting with |required from |bis einschließlich |up to and including )${rootguard_version_pattern}"
+
+# Escapes ERE metacharacters so a value can be safely used as a literal
+# search pattern in awk's gsub() (which always treats its first argument
+# as a regex, never a fixed string) - found live, cutting 1.0.1: an
+# unescaped "1.0.0" passed straight into gsub() let its two dots match
+# ANY character each, so the pattern coincidentally also matched
+# unrelated digit-space-digit runs inside SVG <path d="..."> arc-flag
+# data (e.g. the "1 0 0" in a rounded-icon path) and clobbered them with
+# the literal new-version string - corrupting multiple icons across
+# site/index.html and site/roadmap.html on this exact release. A version
+# string can only ever contain digits/letters/dots/hyphens per
+# rootguard_version_pattern (only "." is an actual ERE metacharacter in
+# that set), but escaping the full metacharacter set here is defensive,
+# not just enough to cover today's shape.
+#
+# Doubled backslash in the replacement (\\\\&, not \\&): a `-v name=value`
+# assignment is itself run through awk's own string-escape processing
+# before the regex engine ever sees it (confirmed live - a single-escaped
+# "1\.0\.0" still reproduced the exact same corruption, since awk's -v
+# handling silently consumed that backslash first) - one extra backslash
+# survives that pass and reaches gsub() as the single literal backslash
+# an escaped regex metacharacter actually needs.
+ere_escape() {
+  printf '%s' "$1" | sed -E 's/[.[\*^$()+?{}|\\]/\\\\&/g'
+}
+
 changed_files=()
 for file in site/*.html README.md; do
   stale_versions="$(grep -vE "${historical_reference_pattern}" "${file}" \
@@ -37,7 +63,7 @@ for file in site/*.html README.md; do
   file_changed=0
   for stale in ${stale_versions}; do
     [[ "${stale}" == "${latest_version}" ]] && continue
-    awk -v old="${stale}" -v new="${latest_version}" \
+    awk -v old="$(ere_escape "${stale}")" -v new="${latest_version}" \
         -v hist="${historical_reference_pattern}" -v img="${rootguard_update_image_line_pattern}" '
       $0 !~ hist && $0 !~ img { gsub(old, new) }
       { print }
