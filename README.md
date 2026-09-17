@@ -73,8 +73,8 @@ notwendig.
 
 ```sh
 mkdir rootguard && cd rootguard
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/.env.release.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.1/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.1/.env.release.example
 ```
 
 Erzeuge zwei voneinander unabhängige Sicherheitsschlüssel:
@@ -234,8 +234,8 @@ RootGuard requires Docker Compose v2. It provides ready-made `amd64` and
 
 ```sh
 mkdir rootguard && cd rootguard
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/.env.release.example
+curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.1/compose.release.yaml
+curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.1/.env.release.example
 ```
 
 Generate two independent random security tokens:
