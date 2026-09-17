@@ -2,7 +2,7 @@
 
 # Threat model
 
-As of 2026-08-08. Extends `docs/architecture.md` with an explicit look at
+As of 2026-09-17. Extends `docs/architecture.md` with an explicit look at
 who RootGuard trusts and how far, what a compromised actor can each reach,
 which countermeasures already apply, and which residual risks are
 deliberately left open or out of scope for this project.
@@ -56,22 +56,37 @@ single trust boundary in the system.
   issue their own Docker API calls instead of the intended narrow
   operations would lead directly to host compromise - there is no second
   line of defense between "code bug in Core" and "full Docker access".
-- Concrete hardening step, in progress: `rootguard-docker-proxy`, a
-  purpose-built proxy that holds the socket itself, allow-lists Docker
-  API calls by exact method+path, and inspects the request body of every
-  call that can grant new capability (container create, exec create,
-  network connect) - rejecting `Privileged`, host namespace sharing, and
-  any bind/mount outside RootGuard's own named volumes, not just toggling
-  resource types on or off. Landed as a standalone, unit-tested component
-  (see `rootguard-docker-proxy/README.md`); not yet wired into
-  `compose.release.yaml`/Core/Updater, so this residual risk still
-  applies until that follow-up ships (tracked in `ROADMAP.md`'s
-  Post-1.0/Future section). Once wired, Core and Updater themselves run
-  unprivileged; the proxy itself still needs root or the host's
-  docker-group GID (see the comments in `rootguard-core/Dockerfile`,
-  `rootguard-updater/Dockerfile`, and `rootguard-docker-proxy/Dockerfile`)
-  - the improvement is concentrating that requirement into one small,
-  exhaustively tested component instead of two large, feature-rich ones.
+- Concrete hardening step, wired in as of this section's date:
+  `rootguard-docker-proxy`, a purpose-built proxy that holds the socket
+  itself, allow-lists Docker API calls by exact method+path, and inspects
+  the request body of every call that can grant new capability (container
+  create, exec create, network connect) - rejecting `Privileged`, host
+  namespace sharing, and any bind/mount outside RootGuard's own named
+  volumes, not just toggling resource types on or off (see
+  `rootguard-docker-proxy/README.md`). `compose.release.yaml` now runs it
+  as its own service on the internal-only `control` network, holding the
+  real `/var/run/docker.sock` mount that Core and the Updater used to
+  carry themselves; they reach it over `DOCKER_HOST=tcp://docker-proxy:2375`
+  instead, with a startup preflight check
+  (`stack.CheckDockerProxyReachable`/`checkDockerProxyReachable`) failing
+  loudly if the URL is configured but the proxy isn't actually reachable.
+  A fresh install gets this topology immediately; **an installation that
+  only ever received updates via the WebGUI keeps its old, unmodified
+  `compose.release.yaml`** (self-update can never deliver a
+  compose-topology change, see `docs/release-process.md`) and therefore
+  keeps mounting the real socket directly until its operator does a fresh
+  install or a manual compose refresh - the same residual-risk shape
+  already true for every other topology change this project has shipped
+  (attestation-proxy's own rollout hit the identical gap). Still open,
+  tracked in `ROADMAP.md`'s Post-1.0/Future section: dropping `USER root`
+  from Core/Updater's own Dockerfiles now that neither holds the real
+  socket anymore (needs its own volume-ownership migration design first),
+  giving docker-proxy a self-update channel of its own, and the second,
+  later phase - rootless Docker daemon compatibility. The proxy itself
+  still needs root or the host's docker-group GID (see the comments in
+  `rootguard-docker-proxy/Dockerfile`) - the improvement is concentrating
+  that requirement into one small, exhaustively tested component instead
+  of two large, feature-rich ones.
 
 ### 2. Browser / authenticated user
 

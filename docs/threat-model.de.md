@@ -2,7 +2,7 @@
 
 # Bedrohungsmodell
 
-Stand: 2026-08-08. Ergänzt `docs/architecture.md` um eine explizite
+Stand: 2026-09-17. Ergänzt `docs/architecture.md` um eine explizite
 Betrachtung, wem RootGuard wie weit vertraut, was ein kompromittierter
 Akteur jeweils erreichen kann, welche Gegenmaßnahmen bereits greifen und
 welche Restrisiken bewusst offen oder nicht Ziel dieses Projekts sind.
@@ -59,24 +59,41 @@ Abstand größte Einzel-Vertrauensgrenze im System.
   vorgesehenen engen Operationen abzusetzen, würde direkt zur
   Host-Kompromittierung führen - es gibt keine zweite Verteidigungslinie
   zwischen „Code-Fehler in Core" und „voller Docker-Zugriff".
-- Konkreter Härtungsschritt, in Arbeit: `rootguard-docker-proxy`, ein
-  eigens gebauter Proxy, der den Socket selbst hält, Docker-API-Aufrufe
-  exakt nach Methode+Pfad allowlistet und zusätzlich den Request-Body
-  jedes Aufrufs prüft, der neue Fähigkeiten verleihen könnte (Container
-  erstellen, Exec erstellen, Netzwerk verbinden) - er lehnt `Privileged`,
-  geteilte Host-Namespaces und jeden Bind/Mount außerhalb von RootGuards
-  eigenen benannten Volumes ab, statt nur Ressourcentypen pauschal an-
-  oder abzuschalten. Als eigenständige, unit-getestete Komponente
-  gelandet (siehe `rootguard-docker-proxy/README.md`); noch nicht in
-  `compose.release.yaml`/Core/Updater eingebunden, das Restrisiko gilt
-  also bis zu diesem Folgeschritt weiter (nachverfolgt in `ROADMAP.md`s
-  Post-1.0/Future-Abschnitt). Sobald eingebunden, laufen Core und Updater
-  selbst unprivilegiert; der Proxy selbst braucht weiterhin root oder die
-  Docker-Gruppen-GID des Hosts (siehe die Kommentare in
-  `rootguard-core/Dockerfile`, `rootguard-updater/Dockerfile` und
-  `rootguard-docker-proxy/Dockerfile`) - die Verbesserung besteht darin,
-  diese Notwendigkeit auf eine kleine, gründlich getestete Komponente zu
-  konzentrieren statt auf zwei große, funktionsreiche.
+- Konkreter Härtungsschritt, eingebunden mit Stand dieses Abschnitts:
+  `rootguard-docker-proxy`, ein eigens gebauter Proxy, der den Socket
+  selbst hält, Docker-API-Aufrufe exakt nach Methode+Pfad allowlistet und
+  zusätzlich den Request-Body jedes Aufrufs prüft, der neue Fähigkeiten
+  verleihen könnte (Container erstellen, Exec erstellen, Netzwerk
+  verbinden) - er lehnt `Privileged`, geteilte Host-Namespaces und jeden
+  Bind/Mount außerhalb von RootGuards eigenen benannten Volumes ab, statt
+  nur Ressourcentypen pauschal an- oder abzuschalten (siehe
+  `rootguard-docker-proxy/README.md`). `compose.release.yaml` betreibt ihn
+  jetzt als eigenen Dienst im internen `control`-Netzwerk und hält dort
+  den echten `/var/run/docker.sock`-Mount, den Core und Updater vorher
+  selbst trugen; sie erreichen ihn stattdessen über
+  `DOCKER_HOST=tcp://docker-proxy:2375`, abgesichert durch eine
+  Preflight-Prüfung beim Start
+  (`stack.CheckDockerProxyReachable`/`checkDockerProxyReachable`), die
+  laut fehlschlägt, falls die URL konfiguriert, der Proxy aber tatsächlich
+  nicht erreichbar ist. Eine Neuinstallation erhält diese Topologie
+  sofort. **Eine Installation, die bisher nur über die WebGUI aktualisiert
+  wurde, behält ihre alte, unveränderte `compose.release.yaml`** (ein
+  Self-Update kann niemals eine Compose-Topologie-Änderung ausliefern,
+  siehe `docs/release-process.md`) und mountet den echten Socket daher
+  weiterhin direkt, bis der Betreiber eine Neuinstallation oder einen
+  manuellen Compose-Refresh durchführt - dasselbe Restrisiko-Muster, das
+  bereits bei jeder anderen Topologie-Änderung dieses Projekts galt (der
+  Rollout von attestation-proxy traf genau auf dieselbe Lücke). Weiterhin
+  offen, nachverfolgt in `ROADMAP.md`s Post-1.0/Future-Abschnitt: `USER
+  root` aus Core/Updaters eigenen Dockerfiles entfernen, jetzt, wo keiner
+  von beiden mehr den echten Socket hält (braucht zuerst ein eigenes
+  Migrationskonzept für Volume-Eigentümerschaften), ein eigener
+  Self-Update-Kanal für docker-proxy, und die zweite, spätere Phase -
+  Kompatibilität mit einem rootless Docker-Daemon. Der Proxy selbst
+  braucht weiterhin root oder die Docker-Gruppen-GID des Hosts (siehe die
+  Kommentare in `rootguard-docker-proxy/Dockerfile`) - die Verbesserung
+  besteht darin, diese Notwendigkeit auf eine kleine, gründlich getestete
+  Komponente zu konzentrieren statt auf zwei große, funktionsreiche.
 
 ### 2. Browser / authentifizierter Nutzer
 

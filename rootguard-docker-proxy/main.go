@@ -25,14 +25,18 @@
 // This binary only holds the real Docker socket - Core and the Updater
 // talk to it instead, over the internal `control` network, via a plain
 // `DOCKER_HOST=tcp://docker-proxy:2375` (no call-site code changes needed;
-// the `docker` CLI/compose already honor DOCKER_HOST transparently), and
-// no longer need to run as root or match the host's docker-group GID.
+// the `docker` CLI/compose already honor DOCKER_HOST transparently).
+// Dropping `USER root` from their own Dockerfiles now that neither holds
+// the real socket anymore is a deliberate, separate follow-up (needs its
+// own volume-ownership migration design first, tracked in ROADMAP.md) -
+// wiring this proxy in doesn't require it.
 //
-// NOT YET WIRED UP: this component is intentionally shipped standalone
-// first - compose.release.yaml, Core/Updater's Dockerfiles, and the
-// preflight ROOTGUARD_DOCKER_PROXY_URL checks are a separate, follow-up
-// change once this proxy's own allowlist has been validated against real
-// observed traffic from an actual guided-setup deploy and self-update run.
+// Wired into compose.release.yaml: Core and the Updater no longer mount
+// the socket themselves, only this service does (see this repository's
+// docs/threat-model.md, actor 1, and rootguard-docker-proxy/README.md for
+// the current rollout state, including the backward-compatibility
+// behavior for installations whose compose topology predates this
+// service).
 package main
 
 import (

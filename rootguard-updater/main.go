@@ -32,6 +32,17 @@ func main() {
 	if err := prepareSessionVolume(envOrDefault("ROOTGUARD_SESSION_DIR", "/var/lib/rootguard-sessions")); err != nil {
 		log.Fatalf("prepare WebApp session volume: %v", err)
 	}
+
+	// See rootguard-core/cmd/rootguard/main.go's identical check and
+	// comment - same backward-compat reasoning applies here: unset means
+	// this installation's compose topology predates rootguard-docker-proxy
+	// and still mounts the real socket directly.
+	if os.Getenv("ROOTGUARD_DOCKER_PROXY_URL") == "" {
+		log.Print("docker-proxy not configured (ROOTGUARD_DOCKER_PROXY_URL unset) - using direct Docker socket access, pre-hardening compose topology")
+	} else if err := checkDockerProxyReachable(); err != nil {
+		log.Fatalf("docker proxy: %v", err)
+	}
+
 	manager := newManager(
 		envOrDefault("ROOTGUARD_UPDATER_DATA_DIR", "/var/lib/rootguard/control-plane-updater"),
 		envOrDefault("ROOTGUARD_COMPOSE_FILE", "/opt/rootguard/compose.yaml"),

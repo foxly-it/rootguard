@@ -149,6 +149,21 @@ func main() {
 		updaterAttestationVerifier = func(context.Context, string, string) error { return nil }
 	}
 
+	// Unset ROOTGUARD_DOCKER_PROXY_URL means this installation's compose
+	// topology predates rootguard-docker-proxy and still mounts the real
+	// Docker socket directly - stack.CheckDockerProxyReachable returns nil
+	// in that case by design (see its own doc comment), so this is
+	// purely informational. Once the operator's compose.release.yaml sets
+	// it, the proxy becomes a hard dependency for virtually everything
+	// this binary does with Docker, so a misconfigured or unreachable one
+	// must fail loudly here rather than surface later as a confusing
+	// first-`docker`-call error.
+	if os.Getenv("ROOTGUARD_DOCKER_PROXY_URL") == "" {
+		log.Print("docker-proxy not configured (ROOTGUARD_DOCKER_PROXY_URL unset) - using direct Docker socket access, pre-hardening compose topology")
+	} else if err := stack.CheckDockerProxyReachable(); err != nil {
+		log.Fatalf("docker proxy: %v", err)
+	}
+
 	port := envOrDefault("PORT", "8081")
 	manager := unbound.NewManager(
 		envOrDefault("UNBOUND_CONFIG_DIR", "/var/lib/rootguard/unbound"),

@@ -18,12 +18,18 @@ holds the real socket, reachable only from `control` (RootGuard's
 internet-isolated internal network), speaking an allow-listed, validated
 subset of the Docker Engine API back to Core and the Updater.
 
-**Status: standalone, not yet wired into the RootGuard stack.** This
-component's own allowlist and validators are complete and unit-tested,
-but `compose.release.yaml`, Core/Updater's Dockerfiles, and a
-`ROOTGUARD_DOCKER_PROXY_URL` preflight check are a deliberate follow-up
-change - see this repository's `docs/threat-model.md` and
-`docs/release-process.md` for the rollout plan once that lands.
+**Wired into `compose.release.yaml`**: Core and the Updater no longer
+mount `/var/run/docker.sock` themselves - only this service does. They
+reach it over `DOCKER_HOST=tcp://docker-proxy:2375` (the Docker CLI both
+already shell out to honors this from the environment with no code
+change) and verify it's actually up at startup via
+`ROOTGUARD_DOCKER_PROXY_URL=http://docker-proxy:2375`
+(`stack.CheckDockerProxyReachable`/`checkDockerProxyReachable`, same
+`/healthz` check pattern as `rootguard-attestation-proxy`). An
+installation that only ever updated via the WebGUI keeps its old
+compose topology (direct socket access) until a fresh install or a
+manual `compose.release.yaml` refresh - self-update can never deliver a
+compose-topology change, see `docs/release-process.md`.
 
 ## Why not a generic allowlist-by-endpoint proxy?
 
@@ -85,6 +91,12 @@ The allowlist and validators themselves are compiled in, not configurable
 via environment or flags - widening them requires a code change and a
 new release, by design, same philosophy as `rootguard-attestation-proxy`.
 The service listens on port `2375`.
+
+Consumer side (Core/the Updater, set in `compose.release.yaml`, not here):
+`DOCKER_HOST=tcp://docker-proxy:2375` redirects every `docker`/`docker
+compose` invocation at this proxy instead of the local socket;
+`ROOTGUARD_DOCKER_PROXY_URL=http://docker-proxy:2375` is the same
+endpoint, used only for each consumer's own startup reachability check.
 
 ## Development
 

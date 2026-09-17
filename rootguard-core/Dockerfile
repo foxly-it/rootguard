@@ -92,17 +92,18 @@ RUN apk del openssh-client \
 COPY --from=builder /rootguard-core /usr/local/bin/rootguard-core
 COPY --from=cosign /ko-app/cosign /usr/local/bin/cosign
 
-# Deliberately no USER instruction: Core holds the Docker socket to
-# orchestrate the other managed services, and socket access requires either
-# running as root or matching the host's docker group GID, which differs
-# per installation and can't be hardcoded here without breaking on hosts
-# where it doesn't match. Tracked as a real gap, not an oversight - the
-# concrete follow-up is a dedicated docker-socket-proxy sidecar that lets
-# Core itself run unprivileged while a narrow, allowlisted proxy holds the
-# actual socket (see ROADMAP.md 0.5's threat-model item). Suppressed for
-# this file specifically in .trivyignore.yaml (AVD-DS-0002), not inline -
-# trivy's inline-ignore comments only attach to a specific line, and this
-# check (like AVD-DS-0026 below) has none: it's a whole-file absence check,
-# so an inline comment anywhere in the file can never match it.
+# Deliberately no USER instruction: Core no longer holds the real Docker
+# socket at all (rootguard-docker-proxy does - see compose.release.yaml
+# and docs/threat-model.md, actor 1), so the original reason for running
+# as root here is gone. Not yet dropped, though - real installations have
+# existing volumes (rootguard-data, unbound-config, adguard-auth)
+# currently owned by root, and switching this image to a non-root UID
+# without a matching migration would break every one of them on their
+# next update. Tracked as its own follow-up in ROADMAP.md, not an
+# oversight. Suppressed for this file specifically in .trivyignore.yaml
+# (AVD-DS-0002), not inline - trivy's inline-ignore comments only attach
+# to a specific line, and this check (like AVD-DS-0026 below) has none:
+# it's a whole-file absence check, so an inline comment anywhere in the
+# file can never match it.
 EXPOSE 8081
 ENTRYPOINT ["rootguard-core"]

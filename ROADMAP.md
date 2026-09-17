@@ -1299,21 +1299,43 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       a bootstrapper process outside the stack itself, or a clearly guided,
       manual pre-update compose refresh step surfaced in the WebGUI before
       the image swap runs.
-- [ ] Close the Docker-socket host-takeover risk named in
+- [x] Close the Docker-socket host-takeover risk named in
       `docs/threat-model.md`'s actor 1 ("Docker socket holders"): a bug in
-      Core or the Updater that lets an attacker issue their own Docker API
-      calls currently leads directly to host compromise, no second line of
+      Core or the Updater that let an attacker issue their own Docker API
+      calls used to lead directly to host compromise, no second line of
       defense. `rootguard-docker-proxy`, a purpose-built, request-body-
-      filtering Docker Engine API proxy, has landed as a standalone,
-      unit-tested component, but is not yet wired into
-      `compose.release.yaml`/Core/Updater - that follow-up (removing their
-      direct `/var/run/docker.sock` mount, routing through the proxy,
-      adding a `ROOTGUARD_DOCKER_PROXY_URL` preflight check following the
-      `rootguard-attestation-proxy` precedent above) is still open. A
-      second, host-level phase is planned after that: rootless-Docker-
-      daemon compatibility verification and documentation, using the
-      existing backup/restore feature as the migration path for existing
-      installations rather than a new tool.
+      filtering Docker Engine API proxy, is now wired into
+      `compose.release.yaml` - Core and the Updater no longer mount
+      `/var/run/docker.sock` themselves, only the proxy does; they reach
+      it over `DOCKER_HOST=tcp://docker-proxy:2375`, guarded by a
+      `ROOTGUARD_DOCKER_PROXY_URL` startup preflight check following the
+      `rootguard-attestation-proxy` precedent above. Backward-compatible
+      by construction: an installation that only ever updated via the
+      WebGUI keeps its old compose topology (direct socket access) until
+      a fresh install or a manual `compose.release.yaml` refresh, since
+      self-update can never deliver a compose-topology change (same
+      residual-risk shape already true for every other topology change
+      this project has shipped, not a new gap).
+- [ ] Drop `USER root` from `rootguard-core`/`rootguard-updater`'s own
+      Dockerfiles now that neither holds the real Docker socket anymore -
+      deliberately deferred from the docker-proxy wiring above, since
+      existing installations have volumes (`rootguard-data`,
+      `unbound-config`, `adguard-auth`, `rootguard-sessions`) currently
+      owned by root; switching to a non-root UID needs its own
+      volume-ownership migration design first, not just a Dockerfile
+      change.
+- [ ] Give `rootguard-docker-proxy` its own self-update channel, matching
+      `rootguard-attestation-proxy`'s (added to Core's own internal update
+      manager's target list, `rootguard-core/internal/updater/manager.go`
+      - a different mechanism from the standalone `rootguard-updater`
+      binary, which only ever swaps Core/WebApp themselves). Deliberately
+      deferred from the initial wiring above to keep that change's blast
+      radius smaller.
+- [ ] Rootless-Docker-daemon compatibility verification and
+      documentation - the second, host-level phase planned after the
+      docker-proxy wiring above, using the existing backup/restore feature
+      as the migration path for existing installations rather than a new
+      tool.
 
 ## How we work with this roadmap
 
