@@ -1,15 +1,10 @@
-const translations = {
-  de: {
-    title: "RootGuard: AdGuard Home & Unbound per Docker verwaltet",
-    description: "RootGuard verbindet AdGuard Home und Unbound in Docker-Containern und verwaltet beide über eine gemeinsame Weboberfläche – dein selbst gehosteter DNS-Schutz."
-  },
-  en: {
-    title: "RootGuard: AdGuard Home & Unbound managed via Docker",
-    description: "RootGuard runs AdGuard Home and Unbound in Docker containers, managed together through one shared web interface – your self-hosted DNS protection."
-  }
-};
-
-let currentLanguage = "de";
+// German and English now live at separate, statically baked URLs
+// (build-bilingual-site.py bakes data-de/data-en into real content per
+// page at deploy time) - the page's own <html lang> already says which
+// one this is, so that's the single source of truth for every
+// language-dependent bit of behavior below (date formatting, empty-state
+// text, ...). There is no more in-place language switch to drive.
+let currentLanguage = document.documentElement.lang === "en" ? "en" : "de";
 let projectData = null;
 
 function formatDate(value, includeTime = false) {
@@ -391,32 +386,7 @@ function initializeScreenshotShowcase() {
 
 const backToTopButton = initializeBackToTop();
 
-function setLanguage(language, persist = true) {
-  if (!translations[language]) return;
-  currentLanguage = language;
-  document.documentElement.lang = language;
-  document.querySelectorAll("[data-de][data-en]").forEach((element) => {
-    element.innerHTML = element.dataset[language];
-  });
-  document.querySelectorAll(".lang-button").forEach((button) => {
-    button.classList.toggle("active", button.dataset.language === language);
-  });
-  backToTopButton.setAttribute("aria-label", language === "de" ? "Nach oben scrollen" : "Scroll to top");
-  const pageTitle = document.body.dataset[language === "de" ? "titleDe" : "titleEn"];
-  const pageDescription = document.body.dataset[language === "de" ? "descriptionDe" : "descriptionEn"];
-  document.title = pageTitle || translations[language].title;
-  document.querySelector('meta[name="description"]').content = pageDescription || translations[language].description;
-  if (persist) localStorage.setItem("rootguard-language", language);
-  renderProjectData();
-}
-
-document.querySelectorAll(".lang-button").forEach((button) => {
-  button.addEventListener("click", () => setLanguage(button.dataset.language));
-});
-
 document.getElementById("year").textContent = new Date().getFullYear();
-const preferred = localStorage.getItem("rootguard-language") || (navigator.language.startsWith("de") ? "de" : "en");
-setLanguage(preferred, false);
 initializeManualNavigation();
 initializeInstallCopyButton();
 initializeInstallDemoReveal();
@@ -424,7 +394,7 @@ initializeReleaseCelebration();
 initializeScrollReveal();
 initializeScreenshotShowcase();
 
-fetch("project-data.json", { cache: "no-cache" })
+fetch("/project-data.json", { cache: "no-cache" })
   .then((response) => {
     if (!response.ok) throw new Error(`Project data request failed: ${response.status}`);
     return response.json();
