@@ -8,12 +8,65 @@ the security-review finding/fix journal.
 
 ## Release status
 
-`v1.0.0-rc.4` is the current public release, published with digest-pinned
-`amd64`/`arm64` images for all six RootGuard components and a live-verified
-`upgrade-test` job in the release pipeline. Milestones 0.1 through 0.6 are
-complete and verified; 0.9 (release candidate) is in progress - see
-`ROADMAP.md` for the current checklist status - with the 1.0.0
-stable-appliance checklist itself the one remaining gate after it.
+`v1.0.1` is the current public release, published with digest-pinned
+`amd64`/`arm64` images for all six deployed RootGuard components (a
+seventh, `rootguard-docker-proxy`, exists as a standalone, not-yet-wired
+component - see `docs/project-state.md`'s repository layout). All
+milestones through `1.0.0` are complete and verified - see `ROADMAP.md`
+for the closing checklist.
+
+**Entries below stop being consistently maintained somewhere before
+`1.0.0` shipped** (a lot of real work landed in between that was never
+backfilled here - `CHANGELOG.md` and `git log` are the authoritative
+record for that window, not this narrative). The `1.0.1` entry below is
+current and complete.
+
+## `v1.0.1` (2026-09-17)
+
+A patch release, cut specifically to ship a real, live-found bug fix to
+existing installations via the normal self-update path, rather than
+leaving it to the next feature release.
+
+- **Fixed, live-found and live-verified**: Core's live service-status
+  machinery (`stack.StackStatus`/`GET /api/services`/
+  `stack.logContainers`) only ever covered 5 of the 7 managed containers
+  (core, webapp, updater, adguard, unbound) - `rootguard-blockpage` and
+  `rootguard-attestation-proxy` were never added, even though both are
+  real, managed components with their own attestation policies and (for
+  attestation-proxy) a working self-update channel. This wasn't just a
+  missing badge: the WebGUI's Stack page looks up each service's runtime
+  state by name, so a missing entry silently resolved to "not found" -
+  Blockpage's card always showed "stopped" regardless of the container's
+  real state, and its Start/Stop/Restart buttons called into
+  `ControlService("blockpage", ...)`, which the backend's own
+  `serviceContainers` allowlist never recognized
+  (`ErrUnknownService`) - a real, reachable, healthy container with a
+  non-functional control panel. Attestation Proxy's card similarly always
+  showed "mutable"/"verification unavailable", even though its actual
+  self-update mechanism already tracked correct digests and attestation
+  status the whole time (issue #481 had closed the update *mechanism*
+  gap but explicitly left this live-inspection gap open).
+  Found live by the user on a fresh test installation, reproduced and
+  root-caused via direct API queries against the running stack, fixed in
+  both directions (backend status/control/log wiring, plus a frontend
+  follow-through - the Attestation Proxy card's own runtime badge, and a
+  second, smaller bug this surfaced: the "Managed services" counter's
+  i18n string had the total hardcoded as a literal `5` instead of the
+  `{total}` the call site already computed) ([#634](https://github.com/foxly-it/rootguard/pull/634)).
+  Verified against the real, running installation before merging: built
+  and swapped Core+WebApp, confirmed the fixed status API, and confirmed
+  Blockpage's Stop-then-Start cycle actually works end to end.
+- Also included (already shipped standalone, not yet wired into the
+  stack): `rootguard-docker-proxy`, a purpose-built Docker Engine API
+  proxy addressing the host-takeover risk in `docs/threat-model.md`'s
+  actor 1 ([#632](https://github.com/foxly-it/rootguard/pull/632)/[#633](https://github.com/foxly-it/rootguard/pull/633)).
+  See `docs/project-state.md`'s repository layout for its current status.
+- A scheduled CI run independently caught and fixed 5 new libxml2 CVEs in
+  the Unbound base image, unrelated to the above
+  ([#631](https://github.com/foxly-it/rootguard/pull/631)).
+- Full CHANGELOG.md entry (auto-generated at release time) covers every
+  PR since `1.0.0`, including the homepage redesign and MkDocs
+  documentation migration that shipped in this window.
 
 Cutting beta.4 (2026-08-22) surfaced three real release-pipeline bugs, none
 caught before because this was the first release since #298 added the
