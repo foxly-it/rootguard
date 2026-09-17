@@ -100,6 +100,8 @@ nav:
   - Anwendungsbeispiele:
       - Unbound: guides/unbound-examples.md
       - HTTPS über einen Reverse-Proxy: guides/https-reverse-proxy.md
+      - AdGuard Home & Unbound mit Docker: guides/adguard-unbound-docker.md
+      - Lokales DNS im Heimnetz: guides/local-dns-home-network.md
   - Sicherheit: security/threat-model.md
   - Betrieb: operations.md
   - Referenz:

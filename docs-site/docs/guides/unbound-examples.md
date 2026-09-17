@@ -72,3 +72,8 @@ RootGuard entscheidet für jeden der drei privaten RFC1918-Bereiche (`10/8`, `17
 3. Bestätige die Warnung und aktiviere - durchläuft dieselbe Vorschau- und Checkconf-Prüfung wie jede andere Unbound-Änderung.
 
 Willst du stattdessen nur, dass `192.168.178.20` als `nas.home.lan` aufgelöst wird, ist das der falsche Ort dafür - siehe [Lokale DNS-Zonen](#lokale-dns-zonen) oben: abgeleitete PTR-Einträge funktionieren unabhängig von dieser bereichsweiten Einstellung.
+
+## Siehe auch
+
+- [Lokales DNS im Heimnetz](local-dns-home-network.md) - die Konzepte hinter diesen Beispielen, unabhängig von RootGuard.
+- [Erste Schritte mit RootGuard](../getting-started.md) - falls du noch am Anfang stehst.
