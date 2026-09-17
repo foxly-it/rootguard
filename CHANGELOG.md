@@ -3,6 +3,34 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.1] - 2026-09-17
+
+### Added
+
+- Add rootguard-docker-proxy, a filtering Docker socket proxy ([#632](https://github.com/foxly-it/rootguard/pull/632))
+
+### Documentation
+
+- Record rootguard-docker-proxy's landing in the roadmap and threat model ([#633](https://github.com/foxly-it/rootguard/pull/633))
+
+### Fixed
+
+- Suppress 5 new libxml2 CVEs unfixed in trixie ([#631](https://github.com/foxly-it/rootguard/pull/631))
+- Include blockpage and attestation-proxy in the live service status ([#634](https://github.com/foxly-it/rootguard/pull/634))
+
+### Other
+
+- Update site and README for shipped 1.0, add release confetti ([#621](https://github.com/foxly-it/rootguard/pull/621))
+- Make the 1.0 release celebration an actual surprise ([#622](https://github.com/foxly-it/rootguard/pull/622))
+- Migrate public documentation to MkDocs Material at /docs/ ([#623](https://github.com/foxly-it/rootguard/pull/623))
+- Fix unreadable MkDocs header/search text contrast ([#624](https://github.com/foxly-it/rootguard/pull/624))
+- Add worked-example guides, inline HTTPS/threat-model docs, fix header ([#625](https://github.com/foxly-it/rootguard/pull/625))
+- Consolidate thin subpages, fix header still not matching the main site ([#626](https://github.com/foxly-it/rootguard/pull/626))
+- Re-add a light color scheme to the docs for accessibility ([#627](https://github.com/foxly-it/rootguard/pull/627))
+- Add real WebApp screenshots to the docs ([#628](https://github.com/foxly-it/rootguard/pull/628))
+- Homepage redesign: trust facts, real-screenshot showcase, cohesive polish ([#629](https://github.com/foxly-it/rootguard/pull/629))
+- Full-width animated status card, showcase countdown bars, fix stale docs links ([#630](https://github.com/foxly-it/rootguard/pull/630))
+
 ## [1.0.0] - 2026-09-14
 
 ### CI
