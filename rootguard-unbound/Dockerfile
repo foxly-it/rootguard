@@ -78,13 +78,25 @@ LABEL org.opencontainers.image.title="RootGuard Unbound" \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        bind9-dnsutils=1:9.20.26-1~deb13u1 \
+        bind9-dnsutils=1:9.20.29-1~deb13u1 \
+        bind9-libs=1:9.20.29-1~deb13u1 \
         ca-certificates=20250419 \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.13-stable-1~deb13u1 \
         libexpat1=2.8.3-1~deb13u1 \
         libpcre2-8-0=10.46-1~deb13u2 \
         libssl3t64=3.5.7-1~deb13u2 \
+    # Found live, 2026-09-18: bind9-dnsutils' own pin went stale on its
+    # own - Debian shipped a bind9 security update (bind9-libs
+    # 1:9.20.29-1~deb13u1 on trixie-security, superseding the
+    # 1:9.20.26-1~deb13u1 this line used to pin), which broke the build
+    # outright rather than silently missing the fix: bind9-dnsutils
+    # still resolved at its old pinned version, but its exact-match
+    # dependency on that same-versioned bind9-libs could no longer be
+    # satisfied once only the newer bind9-libs remained on the mirrors.
+    # bind9-libs is now pinned explicitly too (previously transitive,
+    # same reasoning as libpcre2-8-0 below) so the two can never drift
+    # apart like this again.
     # Found in a v1.0.0 correctness review: libpcre2-8-0 (transitively
     # pulled in, not one of the packages this list previously named)
     # carried two HIGH CVEs (CVE-2026-86145, CVE-2026-89161), fixed by
