@@ -54,11 +54,19 @@ func TestManagerRestoresVerifiedDataThroughCleanInstaller(t *testing.T) {
 		mu.Lock()
 		commands = append(commands, strings.Join(arguments, " "))
 		mu.Unlock()
-		if len(arguments) >= 2 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
+		// Exactly 3 args ("kind inspect name") is installer's own
+		// resource-existence probe; "container inspect --format ..." (5
+		// args, checked below) is a different, unrelated call this test
+		// also needs to answer - found live wiring rootguard-docker-proxy
+		// into the real stack, when both calls started with the same
+		// "container"/"inspect" prefix after dockercli.Run switched from
+		// a bare "inspect" to an explicit "container inspect" (see
+		// backuprestore/manager.go's normalizeUnboundOwnership).
+		if len(arguments) == 3 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
 			return []byte("not found"), errors.New("not found")
 		}
-		if len(arguments) > 2 && arguments[0] == "inspect" && arguments[1] == "--format" {
-			if arguments[len(arguments)-1] == "rootguard-unbound" && arguments[2] == "{{.Config.Image}}" {
+		if len(arguments) > 3 && arguments[0] == "container" && arguments[1] == "inspect" && arguments[2] == "--format" {
+			if arguments[len(arguments)-1] == "rootguard-unbound" && arguments[3] == "{{.Config.Image}}" {
 				return []byte("unbound:test"), nil
 			}
 			return []byte("healthy"), nil
@@ -149,7 +157,7 @@ func TestFailedPreflightLeavesLocalDirectoriesUntouched(t *testing.T) {
 	// resource-absence checks all fail, so Ready is false and Restore
 	// refuses with ErrNotClean before ever calling restoreDeploy.
 	docker := func(_ context.Context, arguments ...string) ([]byte, error) {
-		if len(arguments) >= 2 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
+		if len(arguments) == 3 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
 			return []byte("already exists"), nil
 		}
 		return nil, nil
@@ -239,7 +247,11 @@ func TestFailedRestoreNormalizesOwnershipAfterRollingBackLocalData(t *testing.T)
 		mu.Lock()
 		defer mu.Unlock()
 		commands = append(commands, strings.Join(arguments, " "))
-		if len(arguments) >= 2 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
+		// See the identical comment on this same check earlier in this
+		// file - exactly 3 args is installer's own resource-existence
+		// probe, distinct from the 5-arg "container inspect --format ..."
+		// checked below.
+		if len(arguments) == 3 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
 			return []byte("not found"), errors.New("not found")
 		}
 		if arguments[0] == "cp" {
@@ -249,8 +261,8 @@ func TestFailedRestoreNormalizesOwnershipAfterRollingBackLocalData(t *testing.T)
 		if arguments[0] == "run" && strings.Contains(strings.Join(arguments, " "), "100:101") && cpFailed {
 			chownCallsAfterCpFailure++
 		}
-		if len(arguments) > 2 && arguments[0] == "inspect" && arguments[1] == "--format" {
-			if arguments[len(arguments)-1] == "rootguard-unbound" && arguments[2] == "{{.Config.Image}}" {
+		if len(arguments) > 3 && arguments[0] == "container" && arguments[1] == "inspect" && arguments[2] == "--format" {
+			if arguments[len(arguments)-1] == "rootguard-unbound" && arguments[3] == "{{.Config.Image}}" {
 				return []byte("unbound:test"), nil
 			}
 			return []byte("healthy"), nil

@@ -554,7 +554,7 @@ func TestDeploymentPersistsCompletedState(t *testing.T) {
 			mu.Lock()
 			commands = append(commands, strings.Join(arguments, " "))
 			mu.Unlock()
-			if arguments[0] == "inspect" {
+			if len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect" {
 				return []byte("healthy\n"), nil
 			}
 			return []byte("ok"), nil
@@ -617,7 +617,7 @@ func TestReconcilePinsControllerNetworkAddress(t *testing.T) {
 			mu.Lock()
 			commands = append(commands, strings.Join(arguments, " "))
 			mu.Unlock()
-			if arguments[0] == "inspect" {
+			if len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect" {
 				return []byte("healthy\n"), nil
 			}
 			return []byte("ok"), nil
@@ -664,7 +664,7 @@ func TestDeploymentRestartsBlockpageAfterBootstrapWhenEnabled(t *testing.T) {
 			mu.Lock()
 			commands = append(commands, strings.Join(arguments, " "))
 			mu.Unlock()
-			if arguments[0] == "inspect" {
+			if len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect" {
 				return []byte("healthy\n"), nil
 			}
 			return []byte("ok"), nil
@@ -811,7 +811,7 @@ func TestDeployRefusesActivationWhenAttestationFails(t *testing.T) {
 			return fmt.Errorf("attestation for %s is missing", service)
 		},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
-			if arguments[0] == "inspect" {
+			if len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect" {
 				return []byte("healthy\n"), nil
 			}
 			return []byte("ok"), nil
@@ -871,7 +871,7 @@ func TestDeployResolvesDigestBeforeAttestation(t *testing.T) {
 			if len(arguments) >= 2 && arguments[0] == "pull" && arguments[1] == "rootguard-unbound:test" {
 				return []byte("Status: Downloaded newer image\nDigest: " + digest + "\n"), nil
 			}
-			if arguments[0] == "inspect" {
+			if len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect" {
 				return []byte("healthy\n"), nil
 			}
 			return []byte("ok"), nil

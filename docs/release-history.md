@@ -9,11 +9,13 @@ the security-review finding/fix journal.
 ## Release status
 
 `v1.0.1` is the current public release, published with digest-pinned
-`amd64`/`arm64` images for all six deployed RootGuard components (a
-seventh, `rootguard-docker-proxy`, exists as a standalone, not-yet-wired
-component - see `docs/project-state.md`'s repository layout). All
-milestones through `1.0.0` are complete and verified - see `ROADMAP.md`
-for the closing checklist.
+`amd64`/`arm64` images for six of the seven RootGuard components.
+`rootguard-docker-proxy` joined the deployed stack on 2026-09-17 (wired
+into `compose.release.yaml`, still on its bootstrap pre-release image pin
+until the next real release promotes it like every other component - see
+`docs/project-state.md`'s repository layout). All milestones through
+`1.0.0` are complete and verified - see `ROADMAP.md` for the closing
+checklist.
 
 **Entries below stop being consistently maintained somewhere before
 `1.0.0` shipped** (a lot of real work landed in between that was never

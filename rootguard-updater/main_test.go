@@ -166,7 +166,7 @@ func TestUpdateRefusesADowngrade(t *testing.T) {
 	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
 	run := func(_ context.Context, arguments ...string) ([]byte, error) {
 		switch {
-		case arguments[0] == "inspect":
+		case len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect":
 			container := arguments[len(arguments)-1]
 			return []byte(container + ":image|" + current[container]), nil
 		case len(arguments) >= 2 && arguments[0] == "image" && arguments[1] == "inspect" && strings.Contains(arguments[len(arguments)-2], "Labels"):
@@ -197,7 +197,7 @@ func TestControlPlaneCheckComparesBothAllowlistedServices(t *testing.T) {
 	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
 	run := func(_ context.Context, arguments ...string) ([]byte, error) {
 		switch {
-		case arguments[0] == "inspect":
+		case len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect":
 			container := arguments[len(arguments)-1]
 			return []byte(container + ":old|" + current[container]), nil
 		case arguments[0] == "image":
@@ -229,7 +229,7 @@ func TestControlPlaneUpdateRollsBackBothImagesWhenHealthFails(t *testing.T) {
 		mu.Lock()
 		defer mu.Unlock()
 		switch {
-		case arguments[0] == "inspect":
+		case len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect":
 			container := arguments[len(arguments)-1]
 			return []byte(container + ":image|" + current[container]), nil
 		case arguments[0] == "image":
@@ -287,7 +287,7 @@ func TestControlPlaneUpdateRefusesActivationWhenAttestationFails(t *testing.T) {
 	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
 	run := func(_ context.Context, arguments ...string) ([]byte, error) {
 		switch {
-		case arguments[0] == "inspect":
+		case len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect":
 			container := arguments[len(arguments)-1]
 			return []byte(container + ":image|" + current[container]), nil
 		case arguments[0] == "image":
@@ -395,7 +395,7 @@ func TestStatusSyncedResyncsCurrentIdentityAfterExternalContainerRecreation(t *t
 	candidates := map[string]string{"core:new": "sha256:core-new", "web:new": "sha256:web-new"}
 	run := func(_ context.Context, arguments ...string) ([]byte, error) {
 		switch {
-		case arguments[0] == "inspect":
+		case len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect":
 			container := arguments[len(arguments)-1]
 			return []byte(container + ":old|" + current[container]), nil
 		case arguments[0] == "image":

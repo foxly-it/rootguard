@@ -158,7 +158,14 @@ func CheckStackStatus() StackStatus {
 
 func inspectContainer(name string) ContainerInfo {
 
-	cmd := exec.Command("docker", "inspect", name)
+	// "container inspect", not bare "inspect" - found live wiring
+	// rootguard-docker-proxy into the real stack: the bare form makes the
+	// Docker CLI probe every resource kind (including plugins) until one
+	// matches, and the proxy deliberately never allow-lists Plugins at
+	// all (see rootguard-docker-proxy/README.md). This is the actual
+	// source of most of that noise - called once per managed container on
+	// every status poll.
+	cmd := exec.Command("docker", "container", "inspect", name)
 
 	var out bytes.Buffer
 	cmd.Stdout = &out

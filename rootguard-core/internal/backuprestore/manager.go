@@ -162,7 +162,12 @@ func (m *Manager) Restore(ctx context.Context, request RestoreRequest) (installe
 }
 
 func (m *Manager) normalizeUnboundOwnership(ctx context.Context) error {
-	output, err := m.run(ctx, "inspect", "--format", "{{.Config.Image}}", "rootguard-unbound")
+	// "container inspect", not bare "inspect" - found live wiring
+	// rootguard-docker-proxy into the real stack: the bare form makes the
+	// Docker CLI probe every resource kind (including plugins) until one
+	// matches, and the proxy deliberately never allow-lists Plugins at
+	// all (see rootguard-docker-proxy/README.md).
+	output, err := m.run(ctx, "container", "inspect", "--format", "{{.Config.Image}}", "rootguard-unbound")
 	if err != nil {
 		return fmt.Errorf("inspect restored Unbound image: %w", err)
 	}

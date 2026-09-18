@@ -34,12 +34,14 @@ directories (each with its own Dockerfile and path-filtered CI workflow):
   checks reach GHCR/Sigstore from the fully internet-isolated `control`
   network - self-update managed via its own dedicated channel since
   2026-09-03.
-- `rootguard-docker-proxy/` (joined 2026-09-16, PR #632) is a purpose-built,
+- `rootguard-docker-proxy/` (joined 2026-09-16, PR #632; wired into
+  `compose.release.yaml` 2026-09-17) is a purpose-built,
   request-body-filtering Docker Engine API proxy, closing the host-takeover
-  risk documented in `docs/threat-model.md`'s actor 1. Shipped as a
-  standalone, unit-tested component; not yet wired into
-  `compose.release.yaml`/Core/Updater - see `ROADMAP.md`'s Post-1.0/Future
-  section for the follow-up status.
+  risk documented in `docs/threat-model.md`'s actor 1. Core and the Updater
+  no longer mount `/var/run/docker.sock` themselves, only this service
+  does - see `ROADMAP.md`'s Post-1.0/Future section for the still-open
+  follow-ups (dropping root from Core/Updater, a self-update channel for
+  this component, and the later rootless-Docker phase).
 
 These were four separate repositories included as Git submodules until the
 monorepo migration (see "Delivered and verified" below); their full commit

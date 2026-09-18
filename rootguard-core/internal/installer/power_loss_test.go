@@ -70,7 +70,7 @@ func mockedDeployOptions(dataDir string, touch func(name string), pauseAtCheckpo
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			command := strings.Join(arguments, " ")
 			switch {
-			case arguments[0] == "inspect":
+			case len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect":
 				return []byte("healthy\n"), nil
 			case strings.Contains(command, "compose") && strings.HasSuffix(command, " pull"):
 				touch("pull-done")

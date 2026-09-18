@@ -40,7 +40,7 @@ func TestCheckComparesRunningAndPulledImageIDs(t *testing.T) {
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte("adguard/adguardhome:v1|sha256:old"), nil
 			case "pull":
 				return []byte("pulled"), nil
@@ -87,7 +87,7 @@ func TestUpdateFailsWhenComposeUpDoesNotActuallySwapTheImage(t *testing.T) {
 		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				// Always the old ID - "compose up" below reports success
 				// but never actually recreates the container.
 				return []byte("adguard:v1|sha256:old"), nil
@@ -129,7 +129,7 @@ func TestUpdateBacksUpAndVerifiesBeforeSuccess(t *testing.T) {
 			commands = append(commands, strings.Join(arguments, " "))
 			mu.Unlock()
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				// Reflects the real container's own state: still on the old
 				// image until "compose up" actually recreates it - required
 				// for verifyImageSwapped's post-composeUp check.
@@ -199,7 +199,7 @@ func TestUpdateRefusesActivationWhenAttestationFails(t *testing.T) {
 			commands = append(commands, strings.Join(arguments, " "))
 			mu.Unlock()
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
 			case "image":
 				return []byte("sha256:new"), nil
@@ -249,7 +249,7 @@ func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T)
 			command := strings.Join(arguments, " ")
 			commands = append(commands, command)
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				// Reflects the real container's own state: still on the old
 				// image until "compose up" actually recreates it - required
 				// for verifyImageSwapped's post-composeUp check.
@@ -312,7 +312,7 @@ func TestFailedUpdateRestoresPreviousVolumeOwnershipBeforeRollback(t *testing.T)
 			command := strings.Join(arguments, " ")
 			commands = append(commands, command)
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
 			case "image":
 				return []byte("sha256:new"), nil
@@ -374,7 +374,7 @@ func TestFailedRollbackRefusesTamperedBackupInsteadOfRestoringIt(t *testing.T) {
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte("adguard:v1|sha256:old"), nil
 			case "cp":
 				if !strings.HasPrefix(arguments[1], "rootguard-adguard:") {
@@ -538,7 +538,7 @@ func TestFailedHealthCheckRestoresPreviousImageAndBackup(t *testing.T) {
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				// Reflects the real container's own state: still on the old
 				// image until "compose up" actually recreates it - required
 				// for verifyImageSwapped's post-composeUp check. Rollback's
@@ -1001,7 +1001,7 @@ func TestCheckDoesNotReportAPersistentErrorForAMissingOptionalServiceContainer(t
 			TargetImage: "ghcr.io/foxly-it/rootguard-blockpage:latest", Optional: true,
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
-			if arguments[0] == "inspect" {
+			if arguments[0] == "container" {
 				return []byte("Error: No such container: rootguard-blockpage"), errors.New("exit status 1: Error: No such container: rootguard-blockpage")
 			}
 			return nil, errors.New("unexpected command")
@@ -1028,7 +1028,7 @@ func TestCheckStillReportsAMissingContainerForAMandatoryService(t *testing.T) {
 			TargetImage: "ghcr.io/foxly-it/rootguard-core:latest",
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
-			if arguments[0] == "inspect" {
+			if arguments[0] == "container" {
 				return []byte("Error: No such container: rootguard-core"), errors.New("exit status 1: Error: No such container: rootguard-core")
 			}
 			return nil, errors.New("unexpected command")
@@ -1055,7 +1055,7 @@ func TestCheckStillReportsANonMissingContainerErrorForAnOptionalService(t *testi
 			TargetImage: "ghcr.io/foxly-it/rootguard-blockpage:latest", Optional: true,
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
-			if arguments[0] == "inspect" {
+			if arguments[0] == "container" {
 				return nil, errors.New("Cannot connect to the Docker daemon")
 			}
 			return nil, errors.New("unexpected command")
@@ -1126,7 +1126,7 @@ func TestStatusSyncedResyncsCurrentIdentityAfterExternalContainerRecreation(t *t
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte(inspectImage), nil
 			case "pull":
 				return []byte("pulled"), nil

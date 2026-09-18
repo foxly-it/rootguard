@@ -136,7 +136,7 @@ func TestCheckUsesResolveTargetWhenSet(t *testing.T) {
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
 			case "pull":
 				if arguments[len(arguments)-1] != "unbound:resolved" {
@@ -188,7 +188,7 @@ func TestUpdateUsesResolveTargetWhenSet(t *testing.T) {
 		AttestationVerifier: noopAttestationVerifier,
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				// Reflects the real container's own state: still on the old
 				// image until "compose up" actually recreates it - required
 				// for verifyImageSwapped's post-composeUp check.
@@ -244,7 +244,7 @@ func TestCheckFallsBackToStaticPinWhenResolveTargetFails(t *testing.T) {
 		}},
 		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
 			switch arguments[0] {
-			case "inspect":
+			case "container":
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
 			case "pull":
 				if arguments[len(arguments)-1] != "unbound:static-pin" {

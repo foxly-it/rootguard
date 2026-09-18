@@ -50,12 +50,12 @@ RUN apk del openssh-client \
 COPY --from=builder /rootguard-updater /usr/local/bin/rootguard-updater
 COPY --from=cosign /ko-app/cosign /usr/local/bin/cosign
 
-# Deliberately no USER instruction: like Core, the Updater holds the Docker
-# socket to drive paired update/rollback across the managed services, and
-# socket access requires either running as root or matching the host's
-# docker group GID, which differs per installation (see the matching note
-# in rootguard-core/Dockerfile). Suppressed for this file specifically in
-# .trivyignore.yaml (AVD-DS-0002), not inline - trivy's inline-ignore
-# comments only attach to a specific line, and this check has none.
+# Deliberately no USER instruction: like Core, the Updater no longer holds
+# the real Docker socket at all (rootguard-docker-proxy does - see the
+# matching note in rootguard-core/Dockerfile for the full rationale,
+# including why dropping root is a separate, not-yet-done follow-up).
+# Suppressed for this file specifically in .trivyignore.yaml
+# (AVD-DS-0002), not inline - trivy's inline-ignore comments only attach
+# to a specific line, and this check has none.
 EXPOSE 8082
 ENTRYPOINT ["rootguard-updater"]

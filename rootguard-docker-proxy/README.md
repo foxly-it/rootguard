@@ -18,12 +18,18 @@ holds the real socket, reachable only from `control` (RootGuard's
 internet-isolated internal network), speaking an allow-listed, validated
 subset of the Docker Engine API back to Core and the Updater.
 
-**Status: standalone, not yet wired into the RootGuard stack.** This
-component's own allowlist and validators are complete and unit-tested,
-but `compose.release.yaml`, Core/Updater's Dockerfiles, and a
-`ROOTGUARD_DOCKER_PROXY_URL` preflight check are a deliberate follow-up
-change - see this repository's `docs/threat-model.md` and
-`docs/release-process.md` for the rollout plan once that lands.
+**Wired into `compose.release.yaml`**: Core and the Updater no longer
+mount `/var/run/docker.sock` themselves - only this service does. They
+reach it over `DOCKER_HOST=tcp://docker-proxy:2375` (the Docker CLI both
+already shell out to honors this from the environment with no code
+change) and verify it's actually up at startup via
+`ROOTGUARD_DOCKER_PROXY_URL=http://docker-proxy:2375`
+(`stack.CheckDockerProxyReachable`/`checkDockerProxyReachable`, same
+`/healthz` check pattern as `rootguard-attestation-proxy`). An
+installation that only ever updated via the WebGUI keeps its old
+compose topology (direct socket access) until a fresh install or a
+manual `compose.release.yaml` refresh - self-update can never deliver a
+compose-topology change, see `docs/release-process.md`.
 
 ## Why not a generic allowlist-by-endpoint proxy?
 
@@ -46,18 +52,26 @@ sends - see `validate.go`.
   `rootguard-updater/docker.go`), not a guess at what the Docker API
   offers in general. No Swarm, Plugins, Secrets, Services, Nodes, Build,
   Commit, Session, or Configs endpoints exist in the allowlist at all.
-- **Body-validated for the three capability-granting calls**
-  (`validate.go`):
+- **Body- or query-validated for four calls that can grant new capability
+  or reach new data** (`validate.go`):
   - `POST /containers/create` - rejects `Privileged`, `NetworkMode`/
     `PidMode`/`IpcMode`/`UTSMode: host`, any `Devices`, any `CapAdd`
-    outside `{CHOWN, SETUID, SETGID}`, and any bind/mount whose source
+    outside `{CHOWN, SETUID, SETGID}` (accepting either the short or the
+    kernel-style `CAP_`-prefixed form), and any bind/mount whose source
     isn't one of RootGuard's own named volumes (an arbitrary host path is
     exactly the primitive this proxy exists to close off) or whose
-    `Image` isn't one of RootGuard's own known image repositories.
+    `Image` isn't one of RootGuard's own known image repositories (a
+    resolved, already-cached bare content digest is exempt from the
+    repository check - see `stripImageRef`'s doc comment for why that's
+    still safe).
   - `POST /containers/{id}/exec` - only `rootguard-blockpage`, only the
     two literal commands Core's own code ever sends.
   - `POST /networks/{id}/connect` - only `rootguard-dns`, only
     RootGuard's own containers.
+  - `POST /containers/{id}/attach` - rejects a request for `stdin`,
+    needed by Core's own foreground `docker run` invocations (the chown
+    helper, the port-probe container) to relay output back to the CLI,
+    but never to write into a container.
 - **Not a caller-authentication boundary.** Core and the Updater both sit
   on the same `control` network and aren't distinguished from each other
   at the proxy level - this is a known, documented scope limit, not an
@@ -85,6 +99,12 @@ The allowlist and validators themselves are compiled in, not configurable
 via environment or flags - widening them requires a code change and a
 new release, by design, same philosophy as `rootguard-attestation-proxy`.
 The service listens on port `2375`.
+
+Consumer side (Core/the Updater, set in `compose.release.yaml`, not here):
+`DOCKER_HOST=tcp://docker-proxy:2375` redirects every `docker`/`docker
+compose` invocation at this proxy instead of the local socket;
+`ROOTGUARD_DOCKER_PROXY_URL=http://docker-proxy:2375` is the same
+endpoint, used only for each consumer's own startup reachability check.
 
 ## Development
 

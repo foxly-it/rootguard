@@ -750,7 +750,12 @@ func (m *Manager) waitForUnbound(ctx context.Context) error {
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		output, err := m.run(ctx, "inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}", "rootguard-unbound")
+		// "container inspect", not bare "inspect" - see
+		// backuprestore/manager.go's identical comment for the full
+		// rationale (avoids the Docker CLI's multi-kind probing fallback,
+		// which includes an endpoint rootguard-docker-proxy never
+		// allow-lists).
+		output, err := m.run(ctx, "container", "inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}", "rootguard-unbound")
 		if err == nil && strings.TrimSpace(string(output)) == "healthy" {
 			return nil
 		}
@@ -1261,7 +1266,9 @@ func (m *Manager) runComposeUp(ctx context.Context, args ...string) ([]byte, err
 // performs that host-side bind at container start regardless of whether
 // anything inside the container ever uses the port.
 func (m *Manager) probeHostPortBusy(ctx context.Context, address string, port int) (bool, string) {
-	imageID, err := m.run(ctx, "inspect", "--format", "{{.Image}}", m.coreContainer)
+	// "container inspect", not bare "inspect" - see
+	// backuprestore/manager.go's identical comment for the full rationale.
+	imageID, err := m.run(ctx, "container", "inspect", "--format", "{{.Image}}", m.coreContainer)
 	if err != nil {
 		return false, ""
 	}

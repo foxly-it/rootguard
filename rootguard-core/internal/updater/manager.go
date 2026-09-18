@@ -725,7 +725,10 @@ func (m *Manager) backup(ctx context.Context, spec ServiceSpec) (string, error) 
 }
 
 func (m *Manager) inspectContainer(ctx context.Context, spec ServiceSpec) (string, string, error) {
-	output, err := m.run(ctx, "inspect", "--format", "{{.Config.Image}}|{{.Image}}", spec.Container)
+	// "container inspect", not bare "inspect" - see
+	// rootguard-core/internal/backuprestore/manager.go's identical comment
+	// for the full rationale.
+	output, err := m.run(ctx, "container", "inspect", "--format", "{{.Config.Image}}|{{.Image}}", spec.Container)
 	if err != nil {
 		return "", "", err
 	}

@@ -72,7 +72,7 @@ func TestControlPlaneCheckAppliesTargetImageOverride(t *testing.T) {
 	candidates := map[string]string{resolved: "sha256:core-new"}
 	run := func(_ context.Context, arguments ...string) ([]byte, error) {
 		switch {
-		case arguments[0] == "inspect":
+		case len(arguments) >= 2 && arguments[0] == "container" && arguments[1] == "inspect":
 			container := arguments[len(arguments)-1]
 			return []byte(container + ":old|" + current[container]), nil
 		case arguments[0] == "image":
@@ -126,7 +126,7 @@ func TestControlPlaneCheckAppliesTargetImageOverride(t *testing.T) {
 func TestControlPlaneCheckFallsBackToStaticPinWithoutOverride(t *testing.T) {
 	run := func(_ context.Context, arguments ...string) ([]byte, error) {
 		switch arguments[0] {
-		case "inspect":
+		case "container":
 			return []byte("rootguard-core:old|sha256:core-old"), nil
 		case "pull":
 			if arguments[len(arguments)-1] != "rootguard-core:dev" {

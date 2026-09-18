@@ -481,7 +481,12 @@ func (m *manager) verify(expected map[string]string) error {
 }
 
 func (m *manager) inspectContainer(ctx context.Context, container string) (string, string, error) {
-	output, err := m.run(ctx, "inspect", "--format", "{{.Config.Image}}|{{.Image}}", container)
+	// "container inspect", not bare "inspect" - found live wiring
+	// rootguard-docker-proxy into the real stack: the bare form makes the
+	// Docker CLI probe every resource kind (including plugins) until one
+	// matches, and the proxy deliberately never allow-lists Plugins at
+	// all (see rootguard-docker-proxy/README.md).
+	output, err := m.run(ctx, "container", "inspect", "--format", "{{.Config.Image}}|{{.Image}}", container)
 	if err != nil {
 		return "", "", err
 	}

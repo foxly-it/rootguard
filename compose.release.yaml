@@ -40,6 +40,38 @@ services:
       timeout: 3s
       retries: 5
 
+  # The only container holding the real Docker socket - Core and the
+  # Updater reach it over `control` instead (see their DOCKER_HOST/
+  # ROOTGUARD_DOCKER_PROXY_URL below), never mounting the socket
+  # themselves. See docs/threat-model.md, actor 1 ("Docker socket
+  # holders"), and rootguard-docker-proxy/README.md for the full
+  # rationale - an allow-listed, request-body-validated subset of the
+  # Docker Engine API, not a caller-authentication boundary between Core
+  # and the Updater (they share the same allowlist). Unlike
+  # attestation-proxy, this only ever dials the local socket, never the
+  # internet, so it stays off `egress` entirely.
+  docker-proxy:
+    # Bootstrap pin: this component's very first published image, pushed
+    # by hand (real, public, multi-arch manifest - no real release has
+    # cut it yet), same rationale as attestation-proxy's own comment
+    # above. Superseded by update-alpha-pins' real digest the moment a
+    # real release actually promotes this component.
+    image: "${ROOTGUARD_DOCKER_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-docker-proxy:sha-5fde343@sha256:7b9a03f47b7a79146ed41b3fdf6fb78343033ab2ddfd010f76b6e72a0057f511}"
+    container_name: rootguard-docker-proxy
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - control
+    healthcheck:
+      test: ["CMD", "/rootguard-docker-proxy", "healthcheck"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+
   core:
     image: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.1@sha256:8dd9a6a6848321d7f9f48283272200899f98282f6c3aaa7d426837b22cce7e83}"
     container_name: rootguard-core
@@ -49,12 +81,26 @@ services:
         condition: service_healthy
       attestation-proxy:
         condition: service_healthy
+      docker-proxy:
+        condition: service_healthy
     environment:
       PORT: "8081"
       # See rootguard-core/internal/stack/attestation.go's
       # runAttestationCommand doc comment for the full rationale - scoped
       # to cosign's own subprocess only, never Core's ambient environment.
       ROOTGUARD_ATTESTATION_PROXY_URL: http://attestation-proxy:8888
+      # Redirects every `docker`/`docker compose` call dockercli.Run shells
+      # out to (rootguard-core/internal/dockercli) at the real socket
+      # docker-proxy itself holds - the Docker CLI already honors
+      # DOCKER_HOST from the environment, so this needs no code change.
+      # ROOTGUARD_DOCKER_PROXY_URL is this same endpoint, http:// instead
+      # of tcp://, for CheckDockerProxyReachable's own /healthz check at
+      # startup (rootguard-core/internal/stack/dockerproxy.go) - unset on
+      # an installation whose compose.release.yaml predates this change,
+      # which keeps mounting the real socket directly and keeps working
+      # exactly as before (see that file's doc comment).
+      DOCKER_HOST: tcp://docker-proxy:2375
+      ROOTGUARD_DOCKER_PROXY_URL: http://docker-proxy:2375
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_CORE_CONTAINER: rootguard-core
       # Test-only escape hatch - see cmd/rootguard/main.go's own doc
@@ -143,7 +189,6 @@ services:
       ADGUARD_DNS_ADDRESS: rootguard-adguard:53
       ROOTGUARD_BLOCKPAGE_AUTH_DIR: /var/lib/rootguard/adguard-auth
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - unbound-config:/var/lib/rootguard/unbound
       - adguard-auth:/var/lib/rootguard/adguard-auth
@@ -201,11 +246,17 @@ services:
     depends_on:
       attestation-proxy:
         condition: service_healthy
+      docker-proxy:
+        condition: service_healthy
     environment:
       # See rootguard-updater/attestation.go's verifyAttestation doc
       # comment for the full rationale - scoped to cosign's own
       # subprocess only, never the Updater's ambient environment.
       ROOTGUARD_ATTESTATION_PROXY_URL: http://attestation-proxy:8888
+      # See core's identical comment above - same redirection, same
+      # backward-compat behavior when unset.
+      DOCKER_HOST: tcp://docker-proxy:2375
+      ROOTGUARD_DOCKER_PROXY_URL: http://docker-proxy:2375
       ROOTGUARD_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.release.yaml
@@ -226,7 +277,6 @@ services:
       # recreate this very service (self-update).
       PWD: "${PWD}"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - rootguard-data:/var/lib/rootguard
       - rootguard-sessions:/var/lib/rootguard-sessions
       - ${PWD}/compose.release.yaml:/opt/rootguard/compose.release.yaml:ro
