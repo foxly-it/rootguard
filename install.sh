@@ -314,6 +314,54 @@ docker_present() {
   command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
 }
 
+# Detects whether the invoking user's *default* Docker context is rootless
+# and, if so, resolves the real host socket path - written into .env as
+# ROOTGUARD_DOCKER_SOCKET_PATH so compose.release.yaml bind-mounts the
+# right socket into docker-proxy instead of the rootful default (see that
+# file's own comment on the volume line). Deliberately never installs,
+# configures, or recommends rootless Docker - only adapts to whichever
+# daemon is already there - and never aborts the install either way.
+#
+# Checked with a plain, unelevated `docker info`/`docker context inspect`
+# (not docker_cmd's sudo-fallback wrapper): rootless Docker is reachable by
+# its own unprivileged user without any group membership, so an
+# unelevated call already gives the right answer for a rootless daemon;
+# for a rootful daemon that actually needs sudo, the same unelevated call
+# simply fails and this function correctly does nothing, which is exactly
+# the right outcome for a normal rootful install.
+#
+# `docker info`'s SecurityOptions field is Docker's own documented way to
+# learn this (includes "name=rootless" only when actually connected to a
+# rootless daemon) - inferring it from a $DOCKER_HOST override or a
+# `/run/user/` path pattern instead would miss a rootless daemon reached
+# through its default context, and false-positive on an unrelated
+# $DOCKER_HOST pointed at a perfectly normal rootful remote daemon.
+detect_docker_context() {
+  local __var="$1" security_options
+  security_options="$(docker info --format '{{json .SecurityOptions}}' 2>/dev/null || true)"
+  case "$security_options" in
+    *name=rootless*) ;;
+    *) printf -v "$__var" ''; return ;;
+  esac
+
+  local endpoint socket_path
+  endpoint="$(docker context inspect --format '{{.Endpoints.docker.Host}}' 2>/dev/null || true)"
+  socket_path="${endpoint#unix://}"
+  printf -v "$__var" '%s' "$socket_path"
+
+  log "Rootless Docker erkannt (Socket: ${socket_path:-unbekannt})."
+  # Not a RootGuard limitation - a real, documented restriction of
+  # *unprivileged* LXC containers specifically (Proxmox's default),
+  # confirmed live: see docs/rootless-docker.md for the full writeup.
+  # Purely informational - install.sh still continues either way, the
+  # operator's own environment and risk tolerance decide what to do
+  # with this, not this script.
+  if [ "$(systemd-detect-virt 2>/dev/null || true)" = "lxc" ]; then
+    log "Hinweis: Diese Umgebung läuft in einer LXC. Eine unprivilegierte LXC (Proxmox-Standardeinstellung) kann rootless Docker aus bekannten Gründen oft nicht vollständig unterstützen - siehe docs/rootless-docker.md im Repository, falls der Stack gleich nicht startet."
+  fi
+  log "Hinweis: Für rootless Docker muss der RootlessKit-Netzwerktreiber 'pasta' aktiv sein (Docker 25 oder neuer) - mit der Standardeinstellung geht sonst bei DNS-Anfragen die echte Client-IP verloren und AdGuards Filterung pro Gerät funktioniert nicht richtig. Details: docs/rootless-docker.md"
+}
+
 # Runs the actual `docker` calls below - falls back to as_root automatically:
 # either Docker was just installed (group membership needs a fresh login
 # to take effect, so the current shell isn't in the docker group yet even
@@ -369,6 +417,9 @@ main() {
     install_docker
   fi
   echo
+
+  local docker_socket_path
+  detect_docker_context docker_socket_path
 
   # Every prompt/validation happens up front, before anything below creates
   # $TARGET_DIR or downloads a single byte - so a rejected (too short)
@@ -490,6 +541,13 @@ main() {
     { print }
   ' .env > .env.tmp
   mv .env.tmp .env
+  # Appended, not folded into the awk rewrite above: .env.release.example
+  # only ever ships this commented out (most installs are rootful and
+  # never need it), so there's no existing "ROOTGUARD_DOCKER_SOCKET_PATH="
+  # line for that script's pattern-matching rewrite to find.
+  if [ -n "$docker_socket_path" ]; then
+    printf "ROOTGUARD_DOCKER_SOCKET_PATH='%s'\n" "$docker_socket_path" >> .env
+  fi
   chmod 600 .env
   echo
 

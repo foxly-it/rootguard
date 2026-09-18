@@ -63,7 +63,14 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      # Defaults to the rootful daemon's real socket. Rootless Docker's own
+      # socket lives at a per-user path instead (typically
+      # /run/user/<uid>/docker.sock) - install.sh detects a rootless
+      # daemon and sets ROOTGUARD_DOCKER_SOCKET_PATH accordingly; a manual
+      # deploy sets it directly. See docs/rootless-docker.md for the full
+      # rootless-Docker findings (a real client-source-IP risk with the
+      # default networking driver, resolved by using `pasta` instead).
+      - ${ROOTGUARD_DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock
     networks:
       - control
     healthcheck:

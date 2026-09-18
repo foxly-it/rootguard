@@ -122,13 +122,17 @@ privileged LXC) would ever hit.
   deliberately not attempted, since the only available test host already
   runs the real, live RootGuard installation on the same ports (53, 8080)
   - standing up a second full stack risked interfering with a production
-    service for a marginal gain the raw-socket test already covered. The
-  wiring itself needs no RootGuard code changes: `rootguard-docker-proxy`
-  already exposes `ROOTGUARD_DOCKER_PROXY_SOCKET` as a configurable path
-  (see `rootguard-docker-proxy/README.md`), so pointing its volume mount
-  at the rootless socket (`/run/user/<uid>/docker.sock` instead of
-  `/var/run/docker.sock`) is the only change required - untested, but
-  structurally understood.
+    service for a marginal gain the raw-socket test already covered.
+  `install.sh` now detects a rootless daemon automatically (via `docker
+  info`'s `SecurityOptions`) and points `docker-proxy`'s volume mount at
+  the real rootless socket via `ROOTGUARD_DOCKER_SOCKET_PATH`, without
+  ever installing, configuring, or recommending rootless over rootful -
+  it only adapts to whichever daemon is already running. When it detects
+  rootless, it also prints the LXC-limitation and `pasta`-driver notes
+  above as plain information, not a recommendation. This closes the
+  wiring gap, but the detection logic itself is only shellcheck/config-
+  render verified so far, not exercised against a live rootless stack
+  end to end.
 - **AdGuard Home's own query log**, not just a raw UDP socket, showing the
   correct client IP - the raw-socket test uses the identical `recvfrom()`
   primitive AdGuard's DNS server relies on, but wasn't confirmed through
