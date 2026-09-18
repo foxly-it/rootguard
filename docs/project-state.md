@@ -50,6 +50,10 @@ directories (each with its own Dockerfile and path-filtered CI workflow):
   LAN traffic. See `docs/rootless-docker.md` for the full findings,
   including what's still open (a full compose-stack deployment and the
   backup/restore migration path) before this can be called supported.
+  `install.sh` now auto-detects whichever Docker daemon (rootful or
+  rootless) is already present and wires `docker-proxy`'s socket mount
+  accordingly, without installing, configuring, or recommending either -
+  see `docs/rootless-docker.md`'s "What remains" section.
 
 These were four separate repositories included as Git submodules until the
 monorepo migration (see "Delivered and verified" below); their full commit
