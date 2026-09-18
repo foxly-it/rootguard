@@ -1335,7 +1335,18 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       documentation - the second, host-level phase planned after the
       docker-proxy wiring above, using the existing backup/restore feature
       as the migration path for existing installations rather than a new
-      tool.
+      tool. The one finding that would have ruled this out entirely -
+      whether rootless Docker's networking silently drops the real client
+      IP on DNS queries, breaking AdGuard's per-client filtering - is now
+      confirmed and resolved: the default configuration does lose it, but
+      explicitly configuring the `pasta` network/port driver preserves it,
+      verified hands-on with real LAN traffic (see
+      `docs/rootless-docker.md`). Still open before this can be checked
+      off: a full `compose.release.yaml` deployment under rootless Docker
+      (structurally understood - `ROOTGUARD_DOCKER_PROXY_SOCKET` already
+      makes the socket path configurable, no RootGuard code change needed -
+      just not yet exercised end to end) and the backup/restore migration
+      path itself.
 
 ## How we work with this roadmap
 

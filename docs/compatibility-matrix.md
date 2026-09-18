@@ -29,6 +29,12 @@ See [platform-support.md](platform-support.md) for the full verification
 matrix and how to repeat it. Currently verified: Linux `amd64`/`arm64` on
 GitHub-hosted runners, and Docker Desktop on Apple Silicon.
 
+Rootless Docker daemons are a separate axis from the platform matrix above
+- see [rootless-docker.md](rootless-docker.md) for what's confirmed
+(client-IP preservation requires the `pasta` driver, not the default) and
+what's still open (a full stack deployment, the backup/restore migration
+path).
+
 ## AdGuard Home channel
 
 `ci-adguard-compat.yml` runs the full bootstrap -> status -> filtering
