@@ -41,7 +41,15 @@ directories (each with its own Dockerfile and path-filtered CI workflow):
   no longer mount `/var/run/docker.sock` themselves, only this service
   does - see `ROADMAP.md`'s Post-1.0/Future section for the still-open
   follow-ups (dropping root from Core/Updater, a self-update channel for
-  this component, and the later rootless-Docker phase).
+  this component, and the rootless-Docker phase below).
+- **Rootless Docker daemon compatibility** (2026-09-18): the risk that
+  would have ruled it out - rootless networking silently dropping the real
+  client IP on DNS queries, breaking AdGuard's per-client filtering - is
+  confirmed and resolved. The default configuration does lose it; the
+  `pasta` network/port driver preserves it, verified hands-on with real
+  LAN traffic. See `docs/rootless-docker.md` for the full findings,
+  including what's still open (a full compose-stack deployment and the
+  backup/restore migration path) before this can be called supported.
 
 These were four separate repositories included as Git submodules until the
 monorepo migration (see "Delivered and verified" below); their full commit
