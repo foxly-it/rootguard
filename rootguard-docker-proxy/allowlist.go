@@ -56,6 +56,17 @@ var rules = []rule{
 	{method: "GET", pattern: regexp.MustCompile(`^/info$`)},
 	{method: "GET", pattern: regexp.MustCompile(`^/containers/[^/]+/stats$`)},
 
+	// docker system df -v (Core: the cleanup feature's own size estimate
+	// for candidate images/volumes, rootguard-core/internal/updater/
+	// cleanup.go's dockerUsageSizes) - found live in the same audit that
+	// found the exec gap above: entirely missing before, so cleanup's
+	// preview (and, since execution previews first, cleanup itself)
+	// failed outright once docker-proxy sat in the request path whenever
+	// there was actually something to clean up. Read-only, grants
+	// nothing beyond disk-usage figures for resources Core can already
+	// list and remove through already-allowed calls.
+	{method: "GET", pattern: regexp.MustCompile(`^/system/df$`)},
+
 	// docker pull / docker compose pull (Core + Updater)
 	{method: "POST", pattern: regexp.MustCompile(`^/images/create$`), validate: validateImageCreate},
 

@@ -67,6 +67,7 @@ func TestAllowedCalls(t *testing.T) {
 		{"ps", "GET", "/containers/json", ""},
 		{"daemon info", "GET", "/info", ""},
 		{"container stats", "GET", "/containers/rootguard-core/stats", ""},
+		{"disk usage (cleanup preview)", "GET", "/system/df?type=Image&type=Volume", ""},
 		{"container create from a resolved bare digest", "POST", "/containers/create",
 			`{"Image":"sha256:` + strings.Repeat("a", 64) + `","HostConfig":{}}`},
 		{"container create with a kernel-style capability name", "POST", "/containers/create",
