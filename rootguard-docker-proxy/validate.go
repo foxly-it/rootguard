@@ -241,17 +241,20 @@ func validateAttach(r *http.Request, _ []byte) error {
 	return nil
 }
 
-// knownExecTargets/knownExecCommands: Core's own code only ever execs
-// into rootguard-blockpage, running one of exactly two commands (see
-// rootguard-core/internal/installer/manager.go's renderBlockpageConf/
-// reloadBlockpage call sites).
+// knownExecTargets: Core's own code execs into exactly two containers -
+// rootguard-blockpage (reloading its nginx config) and rootguard-unbound
+// (config-syntax checks and read-only diagnostics; see
+// rootguard-core/internal/unbound). Found live: an earlier version of
+// this allowlist only ever covered rootguard-blockpage, on the mistaken
+// assumption that it was the only exec target - it silently broke every
+// Unbound guided-setting change, custom-config edit, and diagnostic once
+// docker-proxy sat in the request path, none of which any CI fixture
+// happened to exercise. Fixed by actually enumerating every real exec
+// call site in rootguard-core (grep for `"exec"` across the module) and
+// validating each rather than guessing again.
 var knownExecTargets = map[string]bool{
 	"rootguard-blockpage": true,
-}
-
-var knownExecCommands = [][]string{
-	{"sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"},
-	{"nginx", "-s", "reload"},
+	"rootguard-unbound":   true,
 }
 
 type execCreateBody struct {
@@ -270,19 +273,154 @@ func execTargetFromPath(path string) string {
 
 func validateExecCreate(r *http.Request, body []byte) error {
 	target := execTargetFromPath(r.URL.Path)
-	if !knownExecTargets[target] {
-		return fmt.Errorf("exec target %q is not on the allowlist", target)
-	}
 	var e execCreateBody
 	if err := json.Unmarshal(body, &e); err != nil {
 		return fmt.Errorf("invalid exec-create body: %w", err)
 	}
-	for _, known := range knownExecCommands {
-		if cmdEqual(e.Cmd, known) {
+	switch target {
+	case "rootguard-blockpage":
+		return validateBlockpageExecCommand(e.Cmd)
+	case "rootguard-unbound":
+		return validateUnboundExecCommand(e.Cmd)
+	default:
+		return fmt.Errorf("exec target %q is not on the allowlist", target)
+	}
+}
+
+// rootguard-core/internal/installer/manager.go's renderBlockpageConf/
+// reloadBlockpage call sites - exactly two fixed commands, no arguments
+// ever vary.
+var knownBlockpageExecCommands = [][]string{
+	{"sh", "/docker-entrypoint.d/19-render-blockpage-conf.sh"},
+	{"nginx", "-s", "reload"},
+}
+
+func validateBlockpageExecCommand(cmd []string) error {
+	for _, known := range knownBlockpageExecCommands {
+		if cmdEqual(cmd, known) {
 			return nil
 		}
 	}
-	return fmt.Errorf("exec command %v is not on the allowlist", e.Cmd)
+	return fmt.Errorf("exec command %v is not on the allowlist", cmd)
+}
+
+// Core already has full, unrestricted control over rootguard-unbound's
+// actual behavior - it writes every config file Unbound reads (bind
+// mounts, not exec) and can `docker restart` it outright - so none of
+// the exec calls below grant it anything it doesn't already have. Each
+// is still validated by shape rather than accepted as an opaque command,
+// since exec remains the one call that runs arbitrary code inside a
+// container rather than a fixed Docker API verb. unbound-checkconf/cat
+// only ever target two fixed paths each; unbound-control and dig take
+// runtime-variable arguments (a verbosity level, an operator-configured
+// forward-check zone/address, AdGuard's own dynamically-assigned
+// container IP) that a literal command list can't express, so those two
+// are validated structurally instead - see rootguard-core/internal/unbound
+// for every real call site this was built from (custom.go, diagnostic_
+// logging.go, forwarding.go, lifecycle.go, network.go, settings.go).
+var knownUnboundFixedExecCommands = [][]string{
+	{"unbound-checkconf", "/etc/unbound/unbound.conf"},
+	{"unbound-checkconf", "/etc/unbound/unbound.d/.rootguard-combined.candidate"},
+	{"cat", "/etc/unbound/unbound.conf"},
+	{"cat", "/etc/unbound/unbound.d/50-rootguard.conf"},
+	{"unbound-control", "status"},
+	{"dig", "@127.0.0.1", "-p", "5335", ".", "NS", "+time=1", "+tries=1"},
+	{"dig", "-4", "+time=2", "+tries=1", "+short", "@198.41.0.4", ".", "NS"},
+	{"dig", "-6", "+time=2", "+tries=1", "+short", "@2001:503:ba3e::2:30", ".", "NS"},
+}
+
+// unboundVerbosity: Unbound's own verbosity levels only go from 0 (no
+// extra logging) to 5 (very noisy) - see settings.go's LogVerbosity field.
+var unboundVerbosity = regexp.MustCompile(`^[0-5]$`)
+
+func validateUnboundExecCommand(cmd []string) error {
+	for _, known := range knownUnboundFixedExecCommands {
+		if cmdEqual(cmd, known) {
+			return nil
+		}
+	}
+	if len(cmd) == 3 && cmd[0] == "unbound-control" && cmd[1] == "verbosity" && unboundVerbosity.MatchString(cmd[2]) {
+		return nil
+	}
+	if len(cmd) > 0 && cmd[0] == "dig" {
+		return validateUnboundDig(cmd[1:])
+	}
+	return fmt.Errorf("exec command %v is not on the allowlist", cmd)
+}
+
+// digFlag covers every dig flag Core's own call sites actually pass
+// (lifecycle.go's digTimeout/tries constants, forwarding.go's fixed
+// output-shaping flags) - +time=N and +tries=N are bounded to two digits
+// since Core never waits longer than the low tens of seconds for a
+// diagnostic query.
+var digFlag = regexp.MustCompile(`^\+(short|dnssec|noall|comments|answer|authority|time=[0-9]{1,2}|tries=[0-9]{1,2})$`)
+
+// digQTypes: the only record types any Core call site ever queries for.
+var digQTypes = map[string]bool{"A": true, "NS": true, "SOA": true}
+
+// digName: a conservative DNS label/name shape - covers "." (the root,
+// used by the connectivity probes), the two fixed diagnostic domains
+// (example.com/dnssec-failed.org, overridable in CI only, see
+// SetDiagnosticDomains), and any zone an operator has configured as a
+// forward target (forwarding.go's checkForwardTarget - already fully
+// operator-controlled via the existing, sanctioned /api/unbound/settings
+// forward-zone feature, so accepting any well-formed zone name here
+// grants nothing beyond what that feature already allows).
+var digName = regexp.MustCompile(`^\.$|^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*\.?$`)
+
+// validateUnboundDig covers every `dig` invocation Core makes against
+// rootguard-unbound (root-server connectivity probes, the direct and
+// AdGuard-path resolution/DNSSEC diagnostics, and per-forward-zone
+// checks). The server and query-name tokens are necessarily variable
+// (AdGuard's container IP is assigned dynamically; a forward zone/address
+// is whatever the operator configured), so this validates the shape of
+// the command - a known flag, `-p <numeric port>`, an `@server` token, a
+// query name, and a known record type - rather than one fixed argument
+// list per call site.
+func validateUnboundDig(args []string) error {
+	var server, name, qtype string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case digFlag.MatchString(a):
+		case a == "-4" || a == "-6":
+		case a == "-p":
+			i++
+			if i >= len(args) || !isNumeric(args[i]) {
+				return fmt.Errorf("dig -p requires a numeric port")
+			}
+		case strings.HasPrefix(a, "@") && len(a) > 1:
+			server = a
+		case digQTypes[a]:
+			qtype = a
+		case name == "" && digName.MatchString(a):
+			name = a
+		default:
+			return fmt.Errorf("dig argument %q is not on the allowlist", a)
+		}
+	}
+	if server == "" {
+		return fmt.Errorf("dig command has no @server target")
+	}
+	if name == "" {
+		return fmt.Errorf("dig command has no query name")
+	}
+	if qtype == "" {
+		return fmt.Errorf("dig command has no recognized query type")
+	}
+	return nil
+}
+
+func isNumeric(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func cmdEqual(a, b []string) bool {

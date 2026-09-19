@@ -104,8 +104,9 @@ var rules = []rule{
 	// run` invocations request (-i is never passed).
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/attach$`), validate: validateAttach},
 
-	// docker exec (Core only: reloading rootguard-blockpage) - the second
-	// capability-granting call, hence the body validator.
+	// docker exec (Core only: reloading rootguard-blockpage, plus
+	// rootguard-unbound's own config-syntax checks and diagnostics) - the
+	// second capability-granting call, hence the body validator.
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/exec$`), validate: validateExecCreate},
 	{method: "POST", pattern: regexp.MustCompile(`^/exec/[^/]+/start$`)},
 	// docker exec's own exit-code check after running - found live wiring
