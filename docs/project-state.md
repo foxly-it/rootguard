@@ -42,18 +42,23 @@ directories (each with its own Dockerfile and path-filtered CI workflow):
   does - see `ROADMAP.md`'s Post-1.0/Future section for the still-open
   follow-ups (dropping root from Core/Updater, a self-update channel for
   this component, and the rootless-Docker phase below).
-- **Rootless Docker daemon compatibility** (2026-09-18): the risk that
-  would have ruled it out - rootless networking silently dropping the real
-  client IP on DNS queries, breaking AdGuard's per-client filtering - is
-  confirmed and resolved. The default configuration does lose it; the
-  `pasta` network/port driver preserves it, verified hands-on with real
-  LAN traffic. See `docs/rootless-docker.md` for the full findings,
-  including what's still open (a full compose-stack deployment and the
-  backup/restore migration path) before this can be called supported.
-  `install.sh` now auto-detects whichever Docker daemon (rootful or
-  rootless) is already present and wires `docker-proxy`'s socket mount
-  accordingly, without installing, configuring, or recommending either -
-  see `docs/rootless-docker.md`'s "What remains" section.
+- **Rootless Docker daemon compatibility** (2026-09-18/19): fully
+  verified end to end, hands-on - a real risk to per-client filtering
+  (the default rootless networking silently drops the real client IP on
+  DNS queries) is confirmed and resolved by configuring the `pasta`
+  network/port driver. `install.sh` auto-detects whichever Docker daemon
+  (rootful or rootless) is already present and wires `docker-proxy`'s
+  socket mount accordingly, without installing, configuring, or
+  recommending either. A full `compose.release.yaml` deployment, the
+  guided setup, AdGuard's own query log, and the backup/restore migration
+  path from an existing rootful installation were all exercised
+  end to end and confirmed working - see `docs/rootless-docker.md` for
+  the full findings, including two more operator-facing requirements this
+  found (the guided setup's DNS bind address must be `0.0.0.0` under
+  rootless, and privileged port 53 needs
+  `net.ipv4.ip_unprivileged_port_start` rather than a capability grant)
+  and the two `rootguard-docker-proxy` allowlist gaps (an Unbound-exec
+  gap, a missing `GET /system/df`) this same exercise found and fixed.
 
 These were four separate repositories included as Git submodules until the
 monorepo migration (see "Delivered and verified" below); their full commit
