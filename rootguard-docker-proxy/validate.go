@@ -241,22 +241,6 @@ func validateAttach(r *http.Request, _ []byte) error {
 	return nil
 }
 
-// knownExecTargets: Core's own code execs into exactly two containers -
-// rootguard-blockpage (reloading its nginx config) and rootguard-unbound
-// (config-syntax checks and read-only diagnostics; see
-// rootguard-core/internal/unbound). Found live: an earlier version of
-// this allowlist only ever covered rootguard-blockpage, on the mistaken
-// assumption that it was the only exec target - it silently broke every
-// Unbound guided-setting change, custom-config edit, and diagnostic once
-// docker-proxy sat in the request path, none of which any CI fixture
-// happened to exercise. Fixed by actually enumerating every real exec
-// call site in rootguard-core (grep for `"exec"` across the module) and
-// validating each rather than guessing again.
-var knownExecTargets = map[string]bool{
-	"rootguard-blockpage": true,
-	"rootguard-unbound":   true,
-}
-
 type execCreateBody struct {
 	Cmd []string `json:"Cmd"`
 }
@@ -271,6 +255,17 @@ func execTargetFromPath(path string) string {
 	return ""
 }
 
+// Core's own code execs into exactly two containers - rootguard-blockpage
+// (reloading its nginx config) and rootguard-unbound (config-syntax
+// checks and read-only diagnostics; see rootguard-core/internal/unbound).
+// Found live: an earlier version of this allowlist only ever covered
+// rootguard-blockpage, on the mistaken assumption that it was the only
+// exec target - it silently broke every Unbound guided-setting change,
+// custom-config edit, and diagnostic once docker-proxy sat in the
+// request path, none of which any CI fixture happened to exercise. Fixed
+// by actually enumerating every real exec call site in rootguard-core
+// (grep for `"exec"` across the module) and validating each rather than
+// guessing again.
 func validateExecCreate(r *http.Request, body []byte) error {
 	target := execTargetFromPath(r.URL.Path)
 	var e execCreateBody
