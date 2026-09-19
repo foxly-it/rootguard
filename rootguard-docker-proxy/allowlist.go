@@ -56,6 +56,17 @@ var rules = []rule{
 	{method: "GET", pattern: regexp.MustCompile(`^/info$`)},
 	{method: "GET", pattern: regexp.MustCompile(`^/containers/[^/]+/stats$`)},
 
+	// docker system df -v (Core: the cleanup feature's own size estimate
+	// for candidate images/volumes, rootguard-core/internal/updater/
+	// cleanup.go's dockerUsageSizes) - found live in the same audit that
+	// found the exec gap above: entirely missing before, so cleanup's
+	// preview (and, since execution previews first, cleanup itself)
+	// failed outright once docker-proxy sat in the request path whenever
+	// there was actually something to clean up. Read-only, grants
+	// nothing beyond disk-usage figures for resources Core can already
+	// list and remove through already-allowed calls.
+	{method: "GET", pattern: regexp.MustCompile(`^/system/df$`)},
+
 	// docker pull / docker compose pull (Core + Updater)
 	{method: "POST", pattern: regexp.MustCompile(`^/images/create$`), validate: validateImageCreate},
 
@@ -104,8 +115,9 @@ var rules = []rule{
 	// run` invocations request (-i is never passed).
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/attach$`), validate: validateAttach},
 
-	// docker exec (Core only: reloading rootguard-blockpage) - the second
-	// capability-granting call, hence the body validator.
+	// docker exec (Core only: reloading rootguard-blockpage, plus
+	// rootguard-unbound's own config-syntax checks and diagnostics) - the
+	// second capability-granting call, hence the body validator.
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/exec$`), validate: validateExecCreate},
 	{method: "POST", pattern: regexp.MustCompile(`^/exec/[^/]+/start$`)},
 	// docker exec's own exit-code check after running - found live wiring

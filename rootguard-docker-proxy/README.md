@@ -37,7 +37,8 @@ Tools like `tecnativa/docker-socket-proxy` allow-list by *resource type*
 (containers/images/networks on or off), not by *request body*. Core
 legitimately needs `POST /containers/create` (its own `docker run`
 helpers, and everything `docker compose up` does under the hood) and
-`POST /containers/{id}/exec` (to reload the blockpage) - toggling those
+`POST /containers/{id}/exec` (to reload the blockpage, and for
+rootguard-unbound's own config-syntax checks and diagnostics) - toggling those
 endpoints on at all would still let a compromised Core request
 `Privileged: true` or an arbitrary host bind mount through them. This
 proxy inspects the body of every call that can grant new capability and
@@ -64,8 +65,18 @@ sends - see `validate.go`.
     resolved, already-cached bare content digest is exempt from the
     repository check - see `stripImageRef`'s doc comment for why that's
     still safe).
-  - `POST /containers/{id}/exec` - only `rootguard-blockpage`, only the
-    two literal commands Core's own code ever sends.
+  - `POST /containers/{id}/exec` - only `rootguard-blockpage` (the two
+    literal commands Core's own code ever sends) or `rootguard-unbound`
+    (`unbound-checkconf`/`cat` against two fixed paths each,
+    `unbound-control status`, `unbound-control verbosity <0-5>`, and a
+    shape-validated `dig` covering every diagnostic and forward-zone
+    check Core issues - `dig`'s own server/query-name arguments are
+    necessarily variable, see `validateUnboundDig`'s doc comment for why
+    that's still safe). Found live: an earlier version of this allowlist
+    only knew about `rootguard-blockpage`, silently breaking every
+    Unbound guided-setting change once docker-proxy sat in the request
+    path - no CI fixture exercised a settings change after initial
+    deployment, so nothing caught it before manual end-to-end testing did.
   - `POST /networks/{id}/connect` - only `rootguard-dns`, only
     RootGuard's own containers.
   - `POST /containers/{id}/attach` - rejects a request for `stdin`,

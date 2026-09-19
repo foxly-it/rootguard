@@ -56,7 +56,7 @@ services:
     # cut it yet), same rationale as attestation-proxy's own comment
     # above. Superseded by update-alpha-pins' real digest the moment a
     # real release actually promotes this component.
-    image: "${ROOTGUARD_DOCKER_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-docker-proxy:sha-5fde343@sha256:7b9a03f47b7a79146ed41b3fdf6fb78343033ab2ddfd010f76b6e72a0057f511}"
+    image: "${ROOTGUARD_DOCKER_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-docker-proxy:sha-fbba258@sha256:39f728b7a71a0631f53975be6f5a6a00a58e18080fcd733a472e7656de4e471a}"
     container_name: rootguard-docker-proxy
     restart: unless-stopped
     read_only: true
