@@ -1331,22 +1331,34 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       binary, which only ever swaps Core/WebApp themselves). Deliberately
       deferred from the initial wiring above to keep that change's blast
       radius smaller.
-- [ ] Rootless-Docker-daemon compatibility verification and
+- [x] Rootless-Docker-daemon compatibility verification and
       documentation - the second, host-level phase planned after the
       docker-proxy wiring above, using the existing backup/restore feature
       as the migration path for existing installations rather than a new
-      tool. The one finding that would have ruled this out entirely -
-      whether rootless Docker's networking silently drops the real client
-      IP on DNS queries, breaking AdGuard's per-client filtering - is now
-      confirmed and resolved: the default configuration does lose it, but
-      explicitly configuring the `pasta` network/port driver preserves it,
-      verified hands-on with real LAN traffic (see
-      `docs/rootless-docker.md`). Still open before this can be checked
-      off: a full `compose.release.yaml` deployment under rootless Docker
-      (structurally understood - `ROOTGUARD_DOCKER_PROXY_SOCKET` already
-      makes the socket path configurable, no RootGuard code change needed -
-      just not yet exercised end to end) and the backup/restore migration
-      path itself.
+      tool. The finding that would have ruled this out entirely - whether
+      rootless Docker's networking silently drops the real client IP on
+      DNS queries, breaking AdGuard's per-client filtering - is confirmed
+      and resolved: the default configuration loses it (reconfirmed on two
+      different RootlessKit network drivers), but explicitly configuring
+      the `pasta` network/port driver preserves it. A full
+      `compose.release.yaml` deployment was then exercised end to end under
+      rootless Docker: `install.sh` auto-detects the rootless daemon and
+      wires `docker-proxy`'s socket path with no operator action, the
+      guided setup deployed AdGuard/Unbound successfully, and AdGuard's own
+      query log confirmed the real client IP on a fully bootstrapped
+      instance. The backup/restore migration path was verified too - an
+      encrypted backup from a real rootful installation restored cleanly
+      onto a fresh rootless one, settings intact. Two more real,
+      independent requirements surfaced only by this end-to-end run (not
+      knowable from documentation alone): the guided setup's DNS bind
+      address must be `0.0.0.0` rather than a specific host IP under
+      `pasta`, and privileged port binding for `pasta` needs
+      `net.ipv4.ip_unprivileged_port_start` lowered - the `setcap`-based
+      method some general rootless-Docker guides recommend does not work
+      for `pasta`'s automatic port forwarding. Full detail, including the
+      two `rootguard-docker-proxy` allowlist gaps this same exercise found
+      and fixed (an Unbound-exec gap and a missing `GET /system/df`), in
+      `docs/rootless-docker.md`.
 
 ## How we work with this roadmap
 

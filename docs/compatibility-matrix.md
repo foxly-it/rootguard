@@ -30,10 +30,15 @@ matrix and how to repeat it. Currently verified: Linux `amd64`/`arm64` on
 GitHub-hosted runners, and Docker Desktop on Apple Silicon.
 
 Rootless Docker daemons are a separate axis from the platform matrix above
-- see [rootless-docker.md](rootless-docker.md) for what's confirmed
-(client-IP preservation requires the `pasta` driver, not the default) and
-what's still open (a full stack deployment, the backup/restore migration
-path).
+- fully verified end to end (a full stack deployment, AdGuard's own
+per-client filtering, and the backup/restore migration path from an
+existing rootful installation) as of 2026-09-19, `install.sh` detects and
+adapts to a rootless daemon automatically. See
+[rootless-docker.md](rootless-docker.md) for the operator-facing
+requirements this depends on: the `pasta` network/port driver (client-IP
+preservation depends on it, the default doesn't work), `0.0.0.0` as the
+guided setup's DNS bind address rather than a specific host IP, and
+`net.ipv4.ip_unprivileged_port_start` for privileged port binding.
 
 ## AdGuard Home channel
 
