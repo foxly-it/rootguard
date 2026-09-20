@@ -17,6 +17,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import { type ServiceInfo } from "../api/client";
+import { formatBytes } from "../utils/format";
 import "../styles/dashboard.css";
 import { useI18n } from "../i18n";
 import { useOverviewData } from "../hooks/useOverviewData";
@@ -390,17 +391,6 @@ function PanelHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
 
 function formatCPU(value: number) {
   return `${value.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
-}
-
-function formatBytes(value: number) {
-  const units = ["B", "KiB", "MiB", "GiB"];
-  let amount = value;
-  let unit = 0;
-  while (amount >= 1024 && unit < units.length - 1) {
-    amount /= 1024;
-    unit += 1;
-  }
-  return `${amount.toLocaleString(undefined, { minimumFractionDigits: unit > 1 ? 1 : 0, maximumFractionDigits: 1 })} ${units[unit]}`;
 }
 
 function formatInteger(value: number) {

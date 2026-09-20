@@ -412,7 +412,12 @@ function Toggle({ directive, label, badge, description, checked, onChange }: { d
 }
 
 function NumberField({ directive, label, description, recommended, value, min, max, onChange }: { directive: string; label: string; description: string; recommended: string; value: number; min: number; max: number; onChange: (value: number) => void }) {
-  return <label className="number-field"><strong>{label}</strong><code className="setting-directive">{directive}: {value}</code><input type="number" value={value} min={min} max={max} onChange={(event) => onChange(Number(event.target.value))} /><small>{description}</small><em>{recommended}</em></label>;
+  // valueAsNumber is NaN while the field is empty (e.g. the operator
+  // selects-all and deletes to type a new value) - found in review:
+  // Number(event.target.value) instead turns "" into 0, snapping the
+  // input to "0" mid-edit instead of allowing a blank moment, the same
+  // bug class already fixed for Backups.tsx's restore-port field.
+  return <label className="number-field"><strong>{label}</strong><code className="setting-directive">{directive}: {value}</code><input type="number" value={value} min={min} max={max} onChange={(event) => { const next = event.target.valueAsNumber; if (!Number.isNaN(next)) onChange(next); }} /><small>{description}</small><em>{recommended}</em></label>;
 }
 
 function DiagnosticRow({ passed, detail, label }: { name: string; passed: boolean; detail: string; label: string }) {

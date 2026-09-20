@@ -8,6 +8,7 @@ import * as client from "../api/client";
 
 const services: client.ServiceInfo[] = [
   { name: "core", displayName: "Core", description: "", status: "running", health: "healthy", restartCount: 0, immutable: true, metadata: "complete", attestation: "verified" },
+  { name: "webapp", displayName: "WebApp", description: "", status: "running", health: "healthy", restartCount: 0, immutable: true, metadata: "complete", attestation: "verified" },
 ];
 
 const logs: client.ServiceLogs = {
@@ -72,5 +73,26 @@ describe("Logs download report", () => {
     });
 
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");
+  });
+});
+
+// Regression test for a review finding: the effect populating the
+// service picker used to depend on `selected`, which changes on every
+// click in the picker below, re-triggering a full fetchServices() call
+// on every tab click instead of only once on mount.
+describe("Logs service picker", () => {
+  it("fetches the service list only once, not again on every tab click", async () => {
+    render(<Logs />, { wrapper });
+
+    await screen.findByRole("button", { name: /Core/i });
+    expect(client.fetchServices).toHaveBeenCalledTimes(1);
+
+    const webappTab = await screen.findByRole("button", { name: /WebApp/i });
+    await act(async () => {
+      fireEvent.click(webappTab);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(client.fetchServices).toHaveBeenCalledTimes(1);
   });
 });
