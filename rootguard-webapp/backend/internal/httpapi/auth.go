@@ -203,7 +203,14 @@ func (a *SessionAuth) Handler(next http.Handler) http.Handler {
 		case "/api/auth/audit":
 			a.handleAudit(w, r)
 			return
-		case "/health":
+		case "/health", "/api/health":
+			// Found in review: router.go registers /api/health alongside
+			// /health as the same plain HealthHandler, but only the bare
+			// path was special-cased here - /api/health fell through into
+			// the generic /api/ prefix check below and required a session,
+			// contradicting its own registration comment. Fails closed
+			// (401, not a crash), but a genuine inconsistency for a path
+			// meant to be a plain health probe.
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -617,8 +624,18 @@ func (a *SessionAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		a.mu.Lock()
 		entry, existed := a.sessions[cookie.Value]
-		delete(a.sessions, cookie.Value)
-		persistErr := a.persistLocked()
+		var persistErr error
+		if existed {
+			// Found in review: this used to call delete+persistLocked
+			// unconditionally, including for a cookie that never matched a
+			// real session - an unauthenticated POST to this endpoint with
+			// an arbitrary cookie value triggered a full atomic
+			// write+fsync under this same mutex, with no rate limit
+			// covering this path. Nothing was ever in the map to delete in
+			// that case, so there's nothing to persist either.
+			delete(a.sessions, cookie.Value)
+			persistErr = a.persistLocked()
+		}
 		a.mu.Unlock()
 		// The browser side of the logout is already durable at this point
 		// (cookie cleared above) regardless of what happens here - this is
@@ -770,7 +787,17 @@ func (a *SessionAuth) authenticatedUser(r *http.Request) (string, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	entry, ok := a.sessions[cookie.Value]
-	if !ok || !entry.ExpiresAt.After(now) {
+	if !ok {
+		// Found in review: this used to fall through to the same
+		// delete+persist below even when the cookie never matched a real
+		// session - a bogus or already-revoked cookie triggered a full
+		// atomic write+fsync under this same mutex on every request, with
+		// no rate limit covering this path (it runs before any handler-
+		// level guard). Nothing was ever in the map to delete, so there's
+		// nothing to persist either.
+		return "", false
+	}
+	if !entry.ExpiresAt.After(now) {
 		delete(a.sessions, cookie.Value)
 		_ = a.persistLocked()
 		return "", false
