@@ -160,7 +160,14 @@ export default function Setup() {
                 value={config.dns_port}
                 disabled={deploying}
                 onChange={(event) => {
-                  setConfig({ ...config, dns_port: Number(event.target.value) });
+                  // valueAsNumber is NaN while the field is empty (e.g.
+                  // select-all then retype) - found in review:
+                  // Number(event.target.value) instead turned "" into 0,
+                  // snapping the field to "0" mid-edit with no submit-time
+                  // guard preventing that value from reaching preflight.
+                  const port = event.target.valueAsNumber;
+                  if (Number.isNaN(port)) return;
+                  setConfig({ ...config, dns_port: port });
                   setPreflight(null);
                 }}
               />

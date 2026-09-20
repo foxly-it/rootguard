@@ -19,7 +19,7 @@ function isWarningAuditEvent(event: AuditEvent["event"]): boolean {
 }
 
 export default function SessionsModal({ open, onClose, returnFocusTo }: { open: boolean; onClose: () => void; returnFocusTo?: RefObject<Element | null> }) {
-  const { t, locale } = useI18n();
+  const { t, formatDate } = useI18n();
   const [sessions, setSessions] = useState<SessionSummary[] | null>(null);
   const [error, setError] = useState("");
   const [revokingId, setRevokingId] = useState("");
@@ -54,13 +54,6 @@ export default function SessionsModal({ open, onClose, returnFocusTo }: { open: 
     } finally {
       setRevokingId("");
     }
-  }
-
-  function formatDate(value: string) {
-    return new Date(value).toLocaleString(locale === "de" ? "de-DE" : "en-US", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
   }
 
   // The raw User-Agent string is long, technical noise ("Mozilla/5.0
@@ -104,8 +97,8 @@ export default function SessionsModal({ open, onClose, returnFocusTo }: { open: 
               <div className="session-entry-detail">
                 <strong>{describeDevice(entry.user_agent)}</strong>
                 {entry.current && <span className="session-current-badge">{t("sessions.current")}</span>}
-                <small>{t("sessions.since", { date: formatDate(entry.created_at) })}</small>
-                <small>{t("sessions.expires", { date: formatDate(entry.expires_at) })}</small>
+                <small>{t("sessions.since", { date: formatDate(entry.created_at, { dateStyle: "medium", timeStyle: "short" }) })}</small>
+                <small>{t("sessions.expires", { date: formatDate(entry.expires_at, { dateStyle: "medium", timeStyle: "short" }) })}</small>
                 {entry.remote_ip && <small>{entry.remote_ip}</small>}
               </div>
               <button
@@ -133,7 +126,7 @@ export default function SessionsModal({ open, onClose, returnFocusTo }: { open: 
               <i aria-hidden="true" />
               <div>
                 <strong>{t(`sessions.activity.${event.event}`)}</strong>
-                <small>{formatDate(event.timestamp)} · {event.remote_ip}</small>
+                <small>{formatDate(event.timestamp, { dateStyle: "medium", timeStyle: "short" })} · {event.remote_ip}</small>
               </div>
             </li>
           ))}

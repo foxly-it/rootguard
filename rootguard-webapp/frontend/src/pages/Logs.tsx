@@ -34,18 +34,26 @@ export default function Logs() {
     }
   }, [selected, t]);
 
+  // Populates the service picker once on mount, not on every tab click -
+  // found in review: this depended on `selected`, which changes on every
+  // click in the picker below, re-triggering a full /api/services fetch
+  // each time instead of just the intended one-time-on-mount load. Reads
+  // the current selection through setSelected's own updater instead of
+  // closing over `selected` directly, so the effect never needs it as a
+  // dependency.
   useEffect(() => {
     const initial = window.setTimeout(async () => {
       try {
         const available = await fetchServices();
         setServices(available.sort((left, right) => serviceOrder.indexOf(left.name) - serviceOrder.indexOf(right.name)));
-        if (!available.some((service) => service.name === selected) && available[0]) setSelected(available[0].name);
+        setSelected((current) => (!available.some((service) => service.name === current) && available[0]) ? available[0].name : current);
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : t("logs.loadError"));
       }
     }, 0);
     return () => window.clearTimeout(initial);
-  }, [selected, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const initial = window.setTimeout(() => load(), 0);

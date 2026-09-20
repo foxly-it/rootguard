@@ -109,12 +109,17 @@ export default function UserMenu() {
             </a>
           </div>
 
-          <button type="button" className="rg-user-panel-action" onClick={() => { setAccountOpen(true); setOpen(false); }}>
+          {/* Each opener also closes the other modal, not just the
+              dropdown - found in review: reopening the dropdown while one
+              modal was already open (Manage account -> reopen -> Sessions)
+              could otherwise render both simultaneously, each with its own
+              Escape/focus-trap handling stacked on top of the other. */}
+          <button type="button" className="rg-user-panel-action" onClick={() => { setAccountOpen(true); setSessionsOpen(false); setOpen(false); }}>
             <UserCog aria-hidden="true" />
             {t("account.manage")}
           </button>
 
-          <button type="button" className="rg-user-panel-action" onClick={() => { setSessionsOpen(true); setOpen(false); }}>
+          <button type="button" className="rg-user-panel-action" onClick={() => { setSessionsOpen(true); setAccountOpen(false); setOpen(false); }}>
             <Laptop aria-hidden="true" />
             {t("sessions.manage")}
           </button>
