@@ -216,9 +216,9 @@ func TestResourceProfilesRenderBoundedCacheSizes(t *testing.T) {
 func TestActiveConfigurationReadsRunningContainerFiles(t *testing.T) {
 	manager := NewManager(t.TempDir(), "/etc/unbound/unbound.d", "rootguard-unbound")
 	manager.now = func() time.Time { return time.Unix(123, 0) }
-	manager.run = func(_ context.Context, name string, arguments ...string) ([]byte, error) {
-		if name != "docker" || len(arguments) != 4 || arguments[0] != "exec" || arguments[2] != "cat" {
-			t.Fatalf("unexpected command: %s %v", name, arguments)
+	manager.run = func(_ context.Context, arguments ...string) ([]byte, error) {
+		if len(arguments) != 4 || arguments[0] != "exec" || arguments[2] != "cat" {
+			t.Fatalf("unexpected command: %v", arguments)
 		}
 		switch arguments[3] {
 		case "/etc/unbound/unbound.conf":

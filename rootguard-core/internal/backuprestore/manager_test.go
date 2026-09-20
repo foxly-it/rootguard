@@ -190,6 +190,89 @@ func TestFailedPreflightLeavesLocalDirectoriesUntouched(t *testing.T) {
 	}
 }
 
+// TestFailedPrepareLeavesLocalDirectoriesUntouched is the regression test
+// for a review finding: the rollback below used to run for any restore
+// failure that wasn't installer.ErrNotClean, which also covers
+// restoreDeploy's own prepare/pull/create phases failing - here, a clean
+// preflight (so not ErrNotClean) followed by the compose "pull" step
+// failing, before restoreData is ever invoked. Local data was never
+// touched in that case either, so the rollback rewrite is exactly as
+// pointless (and exactly as permission-losing, see the mode assertion
+// below) as it is for the ErrNotClean case already covered above.
+func TestFailedPrepareLeavesLocalDirectoriesUntouched(t *testing.T) {
+	installation := t.TempDir()
+	status := `{"state":"installed","config":{"dns_bind_address":"192.0.2.10","dns_port":53,"adguard_channel":"stable","blockpage_enabled":false}}`
+	if err := os.WriteFile(filepath.Join(installation, "status.json"), []byte(status), 0600); err != nil {
+		t.Fatal(err)
+	}
+	unbound := t.TempDir()
+	if err := os.WriteFile(filepath.Join(unbound, "settings.json"), []byte("archived"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	service := t.TempDir()
+	if err := os.WriteFile(filepath.Join(service, "state"), []byte("service-state"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	credentials := t.TempDir()
+	if err := os.WriteFile(filepath.Join(credentials, "credentials.json"), []byte(`{"username":"rootguard","password":"secret"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	adguard := t.TempDir()
+	if err := os.WriteFile(filepath.Join(adguard, "AdGuardHome.yaml"), []byte("schema_version: 29"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	exporter := backupexport.New(backupexport.Options{DataDir: t.TempDir(), LocalSources: []backupexport.Source{
+		{ArchivePath: "rootguard/installation", Path: installation},
+		{ArchivePath: "rootguard/unbound", Path: unbound},
+		{ArchivePath: "rootguard/adguard", Path: credentials},
+		{ArchivePath: "services/adguard/config", Path: adguard},
+		{ArchivePath: "services/unbound/state", Path: service},
+	}})
+	var encrypted bytes.Buffer
+	if err := exporter.Export(context.Background(), testPassphrase, &encrypted); err != nil {
+		t.Fatal(err)
+	}
+
+	// Every managed resource reports absent (preflight passes, so this is
+	// a clean target, not ErrNotClean) - but the compose "pull" call
+	// itself fails, well before restoreData is ever invoked.
+	docker := func(_ context.Context, arguments ...string) ([]byte, error) {
+		if len(arguments) == 3 && (arguments[0] == "container" || arguments[0] == "volume" || arguments[0] == "network") && arguments[1] == "inspect" {
+			return []byte("no such resource"), errors.New("exit status 1")
+		}
+		if len(arguments) > 0 && arguments[len(arguments)-1] == "pull" {
+			return []byte("pull failed"), errors.New("exit status 1")
+		}
+		return nil, nil
+	}
+	installerManager := installer.NewManager(installer.Options{
+		DataDir: t.TempDir(), CoreContainer: "rootguard-core", DNSNetworkCIDR: "172.29.53.0/24", Run: docker,
+		AttestationVerifier: func(context.Context, string, string) error { return nil },
+	})
+	target := t.TempDir()
+	targetFile := filepath.Join(target, "settings.json")
+	if err := os.WriteFile(targetFile, []byte("original"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	manager := New(Options{DataDir: t.TempDir(), UnboundDir: target, AdGuardDir: t.TempDir(), AdGuardAuthDir: t.TempDir(), Installer: installerManager, Run: docker})
+	_, err := manager.Restore(context.Background(), RestoreRequest{Passphrase: testPassphrase, Archive: bytes.NewReader(encrypted.Bytes())})
+	if err == nil || errors.Is(err, installer.ErrNotClean) {
+		t.Fatalf("expected a wrapped pull failure, not ErrNotClean or success, got %v", err)
+	}
+
+	data, err := os.ReadFile(targetFile)
+	if err != nil || string(data) != "original" {
+		t.Fatalf("expected untouched local data to survive a prepare/pull-phase failure, got %q %v", data, err)
+	}
+	info, err := os.Stat(targetFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0644 {
+		t.Fatalf("expected the untouched file's original mode 0644 to survive, got %o - a pointless rollback overwrote it", info.Mode().Perm())
+	}
+}
+
 // TestFailedRestoreNormalizesOwnershipAfterRollingBackLocalData is the
 // regression test for a round-3 correctness-review finding:
 // copyDirectory (used to both back up and restore the local Unbound/

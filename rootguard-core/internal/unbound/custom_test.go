@@ -180,7 +180,7 @@ func TestCustomConfigRestoresFilesWhenEffectiveCheckFails(t *testing.T) {
 	if _, err := manager.ApplyCustom(context.Background(), initial); err != nil {
 		t.Fatal(err)
 	}
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		if strings.Contains(strings.Join(args, " "), "/etc/unbound/unbound.conf") {
 			return []byte("duplicate or invalid option"), errors.New("exit 1")
 		}

@@ -25,7 +25,7 @@ func (m *Manager) StartDiagnosticLogging(ctx context.Context) (DiagnosticLogging
 	if err != nil {
 		return DiagnosticLoggingStatus{}, err
 	}
-	if output, err := m.run(ctx, "docker", "exec", m.containerName, "unbound-control", "verbosity", "2"); err != nil {
+	if output, err := m.run(ctx, "exec", m.containerName, "unbound-control", "verbosity", "2"); err != nil {
 		return DiagnosticLoggingStatus{}, fmt.Errorf("enable temporary Unbound diagnostic logging: %w: %s", err, output)
 	}
 
@@ -50,7 +50,7 @@ func (m *Manager) stopDiagnosticLogging(ctx context.Context) (DiagnosticLoggingS
 	if err != nil {
 		return DiagnosticLoggingStatus{}, err
 	}
-	if output, err := m.run(ctx, "docker", "exec", m.containerName, "unbound-control", "verbosity", fmt.Sprint(settings.LogVerbosity)); err != nil {
+	if output, err := m.run(ctx, "exec", m.containerName, "unbound-control", "verbosity", fmt.Sprint(settings.LogVerbosity)); err != nil {
 		return DiagnosticLoggingStatus{}, fmt.Errorf("restore privacy-safe Unbound logging: %w: %s", err, output)
 	}
 

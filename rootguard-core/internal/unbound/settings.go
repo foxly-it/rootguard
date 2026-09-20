@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"net/netip"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/foxly-it/rootguard-core/internal/atomicfile"
+	"github.com/foxly-it/rootguard-core/internal/dockercli"
 )
 
 var ErrInvalidSettings = errors.New("invalid unbound settings")
@@ -590,7 +590,7 @@ type Manager struct {
 	hostConfigDir      string
 	containerConfigDir string
 	containerName      string
-	run                commandRunner
+	run                dockercli.CommandRunner
 	now                func() time.Time
 	// sleep backs waitReady's poll loop - time.After by default,
 	// overridden in tests to a zero-delay channel so exercising the
@@ -609,15 +609,11 @@ type Manager struct {
 	dnssecCheckDomain     string
 }
 
-type commandRunner func(context.Context, string, ...string) ([]byte, error)
-
 func NewManager(hostConfigDir, containerConfigDir, containerName string) *Manager {
 	return &Manager{
 		hostConfigDir: hostConfigDir, containerConfigDir: containerConfigDir,
-		containerName: containerName,
-		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			return exec.CommandContext(ctx, name, args...).CombinedOutput()
-		},
+		containerName:         containerName,
+		run:                   dockercli.Run,
 		now:                   time.Now,
 		sleep:                 time.After,
 		diagnosticBaseLevel:   1,
@@ -748,7 +744,7 @@ var resourceProfileCacheSizes = map[string]cacheSizes{
 
 func (m *Manager) ActiveConfiguration(ctx context.Context) (ActiveConfiguration, error) {
 	readContainerFile := func(path string) (string, error) {
-		output, err := m.run(ctx, "docker", "exec", m.containerName, "cat", path)
+		output, err := m.run(ctx, "exec", m.containerName, "cat", path)
 		if err != nil {
 			return "", fmt.Errorf("read active Unbound file %s: %w: %s", path, err, strings.TrimSpace(string(output)))
 		}
@@ -857,13 +853,13 @@ func (m *Manager) applyStateLocked(ctx context.Context, settings Settings, custo
 		return fmt.Errorf("activate custom config: %w", err)
 	}
 
-	output, err := m.run(ctx, "docker", "exec", m.containerName, "unbound-checkconf", "/etc/unbound/unbound.conf")
+	output, err := m.run(ctx, "exec", m.containerName, "unbound-checkconf", "/etc/unbound/unbound.conf")
 	if err != nil {
 		rollbackErr := restoreState(configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
 		return fmt.Errorf("validate effective unbound config: %w: %s; files restored: %v", err, output, rollbackErr)
 	}
 
-	output, err = m.run(ctx, "docker", "restart", m.containerName)
+	output, err = m.run(ctx, "restart", m.containerName)
 	if err != nil {
 		return m.rollbackFailedApply(ctx, "restart unbound", fmt.Errorf("%w: %s", err, output),
 			configPath, settingsPath, customPath, oldConfig, oldSettings, oldCustom, configExisted, settingsExisted, customExisted)
@@ -928,7 +924,7 @@ func (m *Manager) rollbackFailedApply(ctx context.Context, action string, cause 
 	// so it still can't hang forever if something is genuinely stuck.
 	rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	rollbackOutput, restartErr := m.run(rollbackCtx, "docker", "restart", m.containerName)
+	rollbackOutput, restartErr := m.run(rollbackCtx, "restart", m.containerName)
 	if restartErr == nil {
 		restartErr = m.waitReady(rollbackCtx)
 	}
@@ -969,9 +965,9 @@ func (m *Manager) waitReady(ctx context.Context) error {
 	var lastErr error
 	var lastOutput []byte
 	for attempt := 0; attempt < unboundReadyAttempts; attempt++ {
-		output, err := m.run(ctx, "docker", "exec", m.containerName, "unbound-control", "status")
+		output, err := m.run(ctx, "exec", m.containerName, "unbound-control", "status")
 		if err == nil {
-			output, err = m.run(ctx, "docker", "exec", m.containerName, "dig", "@127.0.0.1", "-p", "5335", ".", "NS", "+time=1", "+tries=1")
+			output, err = m.run(ctx, "exec", m.containerName, "dig", "@127.0.0.1", "-p", "5335", ".", "NS", "+time=1", "+tries=1")
 			if err == nil {
 				return nil
 			}
