@@ -64,7 +64,14 @@ sends - see `validate.go`.
     `Image` isn't one of RootGuard's own known image repositories (a
     resolved, already-cached bare content digest is exempt from the
     repository check - see `stripImageRef`'s doc comment for why that's
-    still safe).
+    still safe). Also rejects a `Cmd`/`Entrypoint`/`User` combination
+    outside the two known `docker run` invocations Core's own code issues
+    (the chown helper, the port-probe container) or the all-default (image
+    decides) case every compose-managed container uses, and a
+    `NetworkingConfig` naming any network outside RootGuard's own compose
+    networks - found in review: these fields were previously forwarded
+    completely unchecked, letting an already-allowed image run arbitrary
+    code via a crafted `Entrypoint`/`Cmd`.
   - `POST /containers/{id}/exec` - only `rootguard-blockpage` (the two
     literal commands Core's own code ever sends) or `rootguard-unbound`
     (`unbound-checkconf`/`cat` against two fixed paths each,
@@ -72,17 +79,24 @@ sends - see `validate.go`.
     shape-validated `dig` covering every diagnostic and forward-zone
     check Core issues - `dig`'s own server/query-name arguments are
     necessarily variable, see `validateUnboundDig`'s doc comment for why
-    that's still safe). Found live: an earlier version of this allowlist
-    only knew about `rootguard-blockpage`, silently breaking every
-    Unbound guided-setting change once docker-proxy sat in the request
-    path - no CI fixture exercised a settings change after initial
-    deployment, so nothing caught it before manual end-to-end testing did.
+    that's still safe). Also rejects `Privileged`, a `User` override, or
+    `AttachStdin` - none of the allowed commands need any of them, and
+    each independently grants more than the fixed command itself would.
+    Found live: an earlier version of this allowlist only knew about
+    `rootguard-blockpage`, silently breaking every Unbound guided-setting
+    change once docker-proxy sat in the request path - no CI fixture
+    exercised a settings change after initial deployment, so nothing
+    caught it before manual end-to-end testing did.
   - `POST /networks/{id}/connect` - only `rootguard-dns`, only
-    RootGuard's own containers.
-  - `POST /containers/{id}/attach` - rejects a request for `stdin`,
-    needed by Core's own foreground `docker run` invocations (the chown
-    helper, the port-probe container) to relay output back to the CLI,
-    but never to write into a container.
+    RootGuard's own containers, and an `EndpointConfig` that may only set
+    a well-formed IPv4 address (Core's own real use, joining with a fixed
+    address derived from the DNS network's CIDR) - never an alias, MAC
+    address, or IPv6 address.
+  - `POST /containers/{id}/attach` - rejects any truthy `stdin` value
+    (matching Docker's own boolean parsing exactly, not just the literal
+    strings `"1"`/`"true"`), needed by Core's own foreground `docker run`
+    invocations (the chown helper, the port-probe container) to relay
+    output back to the CLI, but never to write into a container.
 - **Not a caller-authentication boundary.** Core and the Updater both sit
   on the same `control` network and aren't distinguished from each other
   at the proxy level - this is a known, documented scope limit, not an

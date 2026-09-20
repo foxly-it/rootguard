@@ -118,8 +118,20 @@ type mount struct {
 }
 
 type containerCreateBody struct {
-	Image      string     `json:"Image"`
-	HostConfig hostConfig `json:"HostConfig"`
+	Image            string            `json:"Image"`
+	Cmd              []string          `json:"Cmd"`
+	Entrypoint       []string          `json:"Entrypoint"`
+	User             string            `json:"User"`
+	HostConfig       hostConfig        `json:"HostConfig"`
+	NetworkingConfig *networkingConfig `json:"NetworkingConfig"`
+}
+
+// networkingConfig mirrors container-create's own network-attachment
+// block - only the map's keys (which network(s) this call attaches to)
+// are inspected; per-endpoint content (aliases, static IPs) isn't
+// unmarshaled at all, same scope limit as validateNetworkConnect below.
+type networkingConfig struct {
+	EndpointsConfig map[string]json.RawMessage `json:"EndpointsConfig"`
 }
 
 // knownCapAdd is the union of every CapAdd RootGuard's own code or
@@ -165,6 +177,13 @@ func validateContainerCreate(_ *http.Request, body []byte) error {
 		}
 	}
 
+	if err := validateContainerProcess(c); err != nil {
+		return err
+	}
+	if err := validateContainerNetworking(c.NetworkingConfig); err != nil {
+		return err
+	}
+
 	hc := c.HostConfig
 	if hc.Privileged {
 		return fmt.Errorf("privileged containers are not allowed")
@@ -193,6 +212,85 @@ func validateContainerCreate(_ *http.Request, body []byte) error {
 	}
 	if err := validateMounts(hc.Mounts); err != nil {
 		return err
+	}
+	return nil
+}
+
+// knownProcessOverrides: the only two container-create calls Core's own
+// code issues with an explicit Cmd/Entrypoint/User - probeHostPortBusy's
+// port-probe (installer/manager.go) and normalizeUnboundOwnership's
+// chown-helper (backuprestore/manager.go). Every other container Core/the
+// Updater ever create - the entire compose-managed stack - never
+// overrides these fields at all and relies purely on the image's own
+// defaults, which is why an all-empty Cmd/Entrypoint/User is accepted
+// unconditionally below. Found in review: an earlier version of this
+// proxy validated Image and HostConfig only, on the mistaken assumption
+// that those were the only fields capable of granting something new -
+// Cmd/Entrypoint/User are top-level fields on the same request and were
+// forwarded completely unchecked, letting an already-allowed image run
+// arbitrary code via a crafted Entrypoint/Cmd.
+var knownProcessOverrides = []struct {
+	entrypoint []string
+	user       string
+	cmds       [][]string
+}{
+	{
+		entrypoint: []string{"true"},
+		user:       "",
+		cmds:       [][]string{nil},
+	},
+	{
+		entrypoint: []string{"/usr/bin/chown"},
+		user:       "0:0",
+		cmds: [][]string{
+			{"--recursive", "100:101", "/etc/unbound/unbound.d"},
+			{"--recursive", "100:101", "/var/lib/unbound"},
+		},
+	},
+}
+
+func validateContainerProcess(c containerCreateBody) error {
+	if len(c.Cmd) == 0 && len(c.Entrypoint) == 0 && c.User == "" {
+		return nil
+	}
+	for _, known := range knownProcessOverrides {
+		if !cmdEqual(c.Entrypoint, known.entrypoint) || c.User != known.user {
+			continue
+		}
+		for _, cmd := range known.cmds {
+			if cmdEqual(c.Cmd, cmd) {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("container create with Cmd=%v Entrypoint=%v User=%q is not on the allowlist", c.Cmd, c.Entrypoint, c.User)
+}
+
+// knownComposeNetworks: every network RootGuard's own compose files
+// declare. edge/control/egress are Compose-managed with no explicit
+// `name:` in compose.release.yaml, so Compose auto-names them
+// "<project>_<key>" - this stack's project name is pinned to "rootguard"
+// (compose.release.yaml's own top-level `name:`). rootguard-dns is Core's
+// own generated compose file for AdGuard/Unbound/blockpage, which does
+// give it an explicit fixed name. Per-endpoint content (aliases, static
+// IPs) within an entry isn't policed here, the same scope limit already
+// accepted for validateNetworkConnect below - this bounds *which*
+// network a create call can join, not what identity it claims there.
+var knownComposeNetworks = map[string]bool{
+	"rootguard_control": true,
+	"rootguard_edge":    true,
+	"rootguard_egress":  true,
+	"rootguard-dns":     true,
+}
+
+func validateContainerNetworking(nc *networkingConfig) error {
+	if nc == nil {
+		return nil
+	}
+	for name := range nc.EndpointsConfig {
+		if !knownComposeNetworks[name] {
+			return fmt.Errorf("network %q is not on the allowlist", name)
+		}
 	}
 	return nil
 }
@@ -229,20 +327,36 @@ func validateMounts(mounts []mount) error {
 
 // validateAttach covers `POST /containers/{id}/attach` - see allowlist.go's
 // comment on this rule for why it's needed at all. Docker takes stdin/
-// stdout/stderr/stream from the query string, not the body. Rejecting
-// stdin=1/true is the entire security boundary here: without it, nothing
+// stdout/stderr/stream from the query string, not the body. Rejecting a
+// truthy stdin is the entire security boundary here: without it, nothing
 // else about this call can grant a new capability or reach a new
 // container, since {id} must already reference something that exists.
+// Matches Docker's own httputils.BoolValue exactly (case-insensitive,
+// trimmed; only "", "0", "no", "false", "none" are falsy) - found in
+// review: an earlier version only rejected the literal strings "1"/"true",
+// so "stdin=True" or "stdin=yes" reached the real daemon unrejected and
+// opened the container's stdin anyway.
 func validateAttach(r *http.Request, _ []byte) error {
-	switch r.URL.Query().Get("stdin") {
-	case "1", "true":
-		return fmt.Errorf("attach with stdin is not allowed")
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get("stdin"))) {
+	case "", "0", "no", "false", "none":
+		return nil
 	}
-	return nil
+	return fmt.Errorf("attach with stdin is not allowed")
 }
 
+// AttachStdin/Privileged/User are additionally checked below even though
+// no currently-allowed exec command needs any of them: Privileged grants
+// every Linux capability to the exec'd process unconditionally
+// (independent of the container's own HostConfig.Privileged), User can
+// run the command as an arbitrary UID, and AttachStdin - mirrored from
+// validateAttach's own reasoning - is what makes a later
+// `POST /exec/{id}/start` (unconditionally allowed once exec-create
+// succeeds) able to write into the running command at all.
 type execCreateBody struct {
-	Cmd []string `json:"Cmd"`
+	Cmd         []string `json:"Cmd"`
+	Privileged  bool     `json:"Privileged"`
+	User        string   `json:"User"`
+	AttachStdin bool     `json:"AttachStdin"`
 }
 
 // execTargetFromPath extracts the {id} segment from
@@ -271,6 +385,15 @@ func validateExecCreate(r *http.Request, body []byte) error {
 	var e execCreateBody
 	if err := json.Unmarshal(body, &e); err != nil {
 		return fmt.Errorf("invalid exec-create body: %w", err)
+	}
+	if e.Privileged {
+		return fmt.Errorf("privileged exec is not allowed")
+	}
+	if e.User != "" {
+		return fmt.Errorf("exec with a User override is not allowed")
+	}
+	if e.AttachStdin {
+		return fmt.Errorf("exec with AttachStdin is not allowed")
 	}
 	switch target {
 	case "rootguard-blockpage":
@@ -441,8 +564,50 @@ var knownNetworkConnectContainers = map[string]bool{
 	"rootguard-core": true,
 }
 
+// EndpointConfig lets a connect call additionally claim a DNS alias or a
+// fixed IP on the network it's joining. Core's only real use
+// (connectCoreToDNSNetwork) sets exactly one thing - IPAMConfig.IPv4Address,
+// a plain dotted-quad derived from the DNS network's own CIDR - so
+// everything else here is rejected rather than forwarded unchecked; found
+// in review, this field was previously ignored entirely.
+type endpointIPAMConfig struct {
+	IPv4Address  string   `json:"IPv4Address"`
+	IPv6Address  string   `json:"IPv6Address"`
+	LinkLocalIPs []string `json:"LinkLocalIPs"`
+}
+
+type endpointConfig struct {
+	IPAMConfig *endpointIPAMConfig `json:"IPAMConfig"`
+	Links      []string            `json:"Links"`
+	Aliases    []string            `json:"Aliases"`
+	MacAddress string              `json:"MacAddress"`
+	DriverOpts map[string]string   `json:"DriverOpts"`
+}
+
+var ipv4DottedQuad = regexp.MustCompile(`^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$`)
+
+func validateEndpointConfig(ec *endpointConfig) error {
+	if ec == nil {
+		return nil
+	}
+	if len(ec.Links) > 0 || len(ec.Aliases) > 0 || ec.MacAddress != "" || len(ec.DriverOpts) > 0 {
+		return fmt.Errorf("endpoint config may only set an IPv4 address")
+	}
+	if ec.IPAMConfig == nil {
+		return nil
+	}
+	if ec.IPAMConfig.IPv6Address != "" || len(ec.IPAMConfig.LinkLocalIPs) > 0 {
+		return fmt.Errorf("endpoint config may only set an IPv4 address")
+	}
+	if ec.IPAMConfig.IPv4Address != "" && !ipv4DottedQuad.MatchString(ec.IPAMConfig.IPv4Address) {
+		return fmt.Errorf("endpoint IPv4 address %q is not well-formed", ec.IPAMConfig.IPv4Address)
+	}
+	return nil
+}
+
 type networkConnectBody struct {
-	Container string `json:"Container"`
+	Container      string          `json:"Container"`
+	EndpointConfig *endpointConfig `json:"EndpointConfig"`
 }
 
 func networkTargetFromPath(path string) string {
@@ -465,5 +630,5 @@ func validateNetworkConnect(r *http.Request, body []byte) error {
 	if !knownNetworkConnectContainers[n.Container] {
 		return fmt.Errorf("container %q is not allowed to join %q", n.Container, target)
 	}
-	return nil
+	return validateEndpointConfig(n.EndpointConfig)
 }
