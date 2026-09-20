@@ -76,7 +76,15 @@ as_root() {
   if [ "$(id -u)" = "0" ]; then
     "$@"
   else
-    sudo "$@"
+    # env PWD="$PWD", not a bare `sudo "$@"` - found in review: default
+    # sudoers on Debian/Ubuntu (env_reset) strips PWD, so `docker compose`
+    # calls made through this on the primary install path (docker_cmd's
+    # own fallback, hit right after install_docker() adds the invoking
+    # user to the docker group - group membership needs a fresh login to
+    # take effect, so this fallback is the common case there, not an edge
+    # case) resolved compose.release.yaml's ${PWD}-based bind mounts to
+    # an empty/invalid path, failing every container that mounts one.
+    sudo env PWD="$PWD" "$@"
   fi
 }
 
@@ -264,7 +272,11 @@ port_listening() {
   if command -v ss >/dev/null 2>&1; then
     ss -Hln "$family" 2>/dev/null | awk -v p=":${port}\$" '$4 ~ p { found=1 } END { exit !found }'
   elif command -v netstat >/dev/null 2>&1; then
-    netstat -ln 2>/dev/null | awk -v p=":${port}\$" '$4 ~ p { found=1 } END { exit !found }'
+    # "$family", not a bare -ln - found in review: unlike the ss branch
+    # above, this used to ignore the TCP/UDP distinction entirely, so a
+    # UDP check and a TCP check both saw the exact same combined listing.
+    # netstat accepts the same -t/-u flags ss does.
+    netstat -ln "$family" 2>/dev/null | awk -v p=":${port}\$" '$4 ~ p { found=1 } END { exit !found }'
   else
     return 1
   fi
@@ -380,7 +392,15 @@ install_docker() {
   command -v sha256sum >/dev/null 2>&1 || die "sha256sum wird benötigt, um den Docker-Installer zu verifizieren."
   local installer actual_sha256
   installer="$(mktemp)"
-  trap 'rm -f "$installer"' RETURN
+  # EXIT, not RETURN - found in review: a RETURN trap only fires on this
+  # function's own normal return, never on a die() call (die always
+  # exits the whole process), which is exactly the failure path this
+  # cleanup exists for - e.g. the checksum mismatch below used to leave
+  # the failed-integrity-check installer script sitting on disk forever.
+  # Explicitly cleared again below once no longer needed, so it doesn't
+  # linger past this function and collide with the staging directory's
+  # own EXIT trap later in main().
+  trap 'rm -f "$installer"' EXIT
   curl -fsSL "$DOCKERINSTALL_URL" -o "$installer" \
     || die "Docker-Installer konnte nicht heruntergeladen werden."
   # The commit pin above fixes *which* content is expected; this is what
@@ -394,6 +414,8 @@ install_docker() {
   chmod +x "$installer"
   as_root "$installer" install --non-interactive --no-hello --add-user="$(id -un)" \
     || die "Docker-Installation fehlgeschlagen. Manuelle Anleitung: https://docs.docker.com/engine/install/"
+  rm -f "$installer"
+  trap - EXIT
   log "Docker wurde installiert."
 }
 
@@ -489,7 +511,15 @@ main() {
   # behind that would make a retry hit the "existiert bereits" abort above.
   local staging
   staging="$(mktemp -d)"
-  trap 'rm -rf "$staging"' RETURN
+  # EXIT, not RETURN - see install_docker's identical fix above: a
+  # RETURN trap never fires on a die() call, which is exactly the path
+  # that needs this cleanup (e.g. either download below failing left the
+  # scratch directory behind in /tmp forever). Nothing else in this
+  # script sets its own EXIT trap after this point, so leaving it
+  # registered for the remainder of main() is correct, not just
+  # tolerated - it still fires whether the script goes on to succeed or
+  # die() later.
+  trap 'rm -rf "$staging"' EXIT
 
   local raw_base="https://raw.githubusercontent.com/${RG_REPO}/${tag}"
   curl -fsSL -o "$staging/compose.release.yaml" "${raw_base}/compose.release.yaml" \
@@ -497,7 +527,20 @@ main() {
   curl -fsSL -o "$staging/.env" "${raw_base}/.env.release.example" \
     || die "Beispielkonfiguration konnte nicht heruntergeladen werden."
 
-  mkdir -p "$TARGET_DIR"
+  # mkdir -p only for the parent (so --dir=nested/path still works), then
+  # a plain, non-"-p" mkdir for $TARGET_DIR itself - found in review: the
+  # early "existiert bereits" check above and this creation are otherwise
+  # two separate steps with a real gap between them (Docker install,
+  # prompts, the GitHub API call, both downloads above), during which a
+  # second concurrent run of this same script against the same --dir
+  # would pass the same early check and then race this one to create it.
+  # Plain mkdir fails if the directory already exists, making this the
+  # actual atomic check-and-create - the loser dies with the same message
+  # instead of silently mixing its own downloaded files/generated secrets
+  # with the winner's.
+  mkdir -p "$(dirname "$TARGET_DIR")"
+  mkdir "$TARGET_DIR" \
+    || die "'$TARGET_DIR' existiert bereits - vermutlich läuft hier schon eine Installation. Abgebrochen, um nichts zu überschreiben."
   mv "$staging/compose.release.yaml" "$staging/.env" "$TARGET_DIR/"
   cd "$TARGET_DIR"
 
@@ -526,6 +569,18 @@ main() {
   # handle that case. The three internally-generated values below
   # (tokens, port) can't contain a ' either - random_secret() only ever
   # produces hex/base64url output, and WEB_PORT is numeric.
+  # Created with the final restrictive mode *before* anything is written
+  # to it, not after via chmod below - found in review: `awk ... > .env.tmp`
+  # alone creates the file at the process's default umask (typically
+  # 644) while it already holds the real admin password/API token/
+  # recovery token, and only chmod 600 further down closed that window -
+  # briefly readable by another local user on this host, however narrow
+  # the timing. Redirecting into an already-existing file only truncates
+  # it, it doesn't reset the mode, so pre-creating it here keeps it 600
+  # for its entire existence, including through the mv and the append
+  # below.
+  : > .env.tmp
+  chmod 600 .env.tmp
   ROOTGUARD_API_TOKEN="$api_token" \
   ROOTGUARD_RECOVERY_TOKEN="$recovery_token" \
   ROOTGUARD_ADMIN_USER="$admin_user" \
