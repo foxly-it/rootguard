@@ -9,8 +9,8 @@ import (
 func TestTemporaryDiagnosticLoggingStartsAndRestoresSafeLevel(t *testing.T) {
 	manager := NewManager(t.TempDir(), "/etc/unbound/unbound.d", "rootguard-unbound")
 	var commands [][]string
-	manager.run = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		commands = append(commands, append([]string{name}, args...))
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
+		commands = append(commands, args)
 		return nil, nil
 	}
 
@@ -30,8 +30,8 @@ func TestTemporaryDiagnosticLoggingStartsAndRestoresSafeLevel(t *testing.T) {
 	}
 
 	want := [][]string{
-		{"docker", "exec", "rootguard-unbound", "unbound-control", "verbosity", "2"},
-		{"docker", "exec", "rootguard-unbound", "unbound-control", "verbosity", "1"},
+		{"exec", "rootguard-unbound", "unbound-control", "verbosity", "2"},
+		{"exec", "rootguard-unbound", "unbound-control", "verbosity", "1"},
 	}
 	if !reflect.DeepEqual(commands, want) {
 		t.Fatalf("unexpected diagnostic logging commands: %#v", commands)

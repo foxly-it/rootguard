@@ -176,13 +176,21 @@ func (m *Manager) History() ([]HistoryEntry, error) {
 		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
 			continue
 		}
+		// A single unreadable or corrupted entry (a disk hiccup, a
+		// truncated write) shouldn't take down the entire version
+		// history - found in review: this used to abort the whole call
+		// on the first bad file, and recordSnapshot calls History()
+		// before every settings apply/restore, so one bad file
+		// permanently blocked all of them until an operator found and
+		// deleted it by hand. Every other good entry is still real
+		// history worth keeping; skip only the one that isn't.
 		data, err := os.ReadFile(filepath.Join(directory, file.Name()))
 		if err != nil {
-			return nil, err
+			continue
 		}
 		var entry HistoryEntry
 		if err := json.Unmarshal(data, &entry); err != nil {
-			return nil, fmt.Errorf("decode unbound history %s: %w", file.Name(), err)
+			continue
 		}
 		entries = append(entries, entry)
 	}
@@ -228,7 +236,7 @@ func (m *Manager) Diagnose(ctx context.Context) DiagnosticReport {
 
 func (m *Manager) diagnosticCommand(ctx context.Context, name string, args ...string) DiagnosticCheck {
 	dockerArgs := append([]string{"exec", m.containerName}, args...)
-	output, err := m.run(ctx, "docker", dockerArgs...)
+	output, err := m.run(ctx, dockerArgs...)
 	detail := strings.TrimSpace(string(output))
 	if detail == "" {
 		detail = "OK"

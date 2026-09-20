@@ -9,10 +9,7 @@ import (
 
 func TestCheckForwardTargetsPreservesZoneAndServerOrder(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, name string, args ...string) ([]byte, error) {
-		if name != "docker" {
-			return nil, errors.New("unexpected command: " + name)
-		}
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "@192.0.2.53 corp.example. SOA"):
@@ -53,7 +50,7 @@ func TestCheckForwardTargetsPreservesZoneAndServerOrder(t *testing.T) {
 
 func TestCheckForwardTargetsRequiresZoneSOA(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, _ ...string) ([]byte, error) {
 		return []byte("status: NOERROR"), nil
 	}
 	checks, err := manager.CheckForwardTargets(context.Background(), []ForwardZone{{
@@ -70,7 +67,7 @@ func TestCheckForwardTargetsRequiresZoneSOA(t *testing.T) {
 
 func TestCheckForwardTargetsReportsStableStatusError(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, _ ...string) ([]byte, error) {
 		return []byte(";; Got answer:\n;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 1234\n;; flags: qr aa"), nil
 	}
 	checks, err := manager.CheckForwardTargets(context.Background(), []ForwardZone{{
@@ -88,7 +85,7 @@ func TestCheckForwardTargetsReportsStableStatusError(t *testing.T) {
 
 func TestCheckForwardTargetsRedactsIncompleteResponse(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, _ ...string) ([]byte, error) {
 		return []byte("unexpected resolver response that must not reach the API"), nil
 	}
 	checks, err := manager.CheckForwardTargets(context.Background(), []ForwardZone{{
@@ -107,7 +104,7 @@ func TestCheckForwardTargetsRedactsIncompleteResponse(t *testing.T) {
 
 func TestCheckForwardTargetsReportsUnreachableServer(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, _ ...string) ([]byte, error) {
 		return []byte("communications error: timed out"), errors.New("exit status 9")
 	}
 	checks, err := manager.CheckForwardTargets(context.Background(), []ForwardZone{{

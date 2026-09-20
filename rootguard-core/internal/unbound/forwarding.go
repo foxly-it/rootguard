@@ -78,7 +78,7 @@ func (m *Manager) checkForwardTarget(ctx context.Context, zone, address string) 
 	defer cancel()
 	output, err := m.run(
 		targetContext,
-		"docker", "exec", m.containerName,
+		"exec", m.containerName,
 		"dig", "+time=3", "+tries=1", "+noall", "+comments", "+answer", "+authority", "@"+address, zone, "SOA",
 	)
 	detail := strings.TrimSpace(string(output))

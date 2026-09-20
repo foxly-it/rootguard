@@ -130,7 +130,7 @@ func TestApplyRestoresPreviousFilesWhenRestartFails(t *testing.T) {
 	}
 
 	restartCalls := 0
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		if len(args) > 0 && args[0] == "restart" {
 			restartCalls++
 			if restartCalls == 1 {
@@ -171,7 +171,7 @@ func TestApplyRestoresPreviousFilesWhenRestartFails(t *testing.T) {
 func TestApplyWaitsForUnboundToBecomeReadyAfterRestart(t *testing.T) {
 	manager := newTestManager(t)
 	statusCalls := 0
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		if len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
 			statusCalls++
 			if statusCalls < 3 {
@@ -199,7 +199,7 @@ func TestApplyWaitsForUnboundToBecomeReadyAfterRestart(t *testing.T) {
 func TestApplyWaitsForTheDNSPortToBecomeReadyAfterRestart(t *testing.T) {
 	manager := newTestManager(t)
 	digCalls := 0
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		if len(args) >= 3 && args[0] == "exec" && args[2] == "dig" {
 			digCalls++
 			if digCalls < 3 {
@@ -230,7 +230,7 @@ func TestApplyRollsBackWhenUnboundNeverBecomesReady(t *testing.T) {
 	}
 
 	restartCount := 0
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		if len(args) > 0 && args[0] == "restart" {
 			restartCount++
 		}
@@ -283,7 +283,7 @@ func TestWaitReadySkipsTheFinalSleep(t *testing.T) {
 		return fired
 	}
 	restartCount := 0
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		if len(args) > 0 && args[0] == "restart" {
 			restartCount++
 		}
@@ -318,7 +318,7 @@ func TestApplyReportsWhenTheRollbackRestartItselfNeverBecomesReady(t *testing.T)
 		t.Fatal(err)
 	}
 
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		if len(args) >= 2 && args[0] == "exec" && args[len(args)-2] == "unbound-control" && args[len(args)-1] == "status" {
 			return []byte("error: connect() failed"), errors.New("exit 1")
 		}
@@ -350,7 +350,7 @@ func TestApplyRollbackUsesAFreshContextWhenTheOriginalWasCanceled(t *testing.T) 
 	}
 
 	restartCount := 0
-	manager.run = func(ctx context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(ctx context.Context, args ...string) ([]byte, error) {
 		if len(args) == 0 || args[0] != "restart" {
 			return []byte("OK"), nil
 		}
@@ -393,7 +393,7 @@ func TestApplyRollbackUsesAFreshContextWhenTheOriginalWasCanceled(t *testing.T) 
 
 func TestDiagnosticsChecksConfigurationResolutionAndDNSSEC(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "unbound-checkconf"):
@@ -422,7 +422,7 @@ func TestDiagnosticsChecksConfigurationResolutionAndDNSSEC(t *testing.T) {
 func TestSetDiagnosticDomainsOverridesTheQueriedDomains(t *testing.T) {
 	manager := newTestManager(t)
 	manager.SetDiagnosticDomains("good.rgtest-ci.internal", "bad.rgtest-ci.internal")
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		switch {
 		case strings.Contains(joined, "unbound-checkconf"):
@@ -451,7 +451,7 @@ func TestSetDiagnosticDomainsOverridesTheQueriedDomains(t *testing.T) {
 
 func TestDiagnosePathChecksResolutionAndDNSSECThroughAdGuard(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, args ...string) ([]byte, error) {
 		joined := strings.Join(args, " ")
 		if !strings.Contains(joined, "@rootguard-adguard") || !strings.Contains(joined, "-p 53") {
 			t.Fatalf("expected the check to target AdGuard's container address, got: %s", joined)
@@ -476,7 +476,7 @@ func TestDiagnosePathChecksResolutionAndDNSSECThroughAdGuard(t *testing.T) {
 
 func TestDiagnosePathFailsOpenOnInvalidAddress(t *testing.T) {
 	manager := newTestManager(t)
-	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	manager.run = func(_ context.Context, _ ...string) ([]byte, error) {
 		t.Fatal("dig should not run for an unparsable address")
 		return nil, nil
 	}
@@ -519,10 +519,52 @@ func TestHistoryKeepsMostRecentTwentyVersions(t *testing.T) {
 	}
 }
 
+// TestHistorySkipsACorruptedEntryInsteadOfFailingEntirely is the
+// regression test for a review finding: History() used to abort the
+// whole call on the first unreadable/corrupted file under history/, and
+// recordSnapshot calls History() before every settings apply/restore -
+// so one bad file (a disk hiccup, a truncated write) permanently blocked
+// every future config change until an operator found and deleted it by
+// hand.
+func TestHistorySkipsACorruptedEntryInsteadOfFailingEntirely(t *testing.T) {
+	manager := newTestManager(t)
+	settings := DefaultSettings()
+	settings.Threads = 7
+	if err := manager.Apply(context.Background(), settings); err != nil {
+		t.Fatal(err)
+	}
+
+	historyDir := filepath.Join(manager.hostConfigDir, "history")
+	if err := os.WriteFile(filepath.Join(historyDir, "corrupted.json"), []byte("not json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	history, err := manager.History()
+	if err != nil {
+		t.Fatalf("expected History to tolerate one corrupted entry, got error: %v", err)
+	}
+	// A single Apply() call on a fresh manager records both a "before"
+	// snapshot (the prior, default state) and an "after" one - the exact
+	// count isn't the point of this test, only that the corrupted file
+	// doesn't turn into a third, and doesn't turn the whole call into an
+	// error.
+	if len(history) != 2 {
+		t.Fatalf("expected exactly the real entries (corrupted one skipped), got %d", len(history))
+	}
+
+	// A settings apply calls History() (via recordSnapshot) before
+	// writing anything - it must still succeed with the corrupted file
+	// present, not just History() called directly.
+	settings.Threads = 8
+	if err := manager.Apply(context.Background(), settings); err != nil {
+		t.Fatalf("expected Apply to succeed despite the corrupted history entry, got: %v", err)
+	}
+}
+
 func newTestManager(t *testing.T) *Manager {
 	t.Helper()
 	manager := NewManager(t.TempDir(), "/etc/unbound/unbound.d", "rootguard-unbound")
-	manager.run = func(_ context.Context, _ string, _ ...string) ([]byte, error) { return []byte("OK"), nil }
+	manager.run = func(_ context.Context, _ ...string) ([]byte, error) { return []byte("OK"), nil }
 	base := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC)
 	calls := 0
 	manager.now = func() time.Time {

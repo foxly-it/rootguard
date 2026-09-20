@@ -18,7 +18,7 @@ func (m *Manager) NetworkCapabilities(ctx context.Context) NetworkCapabilities {
 	probe := func(family, server string) (bool, string) {
 		probeCtx, cancel := context.WithTimeout(ctx, 4*time.Second)
 		defer cancel()
-		output, err := m.run(probeCtx, "docker", "exec", m.containerName,
+		output, err := m.run(probeCtx, "exec", m.containerName,
 			"dig", family, "+time=2", "+tries=1", "+short", "@"+server, ".", "NS")
 		detail := strings.TrimSpace(string(output))
 		if err != nil || detail == "" {

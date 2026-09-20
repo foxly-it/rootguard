@@ -119,7 +119,7 @@ func (m *Manager) validateCombined(ctx context.Context, settings Settings, custo
 	}
 	defer os.Remove(candidate)
 	containerCandidate := filepath.Join(m.containerConfigDir, filepath.Base(candidate))
-	output, err := m.run(ctx, "docker", "exec", m.containerName, "unbound-checkconf", containerCandidate)
+	output, err := m.run(ctx, "exec", m.containerName, "unbound-checkconf", containerCandidate)
 	detail := strings.TrimSpace(string(output))
 	if err != nil {
 		return "", fmt.Errorf("%w: unbound-checkconf: %s", ErrInvalidCustomConfig, detail)
