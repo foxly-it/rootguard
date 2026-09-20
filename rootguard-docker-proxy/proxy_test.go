@@ -73,7 +73,7 @@ func TestAllowedCalls(t *testing.T) {
 		{"container create with a kernel-style capability name", "POST", "/containers/create",
 			`{"Image":"ghcr.io/foxly-it/rootguard-blockpage","HostConfig":{"CapAdd":["CAP_CHOWN","CAP_SETUID","CAP_SETGID"]}}`},
 		{"container create, port-probe entrypoint override", "POST", "/containers/create",
-			`{"Image":"sha256:` + strings.Repeat("a", 64) + `","Entrypoint":["true"],"HostConfig":{}}`},
+			`{"Image":"sha256:` + strings.Repeat("a", 64) + `","Entrypoint":["true"],"HostConfig":{},"NetworkingConfig":{"EndpointsConfig":{"default":{}}}}`},
 		{"container create, chown-helper override, unbound-config path", "POST", "/containers/create",
 			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","Entrypoint":["/usr/bin/chown"],"Cmd":["--recursive","100:101","/etc/unbound/unbound.d"],"User":"0:0","HostConfig":{"NetworkMode":"none","CapAdd":["CHOWN"],"Binds":["rootguard-unbound-config:/etc/unbound/unbound.d"]}}`},
 		{"container create, chown-helper override, unbound-state path", "POST", "/containers/create",

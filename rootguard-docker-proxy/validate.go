@@ -266,17 +266,26 @@ func validateContainerProcess(c containerCreateBody) error {
 	return fmt.Errorf("container create with Cmd=%v Entrypoint=%v User=%q is not on the allowlist", c.Cmd, c.Entrypoint, c.User)
 }
 
-// knownComposeNetworks: every network RootGuard's own compose files
-// declare. edge/control/egress are Compose-managed with no explicit
-// `name:` in compose.release.yaml, so Compose auto-names them
-// "<project>_<key>" - this stack's project name is pinned to "rootguard"
-// (compose.release.yaml's own top-level `name:`). rootguard-dns is Core's
-// own generated compose file for AdGuard/Unbound/blockpage, which does
-// give it an explicit fixed name. Per-endpoint content (aliases, static
-// IPs) within an entry isn't policed here, the same scope limit already
-// accepted for validateNetworkConnect below - this bounds *which*
-// network a create call can join, not what identity it claims there.
+// knownComposeNetworks: every network a container-create call from
+// Core/the Updater can legitimately request. edge/control/egress are
+// Compose-managed with no explicit `name:` in compose.release.yaml, so
+// Compose auto-names them "<project>_<key>" - this stack's project name
+// is pinned to "rootguard" (compose.release.yaml's own top-level
+// `name:`). rootguard-dns is Core's own generated compose file for
+// AdGuard/Unbound/blockpage, which does give it an explicit fixed name.
+// "default" isn't a real named network at all - found live: the port-
+// probe's plain `docker run` (installer/manager.go's probeHostPortBusy,
+// no `--network` flag at all) has the Docker CLI itself populate
+// NetworkingConfig.EndpointsConfig with this literal key, which the
+// daemon resolves to its own default bridge network; every other known
+// process override either sets `--network none` (no NetworkingConfig at
+// all) or is compose-managed (a real network name, never this one). Per-
+// endpoint content (aliases, static IPs) within an entry isn't policed
+// here, the same scope limit already accepted for validateNetworkConnect
+// below - this bounds *which* network a create call can join, not what
+// identity it claims there.
 var knownComposeNetworks = map[string]bool{
+	"default":           true,
 	"rootguard_control": true,
 	"rootguard_edge":    true,
 	"rootguard_egress":  true,
