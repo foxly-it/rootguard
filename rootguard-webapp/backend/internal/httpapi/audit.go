@@ -69,6 +69,7 @@ const (
 	auditBackupRestore                   = "backup_restore"
 	auditControlPlaneUpdateInstall       = "control_plane_update_install"
 	auditUpdaterSelfUpdateInstall        = "updater_self_update_install"
+	auditInstallationPreflight           = "installation_preflight"
 	auditInstallationDeploy              = "installation_deploy"
 	auditAdGuardBootstrap                = "adguard_bootstrap"
 	auditAdGuardFilteringToggled         = "adguard_filtering_toggled"

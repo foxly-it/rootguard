@@ -165,9 +165,16 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleInstallationStatus(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/installation/preflight", func(w http.ResponseWriter, r *http.Request) {
+	// dest, not bare - found in review: unlike its sibling preview
+	// endpoints (unbound custom/import preview), this one was registered
+	// without the shared rate-limit/audit wrapper even though it's
+	// exec-backed too (checkPortAvailable runs `docker version`, `docker
+	// compose version`, `docker ps`, and a real host-port-bind probe on
+	// every call) - the same unthrottled-exec-probe gap already fixed
+	// elsewhere in this file.
+	mux.HandleFunc("POST /api/installation/preflight", dest(auditInstallationPreflight, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleInstallationPreflight(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("POST /api/installation/deploy", dest(auditInstallationDeploy, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleInstallationDeploy(w, r, core)
@@ -236,19 +243,13 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleUpdaterSelfUpdateInstall(w, r, core)
 	}))
 
-	putUnboundSettings := dest(auditUnboundSettingsApplied, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/unbound/settings", func(w http.ResponseWriter, r *http.Request) {
+		api.HandleGetUnboundSettings(w, r, core)
+	})
+
+	mux.HandleFunc("PUT /api/unbound/settings", dest(auditUnboundSettingsApplied, func(w http.ResponseWriter, r *http.Request) {
 		api.HandlePutUnboundSettings(w, r, core)
-	})
-	mux.HandleFunc("/api/unbound/settings", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			api.HandleGetUnboundSettings(w, r, core)
-		case http.MethodPut:
-			putUnboundSettings(w, r)
-		default:
-			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
-		}
-	})
+	}))
 
 	mux.HandleFunc("GET /api/unbound/config", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleGetUnboundConfiguration(w, r, core)

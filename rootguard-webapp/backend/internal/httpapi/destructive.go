@@ -54,15 +54,6 @@ func (a *SessionAuth) destructiveLimiterKey(r *http.Request) string {
 	return rateLimitKey(r)
 }
 
-// guardDestructive wraps a mutating route handler with the same
-// rate-limit-then-audit shape the login/recovery handlers already use
-// inline (see auth.go), generalized into one wrapper since destructive
-// routes span many otherwise-unrelated handlers across the app rather than
-// two closely related ones. The caller must already sit behind
-// SessionAuth.Handler's session check, so authenticatedUser/
-// authenticatedSessionID here are expected to succeed; they're re-read
-// anyway since guardDestructive has no other way to learn which session
-// is acting.
 // destructiveRateLimitGate applies the shared destructiveLimiter budget -
 // the same TOCTOU-safe beginAttempt/endAttempt gate guardDestructive already
 // used inline - factored out so a handler that already records its own,
@@ -94,14 +85,36 @@ func (a *SessionAuth) destructiveRateLimitGate(event string, next http.HandlerFu
 	}
 }
 
+// guardDestructive wraps a mutating route handler with the same
+// rate-limit-then-audit shape the login/recovery handlers already use
+// inline (see auth.go), generalized into one wrapper since destructive
+// routes span many otherwise-unrelated handlers across the app rather than
+// two closely related ones. The caller must already sit behind
+// SessionAuth.Handler's session check, so authenticatedUser/
+// authenticatedSessionID here are expected to succeed; they're re-read
+// anyway since guardDestructive has no other way to learn which session
+// is acting.
 func (a *SessionAuth) guardDestructive(event string, next http.HandlerFunc) http.HandlerFunc {
 	return a.destructiveRateLimitGate(event, func(w http.ResponseWriter, r *http.Request) {
 		username, _ := a.authenticatedUser(r)
 		remoteIP := clientAddress(r)
+		detail := r.Method + " " + r.URL.Path
 		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		// Found in review: the success/failure audit write below used to
+		// run only as plain code after next(rec, r) returned, so a panic
+		// in the wrapped handler (recovered per-request further up the
+		// stack, by net/http's own server) skipped it entirely - a gap in
+		// exactly the audit trail this wrapper exists to guarantee.
+		// Recording _failure here first, then re-panicking, keeps that
+		// trail complete without changing how the panic itself is handled.
+		defer func() {
+			if p := recover(); p != nil {
+				a.recordAuditDetail(event+"_failure", username, remoteIP, detail)
+				panic(p)
+			}
+		}()
 		next(rec, r)
 
-		detail := r.Method + " " + r.URL.Path
 		if rec.status >= 200 && rec.status < 300 {
 			a.recordAuditDetail(event+"_success", username, remoteIP, detail)
 		} else {
