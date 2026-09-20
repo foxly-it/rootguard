@@ -298,7 +298,7 @@ func (m *manager) update(targetImages map[string]string) {
 			Outcome: "no_change", FromIDs: oldImages, ToIDs: candidateIDs,
 			Message: "Core und WebApp verwenden bereits die aktuellen Images.", CreatedAt: time.Now().UTC(),
 		})
-		m.finish(candidateImages, candidateIDs, "Core und WebApp verwenden bereits die aktuellen Images.")
+		m.finish(candidateImages, candidateIDs, "Core und WebApp verwenden bereits die aktuellen Images.", false)
 		return
 	}
 
@@ -318,7 +318,7 @@ func (m *manager) update(targetImages map[string]string) {
 		})
 		cleanup := m.cleanupAfterSuccess(ctx)
 		m.attachCleanup(cleanup)
-		m.finish(candidateImages, candidateIDs, "Core und WebApp wurden aktualisiert und erfolgreich geprüft.")
+		m.finish(candidateImages, candidateIDs, "Core und WebApp wurden aktualisiert und erfolgreich geprüft.", true)
 		return
 	}
 
@@ -444,7 +444,7 @@ func (m *manager) composeUp(ctx context.Context) error {
 func (m *manager) verifyWithRetry(ctx context.Context, expected map[string]string) error {
 	var lastErr error
 	for attempt := 0; attempt < m.verifyAttempts; attempt++ {
-		lastErr = m.verify(expected)
+		lastErr = m.verify(ctx, expected)
 		if lastErr == nil {
 			return nil
 		}
@@ -457,8 +457,15 @@ func (m *manager) verifyWithRetry(ctx context.Context, expected map[string]strin
 	return lastErr
 }
 
-func (m *manager) verify(expected map[string]string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+// ctx is the caller's own context (verifyWithRetry's, itself update()'s
+// 20-minute deadline or rollback()'s), not context.Background() - found
+// in review: every other slow/external call in this file threads the
+// caller's ctx through, but this one silently didn't, so outer-context
+// cancellation couldn't preempt an in-flight attempt. Still bounded to 8
+// seconds of its own regardless of how much of the outer deadline
+// remains.
+func (m *manager) verify(ctx context.Context, expected map[string]string) error {
+	ctx, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
 	for _, spec := range m.specs {
 		_, currentID, err := m.inspectContainer(ctx, spec.Container)
@@ -547,7 +554,15 @@ func (m *manager) progress(message string) {
 	_ = m.persistLocked()
 }
 
-func (m *manager) finish(images, ids map[string]string, message string) {
+// updateCurrent is false for the no_change path: images/ids there are the
+// resolved *candidate* references, not what's actually running (composeUp
+// never ran), so writing them into CurrentImage/CurrentID would record a
+// reference nothing ever applied to the container - found in review, the
+// status/status.json's current_image could permanently show a value that
+// was never actually deployed. CandidateID is set unconditionally either
+// way since it already equals the (unchanged) CurrentID on the no_change
+// path.
+func (m *manager) finish(images, ids map[string]string, message string, updateCurrent bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.status.State = stateIdle
@@ -555,8 +570,10 @@ func (m *manager) finish(images, ids map[string]string, message string) {
 	m.status.UpdatedAt = time.Now().UTC()
 	for index := range m.status.Services {
 		service := &m.status.Services[index]
-		service.CurrentImage = images[service.Name]
-		service.CurrentID = ids[service.Name]
+		if updateCurrent {
+			service.CurrentImage = images[service.Name]
+			service.CurrentID = ids[service.Name]
+		}
 		service.CandidateID = ids[service.Name]
 		service.UpdateAvailable = false
 		service.CheckedAt = time.Now().UTC()
