@@ -44,3 +44,37 @@ func TestStatusRecorderUnwrapsForResponseController(t *testing.T) {
 		t.Fatalf("expected SetReadDeadline to reach the real connection through *statusRecorder via Unwrap(), got %v", viaRecorder)
 	}
 }
+
+// TestGuardDestructiveRecordsAuditEntryOnPanic is the regression test for
+// a review finding: the success/failure audit write only ran as plain
+// code after the wrapped handler returned normally, so a panic in that
+// handler skipped it entirely - a gap in exactly the audit trail this
+// wrapper exists to guarantee. net/http's own server recovers a panic per
+// request regardless (the process survives either way); what's under
+// test here is only whether the audit entry still gets written, and that
+// the original panic value still propagates rather than being swallowed.
+func TestGuardDestructiveRecordsAuditEntryOnPanic(t *testing.T) {
+	auth := newTestSessionAuth()
+	handler := auth.guardDestructive("test_panic_action", func(http.ResponseWriter, *http.Request) {
+		panic("boom")
+	})
+
+	func() {
+		defer func() {
+			if r := recover(); r != "boom" {
+				t.Fatalf("expected the original panic value to still propagate, got %v", r)
+			}
+		}()
+		handler(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/test", nil))
+	}()
+
+	found := false
+	for _, event := range auth.auditSnapshot() {
+		if event.Event == "test_panic_action_failure" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected a test_panic_action_failure audit entry after the handler panicked")
+	}
+}

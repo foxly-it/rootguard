@@ -424,6 +424,54 @@ func TestSessionRevokeDoesNotDoubleAudit(t *testing.T) {
 	}
 }
 
+// TestAuthenticatedUserWithUnknownCookieDoesNotPersist is the regression
+// test for a real gap found in review: authenticatedUser used to call
+// delete+persistLocked unconditionally, including for a cookie that never
+// matched a real session - an unauthenticated request bearing any bogus
+// cookie value triggered a full atomic write+fsync under the global
+// session mutex on every single call, with no rate limit covering this
+// path at all (it runs before any handler-level guard).
+func TestAuthenticatedUserWithUnknownCookieDoesNotPersist(t *testing.T) {
+	dir := t.TempDir()
+	persistPath := filepath.Join(dir, "sessions.json")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, persistPath)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/dashboard", nil)
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "never-issued"})
+	if _, ok := auth.authenticatedUser(req); ok {
+		t.Fatalf("expected an unknown cookie to not authenticate")
+	}
+	if _, err := os.Stat(persistPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no sessions.json to be written for an unknown cookie, stat err=%v", err)
+	}
+}
+
+// TestLogoutWithUnknownCookieDoesNotPersist is handleLogout's counterpart
+// to the finding above - it had the identical unconditional
+// delete+persistLocked call, reachable by anyone with zero credentials
+// via a bare POST /api/auth/logout (RequireSameOriginWrites already
+// admits requests with no Origin/Referer/Sec-Fetch-Site headers, and this
+// route is dispatched before any session check).
+func TestLogoutWithUnknownCookieDoesNotPersist(t *testing.T) {
+	dir := t.TempDir()
+	persistPath := filepath.Join(dir, "sessions.json")
+	auth := NewSessionAuth("admin", "secret", "", time.Hour, persistPath)
+	handler := RequireSameOriginWrites(auth.Handler(http.NotFoundHandler()))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req.Header.Set("Origin", "http://example.com")
+	req.Host = "example.com"
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "never-issued"})
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected logout with an unknown cookie to still report success, got %d", rec.Code)
+	}
+	if _, err := os.Stat(persistPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no sessions.json to be written for an unknown cookie, stat err=%v", err)
+	}
+}
+
 // TestLogoutClearsCookieEvenWhenPersistFails is the regression test for a
 // real gap found in review: the delete-cookie call used to run only after
 // persistLocked succeeded, so a persist failure returned a 500 with the
