@@ -3,6 +3,49 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.2] - 2026-09-21
+
+### Added
+
+- Serve German and English marketing pages on separate URLs ([#639](https://github.com/foxly-it/rootguard/pull/639))
+
+### Documentation
+
+- Catch up project-state.md/release-history.md to v1.0.1 ([#635](https://github.com/foxly-it/rootguard/pull/635))
+- Add two new guides targeting broader search intent ([#638](https://github.com/foxly-it/rootguard/pull/638))
+- Verify and document rootless Docker daemon compatibility ([#642](https://github.com/foxly-it/rootguard/pull/642))
+- Rootless Docker fully verified end to end, close out the roadmap item ([#645](https://github.com/foxly-it/rootguard/pull/645))
+- Log the two 1.0.2 review rounds in security-audit-log.md ([#660](https://github.com/foxly-it/rootguard/pull/660))
+- Add extension API design draft for #186 ([#665](https://github.com/foxly-it/rootguard/pull/665))
+
+### Fixed
+
+- Add a curl/sudo preflight check, skip sudo when already root ([#636](https://github.com/foxly-it/rootguard/pull/636))
+- Repair icons corrupted by the 1.0.1 version bump, plus an SEO pass ([#637](https://github.com/foxly-it/rootguard/pull/637))
+- Unbreak the build - bind9-dnsutils' own pin went stale ([#641](https://github.com/foxly-it/rootguard/pull/641))
+
+### Maintenance
+
+- Bump the actions group across 1 directory with 3 updates ([#652](https://github.com/foxly-it/rootguard/pull/652))
+
+### Other
+
+- Wire rootguard-docker-proxy into the stack ([#640](https://github.com/foxly-it/rootguard/pull/640))
+- Detect rootless Docker and adapt without forcing either mode ([#643](https://github.com/foxly-it/rootguard/pull/643))
+- Allow Core's real rootguard-unbound exec calls ([#644](https://github.com/foxly-it/rootguard/pull/644))
+- Fix unauthenticated session-fsync DoS and audit gaps ([#647](https://github.com/foxly-it/rootguard/pull/647))
+- Validate Cmd/Entrypoint/User/NetworkingConfig and more ([#646](https://github.com/foxly-it/rootguard/pull/646))
+- Tolerate corrupted history entries, fix rollback scope, dedup runner ([#649](https://github.com/foxly-it/rootguard/pull/649))
+- Fix sudo PWD loss, cleanup traps, and two races ([#648](https://github.com/foxly-it/rootguard/pull/648))
+- Fix status accuracy on no-op checks and ctx plumbing in verify ([#650](https://github.com/foxly-it/rootguard/pull/650))
+- Webapp frontend: fix number-field NaN handling and dedupe helpers ([#651](https://github.com/foxly-it/rootguard/pull/651))
+- Move Post-1.0/Future to the top, newest items first ([#653](https://github.com/foxly-it/rootguard/pull/653))
+- Close volume bind-mount escape, validate Healthcheck/Env/SecurityOpt ([#655](https://github.com/foxly-it/rootguard/pull/655))
+- Audit/rate-limit update-check routes, fix service-logs error mapping ([#657](https://github.com/foxly-it/rootguard/pull/657))
+- Reject public IPv6 ranges in reverse-DNS discovery ([#659](https://github.com/foxly-it/rootguard/pull/659))
+- Fix flaky installer tests racing a fixed 2-second deploy deadline ([#662](https://github.com/foxly-it/rootguard/pull/662))
+- Close TOCTOU gap between control-plane update and self-update ([#663](https://github.com/foxly-it/rootguard/pull/663))
+
 ## [1.0.1] - 2026-09-17
 
 ### Added
