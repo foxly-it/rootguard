@@ -100,15 +100,17 @@ func validateImageCreate(r *http.Request, _ []byte) error {
 // ignored (and passed through unmodified, since the body itself is
 // forwarded byte-for-byte once validated, never rewritten).
 type hostConfig struct {
-	Privileged  bool     `json:"Privileged"`
-	NetworkMode string   `json:"NetworkMode"`
-	PidMode     string   `json:"PidMode"`
-	IpcMode     string   `json:"IpcMode"`
-	UTSMode     string   `json:"UTSMode"`
-	CapAdd      []string `json:"CapAdd"`
-	Devices     []any    `json:"Devices"`
-	Binds       []string `json:"Binds"`
-	Mounts      []mount  `json:"Mounts"`
+	Privileged     bool     `json:"Privileged"`
+	NetworkMode    string   `json:"NetworkMode"`
+	PidMode        string   `json:"PidMode"`
+	IpcMode        string   `json:"IpcMode"`
+	UTSMode        string   `json:"UTSMode"`
+	CapAdd         []string `json:"CapAdd"`
+	Devices        []any    `json:"Devices"`
+	DeviceRequests []any    `json:"DeviceRequests"`
+	SecurityOpt    []string `json:"SecurityOpt"`
+	Binds          []string `json:"Binds"`
+	Mounts         []mount  `json:"Mounts"`
 }
 
 type mount struct {
@@ -118,12 +120,27 @@ type mount struct {
 }
 
 type containerCreateBody struct {
-	Image            string            `json:"Image"`
-	Cmd              []string          `json:"Cmd"`
-	Entrypoint       []string          `json:"Entrypoint"`
-	User             string            `json:"User"`
-	HostConfig       hostConfig        `json:"HostConfig"`
-	NetworkingConfig *networkingConfig `json:"NetworkingConfig"`
+	Image            string             `json:"Image"`
+	Cmd              []string           `json:"Cmd"`
+	Entrypoint       []string           `json:"Entrypoint"`
+	User             string             `json:"User"`
+	Env              []string           `json:"Env"`
+	Healthcheck      *healthcheckConfig `json:"Healthcheck"`
+	HostConfig       hostConfig         `json:"HostConfig"`
+	NetworkingConfig *networkingConfig  `json:"NetworkingConfig"`
+}
+
+// healthcheckConfig mirrors container-create's own Healthcheck override -
+// Found in review: entirely unmodeled before, so a Healthcheck.Test set to
+// ["CMD-SHELL", "<arbitrary shell command>"] reached the real daemon
+// unrejected on an otherwise fully-compliant, already-allowed image create
+// call. Docker runs Test periodically for the container's whole lifetime,
+// making this a recurring-RCE primitive of exactly the kind
+// knownProcessOverrides already closes for Cmd/Entrypoint/User - only
+// Test is modeled, since Interval/Timeout/Retries/StartPeriod are just
+// polling cadence and grant nothing.
+type healthcheckConfig struct {
+	Test []string `json:"Test"`
 }
 
 // networkingConfig mirrors container-create's own network-attachment
@@ -180,6 +197,12 @@ func validateContainerCreate(_ *http.Request, body []byte) error {
 	if err := validateContainerProcess(c); err != nil {
 		return err
 	}
+	if err := validateEnv(c.Env); err != nil {
+		return err
+	}
+	if err := validateHealthcheck(c.Healthcheck); err != nil {
+		return err
+	}
 	if err := validateContainerNetworking(c.NetworkingConfig); err != nil {
 		return err
 	}
@@ -195,6 +218,12 @@ func validateContainerCreate(_ *http.Request, body []byte) error {
 	}
 	if len(hc.Devices) > 0 {
 		return fmt.Errorf("device mappings are not allowed")
+	}
+	if len(hc.DeviceRequests) > 0 {
+		return fmt.Errorf("device requests are not allowed")
+	}
+	if err := validateSecurityOpt(hc.SecurityOpt); err != nil {
+		return err
 	}
 	for _, capName := range hc.CapAdd {
 		// Found live wiring this proxy into the real stack: this Docker
@@ -264,6 +293,83 @@ func validateContainerProcess(c containerCreateBody) error {
 		}
 	}
 	return fmt.Errorf("container create with Cmd=%v Entrypoint=%v User=%q is not on the allowlist", c.Cmd, c.Entrypoint, c.User)
+}
+
+// knownHealthchecks is every healthcheck.test compose.release.yaml
+// declares (attestation-proxy, docker-proxy, core, webapp, updater) - each
+// one a fixed "CMD" (never "CMD-SHELL") argv the daemon exec's directly,
+// never through a shell. The DNS-stack's own generated compose (unbound/
+// adguard/blockpage, installer/manager.go's renderCompose) sets no
+// healthcheck at all and relies on the image's own baked-in HEALTHCHECK
+// instead, which never appears in the create body - matching the nil/
+// empty case already accepted below.
+var knownHealthchecks = [][]string{
+	{"CMD", "/rootguard-attestation-proxy", "healthcheck"},
+	{"CMD", "/rootguard-docker-proxy", "healthcheck"},
+	{"CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/api/health"},
+	{"CMD", "/app/rootguard-webapp", "-healthcheck"},
+	{"CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8082/health"},
+}
+
+func validateHealthcheck(hc *healthcheckConfig) error {
+	if hc == nil || len(hc.Test) == 0 {
+		return nil
+	}
+	for _, known := range knownHealthchecks {
+		if cmdEqual(hc.Test, known) {
+			return nil
+		}
+	}
+	return fmt.Errorf("healthcheck %v is not on the allowlist", hc.Test)
+}
+
+// knownDangerousEnvKeys blocks the classic dynamic-linker/interpreter
+// hijack variables from ever reaching a container-create call. Found in
+// review: Env was entirely unmodeled before. Unlike Cmd/Entrypoint/User,
+// legitimate Env content here is large, per-service, and changes with
+// almost every release (compose.release.yaml's core/webapp/updater
+// services alone declare ~40 real ROOTGUARD_*/config keys between them) -
+// mirroring an exhaustive allowlist would silently break a real deploy the
+// next time compose.release.yaml gains one, exactly the class of drift
+// this file's own history warns about elsewhere. Denylisting the actual
+// attack surface instead stays correct without tracking every legitimate
+// key.
+var knownDangerousEnvKeys = map[string]bool{
+	"LD_PRELOAD":      true,
+	"LD_LIBRARY_PATH": true,
+	"LD_AUDIT":        true,
+	"LD_ORIGIN_PATH":  true,
+	"GCONV_PATH":      true,
+	"NLSPATH":         true,
+	"LOCPATH":         true,
+}
+
+func validateEnv(env []string) error {
+	for _, kv := range env {
+		key, _, _ := strings.Cut(kv, "=")
+		if knownDangerousEnvKeys[strings.ToUpper(key)] {
+			return fmt.Errorf("environment variable %q is not allowed", key)
+		}
+	}
+	return nil
+}
+
+// securityOptNoNewPrivileges is the only SecurityOpt entry any known
+// compose service ever sets (attestation-proxy, docker-proxy, and the
+// DNS-stack's generated unbound/blockpage services all set exactly this;
+// core/webapp/updater set none at all, the empty/nil case already accepted
+// below). Rejecting everything else closes off seccomp=unconfined,
+// apparmor=unconfined, and similar kernel-confinement downgrades no known
+// call site needs.
+var securityOptNoNewPrivileges = regexp.MustCompile(`(?i)^no-new-privileges[:=]true$`)
+
+func validateSecurityOpt(opts []string) error {
+	for _, opt := range opts {
+		if !securityOptNoNewPrivileges.MatchString(opt) {
+			return fmt.Errorf("security option %q is not on the allowlist", opt)
+		}
+	}
+	return nil
 }
 
 // knownComposeNetworks: every network a container-create call from
@@ -353,19 +459,24 @@ func validateAttach(r *http.Request, _ []byte) error {
 	return fmt.Errorf("attach with stdin is not allowed")
 }
 
-// AttachStdin/Privileged/User are additionally checked below even though
-// no currently-allowed exec command needs any of them: Privileged grants
-// every Linux capability to the exec'd process unconditionally
+// AttachStdin/Privileged/User/Env are additionally checked below even
+// though no currently-allowed exec command needs any of them: Privileged
+// grants every Linux capability to the exec'd process unconditionally
 // (independent of the container's own HostConfig.Privileged), User can
-// run the command as an arbitrary UID, and AttachStdin - mirrored from
+// run the command as an arbitrary UID, AttachStdin - mirrored from
 // validateAttach's own reasoning - is what makes a later
 // `POST /exec/{id}/start` (unconditionally allowed once exec-create
-// succeeds) able to write into the running command at all.
+// succeeds) able to write into the running command at all, and Env (found
+// in review: previously unmodeled here too) is a classic injection vector
+// (LD_PRELOAD and friends). Unlike container-create's Env, no exec target
+// below ever legitimately sets one, so any non-empty Env is rejected
+// outright rather than only denylisting known-dangerous keys.
 type execCreateBody struct {
 	Cmd         []string `json:"Cmd"`
 	Privileged  bool     `json:"Privileged"`
 	User        string   `json:"User"`
 	AttachStdin bool     `json:"AttachStdin"`
+	Env         []string `json:"Env"`
 }
 
 // execTargetFromPath extracts the {id} segment from
@@ -403,6 +514,9 @@ func validateExecCreate(r *http.Request, body []byte) error {
 	}
 	if e.AttachStdin {
 		return fmt.Errorf("exec with AttachStdin is not allowed")
+	}
+	if len(e.Env) > 0 {
+		return fmt.Errorf("exec with an Env override is not allowed")
 	}
 	switch target {
 	case "rootguard-blockpage":
@@ -640,4 +754,67 @@ func validateNetworkConnect(r *http.Request, body []byte) error {
 		return fmt.Errorf("container %q is not allowed to join %q", n.Container, target)
 	}
 	return validateEndpointConfig(n.EndpointConfig)
+}
+
+// volumeCreateBody mirrors `POST /volumes/create` - Found in review: this
+// call had no validator at all, so any body was forwarded raw. Docker's
+// well-known `local`-driver bind-mount-as-volume idiom
+// (DriverOpts={"type":"none","o":"bind","device":"/"}) lets a caller mint
+// a "volume" that's actually the host's own filesystem at an arbitrary
+// path; validateBinds/validateMounts only ever check a bind/mount source's
+// *name* against knownVolumeNames, which can't detect that a known name
+// now resolves to attacker-chosen storage. Combined with the
+// already-unrestricted DELETE /volumes/{id} below (see
+// validateVolumeDelete), this was a full container-create Binds/Mounts
+// allowlist bypass: delete a protected named volume, recreate it as a
+// host bind mount, then reference it by its now-poisoned name in an
+// otherwise fully compliant container-create call.
+type volumeCreateBody struct {
+	Name       string            `json:"Name"`
+	Driver     string            `json:"Driver"`
+	DriverOpts map[string]string `json:"DriverOpts"`
+}
+
+func validateVolumeCreate(_ *http.Request, body []byte) error {
+	var v volumeCreateBody
+	if err := json.Unmarshal(body, &v); err != nil {
+		return fmt.Errorf("invalid volume-create body: %w", err)
+	}
+	if !knownVolumeNames[v.Name] {
+		return fmt.Errorf("volume name %q is not on the allowlist", v.Name)
+	}
+	if v.Driver != "" && v.Driver != "local" {
+		return fmt.Errorf("volume driver %q is not allowed", v.Driver)
+	}
+	if len(v.DriverOpts) > 0 {
+		return fmt.Errorf("volume driver options are not allowed")
+	}
+	return nil
+}
+
+// volumeNameFromPath extracts the {id} segment from "/volumes/{id}"
+// (already version-stripped by the caller).
+func volumeNameFromPath(path string) string {
+	return strings.TrimPrefix(normalizePath(path), "/volumes/")
+}
+
+// validateVolumeDelete covers `DELETE /volumes/{id}` - see allowlist.go's
+// comment on this rule: it's meant only for the Updater's own cleanup of
+// orphaned volumes labeled io.rootguard.cleanup=true, but nothing
+// previously enforced that scope at the proxy itself, the label filtering
+// only ever happened in the Updater's own (trusted-by-assumption) request.
+// This proxy has no cheap way to inspect a volume's labels before
+// allowing its removal, but it can and does refuse to ever remove one of
+// RootGuard's own actively-used named volumes - which is also the
+// concrete precondition the container-create bind-mount-escape above
+// needs (delete a protected volume, then recreate it poisoned). No
+// legitimate cleanup target is ever one of these names: image-retention-
+// policy.md's own rule 7 keeps configuration/DNS data/state/sessions/
+// backups permanently ineligible for the cleanup label.
+func validateVolumeDelete(r *http.Request, _ []byte) error {
+	name := volumeNameFromPath(r.URL.Path)
+	if knownVolumeNames[name] {
+		return fmt.Errorf("volume %q is a protected named volume and may not be removed", name)
+	}
+	return nil
 }
