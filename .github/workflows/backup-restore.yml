@@ -64,7 +64,7 @@ jobs:
       # images, is what makes this job actually test the pull request
       # instead of just re-testing the last release on every run.
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
       # See ci-core.yml's identical step for the full rationale - same
       # scopes ci-core.yml/ci-webapp.yml's own test-image builds use, so
