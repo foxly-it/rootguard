@@ -42,6 +42,38 @@ entry, not by a separate audit.
   Post-1.0/Future section ([#666](https://github.com/foxly-it/rootguard/issues/666)),
   so this can't silently recur unnoticed at the next release without
   someone actively deciding to skip that check.
+- **Fixed**: the pin bump above exposed a second, real bug the release
+  pipeline's own upgrade-test caught before anything shipped -
+  `rootguard-docker-proxy`'s `validateBinds` unconditionally rejected
+  Core's and the Updater's own read-only self-referential
+  `compose.release.yaml` bind mount, needed for their `docker compose -f
+  ...` self-update re-invocations, breaking the control-plane update path
+  for core/webapp entirely
+  ([#668](https://github.com/foxly-it/rootguard/issues/668),
+  fixed by [#669](https://github.com/foxly-it/rootguard/pull/669)).
+- **Action required for existing `1.0.1`/`1.0.2` installations**: the
+  fix above only helps a *fresh* install pulling the new docker-proxy
+  image - an **already-running** docker-proxy container has no
+  self-update channel of its own (a separate, harder, already-tracked
+  gap - see `ROADMAP.md`) and will keep rejecting the control-plane
+  update path for core/webapp until it's refreshed by hand:
+  ```
+  cd <install directory>
+  docker compose pull docker-proxy
+  docker compose up -d docker-proxy
+  ```
+  This talks to the real Docker socket directly, the same way the
+  original install did, so none of the above applies to it. Once done,
+  the normal WebGUI self-update path works again. Tracked at
+  [#670](https://github.com/foxly-it/rootguard/issues/670).
+- **Process note**: `release-alpha.yml`'s `upgrade-test` gate was
+  bypassed for this one release only (`update-alpha-pins` normally
+  requires it) - it correctly failed by deploying `1.0.2` exactly as it
+  actually shipped and hitting the same already-running-docker-proxy
+  limitation above, not a defect in the new candidate images themselves
+  (which `smoke-test` already verified). The bypass was reverted
+  immediately after this release in the very next commit - see git
+  history, not left in place.
 - No other changes - every other component's `1.0.2` pin was already
   correct (published through the normal, working release pipeline).
 
