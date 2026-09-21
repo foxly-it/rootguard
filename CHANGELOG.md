@@ -3,6 +3,12 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.3] - 2026-09-21
+
+### Other
+
+- Bump stale docker-proxy pin, fixes shipped but never deployed ([#667](https://github.com/foxly-it/rootguard/pull/667))
+
 ## [1.0.2] - 2026-09-21
 
 ### Added
