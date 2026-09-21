@@ -4314,4 +4314,188 @@ substitution) and not found. Left as-is rather than making a
 speculative change with no confirmed defect behind it - consistent with
 this whole review's own verify-before-fixing discipline.
 
+## Fourth full-repo review: bugs, security, compaction, for 1.0.2 (2026-09-20)
+
+First review pass since 1.0.0/1.0.1 shipped, explicitly scoped back to
+all three angles at once ("Fehler, Kompressionsmöglichkeiten,
+Sicherheitsprobleme") rather than one at a time - the first two full-repo
+rounds already split by category, the third by correctness alone. One
+fix per PR as always, `go build`/`go vet`/`go test`/`staticcheck` (Go)
+or `npm run build`/`lint`/`test` (frontend) or `shellcheck`/`bash -n`
+(install.sh) clean on every PR, plus a live end-to-end verification on
+the `.7` test host for the highest-blast-radius change (docker-proxy,
+since it sits on every container-create call) - fresh compose-managed
+install, guided setup, backup/restore, and the port-probe, which
+surfaced one real bug live (see below) before it ever reached review.
+
+- **docker-proxy** ([rootguard#646](https://github.com/foxly-it/rootguard/pull/646)):
+  found by cross-checking every body validator against Docker's real API
+  schema (verified against vendored moby/moby source) rather than
+  against this proxy's own prior assumptions. `POST /containers/create`
+  never inspected `Cmd`/`Entrypoint`/`User` at all - an already-allowed
+  image combined with a crafted `Entrypoint`/`Cmd` passed every existing
+  check and ran arbitrary code with access to whatever volumes the same
+  request bound, including ones never otherwise reachable from Core.
+  Fixed by requiring either the all-default (image decides) shape every
+  compose-managed container uses, or one of the two known `docker run`
+  invocations Core's own code issues; `NetworkingConfig` was similarly
+  unchecked, now bounded to RootGuard's own compose networks. `POST
+  /containers/{id}/exec` never inspected `Privileged`/`User`/
+  `AttachStdin`, letting an exec request grant itself every Linux
+  capability, run as an arbitrary UID, or write into the exec'd process's
+  stdin independent of the fixed, already-allowlisted command.
+  `POST /containers/{id}/attach`'s stdin check only matched the literal
+  strings `"1"`/`"true"`, not Docker's own case-insensitive boolean
+  parsing (`httputils.BoolValue`) - `stdin=True`/`stdin=yes` reached the
+  real daemon unrejected. `POST /networks/{id}/connect`'s
+  `EndpointConfig` was never inspected, letting a connect call claim an
+  arbitrary alias or MAC/IPv6 address on the network it joins. **Found
+  live during this PR's own end-to-end verification, not from the
+  original review**: the port-probe's plain `docker run` (no `--network`
+  flag) is rejected by the new `NetworkingConfig` check, because the
+  Docker CLI itself populates `EndpointsConfig["default"]` in that case -
+  a Docker CLI convention, not a real named network - fixed by adding
+  `"default"` to the known-networks set and re-verified live.
+- **webapp backend** ([rootguard#647](https://github.com/foxly-it/rootguard/pull/647)):
+  `authenticatedUser`/`handleLogout` ran the full session-persist path
+  (JSON marshal, atomic write, fsync, directory fsync, all under the
+  single global session mutex) even for a cookie that never matched a
+  real session - reachable by any request bearing a bogus/expired
+  cookie to any `/api/*` route, or a bare unauthenticated `POST
+  /api/auth/logout`, and not covered by any rate limiter since those
+  only apply inside handlers reached after this check. A busy attacker
+  could serialize every other session-mutex-guarded operation
+  (login/logout/account/session management) behind repeated disk I/O.
+  Fixed by only persisting when the delete actually removed a real
+  entry. Also: `POST /api/installation/preflight` was missing the shared
+  rate-limit/audit wrapper despite being exec/host-port-probe-backed on
+  every call; `guardDestructive`'s audit write skipped a panicking
+  handler entirely (recovered per-request by net/http's own server,
+  never reaching the audit code after it); `GET /api/health` required a
+  session unlike its sibling `/health`, contradicting its own
+  registration comment.
+- **install.sh** ([rootguard#648](https://github.com/foxly-it/rootguard/pull/648)):
+  `as_root()`'s sudo fallback ran a bare `sudo "$@"`; default Debian/
+  Ubuntu sudoers strips `PWD`, so the common fresh-install case (running
+  `docker compose` again right after `install_docker()` adds the user to
+  the docker group, before a fresh login takes effect) silently mounted
+  `compose.release.yaml`'s `${PWD}`-based volumes against the wrong
+  path. Two cleanup traps used `RETURN`, which never fires on a `die()`
+  call, leaving a failed installer's staging directory behind in `/tmp`
+  indefinitely. The target-directory existence check and its creation
+  were two separate steps with a real gap between them (Docker install,
+  prompts, a GitHub API call, two downloads) - a genuine TOCTOU race
+  between two concurrent installer runs against the same `--dir`. The
+  generated `.env` (real admin password/API token/recovery token) was
+  briefly world-readable between creation and its later `chmod 600`.
+- **core** ([rootguard#649](https://github.com/foxly-it/rootguard/pull/649)):
+  `unbound.Manager.History()` aborted entirely if any single
+  `history/*.json` file failed to read or unmarshal, and `recordSnapshot`
+  calls `History()` before every settings apply/restore - one corrupted
+  or partially-written history file permanently blocked all future
+  Unbound configuration changes until an operator found and deleted it
+  by hand. Now skips only the bad entry. `backuprestore.Manager`'s
+  rollback-on-failure path inferred whether local directories needed
+  rolling back from one specific error's identity
+  (`!errors.Is(restoreErr, installer.ErrNotClean)`), missing every other
+  way the restore-data callback can end up never invoked; now tracked
+  explicitly via a flag set inside the callback itself.
+- **updater** ([rootguard#650](https://github.com/foxly-it/rootguard/pull/650)):
+  the `no_change` path (nothing actually applied, `composeUp` never ran)
+  still passed the resolved candidate image/ID into `finish()` the same
+  way a real update does, which unconditionally overwrote
+  `CurrentImage`/`CurrentID` - a no-op check could permanently record a
+  `current_image` value that was never actually deployed, with nothing
+  else ever correcting it. `verify()` built its own
+  `context.WithTimeout(context.Background(), ...)` instead of deriving
+  from the caller's context, unlike every other slow/external call in
+  this file - outer cancellation (the 20-minute update deadline, or
+  rollback's own context) couldn't preempt an in-flight verify attempt.
+- **webapp frontend** ([rootguard#651](https://github.com/foxly-it/rootguard/pull/651)):
+  six Unbound resolver settings fields plus Setup's DNS-port field used
+  `Number(event.target.value)`, which turns `""` into `0` rather than
+  `NaN` - clearing the field to retype a value snapped it to "0"
+  immediately, the same bug class already fixed once for `Backups.tsx`'s
+  restore-port field. `Logs.tsx`'s service-picker effect depended on
+  `selected`, which changes on every tab click, refetching the full
+  service list each time instead of once on mount.
+
+## Fourth review, follow-up pass (2026-09-21)
+
+A second, independent pass over the current (post-round-4) state of the
+whole repo, run the same way: parallel agents split by component,
+explicitly told not to re-verify round 4's own fixes and instead look
+fresh for anything new or missed. Found four real issues in
+docker-proxy, one in webapp, one in core; one additional finding
+(a narrow race in the updater's volume-ownership migration) was
+investigated, judged not worth fixing given the regression risk of the
+only real fix, and documented in place instead of silently left alone -
+called out explicitly in [rootguard#659](https://github.com/foxly-it/rootguard/pull/659)'s
+own PR description rather than treated as resolved.
+
+- **docker-proxy** ([rootguard#655](https://github.com/foxly-it/rootguard/pull/655)),
+  most severe: `POST /volumes/create` had no body validator at all, and
+  `DELETE /volumes/{id}` accepted any volume name despite its own
+  comment claiming a scope (orphaned, cleanup-labeled volumes only) that
+  nothing enforced. Combined with the already-allowed container stop/
+  remove calls, a compromised Core/Updater could delete a protected
+  named volume (e.g. `rootguard-data`), recreate it via Docker's
+  well-known `local`-driver bind-mount-as-volume idiom
+  (`DriverOpts={"type":"none","o":"bind","device":"/"}`), then bind-mount
+  it into any already-allowed image - full host filesystem access,
+  completely bypassing the `Binds`/`Mounts` allowlist round 4 had just
+  hardened. Fixed with a validator restricting volume creation to a
+  known name/`local` driver/no `DriverOpts`, and a delete validator that
+  refuses to ever remove one of RootGuard's own actively-used named
+  volumes. Also closed in the same PR: `Config.Healthcheck` was entirely
+  unmodeled on container-create - Docker runs `Healthcheck.Test` on a
+  recurring timer for the container's whole lifetime, so an unmodeled
+  `CMD-SHELL` entry there is a recurring-RCE primitive of the same shape
+  as round 4's Cmd/Entrypoint fix, just through a different field; `Env`
+  was unvalidated on both container-create and exec-create (a classic
+  `LD_PRELOAD`-style injection vector, closed with a denylist rather
+  than an allowlist since legitimate `Env` content is large, per-service,
+  and changes almost every release); `HostConfig.SecurityOpt`/
+  `DeviceRequests` weren't checked, allowing `seccomp=unconfined`/
+  `apparmor=unconfined` or a GPU device request on an otherwise
+  compliant container-create.
+- **webapp** ([rootguard#657](https://github.com/foxly-it/rootguard/pull/657)):
+  `/api/updates/check`, `/api/control-plane-updates/check`, and
+  `/api/updater-updates/check` were the only three mutating routes in
+  the router registered without the shared rate-limit/audit wrapper,
+  despite each one starting a real background `docker pull` against
+  every configured service's upstream image - genuinely expensive,
+  network-bound work whose near-instant 202/409 response let an
+  unbounded caller re-trigger it indefinitely, risking GHCR pull-rate-
+  limit exhaustion (which would then also block RootGuard's own
+  legitimate self-update mechanism). Also: `HandleServiceLogs` still
+  flattened every Core error into a bare 502 instead of propagating
+  Core's real status, the same bug already fixed for `HandleServiceAction`
+  in round 3.
+- **core** ([rootguard#659](https://github.com/foxly-it/rootguard/pull/659)):
+  `reverseDNSAddresses` validated IPv4 networks with `IsPrivate()` but
+  only checked IPv6 networks were global unicast and non-link-local -
+  accepting essentially any public IPv6 range, unlike its IPv4 sibling.
+  `netip.Addr.IsPrivate()` already covers both families correctly (RFC
+  1918 for IPv4, RFC 4193/`fc00::/7` for IPv6, which doesn't overlap
+  `fe80::/10`), so a single unified check replaces both branches - closes
+  the gap and is shorter than what it replaced.
+
+**Investigated, documented instead of fixed:** the updater's
+`migrateVolumeOwnership` chown step runs while the old container still
+has the target volume mounted read-write, so a file the old process
+writes in that narrow window keeps the old owner and the new container
+might not be able to read it. Reordering to stop the old container
+first was considered, but every failure path below that point in
+`update()` currently relies on the old container staying up to either
+keep serving or be cleanly rolled back to - restructuring that contract
+to also handle restarting an already-stopped old container on each
+failure path carries more real regression risk (a service left down
+after a failed pre-swap step, where today it correctly stays up) than
+this race's own impact: it only matters when a real UID/GID change is
+in play (the common case is a no-op), and a resulting startup failure is
+already caught by `verifyWithRetry` and safely rolled back like any
+other failed update. Documented in place (`rootguard-core/internal/
+updater/manager.go`) rather than silently left unaddressed.
+
 With this pass, every confirmed round-3 finding is resolved.
