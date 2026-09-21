@@ -62,21 +62,38 @@ const (
 	auditUnboundDiagnosticLoggingStopped = "unbound_diagnostic_logging_stopped"
 	auditServiceAction                   = "service_action"
 	auditServiceUpdateStarted            = "service_update_started"
-	auditBackupSettingsChanged           = "backup_settings_changed"
-	auditCleanupRun                      = "cleanup_run"
-	auditBackupExport                    = "backup_export"
-	auditBackupRestorePreview            = "backup_restore_preview"
-	auditBackupRestore                   = "backup_restore"
-	auditControlPlaneUpdateInstall       = "control_plane_update_install"
-	auditUpdaterSelfUpdateInstall        = "updater_self_update_install"
-	auditInstallationPreflight           = "installation_preflight"
-	auditInstallationDeploy              = "installation_deploy"
-	auditAdGuardBootstrap                = "adguard_bootstrap"
-	auditAdGuardFilteringToggled         = "adguard_filtering_toggled"
-	auditAdGuardProtectionToggled        = "adguard_protection_toggled"
-	auditFritzBoxDiscover                = "fritzbox_discover"
-	auditUnboundForwardCheck             = "unbound_forward_check"
-	auditReverseDNSDiscover              = "reverse_dns_discover"
+	// auditUpdateCheckTriggered/auditControlPlaneUpdateCheckTriggered/
+	// auditUpdaterSelfUpdateCheckTriggered: found in review - these three
+	// "check for updates" routes ran without any dest() wrapper at all,
+	// unlike every other mutating route in this file including their own
+	// "install" siblings. Each one starts a real background `docker pull`
+	// against every configured service's upstream image
+	// (updater.Manager.StartCheck, rootguard-core/internal/updater/
+	// manager.go) - genuinely expensive, network-bound work, unlike
+	// /api/unbound/preview's cheap in-memory call. Both possible responses
+	// (202 started, 409 already running) return near-instantly, so an
+	// unbounded caller could keep re-triggering pulls back-to-back
+	// indefinitely: unbounded bandwidth/disk, and a real risk of
+	// exhausting GHCR's own pull rate limit, which would then also block
+	// RootGuard's own legitimate self-update mechanism.
+	auditUpdateCheckTriggered             = "update_check_triggered"
+	auditControlPlaneUpdateCheckTriggered = "control_plane_update_check_triggered"
+	auditUpdaterSelfUpdateCheckTriggered  = "updater_self_update_check_triggered"
+	auditBackupSettingsChanged            = "backup_settings_changed"
+	auditCleanupRun                       = "cleanup_run"
+	auditBackupExport                     = "backup_export"
+	auditBackupRestorePreview             = "backup_restore_preview"
+	auditBackupRestore                    = "backup_restore"
+	auditControlPlaneUpdateInstall        = "control_plane_update_install"
+	auditUpdaterSelfUpdateInstall         = "updater_self_update_install"
+	auditInstallationPreflight            = "installation_preflight"
+	auditInstallationDeploy               = "installation_deploy"
+	auditAdGuardBootstrap                 = "adguard_bootstrap"
+	auditAdGuardFilteringToggled          = "adguard_filtering_toggled"
+	auditAdGuardProtectionToggled         = "adguard_protection_toggled"
+	auditFritzBoxDiscover                 = "fritzbox_discover"
+	auditUnboundForwardCheck              = "unbound_forward_check"
+	auditReverseDNSDiscover               = "reverse_dns_discover"
 )
 
 func (a *SessionAuth) recordAudit(event, username, remoteIP string) {

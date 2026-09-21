@@ -114,3 +114,38 @@ func TestUnboundPreviewRoutesAreRateLimited(t *testing.T) {
 		})
 	}
 }
+
+// TestUpdateCheckRoutesAreRateLimited is the regression test for a
+// follow-up review finding: /api/updates/check, /api/control-plane-
+// updates/check, and /api/updater-updates/check were the only three
+// mutating routes in this file registered without a dest() wrapper,
+// despite each one starting a real background `docker pull` against every
+// configured service's upstream image (updater.Manager.StartCheck) -
+// genuinely expensive, network-bound work whose near-instant 202/409
+// response let an unbounded caller re-trigger it back-to-back
+// indefinitely, risking GHCR pull-rate-limit exhaustion (which would then
+// also block RootGuard's own legitimate self-update mechanism) with no
+// audit trail of who triggered it.
+func TestUpdateCheckRoutesAreRateLimited(t *testing.T) {
+	core := coreclient.New("http://127.0.0.1:1", "test-token")
+
+	for _, path := range []string{"/api/updates/check", "/api/control-plane-updates/check", "/api/updater-updates/check"} {
+		t.Run(path, func(t *testing.T) {
+			auth := newTestSessionAuth()
+			auth.destructiveLimiter = newRateLimiter(time.Minute, 1)
+			mux := NewRouter(core, auth)
+
+			first := httptest.NewRecorder()
+			mux.ServeHTTP(first, httptest.NewRequest(http.MethodPost, path, nil))
+			if first.Code == http.StatusTooManyRequests {
+				t.Fatalf("expected the first request to reach the handler, got 429 immediately")
+			}
+
+			second := httptest.NewRecorder()
+			mux.ServeHTTP(second, httptest.NewRequest(http.MethodPost, path, nil))
+			if second.Code != http.StatusTooManyRequests {
+				t.Fatalf("expected the second request to be rate-limited once the shared budget was exhausted, got %d", second.Code)
+			}
+		})
+	}
+}
