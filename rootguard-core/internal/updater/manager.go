@@ -480,6 +480,22 @@ func (m *Manager) update(service string) {
 		return
 	}
 
+	// Found in review: this chown runs while spec.Container (still on
+	// oldID) is running and has the volume mounted read-write - a file the
+	// old process happens to write in this narrow window keeps the old
+	// owner, and the new container might not be able to read it. Not
+	// fixed by stopping the old container first: every failure path below
+	// this point (this call itself, selectImage, composeUp/verify) relies
+	// on the old container still being up to either continue serving or
+	// be rolled back to cleanly, and restructuring that contract to also
+	// restart an already-stopped old container on each of those paths
+	// carries more real regression risk (a service left down after a
+	// failed pre-swap step, where today it correctly stays up) than this
+	// race's own impact: it only matters when record.changed is true (a
+	// real UID/GID change between images, not the common no-op case), and
+	// a resulting startup failure is caught by verifyWithRetry below and
+	// safely rolled back like any other failed update, not silent data
+	// loss.
 	m.setProgress(service, "Migriere persistente Volume-Berechtigungen für das Ziel-Image.")
 	previousOwnership, err := m.migrateVolumeOwnership(ctx, spec, oldID, candidateID)
 	if err != nil {
