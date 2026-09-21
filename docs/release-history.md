@@ -8,20 +8,104 @@ the security-review finding/fix journal.
 
 ## Release status
 
-`v1.0.1` is the current public release, published with digest-pinned
-`amd64`/`arm64` images for six of the seven RootGuard components.
-`rootguard-docker-proxy` joined the deployed stack on 2026-09-17 (wired
-into `compose.release.yaml`, still on its bootstrap pre-release image pin
-until the next real release promotes it like every other component - see
-`docs/project-state.md`'s repository layout). All milestones through
-`1.0.0` are complete and verified - see `ROADMAP.md` for the closing
-checklist.
+`v1.0.3` is the current public release, published with digest-pinned
+`amd64`/`arm64` images for all seven RootGuard components. All milestones
+through `1.0.0` are complete and verified - see `ROADMAP.md` for the
+closing checklist.
 
 **Entries below stop being consistently maintained somewhere before
 `1.0.0` shipped** (a lot of real work landed in between that was never
 backfilled here - `CHANGELOG.md` and `git log` are the authoritative
-record for that window, not this narrative). The `1.0.1` entry below is
-current and complete.
+record for that window, not this narrative). The `1.0.1`/`1.0.2`/`1.0.3`
+entries below are current and complete.
+
+## `v1.0.3` (2026-09-21)
+
+An emergency follow-up to `1.0.2`, cut the same day: `compose.release.yaml`'s
+`rootguard-docker-proxy` pin was still on a 2026-09-19 image - predating
+both `1.0.2`'s own docker-proxy security fixes below. `rootguard-docker-proxy`
+was never added to `release-alpha.yml`'s publish matrix when it joined
+the deployed stack, so nothing ever refreshed this pin the way every
+other component's pin refreshes at each real release - a fresh install
+via the *published* `compose.release.yaml` (`1.0.1` and `1.0.2` alike)
+pulled a docker-proxy image missing already-merged, already-built
+security fixes, despite them being treated as shipped in `1.0.2`'s own
+changelog. Found and fixed while writing `1.0.2`'s own release-history
+entry, not by a separate audit.
+
+- **Fixed**: `compose.release.yaml`/`.env.release.example`'s
+  `ROOTGUARD_DOCKER_PROXY_IMAGE` bumped by hand to the image already
+  built from current `main` (includes every `1.0.2` docker-proxy fix
+  below). This is a manual emergency bump, not `update-alpha-pins` - the
+  underlying gap (docker-proxy still outside the release pipeline's
+  publish matrix) is tracked as its own item in `ROADMAP.md`'s
+  Post-1.0/Future section ([#666](https://github.com/foxly-it/rootguard/issues/666)),
+  so this can't silently recur unnoticed at the next release without
+  someone actively deciding to skip that check.
+- No other changes - every other component's `1.0.2` pin was already
+  correct (published through the normal, working release pipeline).
+
+## `v1.0.2` (2026-09-21)
+
+A hardening release: two independent full-repo review rounds (bugs,
+security, compaction) since `1.0.1`, every finding fixed or explicitly
+documented, no new features. Full detail and every finding's own
+root-cause writeup lives in `docs/security-audit-log.md`'s "Fourth
+full-repo review"/"Fourth review, follow-up pass" entries - this is the
+release-facing summary.
+
+- **Critical, fixed**: `rootguard-docker-proxy`'s `POST /volumes/create`
+  had no request validation at all, and `DELETE /volumes/{id}` accepted
+  any volume name - together, a compromised Core/Updater could delete a
+  protected named volume, recreate it via Docker's own `local`-driver
+  bind-mount-as-volume idiom, and bind-mount it into an already-allowed
+  container for full host filesystem access, completely bypassing the
+  proxy's Binds/Mounts allowlist ([#655](https://github.com/foxly-it/rootguard/pull/655)).
+  The same review round also closed a `Cmd`/`Entrypoint`/`User`
+  container-create bypass, a case-sensitivity gap in the attach-stdin
+  check, and missing `EndpointConfig` validation on network-connect
+  ([#646](https://github.com/foxly-it/rootguard/pull/646)), plus, in the
+  same PR as the volumes fix, three more previously-unmodeled
+  container-create fields: `Healthcheck.Test` (a recurring-RCE primitive
+  via an unchecked `CMD-SHELL`), `Env` (denylisted the classic
+  `LD_PRELOAD`-style dynamic-linker hijack keys), and
+  `HostConfig.SecurityOpt`/`DeviceRequests`. **Correction**: merged and
+  built as described here, but not actually reaching a fresh install
+  through the *published* `compose.release.yaml` until `1.0.3` - see that
+  entry above.
+- **Fixed**: the WebApp's session-persist path ran its full disk-write
+  cycle even for a bogus/expired cookie, reachable by any unauthenticated
+  request and not covered by any rate limiter - a real, if narrow, DoS
+  surface ([#647](https://github.com/foxly-it/rootguard/pull/647)). Several
+  destructive-action audit/rate-limit gaps closed alongside it, and again
+  in the follow-up round for the three "check for updates" routes, which
+  could otherwise be flooded to exhaust GHCR's own pull rate limit
+  ([#657](https://github.com/foxly-it/rootguard/pull/657)).
+- **Fixed**: a real TOCTOU race between a Core/WebApp update requested
+  through the control plane and the updater's own self-update, which
+  could abort an in-flight update request instead of failing cleanly
+  with a clear, retryable error ([#663](https://github.com/foxly-it/rootguard/pull/663)).
+- **Fixed**: `install.sh`'s sudo/`PWD` handling, two cleanup-trap
+  ordering bugs, a target-directory creation race, and a brief window
+  where the generated `.env` (holding real secrets) was world-readable
+  ([#648](https://github.com/foxly-it/rootguard/pull/648)); Unbound's
+  config-history and backup-restore rollback-scope correctness bugs, and
+  a public-IPv6-range gap in reverse-DNS discovery's private-network
+  check ([#649](https://github.com/foxly-it/rootguard/pull/649),
+  [#659](https://github.com/foxly-it/rootguard/pull/659)); the updater's
+  no-op-update status accuracy and a context-plumbing gap in its own
+  verify step ([#650](https://github.com/foxly-it/rootguard/pull/650)); a
+  frontend `NaN`-on-clear bug across six Unbound number fields and a
+  Logs-page over-fetching bug ([#651](https://github.com/foxly-it/rootguard/pull/651)).
+- **Fixed**: a flaky installer test suite (five duplicated poll loops
+  racing a too-tight 2-second deadline against an async deploy) that had
+  produced a real, reproduced CI failure during this very release's own
+  review pass ([#662](https://github.com/foxly-it/rootguard/pull/662)).
+- Full `CHANGELOG.md` entry (auto-generated at release time) covers every
+  PR since `1.0.1`, including the design-only extension-API draft for
+  post-1.0 work ([#186](https://github.com/foxly-it/rootguard/issues/186))
+  and the `ROADMAP.md` reorganization that put active work back at the
+  top of the file.
 
 ## `v1.0.1` (2026-09-17)
 

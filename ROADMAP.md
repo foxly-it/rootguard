@@ -14,11 +14,11 @@ reason - within it, items are ordered newest first too. Everything from
 
 ## Status and scope
 
-**1.0.0 shipped 2026-09-14; 1.0.1 (a patch release) shipped 2026-09-17** -
-see `docs/release-history.md`/`CHANGELOG.md` for what actually shipped in
-each release. Every milestone through `1.0.0` below is complete and
-verified; current work now lives entirely in the "Post-1.0 / Future"
-section immediately below.
+**1.0.0 shipped 2026-09-14; 1.0.1/1.0.2/1.0.3 (patch releases) shipped
+2026-09-17/2026-09-21/2026-09-21** - see `docs/release-history.md`/
+`CHANGELOG.md` for what actually shipped in each release. Every milestone
+through `1.0.0` below is complete and verified; current work now lives
+entirely in the "Post-1.0 / Future" section immediately below.
 
 The 1.0 scope was a **single-node Docker appliance**. Bare-metal/systemd and
 multi-node management remain explicitly post-1.0.
@@ -54,6 +54,18 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [ ] Add `rootguard-docker-proxy` to `release-alpha.yml`'s own publish
+      matrix ([#666](https://github.com/foxly-it/rootguard/issues/666)) -
+      found cutting `1.0.2`: this component was never added when it
+      joined the deployed stack, so nothing ever refreshed
+      `compose.release.yaml`'s pin at release time the way every other
+      component's pin is refreshed. Concretely meant a fresh install via
+      the *published* `compose.release.yaml` still pulled a pre-fix image
+      for both `1.0.1` and `1.0.2`, missing already-merged, already-built
+      security fixes (see `docs/release-history.md`'s `1.0.3` entry for
+      the emergency pin bump this forced). Distinct from the self-update
+      channel item below - this is about fresh-install pin freshness, not
+      updating an already-deployed instance.
 - [x] Rootless-Docker-daemon compatibility verification and
       documentation - the second, host-level phase planned after this same
       section's own docker-proxy wiring item, using the existing
