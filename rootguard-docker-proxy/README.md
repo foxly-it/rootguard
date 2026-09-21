@@ -62,7 +62,12 @@ sends - see `validate.go`.
     form), any `SecurityOpt` beyond `no-new-privileges:true`, and any
     bind/mount whose source isn't one of RootGuard's own named volumes
     (an arbitrary host path is exactly the primitive this proxy exists to
-    close off) or whose `Image` isn't one of RootGuard's own known image
+    close off) - with one narrow, explicit exception: Core's and the
+    Updater's own read-only self-referential `compose.release.yaml` bind,
+    needed for their `docker compose -f ...` self-update re-invocations,
+    which can never be a named volume by its own nature (it exposes the
+    operator's real compose file, not a copy) - or whose `Image` isn't
+    one of RootGuard's own known image
     repositories (a resolved, already-cached bare content digest is
     exempt from the repository check - see `stripImageRef`'s doc comment
     for why that's still safe). Also rejects a `Cmd`/`Entrypoint`/`User`
