@@ -410,18 +410,67 @@ func validateContainerNetworking(nc *networkingConfig) error {
 	return nil
 }
 
+// knownComposeFileBindTargets: the two fixed container-side paths Core
+// and the Updater each mount their own compose.release.yaml at
+// (ROOTGUARD_COMPOSE_FILE and the equivalent) for their self-referential
+// `docker compose -f ...` re-invocations - self-update and the
+// control-plane update path both recreate core/webapp this way. The
+// host-side source here is necessarily a real host path
+// (${PWD}/compose.release.yaml) - unlike every other bind this proxy
+// allows, it can never be a named volume, since the whole point is
+// exposing the operator's own real compose file, not a copy. Found live
+// cutting 1.0.3: this bind was never modeled at all, so it was
+// unconditionally rejected the moment docker-proxy became the sole
+// socket holder - breaking the control-plane update path for core/webapp
+// entirely, caught by the release pipeline's own upgrade-test rather
+// than shipped (the first upgrade test to exercise an installation that
+// already had docker-proxy wired in as sole holder, since 1.0.2 was
+// itself the first release with that wiring).
+var knownComposeFileBindTargets = map[string]bool{
+	"/opt/rootguard/compose.yaml":         true,
+	"/opt/rootguard/compose.release.yaml": true,
+}
+
+// isKnownComposeFileBind scopes this one necessary host-path exception as
+// narrowly as the source's own operator-dependent variability allows:
+// read-only only, target must be one of the two exact fixed paths above,
+// and source must end in exactly "/compose.release.yaml" (anchored on
+// the path separator, so a similarly-named but different file can't
+// match). A compromised Core/Updater could still point this at some
+// other host file happening to share that exact name, but read-only,
+// only at one of two fixed container paths, is a materially narrower
+// primitive than the arbitrary-host-path-anywhere risk this whole
+// validator exists to close - and no narrower fix is possible without
+// Core stopping using a real host bind mount for its own compose file
+// entirely, a bigger architecture change than a live-found regression
+// fix.
+func isKnownComposeFileBind(source, target, mode string) bool {
+	return mode == "ro" && knownComposeFileBindTargets[target] && strings.HasSuffix(source, "/compose.release.yaml")
+}
+
 // validateBinds checks legacy "source:target[:mode]" bind-mount strings.
-// Only a known named volume may appear as the source - a bare host path
-// (starting with "/") is exactly the primitive this proxy exists to
-// close off, so it's always rejected regardless of what's on the other
-// side of the colon.
+// Only a known named volume, or the one known compose-file exception
+// above, may appear as the source - any other bare host path is exactly
+// the primitive this proxy exists to close off, so it's always rejected
+// regardless of what's on the other side of the colon.
 func validateBinds(binds []string) error {
 	for _, b := range binds {
 		parts := strings.SplitN(b, ":", 3)
 		source := parts[0]
-		if !knownVolumeNames[source] {
-			return fmt.Errorf("bind mount source %q is not an allow-listed named volume", source)
+		if knownVolumeNames[source] {
+			continue
 		}
+		var target, mode string
+		if len(parts) > 1 {
+			target = parts[1]
+		}
+		if len(parts) > 2 {
+			mode = parts[2]
+		}
+		if isKnownComposeFileBind(source, target, mode) {
+			continue
+		}
+		return fmt.Errorf("bind mount source %q is not an allow-listed named volume", source)
 	}
 	return nil
 }
