@@ -184,9 +184,9 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleUpdateStatus(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/updates/check", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/updates/check", dest(auditUpdateCheckTriggered, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUpdateCheck(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("POST /api/updates/{name}", dest(auditServiceUpdateStarted, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUpdateService(w, r, core)
@@ -223,9 +223,9 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleControlPlaneUpdateStatus(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/control-plane-updates/check", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/control-plane-updates/check", dest(auditControlPlaneUpdateCheckTriggered, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleControlPlaneUpdateCheck(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("POST /api/control-plane-updates/install", dest(auditControlPlaneUpdateInstall, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleControlPlaneUpdateInstall(w, r, core)
@@ -235,9 +235,9 @@ func NewRouter(core *coreclient.Client, sessionAuth *SessionAuth) http.Handler {
 		api.HandleUpdaterSelfUpdateStatus(w, r, core)
 	})
 
-	mux.HandleFunc("POST /api/updater-updates/check", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("POST /api/updater-updates/check", dest(auditUpdaterSelfUpdateCheckTriggered, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUpdaterSelfUpdateCheck(w, r, core)
-	})
+	}))
 
 	mux.HandleFunc("POST /api/updater-updates/install/{name}", dest(auditUpdaterSelfUpdateInstall, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleUpdaterSelfUpdateInstall(w, r, core)
