@@ -133,7 +133,10 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       manual pre-update compose refresh step surfaced in the WebGUI before
       the image swap runs.
 - [ ] Define a versioned extension API, compatibility contract, capability
-      model, and explicit permission boundaries.
+      model, and explicit permission boundaries. A concrete, reviewed design
+      draft exists for all four bullets in this section -
+      `docs/extension-api-design.md` - written against a reference guided
+      access-rules extension; not implemented, no timeline attached.
 - [ ] Provide constrained integration, configuration, and UI extension points;
       RootGuard must retain ownership of preview, validation, activation,
       history, rollback, audit, backup, and restore.
