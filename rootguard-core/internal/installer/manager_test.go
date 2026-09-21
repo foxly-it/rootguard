@@ -569,10 +569,7 @@ func TestDeploymentPersistsCompletedState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForDeploymentDone(t, manager)
 	if status := manager.Status(); status.State != StateInstalled {
 		t.Fatalf("expected installed state, got %#v", status)
 	}
@@ -627,10 +624,7 @@ func TestReconcilePinsControllerNetworkAddress(t *testing.T) {
 	if _, err := manager.Start(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53}); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForDeploymentDone(t, manager)
 
 	mu.Lock()
 	commands = nil
@@ -680,10 +674,7 @@ func TestDeploymentRestartsBlockpageAfterBootstrapWhenEnabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
-	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForDeploymentDone(t, manager)
 	if status := manager.Status(); status.State != StateInstalled {
 		t.Fatalf("expected installed state, got %#v", status)
 	}
@@ -821,10 +812,7 @@ func TestDeployRefusesActivationWhenAttestationFails(t *testing.T) {
 	if _, err := manager.Start(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53}); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(2 * time.Second)
-	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForDeploymentDone(t, manager)
 	status := manager.Status()
 	if status.State != StateFailed {
 		t.Fatalf("expected the deployment to fail closed on a failed attestation, got %#v", status)
@@ -881,10 +869,7 @@ func TestDeployResolvesDigestBeforeAttestation(t *testing.T) {
 	if _, err := manager.Start(context.Background(), Config{DNSBindAddress: "192.168.1.2", DNSPort: 53}); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for manager.Status().State == StateDeploying && time.Now().Before(deadline) {
-		time.Sleep(10 * time.Millisecond)
-	}
+	waitForDeploymentDone(t, manager)
 	status := manager.Status()
 	if status.State != StateFailed {
 		t.Fatalf("expected deployment to fail closed (no real cosign attestation available in tests), got %#v", status)

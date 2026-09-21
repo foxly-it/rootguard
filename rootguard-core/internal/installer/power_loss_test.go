@@ -143,6 +143,27 @@ func waitForInstalled(t *testing.T, manager *Manager) {
 	t.Fatalf("deployment retry did not reach installed state, got %#v", manager.Status())
 }
 
+// waitForDeploymentDone polls until manager leaves StateDeploying (either
+// StateInstalled or StateFailed) - for tests that assert their own
+// expected terminal state afterward, unlike waitForInstalled above, which
+// requires installed specifically. Found in review: manager_test.go had
+// five separate inline copies of this poll loop, four of them racing a
+// fixed 2-second deadline against the deploy goroutine this same
+// function's own Start() call kicks off - too tight under a loaded CI
+// runner, causing a real, reproduced flake (a run that landed on
+// "connect: running" instead of installed when the deadline hit).
+func waitForDeploymentDone(t *testing.T, manager *Manager) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if manager.Status().State != StateDeploying {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("deployment did not leave the deploying state in time, got %#v", manager.Status())
+}
+
 func TestDeployPowerLossDuringPullRecoversCleanly(t *testing.T) {
 	dataDir := t.TempDir()
 	killDeployHelperAtCheckpoint(t, dataDir, "pull-done")
