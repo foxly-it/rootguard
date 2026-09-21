@@ -53,25 +53,36 @@ sends - see `validate.go`.
   `rootguard-updater/docker.go`), not a guess at what the Docker API
   offers in general. No Swarm, Plugins, Secrets, Services, Nodes, Build,
   Commit, Session, or Configs endpoints exist in the allowlist at all.
-- **Body- or query-validated for four calls that can grant new capability
+- **Body- or query-validated for six calls that can grant new capability
   or reach new data** (`validate.go`):
   - `POST /containers/create` - rejects `Privileged`, `NetworkMode`/
-    `PidMode`/`IpcMode`/`UTSMode: host`, any `Devices`, any `CapAdd`
-    outside `{CHOWN, SETUID, SETGID}` (accepting either the short or the
-    kernel-style `CAP_`-prefixed form), and any bind/mount whose source
-    isn't one of RootGuard's own named volumes (an arbitrary host path is
-    exactly the primitive this proxy exists to close off) or whose
-    `Image` isn't one of RootGuard's own known image repositories (a
-    resolved, already-cached bare content digest is exempt from the
-    repository check - see `stripImageRef`'s doc comment for why that's
-    still safe). Also rejects a `Cmd`/`Entrypoint`/`User` combination
-    outside the two known `docker run` invocations Core's own code issues
-    (the chown helper, the port-probe container) or the all-default (image
-    decides) case every compose-managed container uses, and a
-    `NetworkingConfig` naming any network outside RootGuard's own compose
-    networks - found in review: these fields were previously forwarded
-    completely unchecked, letting an already-allowed image run arbitrary
-    code via a crafted `Entrypoint`/`Cmd`.
+    `PidMode`/`IpcMode`/`UTSMode: host`, any `Devices` or
+    `DeviceRequests`, any `CapAdd` outside `{CHOWN, SETUID, SETGID}`
+    (accepting either the short or the kernel-style `CAP_`-prefixed
+    form), any `SecurityOpt` beyond `no-new-privileges:true`, and any
+    bind/mount whose source isn't one of RootGuard's own named volumes
+    (an arbitrary host path is exactly the primitive this proxy exists to
+    close off) or whose `Image` isn't one of RootGuard's own known image
+    repositories (a resolved, already-cached bare content digest is
+    exempt from the repository check - see `stripImageRef`'s doc comment
+    for why that's still safe). Also rejects a `Cmd`/`Entrypoint`/`User`
+    combination outside the two known `docker run` invocations Core's own
+    code issues (the chown helper, the port-probe container) or the
+    all-default (image decides) case every compose-managed container
+    uses, a `Healthcheck.Test` outside the fixed set `compose.release.yaml`
+    declares (Docker runs this on a timer for the container's whole
+    lifetime - an unmodeled `CMD-SHELL` here is a recurring-RCE primitive
+    of the same shape as the `Cmd`/`Entrypoint` gap), an `Env` entry
+    naming a dynamic-linker/interpreter hijack variable
+    (`LD_PRELOAD` and friends - legitimate `Env` content is otherwise
+    large and evolves with almost every release, so this denylists the
+    actual attack surface instead of mirroring an allowlist that would
+    silently break real deploys), and a `NetworkingConfig` naming any
+    network outside RootGuard's own compose networks - found in review:
+    all of these fields were previously forwarded completely unchecked,
+    letting an already-allowed image run arbitrary code via a crafted
+    `Entrypoint`/`Cmd`/`Healthcheck`, weaken its own kernel confinement,
+    or have an extra process environment variable injected into it.
   - `POST /containers/{id}/exec` - only `rootguard-blockpage` (the two
     literal commands Core's own code ever sends) or `rootguard-unbound`
     (`unbound-checkconf`/`cat` against two fixed paths each,
@@ -86,7 +97,26 @@ sends - see `validate.go`.
     `rootguard-blockpage`, silently breaking every Unbound guided-setting
     change once docker-proxy sat in the request path - no CI fixture
     exercised a settings change after initial deployment, so nothing
-    caught it before manual end-to-end testing did.
+    caught it before manual end-to-end testing did. Also rejects any `Env`
+    override outright - unlike container-create, no exec target here ever
+    legitimately sets one.
+  - `POST /volumes/create` - only one of RootGuard's own named volumes,
+    only the `local` driver (or unset), and no `DriverOpts` - found in
+    review: this call had no validator at all, so Docker's own well-known
+    `local`-driver bind-mount-as-volume idiom
+    (`DriverOpts={"type":"none","o":"bind","device":"/"}`) could mint a
+    "volume" that was actually the host's own filesystem at an arbitrary
+    path, bypassing the `POST /containers/create` Binds/Mounts allowlist
+    entirely by hiding behind an already-trusted volume name.
+  - `DELETE /volumes/{id}` - refuses to ever remove one of RootGuard's own
+    actively-used named volumes. This call exists for the Updater's own
+    cleanup of orphaned volumes labeled `io.rootguard.cleanup=true` (never
+    one of RootGuard's persistent data/config/session volumes, see
+    `docs/image-retention-policy.md`'s retention rules) - found in review:
+    nothing previously enforced that scope at the proxy itself, so this
+    call combined with the `POST /volumes/create` gap above was a full
+    bypass (delete a protected volume, recreate it poisoned, bind-mount it
+    into an otherwise fully compliant container).
   - `POST /networks/{id}/connect` - only `rootguard-dns`, only
     RootGuard's own containers, and an `EndpointConfig` that may only set
     a well-formed IPv4 address (Core's own real use, joining with a fixed

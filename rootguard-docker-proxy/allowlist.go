@@ -144,11 +144,16 @@ var rules = []rule{
 	{method: "POST", pattern: regexp.MustCompile(`^/networks/create$`)},
 	{method: "GET", pattern: regexp.MustCompile(`^/volumes$`)},
 	{method: "GET", pattern: regexp.MustCompile(`^/volumes/[^/]+$`)},
-	{method: "POST", pattern: regexp.MustCompile(`^/volumes/create$`)},
+	// Found in review: this call had no body validator at all - see
+	// validateVolumeCreate's own doc comment for the bind-mount-as-volume
+	// bypass that left open.
+	{method: "POST", pattern: regexp.MustCompile(`^/volumes/create$`), validate: validateVolumeCreate},
 
 	// docker volume ls/rm (Updater only: post-update cleanup of orphaned
-	// volumes labeled io.rootguard.cleanup=true)
-	{method: "DELETE", pattern: regexp.MustCompile(`^/volumes/[^/]+$`)},
+	// volumes labeled io.rootguard.cleanup=true) - found in review: the
+	// path+method allowlist alone let any volume name through, including
+	// RootGuard's own actively-used ones; see validateVolumeDelete.
+	{method: "DELETE", pattern: regexp.MustCompile(`^/volumes/[^/]+$`), validate: validateVolumeDelete},
 
 	// docker image rm (Updater only: post-update cleanup of the old image)
 	{method: "DELETE", pattern: regexp.MustCompile(`^/images/[^/]+$`)},
