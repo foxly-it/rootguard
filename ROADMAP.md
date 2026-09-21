@@ -1,22 +1,27 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-09-03
+Last reviewed: 2026-09-21
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
 Items are completed only when their acceptance criteria are verified.
 
+**Newest first:** the "Post-1.0 / Future" section right below tracks all
+current, active work and sits at the top of this file for exactly that
+reason - within it, items are ordered newest first too. Everything from
+"0.1.0-alpha.2" onward is the historical record of how RootGuard reached
+1.0.0, kept in its original chronological (oldest-first) order below.
+
 ## Status and scope
 
-RootGuard is in **pre-release, release-candidate testing** (see the `0.9`
-section below for current status). The end-to-end DNS path,
-guided setup, authenticated WebGUI, Unbound configuration lifecycle, AdGuard
-bootstrap, and guarded update paths exist. Use in a production environment requires
-recovery, immutable releases, broader system tests, and operational hardening.
+**1.0.0 shipped 2026-09-14; 1.0.1 (a patch release) shipped 2026-09-17** -
+see `docs/release-history.md`/`CHANGELOG.md` for what actually shipped in
+each release. Every milestone through `1.0.0` below is complete and
+verified; current work now lives entirely in the "Post-1.0 / Future"
+section immediately below.
 
-The 1.0 scope is a **single-node Docker appliance**. Bare-metal/systemd and
-multi-node management are explicitly post-1.0 so they cannot delay a reliable
-Docker release.
+The 1.0 scope was a **single-node Docker appliance**. Bare-metal/systemd and
+multi-node management remain explicitly post-1.0.
 
 Status symbols:
 
@@ -39,6 +44,107 @@ Every release candidate must satisfy all of these rules:
    architectures are published.
 6. Known limitations are explicit. A feature is never presented as delivered
    before its release gate passes.
+
+---
+
+## Post-1.0 / Future — extensions
+
+Goal: let advanced operators add narrowly scoped integrations and guided
+features without weakening RootGuard's validation, recovery, or appliance
+security model. This work is explicitly deferred until after 1.0 and carries no
+current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
+
+- [x] Rootless-Docker-daemon compatibility verification and
+      documentation - the second, host-level phase planned after this same
+      section's own docker-proxy wiring item, using the existing
+      backup/restore feature as the migration path for existing
+      installations rather than a new tool. The finding that would have
+      ruled this out entirely - whether rootless Docker's networking
+      silently drops the real client IP on DNS queries, breaking
+      AdGuard's per-client filtering - is confirmed
+      and resolved: the default configuration loses it (reconfirmed on two
+      different RootlessKit network drivers), but explicitly configuring
+      the `pasta` network/port driver preserves it. A full
+      `compose.release.yaml` deployment was then exercised end to end under
+      rootless Docker: `install.sh` auto-detects the rootless daemon and
+      wires `docker-proxy`'s socket path with no operator action, the
+      guided setup deployed AdGuard/Unbound successfully, and AdGuard's own
+      query log confirmed the real client IP on a fully bootstrapped
+      instance. The backup/restore migration path was verified too - an
+      encrypted backup from a real rootful installation restored cleanly
+      onto a fresh rootless one, settings intact. Two more real,
+      independent requirements surfaced only by this end-to-end run (not
+      knowable from documentation alone): the guided setup's DNS bind
+      address must be `0.0.0.0` rather than a specific host IP under
+      `pasta`, and privileged port binding for `pasta` needs
+      `net.ipv4.ip_unprivileged_port_start` lowered - the `setcap`-based
+      method some general rootless-Docker guides recommend does not work
+      for `pasta`'s automatic port forwarding. Full detail, including the
+      two `rootguard-docker-proxy` allowlist gaps this same exercise found
+      and fixed (an Unbound-exec gap and a missing `GET /system/df`), in
+      `docs/rootless-docker.md`.
+- [x] Close the Docker-socket host-takeover risk named in
+      `docs/threat-model.md`'s actor 1 ("Docker socket holders"): a bug in
+      Core or the Updater that let an attacker issue their own Docker API
+      calls used to lead directly to host compromise, no second line of
+      defense. `rootguard-docker-proxy`, a purpose-built, request-body-
+      filtering Docker Engine API proxy, is now wired into
+      `compose.release.yaml` - Core and the Updater no longer mount
+      `/var/run/docker.sock` themselves, only the proxy does; they reach
+      it over `DOCKER_HOST=tcp://docker-proxy:2375`, guarded by a
+      `ROOTGUARD_DOCKER_PROXY_URL` startup preflight check following the
+      same pattern `rootguard-attestation-proxy` already established (see
+      this file's `0.9` section). Backward-compatible
+      by construction: an installation that only ever updated via the
+      WebGUI keeps its old compose topology (direct socket access) until
+      a fresh install or a manual `compose.release.yaml` refresh, since
+      self-update can never deliver a compose-topology change (same
+      residual-risk shape already true for every other topology change
+      this project has shipped, not a new gap).
+- [ ] Drop `USER root` from `rootguard-core`/`rootguard-updater`'s own
+      Dockerfiles now that neither holds the real Docker socket anymore -
+      deliberately deferred from this same section's docker-proxy wiring
+      item, since existing installations have volumes (`rootguard-data`,
+      `unbound-config`, `adguard-auth`, `rootguard-sessions`) currently
+      owned by root; switching to a non-root UID needs its own
+      volume-ownership migration design first, not just a Dockerfile
+      change.
+- [ ] Give `rootguard-docker-proxy` its own self-update channel, matching
+      `rootguard-attestation-proxy`'s (added to Core's own internal update
+      manager's target list, `rootguard-core/internal/updater/manager.go`
+      - a different mechanism from the standalone `rootguard-updater`
+      binary, which only ever swaps Core/WebApp themselves). Deliberately
+      deferred from this same section's docker-proxy wiring item to keep
+      that change's blast radius smaller.
+- [ ] Give self-update a real compose-topology migration path. Today it only
+      ever swaps container *images* in place against whatever
+      `compose.release.yaml` already exists on disk (documented in
+      `docs/release-process.md`, "Self-update can never deliver a
+      compose-topology change") - a release that adds a new service, network,
+      mount, or env var (like `rootguard-attestation-proxy`/`egress` in
+      `1.0.0-rc.2`) can never reach an installation that updated via the
+      WebGUI alone; only a fresh install or a manual compose refresh can
+      cross it. `RequireAttestation`/`CheckAttestationProxyReachable` already
+      turn this into a clear, actionable error instead of a hang or a generic
+      cosign network failure, but that's a diagnosis, not a fix. Flagged
+      again in an external code review (2026-09-08); three candidate
+      directions, unevaluated so far: a signed compose migration mechanism,
+      a bootstrapper process outside the stack itself, or a clearly guided,
+      manual pre-update compose refresh step surfaced in the WebGUI before
+      the image swap runs.
+- [ ] Define a versioned extension API, compatibility contract, capability
+      model, and explicit permission boundaries.
+- [ ] Provide constrained integration, configuration, and UI extension points;
+      RootGuard must retain ownership of preview, validation, activation,
+      history, rollback, audit, backup, and restore.
+- [ ] Define signing or explicit trust handling plus safe install, disable,
+      upgrade, failure-isolation, and removal semantics. Unrestricted Docker
+      socket access or arbitrary root scripts are not the default model.
+- [ ] Build an official reference extension after the platform contract is
+      stable. A guided access-rules extension is a candidate: professionals can
+      already use the expert editor today, while a future guided surface must
+      conflict-check zones, forwarding, and expert configuration before it can
+      activate.
 
 ---
 
@@ -1261,105 +1367,6 @@ RootGuard 1.0 ships when:
 Post-1.0 candidates: bare-metal/systemd provider, multi-node management, high
 availability, and external identity providers.
 
----
-
-## Post-1.0 / Future — extensions
-
-Goal: let advanced operators add narrowly scoped integrations and guided
-features without weakening RootGuard's validation, recovery, or appliance
-security model. This work is explicitly deferred until after 1.0 and carries no
-current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
-
-- [ ] Define a versioned extension API, compatibility contract, capability
-      model, and explicit permission boundaries.
-- [ ] Provide constrained integration, configuration, and UI extension points;
-      RootGuard must retain ownership of preview, validation, activation,
-      history, rollback, audit, backup, and restore.
-- [ ] Define signing or explicit trust handling plus safe install, disable,
-      upgrade, failure-isolation, and removal semantics. Unrestricted Docker
-      socket access or arbitrary root scripts are not the default model.
-- [ ] Build an official reference extension after the platform contract is
-      stable. A guided access-rules extension is a candidate: professionals can
-      already use the expert editor today, while a future guided surface must
-      conflict-check zones, forwarding, and expert configuration before it can
-      activate.
-- [ ] Give self-update a real compose-topology migration path. Today it only
-      ever swaps container *images* in place against whatever
-      `compose.release.yaml` already exists on disk (documented in
-      `docs/release-process.md`, "Self-update can never deliver a
-      compose-topology change") - a release that adds a new service, network,
-      mount, or env var (like `rootguard-attestation-proxy`/`egress` in
-      `1.0.0-rc.2`) can never reach an installation that updated via the
-      WebGUI alone; only a fresh install or a manual compose refresh can
-      cross it. `RequireAttestation`/`CheckAttestationProxyReachable` already
-      turn this into a clear, actionable error instead of a hang or a generic
-      cosign network failure, but that's a diagnosis, not a fix. Flagged
-      again in an external code review (2026-09-08); three candidate
-      directions, unevaluated so far: a signed compose migration mechanism,
-      a bootstrapper process outside the stack itself, or a clearly guided,
-      manual pre-update compose refresh step surfaced in the WebGUI before
-      the image swap runs.
-- [x] Close the Docker-socket host-takeover risk named in
-      `docs/threat-model.md`'s actor 1 ("Docker socket holders"): a bug in
-      Core or the Updater that let an attacker issue their own Docker API
-      calls used to lead directly to host compromise, no second line of
-      defense. `rootguard-docker-proxy`, a purpose-built, request-body-
-      filtering Docker Engine API proxy, is now wired into
-      `compose.release.yaml` - Core and the Updater no longer mount
-      `/var/run/docker.sock` themselves, only the proxy does; they reach
-      it over `DOCKER_HOST=tcp://docker-proxy:2375`, guarded by a
-      `ROOTGUARD_DOCKER_PROXY_URL` startup preflight check following the
-      `rootguard-attestation-proxy` precedent above. Backward-compatible
-      by construction: an installation that only ever updated via the
-      WebGUI keeps its old compose topology (direct socket access) until
-      a fresh install or a manual `compose.release.yaml` refresh, since
-      self-update can never deliver a compose-topology change (same
-      residual-risk shape already true for every other topology change
-      this project has shipped, not a new gap).
-- [ ] Drop `USER root` from `rootguard-core`/`rootguard-updater`'s own
-      Dockerfiles now that neither holds the real Docker socket anymore -
-      deliberately deferred from the docker-proxy wiring above, since
-      existing installations have volumes (`rootguard-data`,
-      `unbound-config`, `adguard-auth`, `rootguard-sessions`) currently
-      owned by root; switching to a non-root UID needs its own
-      volume-ownership migration design first, not just a Dockerfile
-      change.
-- [ ] Give `rootguard-docker-proxy` its own self-update channel, matching
-      `rootguard-attestation-proxy`'s (added to Core's own internal update
-      manager's target list, `rootguard-core/internal/updater/manager.go`
-      - a different mechanism from the standalone `rootguard-updater`
-      binary, which only ever swaps Core/WebApp themselves). Deliberately
-      deferred from the initial wiring above to keep that change's blast
-      radius smaller.
-- [x] Rootless-Docker-daemon compatibility verification and
-      documentation - the second, host-level phase planned after the
-      docker-proxy wiring above, using the existing backup/restore feature
-      as the migration path for existing installations rather than a new
-      tool. The finding that would have ruled this out entirely - whether
-      rootless Docker's networking silently drops the real client IP on
-      DNS queries, breaking AdGuard's per-client filtering - is confirmed
-      and resolved: the default configuration loses it (reconfirmed on two
-      different RootlessKit network drivers), but explicitly configuring
-      the `pasta` network/port driver preserves it. A full
-      `compose.release.yaml` deployment was then exercised end to end under
-      rootless Docker: `install.sh` auto-detects the rootless daemon and
-      wires `docker-proxy`'s socket path with no operator action, the
-      guided setup deployed AdGuard/Unbound successfully, and AdGuard's own
-      query log confirmed the real client IP on a fully bootstrapped
-      instance. The backup/restore migration path was verified too - an
-      encrypted backup from a real rootful installation restored cleanly
-      onto a fresh rootless one, settings intact. Two more real,
-      independent requirements surfaced only by this end-to-end run (not
-      knowable from documentation alone): the guided setup's DNS bind
-      address must be `0.0.0.0` rather than a specific host IP under
-      `pasta`, and privileged port binding for `pasta` needs
-      `net.ipv4.ip_unprivileged_port_start` lowered - the `setcap`-based
-      method some general rootless-Docker guides recommend does not work
-      for `pasta`'s automatic port forwarding. Full detail, including the
-      two `rootguard-docker-proxy` allowlist gaps this same exercise found
-      and fixed (an Unbound-exec gap and a missing `GET /system/df`), in
-      `docs/rootless-docker.md`.
-
 ## How we work with this roadmap
 
 For each development slice:
@@ -1370,3 +1377,11 @@ For each development slice:
 4. Record verification and mark the checkbox only after it passes.
 5. Do not start the next release phase while an earlier safety gate remains
    unresolved unless the work is independent and explicitly tracked.
+6. Add a new "Post-1.0 / Future" item at the *top* of that section's list,
+   not appended at the bottom - it stays ordered newest first so the most
+   recent work is visible without scrolling past the historical record
+   below. When a new item directly follows up on an existing one (a
+   deferred piece of the same change), keep it adjacent to that item
+   rather than strictly by date, and describe the relationship without
+   relying on "above"/"below" - the list gets reordered as new work lands,
+   which quietly breaks positional wording like that.
