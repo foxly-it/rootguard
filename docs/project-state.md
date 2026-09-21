@@ -1,8 +1,10 @@
 # RootGuard project state
 
-Last updated: 2026-09-17
+Last updated: 2026-09-21
 
-**1.0.0 shipped 2026-09-14; 1.0.1 (a patch release) shipped 2026-09-17.**
+**1.0.0 shipped 2026-09-14; 1.0.1/1.0.2/1.0.3 (patch releases) shipped
+2026-09-17/2026-09-21/2026-09-21.** `1.0.3` was an emergency follow-up to
+`1.0.2` the same day - see `docs/release-history.md` for why.
 Every milestone this file's own "Remaining production milestones" section
 below once tracked is now complete - see `ROADMAP.md`'s own `1.0.0`
 section (kept current) for the authoritative checklist, and
@@ -41,7 +43,9 @@ directories (each with its own Dockerfile and path-filtered CI workflow):
   no longer mount `/var/run/docker.sock` themselves, only this service
   does - see `ROADMAP.md`'s Post-1.0/Future section for the still-open
   follow-ups (dropping root from Core/Updater, a self-update channel for
-  this component, and the rootless-Docker phase below).
+  this component, joining `release-alpha.yml`'s own publish matrix so its
+  `compose.release.yaml` pin stops needing a manual bump at every release,
+  and the rootless-Docker phase below).
 - **Rootless Docker daemon compatibility** (2026-09-18/19): fully
   verified end to end, hands-on - a real risk to per-client filtering
   (the default rootless networking silently drops the real client IP on
