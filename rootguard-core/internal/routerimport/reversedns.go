@@ -106,12 +106,16 @@ func reverseDNSAddresses(networks []string) ([]netip.Addr, error) {
 		if err != nil || prefix != prefix.Masked() {
 			return nil, fmt.Errorf("%w: %q is not a canonical CIDR prefix", ErrReverseDNSDiscovery, raw)
 		}
+		// IsPrivate covers both address families correctly on its own
+		// (RFC 1918 for IPv4, RFC 4193/fc00::/7 for IPv6) - found in
+		// review: an earlier version only required this for IPv4 and
+		// instead accepted any IPv6 unicast/non-link-local address for
+		// IPv6, which let a caller point PTR lookups at public IPv6
+		// ranges despite this feature's own purpose (and its IPv4
+		// sibling) being scoped to private LAN discovery.
 		address := prefix.Addr()
-		if address.Is4() && !address.IsPrivate() {
-			return nil, fmt.Errorf("%w: IPv4 network %q is not private", ErrReverseDNSDiscovery, raw)
-		}
-		if !address.Is4() && (!address.IsGlobalUnicast() || address.IsLinkLocalUnicast()) {
-			return nil, fmt.Errorf("%w: IPv6 network %q is not unicast", ErrReverseDNSDiscovery, raw)
+		if !address.IsPrivate() {
+			return nil, fmt.Errorf("%w: network %q is not private", ErrReverseDNSDiscovery, raw)
 		}
 		if prefix.Addr().BitLen()-prefix.Bits() > 8 {
 			return nil, fmt.Errorf("%w: network %q contains more than %d addresses", ErrReverseDNSDiscovery, raw, maxReverseDNSAddresses)

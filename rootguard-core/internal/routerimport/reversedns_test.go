@@ -69,6 +69,7 @@ func TestReverseDNSDiscovererRejectsUnsafeRanges(t *testing.T) {
 		"203.0.113.0/24",
 		"fd00::/119",
 		"fe80::/120",
+		"2606:4700:4700::/125",
 	}
 	for _, network := range tests {
 		t.Run(network, func(t *testing.T) {
