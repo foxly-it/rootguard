@@ -165,6 +165,12 @@ type Manager struct {
 	backupError         string
 	verifyAttempts      int
 	retryDelay          time.Duration
+	// reservedForControlPlane: see ReserveForControlPlane's own doc
+	// comment - a second busy flag, deliberately kept separate from
+	// status.State, so a caller reserving this manager for an unrelated
+	// remote control-plane operation never surfaces as this manager's
+	// own self-update State/Message.
+	reservedForControlPlane bool
 }
 
 func NewManager(options Options) *Manager {
@@ -933,7 +939,43 @@ func (m *Manager) clearServiceErrorsLocked() {
 }
 
 func (m *Manager) busyLocked() bool {
-	return m.status.State == StateChecking || m.status.State == StateUpdating
+	return m.status.State == StateChecking || m.status.State == StateUpdating || m.reservedForControlPlane
+}
+
+// ReserveForControlPlane atomically claims this manager's own busy-guard
+// for a caller about to start an unrelated, remote control-plane (core/
+// webapp) update through the separate rootguard-updater process, without
+// touching status.State/Message the way RunExclusive deliberately does -
+// a failure of that unrelated remote request must never show up as this
+// manager's own self-update having failed, since nothing about the
+// updater/attestation-proxy containers this manager actually owns was
+// touched.
+//
+// Found in review (rootguard#546): controlPlaneUpdateHandler used to
+// check this manager's Status() once, then separately call the remote
+// client.Update() - a classic check-then-act gap. If a concurrent
+// StartUpdate("updater") landed in between and swapped this same
+// process's own container mid-flight, the in-flight client.Update()
+// request would abort (connection reset) instead of failing cleanly with
+// 409. Wrapping that whole remote call between Reserve and release closes
+// it: StartUpdate/StartCheck's own busyLocked() check (the same lock this
+// method takes) now correctly rejects a concurrent request either way,
+// for as long as the reservation is held - the remote round-trip's own
+// duration, not the whole (asynchronous) remote update that continues
+// after it returns; the existing controlPlane.Status() pre-check in
+// selfUpdateInstallHandler already covers that longer window symmetrically.
+func (m *Manager) ReserveForControlPlane() (release func(), err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.busyLocked() {
+		return nil, ErrBusy
+	}
+	m.reservedForControlPlane = true
+	return func() {
+		m.mu.Lock()
+		m.reservedForControlPlane = false
+		m.mu.Unlock()
+	}, nil
 }
 
 func (m *Manager) serviceNames() []string {

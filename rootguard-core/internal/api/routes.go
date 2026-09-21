@@ -169,21 +169,25 @@ func controlPlaneCheckHandler(client *controlplane.Client) http.HandlerFunc {
 }
 
 // controlPlaneUpdateHandler starts a Core/WebApp update via the remote
-// rootguard-updater. Found in review: the reverse of
-// selfUpdateInstallHandler's own guard was missing entirely - nothing
-// stopped this from starting while updaterSelfUpdate was itself mid a
-// compose swap of the very updater container about to execute this
-// request, which would abort that swap (or the request itself) instead
-// of failing cleanly with a clear, retryable error. Same UX-guard
-// reasoning as selfUpdateInstallHandler: not required for correctness
-// (the remote side already recovers on its own next start), just avoids
-// an easily-avoidable, confusing failure.
+// rootguard-updater. Found in review (rootguard#546): a plain
+// check-then-act on updaterSelfUpdate.Status() left a real TOCTOU gap -
+// nothing stopped a concurrent StartUpdate("updater") from swapping the
+// very updater container about to receive this request in between the
+// check and client.Update() actually landing, aborting the in-flight
+// request instead of failing cleanly with 409. Reserving the manager for
+// the whole remote round-trip (see ReserveForControlPlane's own doc
+// comment) closes that: StartUpdate/StartCheck's own busyLocked() check
+// - the actual, atomic enforcement point, not this handler's own
+// pre-check - now sees the reservation regardless of which side got
+// there first.
 func controlPlaneUpdateHandler(client *controlplane.Client, updaterSelfUpdate *updater.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if status := updaterSelfUpdate.Status(); status.State == updater.StateChecking || status.State == updater.StateUpdating {
+		release, err := updaterSelfUpdate.ReserveForControlPlane()
+		if err != nil {
 			writeError(w, http.StatusConflict, fmt.Errorf("the updater is itself mid a self-update, try again once it finishes"))
 			return
 		}
+		defer release()
 		result, err := client.Update(r.Context())
 		if err != nil {
 			writeError(w, http.StatusBadGateway, err)

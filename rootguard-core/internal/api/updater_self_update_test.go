@@ -205,6 +205,72 @@ func TestControlPlaneUpdateHandlerProceedsWhileSelfUpdateIdle(t *testing.T) {
 	}
 }
 
+// TestControlPlaneUpdateHandlerReservesForTheWholeRemoteRoundTrip is the
+// regression test for the actual TOCTOU race in rootguard#546, not just
+// the pre-set-busy-state check the tests above already cover: a
+// concurrent StartUpdate("updater") landing while a controlPlaneUpdate
+// request is genuinely in flight (not yet returned) must still be
+// refused, proving the reservation covers the real race window - a
+// request already accepted before the reservation existed wouldn't have
+// caught this, since the manager's Status() looked idle right up until
+// the remote call actually started.
+func TestControlPlaneUpdateHandlerReservesForTheWholeRemoteRoundTrip(t *testing.T) {
+	requestReceived := make(chan struct{})
+	releaseRequest := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(requestReceived)
+		<-releaseRequest
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"updating","message":"","services":[],"updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	controlPlane := controlplane.NewClient(server.URL, "token")
+	manager := newSelfUpdateTestManager(t, func(context.Context, ...string) ([]byte, error) {
+		t.Fatal("docker should not run - StartUpdate must be rejected while the control-plane request is in flight")
+		return nil, nil
+	})
+
+	handlerDone := make(chan int, 1)
+	go func() {
+		recorder := httptest.NewRecorder()
+		controlPlaneUpdateHandler(controlPlane, manager)(recorder, httptest.NewRequest(http.MethodPost, "/api/control-plane-updates/install", nil))
+		handlerDone <- recorder.Code
+	}()
+
+	select {
+	case <-requestReceived:
+	case <-time.After(2 * time.Second):
+		t.Fatal("controlPlaneUpdateHandler never reached the remote server")
+	}
+
+	if _, err := manager.StartUpdate("updater"); err != updater.ErrBusy {
+		t.Fatalf("expected ErrBusy for a concurrent self-update while the control-plane request is in flight, got %v", err)
+	}
+	// Status().State must stay unaffected by the reservation itself - a
+	// failure of the unrelated remote request must never masquerade as
+	// this manager's own self-update having failed.
+	if state := manager.Status().State; state != updater.StateIdle {
+		t.Fatalf("expected the reservation to leave State idle, got %q", state)
+	}
+
+	close(releaseRequest)
+	select {
+	case code := <-handlerDone:
+		if code != http.StatusAccepted {
+			t.Fatalf("expected 202 Accepted once the remote call completes, got %d", code)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("controlPlaneUpdateHandler never returned after the remote call completed")
+	}
+
+	release, err := manager.ReserveForControlPlane()
+	if err != nil {
+		t.Fatalf("expected the reservation to be released once the handler returns, got %v", err)
+	}
+	release()
+}
+
 // TestSelfUpdateInstallRejectsUnknownService proves the shared manager's
 // own StartUpdate validation still rejects a service name that isn't in
 // its Services list - the shared channel doesn't silently accept an

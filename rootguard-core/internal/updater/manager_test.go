@@ -651,6 +651,33 @@ func TestRunExclusiveBlocksConcurrentUpdaterOperations(t *testing.T) {
 	}
 }
 
+// TestReserveForControlPlaneBlocksConcurrentUpdaterOperations mirrors
+// TestRunExclusiveBlocksConcurrentUpdaterOperations above, but for
+// ReserveForControlPlane - added for rootguard#546, the TOCTOU gap
+// between controlPlaneUpdateHandler and selfUpdateInstallHandler.
+func TestReserveForControlPlaneBlocksConcurrentUpdaterOperations(t *testing.T) {
+	manager := NewManager(Options{DataDir: t.TempDir()})
+	release, err := manager.ReserveForControlPlane()
+	if err != nil {
+		t.Fatalf("expected the first reservation to succeed, got %v", err)
+	}
+	if _, err := manager.StartCheck(); !errors.Is(err, ErrBusy) {
+		t.Fatalf("expected a concurrent self-update to be blocked, got %v", err)
+	}
+	if _, err := manager.ReserveForControlPlane(); !errors.Is(err, ErrBusy) {
+		t.Fatalf("expected a second concurrent reservation to be blocked, got %v", err)
+	}
+	release()
+	if status := manager.Status(); status.State != StateIdle {
+		t.Fatalf("expected State to stay untouched by the reservation, got %+v", status)
+	}
+	releaseAgain, err := manager.ReserveForControlPlane()
+	if err != nil {
+		t.Fatalf("expected a fresh reservation to succeed once the first was released, got %v", err)
+	}
+	releaseAgain()
+}
+
 func waitForIdle(t *testing.T, manager *Manager) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
