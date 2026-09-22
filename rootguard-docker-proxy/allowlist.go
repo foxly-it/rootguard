@@ -87,6 +87,18 @@ var rules = []rule{
 	{method: "HEAD", pattern: regexp.MustCompile(`^/containers/[^/]+/archive$`)},
 	{method: "PUT", pattern: regexp.MustCompile(`^/containers/[^/]+/archive$`)},
 
+	// docker logs (Core: the WebGUI's "Logs & Diagnose" per-service log
+	// view, stack.ReadServiceLogs) - found live on a real 1.0.3 install:
+	// entirely missing from this allowlist since docker-proxy became sole
+	// socket holder, so every log request failed with a generic "exit
+	// status 1" the WebApp had no way to explain further. Read-only,
+	// grants nothing beyond stdout/stderr for a container Core can already
+	// inspect/stop/restart through already-allowed calls; {id} here can
+	// only ever be one of Core's own known managed containers, since
+	// ReadServiceLogs's own allowlist picks the container name, never the
+	// browser.
+	{method: "GET", pattern: regexp.MustCompile(`^/containers/[^/]+/logs$`)},
+
 	// docker restart (Core: backup restore)
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/restart$`)},
 	// docker compose down's own per-service stop, issued before removal -
