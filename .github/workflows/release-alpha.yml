@@ -460,19 +460,8 @@ jobs:
   # moved release tag referencing a candidate that never actually promoted.
   # (The GitHub Release itself moved here too, for the same reason - see
   # its own step below.)
-  # TEMPORARY, one-release bypass for cutting 1.0.5 - see #683. upgrade-test
-  # correctly fails: it deploys 1.0.4 exactly as it shipped, and 1.0.4's
-  # own docker-proxy image predates #684 (the container-rename allowlist
-  # fix) - a real, newly-discovered bug that by definition can't have
-  # shipped in any release before the one fixing it, so the very next
-  # release after any such fix will always fail this test once, no matter
-  # how many retries. Third occurrence of this bypass pattern (1.0.3,
-  # 1.0.4, now 1.0.5), each for a different underlying docker-proxy gap;
-  # smoke-test (verifies the *new* candidate images for a fresh install)
-  # already passed. MUST be reverted in the very next commit after 1.0.5
-  # ships.
   update-alpha-pins:
-    needs: [version, publish, image-scan, smoke-test]
+    needs: [version, publish, image-scan, smoke-test, upgrade-test]
     timeout-minutes: 15
     runs-on: ubuntu-latest
     permissions:
