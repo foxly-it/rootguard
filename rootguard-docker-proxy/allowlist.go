@@ -108,6 +108,22 @@ var rules = []rule{
 	// what restart already does to an existing container.
 	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/stop$`)},
 
+	// docker compose's own container-recreate choreography (the Updater's
+	// `docker compose ... up -d --no-deps core webapp`, and Core's own
+	// equivalent for the DNS stack): compose renames the outgoing
+	// container out of the way (a temporary suffixed name) before
+	// creating and starting the replacement under the real name, then
+	// removes the renamed-away original. Found live cutting 1.0.5, the
+	// first upgrade-test run to actually reach this step (every earlier
+	// attempt failed at an earlier point in the same test) - this had
+	// silently blocked every real core/webapp self-update through
+	// docker-proxy since it became sole socket holder, never caught
+	// before. {id} must already reference an existing container, and the
+	// new name is compose's own internal bookkeeping - grants nothing a
+	// caller who can already stop/remove/recreate any container (all
+	// already allowed) doesn't already have.
+	{method: "POST", pattern: regexp.MustCompile(`^/containers/[^/]+/rename$`)},
+
 	// docker run (Core: one-off chown-helper and self-image-verification
 	// containers) and docker compose up's own per-service container
 	// creation - the one call that can request a privileged container or
