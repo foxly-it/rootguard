@@ -1,6 +1,6 @@
 # RootGuard roadmap to 1.0
 
-Last reviewed: 2026-09-21
+Last reviewed: 2026-09-22
 
 This is the canonical product and engineering roadmap. The public website
 summarises it; implementation decisions and release readiness are tracked here.
@@ -127,7 +127,21 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       - a different mechanism from the standalone `rootguard-updater`
       binary, which only ever swaps Core/WebApp themselves). Deliberately
       deferred from this same section's docker-proxy wiring item to keep
-      that change's blast radius smaller.
+      that change's blast radius smaller. **No longer just a parity gap**:
+      confirmed live cutting `1.0.3`
+      ([#670](https://github.com/foxly-it/rootguard/issues/670)) that any
+      installation with docker-proxy wired in as sole socket holder (every
+      real `1.0.2` install) cannot self-update Core/WebApp at all until
+      docker-proxy itself is refreshed - and, structurally, docker-proxy
+      can never self-update through itself either way (its own real
+      Docker-socket bind mount would need to pass its own request
+      validation to recreate itself). Needs a fundamentally different
+      mechanism than every other component's self-update, not just a new
+      target-list entry - e.g. Core recreating it directly against the
+      real socket during a narrow, explicitly-privileged maintenance
+      window, bypassing docker-proxy's own request path for that one
+      operation only. Manual remediation for an already-affected install
+      documented in `docs/release-history.md`'s `1.0.3` entry.
 - [ ] Give self-update a real compose-topology migration path. Today it only
       ever swaps container *images* in place against whatever
       `compose.release.yaml` already exists on disk (documented in

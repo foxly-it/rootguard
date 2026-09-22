@@ -11,19 +11,6 @@ still ahead.
 - Allow Core/Updater's self-referential compose-file bind ([#669](https://github.com/foxly-it/rootguard/pull/669))
 - TEMPORARY bypass of upgrade-test gate for 1.0.3 only ([#671](https://github.com/foxly-it/rootguard/pull/671))
 
-## [1.0.3] - 2026-09-21
-
-### Other
-
-- Bump stale docker-proxy pin, fixes shipped but never deployed ([#667](https://github.com/foxly-it/rootguard/pull/667))
-- Allow Core/Updater's self-referential compose-file bind ([#669](https://github.com/foxly-it/rootguard/pull/669))
-
-## [1.0.3] - 2026-09-21
-
-### Other
-
-- Bump stale docker-proxy pin, fixes shipped but never deployed ([#667](https://github.com/foxly-it/rootguard/pull/667))
-
 ## [1.0.2] - 2026-09-21
 
 ### Added

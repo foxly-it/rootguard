@@ -1,6 +1,6 @@
 # RootGuard project state
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 **1.0.0 shipped 2026-09-14; 1.0.1/1.0.2/1.0.3 (patch releases) shipped
 2026-09-17/2026-09-21/2026-09-21.** `1.0.3` was an emergency follow-up to
