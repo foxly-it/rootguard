@@ -54,18 +54,25 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
-- [ ] Add `rootguard-docker-proxy` to `release-alpha.yml`'s own publish
+- [x] Add `rootguard-docker-proxy` to `release-alpha.yml`'s own publish
       matrix ([#666](https://github.com/foxly-it/rootguard/issues/666)) -
       found cutting `1.0.2`: this component was never added when it
       joined the deployed stack, so nothing ever refreshed
       `compose.release.yaml`'s pin at release time the way every other
-      component's pin is refreshed. Concretely meant a fresh install via
-      the *published* `compose.release.yaml` still pulled a pre-fix image
-      for both `1.0.1` and `1.0.2`, missing already-merged, already-built
-      security fixes (see `docs/release-history.md`'s `1.0.3` entry for
-      the emergency pin bump this forced). Distinct from the self-update
-      channel item below - this is about fresh-install pin freshness, not
-      updating an already-deployed instance.
+      component's pin is refreshed. Missed twice as a result (`1.0.2`,
+      then `1.0.4` - see `docs/release-history.md`'s entries for both
+      emergency pin bumps this forced, and a hand-written warning
+      comment that itself failed to prevent the second occurrence).
+      Fixed properly rather than patched again: `rootguard-docker-proxy`
+      now goes through the exact same `publish`/`image-scan`/
+      `smoke-test`/`update-alpha-pins` treatment every other component
+      gets - real digest attestation, a genuine `smoke-test` run against
+      its own new candidate (previously silently skipped, since nothing
+      overrode the default pin for that job), and an automatic pin
+      refresh to a real semver tag on every release from here on, not a
+      hand-maintained `sha-<commit>` reference. Distinct from the
+      self-update channel item below - this is about fresh-install pin
+      freshness, not updating an already-deployed instance.
 - [x] Rootless-Docker-daemon compatibility verification and
       documentation - the second, host-level phase planned after this same
       section's own docker-proxy wiring item, using the existing
