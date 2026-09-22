@@ -8,20 +8,58 @@ the security-review finding/fix journal.
 
 ## Release status
 
-`v1.0.4` is the current public release, published with digest-pinned
-`amd64`/`arm64` images for six of the seven RootGuard components.
-`rootguard-docker-proxy` is still not part of `release-alpha.yml`'s own
-publish matrix (`#666`) and stays on a manually-maintained pin - that pin
-has itself gone stale twice already (see the `1.0.3`/`1.0.4` entries
-below), which is why fixing `#666` is the very next piece of work, not a
-standing exception. All milestones through `1.0.0` are complete and
-verified - see `ROADMAP.md` for the closing checklist.
+`v1.0.5` is the current public release, published with digest-pinned
+`amd64`/`arm64` images for **all seven** RootGuard components -
+`rootguard-docker-proxy` joined `release-alpha.yml`'s own publish matrix
+this release (`#666`, fixed after its manually-maintained pin had gone
+stale twice, see the `1.0.3`/`1.0.4` entries below). All milestones
+through `1.0.0` are complete and verified - see `ROADMAP.md` for the
+closing checklist.
 
 **Entries below stop being consistently maintained somewhere before
 `1.0.0` shipped** (a lot of real work landed in between that was never
 backfilled here - `CHANGELOG.md` and `git log` are the authoritative
 record for that window, not this narrative). The
-`1.0.1`/`1.0.2`/`1.0.3`/`1.0.4` entries below are current and complete.
+`1.0.1`/`1.0.2`/`1.0.3`/`1.0.4`/`1.0.5` entries below are current and
+complete.
+
+## `v1.0.5` (2026-09-22)
+
+`rootguard-docker-proxy` joining `release-alpha.yml`'s own publish
+matrix (`#666`, fixing the repeatedly-stale-pin problem behind the
+`1.0.3`/`1.0.4` emergency fixes) immediately paid for itself: this
+release's own `smoke-test` was the *first* one to ever actually exercise
+a fresh docker-proxy candidate build rather than silently falling back to
+the old default pin, and this release's `upgrade-test` was the first to
+ever get far enough into a real core/webapp self-update to reach the
+container-recreate step at all - surfacing a real bug immediately.
+
+- **Fixed**: `POST /containers/{id}/rename` was entirely missing from
+  docker-proxy's allowlist. `docker compose ... up -d --no-deps <service>`
+  renames the outgoing container out of the way before creating and
+  starting the replacement - this silently blocked **every real
+  core/webapp self-update through docker-proxy since it became sole
+  socket holder**, never caught before because every earlier
+  upgrade-test attempt failed at an earlier point in the same test
+  ([#683](https://github.com/foxly-it/rootguard/issues/683), fixed by
+  [#684](https://github.com/foxly-it/rootguard/pull/684)). Live-verified
+  on the `.7` test host before merging: built the fix from source,
+  swapped the running docker-proxy container to it in place, and ran the
+  exact real recreate command the Updater issues - completed cleanly,
+  confirmed no rejections logged.
+- **Process note**: `upgrade-test` was bypassed for this release too, a
+  third time (`1.0.3`, `1.0.4`, now `1.0.5`), each for a different,
+  genuinely new docker-proxy gap. This is structurally unavoidable for a
+  *newly discovered* docker-proxy fix specifically: the test deploys the
+  previous release exactly as it shipped, and a fix can never have
+  shipped in the release before the one that introduces it - the very
+  next release after any such fix will fail this test once, no matter
+  how many retries. Reverted immediately after this release, same as the
+  prior two times.
+- **No action required** for existing installations beyond what
+  `1.0.4`'s entry already documents - the same manual
+  `docker compose pull docker-proxy && docker compose up -d docker-proxy`
+  picks up this release's rename fix too.
 
 ## `v1.0.4` (2026-09-22)
 
