@@ -8,16 +8,57 @@ the security-review finding/fix journal.
 
 ## Release status
 
-`v1.0.3` is the current public release, published with digest-pinned
-`amd64`/`arm64` images for all seven RootGuard components. All milestones
-through `1.0.0` are complete and verified - see `ROADMAP.md` for the
-closing checklist.
+`v1.0.4` is the current public release, published with digest-pinned
+`amd64`/`arm64` images for six of the seven RootGuard components.
+`rootguard-docker-proxy` is still not part of `release-alpha.yml`'s own
+publish matrix (`#666`) and stays on a manually-maintained pin - that pin
+has itself gone stale twice already (see the `1.0.3`/`1.0.4` entries
+below), which is why fixing `#666` is the very next piece of work, not a
+standing exception. All milestones through `1.0.0` are complete and
+verified - see `ROADMAP.md` for the closing checklist.
 
 **Entries below stop being consistently maintained somewhere before
 `1.0.0` shipped** (a lot of real work landed in between that was never
 backfilled here - `CHANGELOG.md` and `git log` are the authoritative
-record for that window, not this narrative). The `1.0.1`/`1.0.2`/`1.0.3`
-entries below are current and complete.
+record for that window, not this narrative). The
+`1.0.1`/`1.0.2`/`1.0.3`/`1.0.4` entries below are current and complete.
+
+## `v1.0.4` (2026-09-22)
+
+Another same-window follow-up, this time for a real, live-found bug
+report rather than a release-pipeline gap: the user's own manual install
+scenario on a fresh `1.0.3` immediately hit a broken "Logs & Diagnose"
+feature.
+
+- **Fixed**: `GET /containers/{id}/logs` was never added to
+  `rootguard-docker-proxy`'s allowlist at all - every per-service log
+  view in the WebGUI returned a bare 500 since docker-proxy became sole
+  socket holder. Found live, root-caused, and fixed the same session
+  ([#674](https://github.com/foxly-it/rootguard/issues/674), fixed by
+  [#675](https://github.com/foxly-it/rootguard/pull/675)). A systematic
+  cross-check of every real `docker`/`docker compose` subcommand Core/the
+  Updater issue against the allowlist found no other gaps.
+- **Fixed (again)**: fixing the logs gap exposed that the `1.0.3` docker-
+  proxy pin bump ([#667](https://github.com/foxly-it/rootguard/pull/667))
+  never actually included `#669`'s own compose-file-bind fix - the pin
+  was bumped once cutting `1.0.2`, but the very next docker-proxy PR
+  changed the source without also re-bumping it, so that fix was built
+  and merged but never deployed either
+  ([#676](https://github.com/foxly-it/rootguard/issues/676), fixed by
+  [#677](https://github.com/foxly-it/rootguard/pull/677)). This is the
+  same root cause as `1.0.3`'s own emergency fix, recurring for the same
+  reason (`#666` - docker-proxy still outside the real release pipeline)
+  - tracked to actually be closed as the next piece of work, not just
+  documented again.
+- **Process note**: `upgrade-test` was bypassed for this release too,
+  for the same reason as `1.0.3` - it deploys `1.0.3` exactly as it
+  shipped, and `1.0.3`'s own pin was the stale one being fixed. Reverted
+  immediately after this release, same as last time.
+- **No action beyond `1.0.3`'s own required step** for existing
+  1.0.1/1.0.2/1.0.3 installations - the same manual
+  `docker compose pull docker-proxy && docker compose up -d docker-proxy`
+  already documented there also picks up this release's logs fix, since
+  it pulls whatever the current `compose.release.yaml` pin points at.
 
 ## `v1.0.3` (2026-09-21)
 
