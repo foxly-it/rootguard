@@ -13,6 +13,18 @@ still ahead.
 
 - Revert the temporary 1.0.3 upgrade-test bypass ([#672](https://github.com/foxly-it/rootguard/pull/672))
 - Allow GET /containers/{id}/logs, fixes Logs & Diagnose ([#675](https://github.com/foxly-it/rootguard/pull/675))
+- Re-bump docker-proxy pin, PR #669's fix was never deployed ([#677](https://github.com/foxly-it/rootguard/pull/677))
+
+## [1.0.4] - 2026-09-22
+
+### Documentation
+
+- Post-1.0.3 cleanup - dedupe CHANGELOG.md, refresh ROADMAP/project-state ([#673](https://github.com/foxly-it/rootguard/pull/673))
+
+### Other
+
+- Revert the temporary 1.0.3 upgrade-test bypass ([#672](https://github.com/foxly-it/rootguard/pull/672))
+- Allow GET /containers/{id}/logs, fixes Logs & Diagnose ([#675](https://github.com/foxly-it/rootguard/pull/675))
 
 ## [1.0.3] - 2026-09-21
 
