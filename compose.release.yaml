@@ -51,23 +51,12 @@ services:
   # attestation-proxy, this only ever dials the local socket, never the
   # internet, so it stays off `egress` entirely.
   docker-proxy:
-    # Manual pin, not update-alpha-pins - this component is still not
-    # part of release-alpha.yml's own publish matrix (#666), so nothing
-    # automatically refreshes this the way every other component's pin is
-    # refreshed at each real release cut.
-    #
-    # THIS EXACT MISTAKE HAS ALREADY HAPPENED TWICE - found cutting 1.0.2
-    # (pin was 3 days stale, missing #646/#655), then found AGAIN cutting
-    # 1.0.4 (the 1.0.2 fix bumped the pin, but the very next docker-proxy
-    # PR - #669 - changed validate.go without also re-bumping this line,
-    # so the fix it shipped was never actually deployed either, for the
-    # exact same reason). If you are changing anything under
-    # rootguard-docker-proxy/, you MUST update this pin (and the matching
-    # line in .env.release.example) to the image GHCR just built from your
-    # merge commit in the SAME change - not a follow-up, not "someone will
-    # catch it in review". Verify with:
-    #   gh api "/users/foxly-it/packages/container/rootguard-docker-proxy/versions?per_page=1" \
-    #     -q '.[] | select(.metadata.container.tags[]?=="latest") | .name'
+    # Bootstrap pin: this component just joined release-alpha.yml's own
+    # publish matrix (#666) - before this, nothing automatically refreshed
+    # this pin, which went stale twice (1.0.2, then again 1.0.4; see
+    # docs/release-history.md for both). Gets superseded by
+    # update-alpha-pins' own real digest the moment the next real release
+    # promotes it, same as every other component's own first-ever pin.
     image: "${ROOTGUARD_DOCKER_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-docker-proxy:sha-d5d5a9e@sha256:35c3e150174bb52337853fad15fd36de38fcefd20f0d65c2e5e43b9c1450d47e}"
     container_name: rootguard-docker-proxy
     restart: unless-stopped
