@@ -1430,6 +1430,18 @@ jobs:
             fi
             code="${body##*$'\n'}"
             body="${body%$'\n'*}"
+            # A 502/503/504 here means the WebApp itself answered but its
+            # own reverse proxy to Core failed - exactly expected while
+            # this very request's target (core) is mid-recreation, the
+            # same transient window the curl-level-failure branch above
+            # already tolerates, just surfacing one layer higher in the
+            # stack. Found live cutting 1.0.5: only the curl-level case
+            # was tolerated, so this class of failure - WebApp reachable,
+            # Core briefly not - hard-failed the whole job instead of
+            # retrying like every other transient condition here does.
+            case "$code" in
+              502|503|504) return 0 ;;
+            esac
             if [ "${code:0:1}" != 2 ]; then
               echo "::error::GET /api/control-plane-updates returned HTTP ${code}: ${body}" >&2
               exit 1
