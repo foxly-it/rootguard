@@ -11,6 +11,16 @@ still ahead.
 - Add rootguard-docker-proxy to the real release pipeline ([#680](https://github.com/foxly-it/rootguard/pull/680))
 - Tolerate WebApp's own 502 during the core/webapp swap ([#682](https://github.com/foxly-it/rootguard/pull/682))
 - Allow POST /containers/{id}/rename ([#684](https://github.com/foxly-it/rootguard/pull/684))
+- TEMPORARY bypass of upgrade-test gate for 1.0.5 only ([#685](https://github.com/foxly-it/rootguard/pull/685))
+
+## [1.0.5] - 2026-09-22
+
+### Other
+
+- Revert the temporary 1.0.4 upgrade-test bypass ([#679](https://github.com/foxly-it/rootguard/pull/679))
+- Add rootguard-docker-proxy to the real release pipeline ([#680](https://github.com/foxly-it/rootguard/pull/680))
+- Tolerate WebApp's own 502 during the core/webapp swap ([#682](https://github.com/foxly-it/rootguard/pull/682))
+- Allow POST /containers/{id}/rename ([#684](https://github.com/foxly-it/rootguard/pull/684))
 
 ## [1.0.5] - 2026-09-22
 
