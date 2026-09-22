@@ -92,6 +92,7 @@ func TestAllowedCalls(t *testing.T) {
 		{"service logs", "GET", "/containers/rootguard-webapp/logs?stdout=1&stderr=1&tail=100&since=1758000000", ""},
 		{"restart", "POST", "/containers/rootguard-unbound/restart", ""},
 		{"stop", "POST", "/containers/rootguard-adguard/stop", ""},
+		{"rename, compose's own recreate choreography", "POST", "/containers/abc123/rename?name=rootguard-core_old_a1b2c3", ""},
 		{"container create", "POST", "/containers/create", validContainerCreate},
 		{"container start", "POST", "/containers/abc123/start", ""},
 		{"container wait", "POST", "/containers/abc123/wait", ""},
