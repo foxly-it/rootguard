@@ -89,6 +89,7 @@ func TestAllowedCalls(t *testing.T) {
 		{"cp out", "GET", "/containers/rootguard-adguard/archive?path=%2Fopt%2Fadguardhome%2Fconf", ""},
 		{"cp preflight", "HEAD", "/containers/rootguard-adguard/archive?path=%2Fopt%2Fadguardhome%2Fconf", ""},
 		{"cp in", "PUT", "/containers/rootguard-adguard/archive?path=%2Fopt%2Fadguardhome%2Fconf", ""},
+		{"service logs", "GET", "/containers/rootguard-webapp/logs?stdout=1&stderr=1&tail=100&since=1758000000", ""},
 		{"restart", "POST", "/containers/rootguard-unbound/restart", ""},
 		{"stop", "POST", "/containers/rootguard-adguard/stop", ""},
 		{"container create", "POST", "/containers/create", validContainerCreate},
@@ -188,7 +189,6 @@ func TestRejectedCalls(t *testing.T) {
 		{"attach with stdin", "POST", "/containers/abc/attach?stdin=1&stdout=1", ""},
 		{"attach with a capitalized truthy stdin", "POST", "/containers/abc/attach?stdin=True&stdout=1", ""},
 		{"attach with a non-numeric truthy stdin", "POST", "/containers/abc/attach?stdin=yes&stdout=1", ""},
-		{"logs", "GET", "/containers/abc/logs", ""},
 
 		{"privileged container", "POST", "/containers/create",
 			`{"Image":"ghcr.io/foxly-it/rootguard-unbound","HostConfig":{"Privileged":true}}`},
