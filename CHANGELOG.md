@@ -3,6 +3,13 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.5] - 2026-09-22
+
+### Other
+
+- Revert the temporary 1.0.4 upgrade-test bypass ([#679](https://github.com/foxly-it/rootguard/pull/679))
+- Add rootguard-docker-proxy to the real release pipeline ([#680](https://github.com/foxly-it/rootguard/pull/680))
+
 ## [1.0.4] - 2026-09-22
 
 ### Documentation
