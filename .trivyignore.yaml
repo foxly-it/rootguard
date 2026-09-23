@@ -460,6 +460,21 @@ vulnerabilities:
       live). Use-after-free from missing handler call-depth tracking
       with custom encoding callbacks - same package, same reasoning as
       CVE-2026-66046's identical statement above.
+  # Found live, 2026-09-23 (scheduled ci-unbound.yml run on main, no code
+  # change involved, #687). Unfixed in bookworm/trixie/forky, fixed only
+  # in sid at 2.8.4-2 (Debian Security Tracker, confirmed live) - no
+  # trixie version exists to pin to. Unbound links libexpat solely for
+  # unbound-anchor's root-anchors.xml parsing, which this image never
+  # runs: the trust anchor is seeded from dns-root-data's root.key by
+  # docker-entrypoint.sh and kept current via RFC 5011
+  # auto-trust-anchor-file, neither of which involves XML.
+  - id: CVE-2026-93990
+    purls: ["pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Unfixed in trixie (confirmed live), fix only in sid. XML injection
+      via unvalidated UTF-16 surrogates; only unbound-anchor parses XML
+      and this image never invokes it - see the comment above.
   - id: CVE-2026-6653
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
     expired_at: 2026-11-30
