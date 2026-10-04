@@ -475,6 +475,18 @@ vulnerabilities:
       Unfixed in trixie (confirmed live), fix only in sid. XML injection
       via unvalidated UTF-16 surrogates; only unbound-anchor parses XML
       and this image never invokes it - see the comment above.
+  # Found live, 2026-10-04 (#694): WebApp's distroless base-debian12 ships
+  # libssl3 3.0.20-1~deb12u2, unfixed in bookworm (Debian Security Tracker,
+  # confirmed live; fixed only in trixie/sid). rootguard-webapp is built
+  # with CGO_ENABLED=0 - a static Go binary that never loads libssl3 and
+  # does TLS via Go's own crypto/tls - and nothing in the image uses DTLS.
+  - id: CVE-2026-84782
+    purls: ["pkg:deb/debian/libssl3@3.0.20-1~deb12u2"]
+    expired_at: 2026-11-30
+    statement: >-
+      OpenSSL DTLS retransmission out-of-bounds read, unfixed in bookworm.
+      Unreachable: the static (CGO_ENABLED=0) WebApp binary never loads
+      libssl3 - see the comment above.
   - id: CVE-2026-6653
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
     expired_at: 2026-11-30

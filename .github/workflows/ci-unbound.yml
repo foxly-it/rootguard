@@ -277,7 +277,10 @@ jobs:
     name: Build and push multi-arch image
     needs: [test, scenario-tests, detect-unbound-changes]
     if: always() && needs.test.result == 'success' && needs.scenario-tests.result == 'success' && (github.event_name != 'pull_request' || needs.detect-unbound-changes.outputs.changed == 'true')
-    timeout-minutes: 20
+    # Found live, 2026-10-04 (#690): any change to the builder stage's apt
+    # pins invalidates the gha cache, so arm64 recompiles Unbound under QEMU
+    # emulation from scratch - that alone overran the previous 20 minutes.
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     permissions:
       contents: read

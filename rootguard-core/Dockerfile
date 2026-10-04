@@ -83,9 +83,15 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     (both "Expat through 2.8.3" DoS), fixed in 2.8.4-r0 - already
 #     published on Alpine 3.24's own `main` repo (confirmed live). Same
 #     stopgap pattern as the rest of this block.
+#   - Found live, 2026-10-04 (#692): the mirror dropped 3.5.8-r0/2.8.4-r0
+#     for 3.5.9-r0/2.8.5-r0 (libexpat 2.8.5 also fixes CVE-2026-93990),
+#     breaking `apk add` outright. Bumped to what `apk policy` reports
+#     installable against this digest. pcre2 (pulled in by the base's git)
+#     newly pinned at 10.49-r0 for 4 HIGH CVEs (CVE-2026-86145/-89157/
+#     -89161/-103111), fixable instead of suppressed.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.8-r0 libcrypto3=3.5.8-r0 libexpat=2.8.4-r0 \
+        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.8.5-r0 pcre2=10.49-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 

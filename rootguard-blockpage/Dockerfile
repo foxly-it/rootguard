@@ -56,16 +56,24 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # The Alpine 3.23 mirror is evidently mid-rollout today specifically;
 # confirmed live that every other package is still exactly where round
 # 16 left it.
+#
+# Found live, 2026-10-04 (#692): libssl3/libcrypto3 3.5.8-r0 -> 3.5.9-r0
+# and libexpat 2.8.4-r0 -> 2.8.5-r0 (also fixes CVE-2026-93990), same
+# "unable to select packages" break, same fix as Core/Updater. `apk
+# policy` against the pinned base confirms every other pin is current.
+# pcre2 (nginx's own regex dependency) newly pinned at 10.49-r0 for the
+# same 4 HIGH CVEs trivy found in Core/Updater's base.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.8-r0 \
         curl=8.22.0-r0 \
         libcurl=8.22.0-r0 \
-        libcrypto3=3.5.8-r0 \
-        libssl3=3.5.8-r0 \
-        libexpat=2.8.4-r0 \
+        libcrypto3=3.5.9-r0 \
+        libssl3=3.5.9-r0 \
+        libexpat=2.8.5-r0 \
         libuuid=2.41.6-r1 \
         libxml2=2.13.9-r1 \
-        nghttp2-libs=1.69.0-r0
+        nghttp2-libs=1.69.0-r0 \
+        pcre2=10.49-r0
 
 RUN rm -f /etc/nginx/conf.d/default.conf
 # Deliberately NOT under /etc/nginx/templates/: the stock image's own
