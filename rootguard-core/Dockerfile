@@ -25,7 +25,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /rootguard-core ./cmd/r
 # one - see its identical comment.
 FROM ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 AS cosign
 
-FROM docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe
+FROM docker:29-cli@sha256:1a4c7cb63513f349bdad01fcc6e0f3f2f67d37b9da86f14dc0d4a0942eecda00
 
 ARG VERSION=dev
 ARG COMMIT=unknown
@@ -42,10 +42,10 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 # unpinned (a real reproducible-builds gap - the exact package version
 # fetched could drift between two builds of the same commit). Verified
 # against the upstream docker-library/docker source, correlated to this
-# exact pinned digest's own build date (2026-08-10, via `docker buildx
+# exact pinned digest's own build date (2026-10-09, via `docker buildx
 # imagetools inspect`) rather than that source's current HEAD - a
 # follow-up review correctly caught that the two can disagree - that
-# docker:29-cli already bundles docker compose (v5.4.0 as of this
+# docker:29-cli already bundles docker compose (v5.6.0 as of this
 # digest) as a CLI plugin at
 # /usr/local/libexec/docker/cli-plugins/docker-compose - one of Docker
 # CLI's standard plugin search paths, and exactly where `docker compose
@@ -89,9 +89,13 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     installable against this digest. pcre2 (pulled in by the base's git)
 #     newly pinned at 10.49-r0 for 4 HIGH CVEs (CVE-2026-86145/-89157/
 #     -89161/-103111), fixable instead of suppressed.
+#   - #703, 2026-10-09: digest bumped to the build shipping Docker CLI
+#     29.9.0 (Go 1.26.9), compose 5.6.0 and Alpine 3.24.2. That base
+#     already carries libexpat 2.8.5-r0 and pcre2 10.49-r0, so both pins
+#     are gone; it still ships OpenSSL 3.5.8-r0, so that pin stays.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.8.5-r0 pcre2=10.49-r0 \
+        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 

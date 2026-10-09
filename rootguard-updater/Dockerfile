@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /rootguard-updater .
 # plus a real signature-verification-bypass fix in v3.1.3).
 FROM ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 AS cosign
 
-FROM docker:29-cli@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe
+FROM docker:29-cli@sha256:1a4c7cb63513f349bdad01fcc6e0f3f2f67d37b9da86f14dc0d4a0942eecda00
 
 ARG VERSION=dev
 ARG COMMIT=unknown
@@ -41,11 +41,11 @@ LABEL org.opencontainers.image.title="RootGuard Updater" \
 # the full CVE-2026-14456 and unused-buildx-plugin rationale - this exact
 # pinned digest is the same one Core uses, so both stopgaps apply here
 # too. OpenSSH is removed because RootGuard never uses ssh:// Docker
-# contexts; libexpat retains its CVE-2026-66046/CVE-2026-76641 stopgap
-# (bumped with Core to 3.5.9-r0/2.8.5-r0, plus pcre2 10.49-r0, #692).
+# contexts. Since the #703 digest bump only the OpenSSL pin remains - the
+# base itself now ships the fixed libexpat and pcre2.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.8.5-r0 pcre2=10.49-r0 \
+        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx
 
 COPY --from=builder /rootguard-updater /usr/local/bin/rootguard-updater

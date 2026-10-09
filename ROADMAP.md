@@ -54,6 +54,14 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Bump Core/Updater's `docker:29-cli` base
+      ([#703](https://github.com/foxly-it/rootguard/issues/703)) to the
+      2026-10-09 build: Docker CLI 29.9.0 (Go 1.26.9), compose 5.6.0,
+      Alpine 3.24.2. The docker binary now has no scanner findings, compose
+      none of its older ones; the libexpat/pcre2 stopgap pins and 5
+      compose-only suppressions are gone, the rest narrowed to cosign.
+      Still open upstream: cosign v3.1.3 (Go 1.26.4) and compose 5.6.0
+      (Go 1.26.8) carry Go 1.26.9 fixes trivy hasn't rated yet.
 - [x] Run CI on `debian-pin-freshness.yml`'s bot PRs
       ([#697](https://github.com/foxly-it/rootguard/issues/697)) - the
       push/PR step now uses an optional, dedicated `PIN_REFRESH_TOKEN`
