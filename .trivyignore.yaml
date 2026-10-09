@@ -495,6 +495,14 @@ vulnerabilities:
       Unfixed in trixie (confirmed live), fix only in sid. XML injection
       via unvalidated UTF-16 surrogates; only unbound-anchor parses XML
       and this image never invokes it - see the comment above.
+  - id: CVE-2026-77214
+    purls: ["pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Found live 2026-10-09 (#700). Unfixed in trixie/trixie-security
+      (confirmed live), fixed only in sid at 2.9.0-1. Heap over-read in
+      XML_ParseBuffer - same reachability as CVE-2026-93990 above: only
+      unbound-anchor parses XML and this image never invokes it.
   # Found live, 2026-10-04 (#694): WebApp's distroless base-debian12 ships
   # libssl3 3.0.20-1~deb12u2, unfixed in bookworm (Debian Security Tracker,
   # confirmed live; fixed only in trixie/sid). rootguard-webapp is built
