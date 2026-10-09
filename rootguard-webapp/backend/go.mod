@@ -1,3 +1,3 @@
 module github.com/foxly-it/rootguard-webapp/backend
 
-go 1.26.8
+go 1.26.9

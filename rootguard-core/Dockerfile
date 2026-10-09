@@ -3,7 +3,7 @@
 # between them, and a compromised/re-pushed upstream tag would be pulled
 # without any change to this file. Same reasoning already applied to
 # cosign below and to rootguard-unbound/rootguard-blockpage's base images.
-FROM golang:1.26-alpine@sha256:ce864e7223ac17b1775e6fd0b4c0db580c2eb50e7953a427916379e4b92a1628 AS builder
+FROM golang:1.26-alpine@sha256:c95332c2af86b6d89b91bd0500f4b9529ccbd090a0d1855c6d1ceaa142ae8615 AS builder
 
 WORKDIR /src
 COPY go.mod go.sum ./

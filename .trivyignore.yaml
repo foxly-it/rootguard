@@ -319,6 +319,44 @@ vulnerabilities:
       the bundled compose plugin contains the affected x/crypto version,
       but RootGuard connects it only to the local Docker socket and never
       invokes the vulnerable SSH server-side NewServerConn path.
+  # Found live, 2026-10-09 (#699): Go 1.26.9's net/http fix. RootGuard's own
+  # binaries now build with 1.26.9; these three bundled upstream binaries
+  # can't be rebuilt here - cosign v3.1.3 is still the newest release, and
+  # even the newest docker:29-cli build ships compose on Go 1.26.8 (#703
+  # tracks that base bump). All three run as short-lived HTTP clients only
+  # (cosign via the attestation proxy, docker/compose against the internal
+  # docker-proxy), never as an HTTP server.
+  - id: CVE-2026-78667
+    purls:
+      - "pkg:golang/stdlib@v1.26.4"
+      - "pkg:golang/stdlib@v1.26.5"
+    paths:
+      - "usr/local/bin/cosign"
+      - "usr/local/bin/docker"
+      - "usr/local/libexec/docker/cli-plugins/docker-compose"
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib net/http CVE baked into the upstream toolchain of the
+      bundled cosign/docker/compose binaries, used only as short-lived
+      HTTP clients - see the comment above.
+  # Same Go 1.26.9 release, surfaced by trivy's DB one day later (#699).
+  # docker/compose never speak TLS here (plain tcp://docker-proxy:2375);
+  # cosign's only TLS peers are the attestation proxy's fixed GitHub/
+  # Sigstore allowlist (ghcr.io, pkg-containers.githubusercontent.com,
+  # tuf-repo-cdn.sigstore.dev, api.github.com).
+  - id: CVE-2026-97031
+    purls:
+      - "pkg:golang/stdlib@v1.26.4"
+      - "pkg:golang/stdlib@v1.26.5"
+    paths:
+      - "usr/local/bin/cosign"
+      - "usr/local/bin/docker"
+      - "usr/local/libexec/docker/cli-plugins/docker-compose"
+    expired_at: 2026-11-30
+    statement: >-
+      Go stdlib crypto/tls CVE in the bundled upstream binaries' toolchain;
+      docker/compose use no TLS here and cosign only reaches the attestation
+      proxy's allowlisted hosts - see the comment above.
 
   # Found in review, round 14: Unbound's debian:13-slim-based image
   # wasn't scanned by any CI job at all until this round's own
@@ -475,6 +513,14 @@ vulnerabilities:
       Unfixed in trixie (confirmed live), fix only in sid. XML injection
       via unvalidated UTF-16 surrogates; only unbound-anchor parses XML
       and this image never invokes it - see the comment above.
+  - id: CVE-2026-77214
+    purls: ["pkg:deb/debian/libexpat1@2.8.3-1~deb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Found live 2026-10-09 (#700). Unfixed in trixie/trixie-security
+      (confirmed live), fixed only in sid at 2.9.0-1. Heap over-read in
+      XML_ParseBuffer - same reachability as CVE-2026-93990 above: only
+      unbound-anchor parses XML and this image never invokes it.
   # Found live, 2026-10-04 (#694): WebApp's distroless base-debian12 ships
   # libssl3 3.0.20-1~deb12u2, unfixed in bookworm (Debian Security Tracker,
   # confirmed live; fixed only in trixie/sid). rootguard-webapp is built
