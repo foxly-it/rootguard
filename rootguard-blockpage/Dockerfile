@@ -63,6 +63,9 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # policy` against the pinned base confirms every other pin is current.
 # pcre2 (nginx's own regex dependency) newly pinned at 10.49-r0 for the
 # same 4 HIGH CVEs trivy found in Core/Updater's base.
+#
+# Found live, 2026-10-09 (#701): tiff (via the base's libgd) newly pinned
+# at 4.7.2-r0 for CVE-2026-4775 (HIGH), fixable on Alpine 3.23's `main`.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.8-r0 \
         curl=8.22.0-r0 \
@@ -73,7 +76,8 @@ RUN apk add --no-cache --upgrade \
         libuuid=2.41.6-r1 \
         libxml2=2.13.9-r1 \
         nghttp2-libs=1.69.0-r0 \
-        pcre2=10.49-r0
+        pcre2=10.49-r0 \
+        tiff=4.7.2-r0
 
 RUN rm -f /etc/nginx/conf.d/default.conf
 # Deliberately NOT under /etc/nginx/templates/: the stock image's own
