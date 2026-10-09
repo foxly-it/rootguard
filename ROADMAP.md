@@ -54,6 +54,13 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [ ] Run CI on `debian-pin-freshness.yml`'s bot PRs
+      ([#697](https://github.com/foxly-it/rootguard/issues/697)) - the
+      push/PR step now uses an optional, dedicated `PIN_REFRESH_TOKEN`
+      instead of `GITHUB_TOKEN`, whose events never trigger workflows (#689
+      sat in `action_required` for days while main's Unbound CI was red).
+      Workflow change merged; stays unchecked until the secret exists and a
+      real drift PR has run its CI on its own.
 - [x] Add `rootguard-docker-proxy` to `release-alpha.yml`'s own publish
       matrix ([#666](https://github.com/foxly-it/rootguard/issues/666)) -
       found cutting `1.0.2`: this component was never added when it
