@@ -22,7 +22,7 @@ RUN apt-get update \
         curl=8.14.1-2+deb13u5 \
         libevent-dev=2.1.13-stable-1~deb13u1 \
         libexpat1-dev=2.8.3-1~deb13u1 \
-        libssl-dev=3.5.7-1~deb13u3 \
+        libssl-dev=3.5.7-1~deb13u2 \
         pkg-config=1.8.1-4 \
     && rm -rf /var/lib/apt/lists/*
 
