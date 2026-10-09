@@ -1523,7 +1523,13 @@ of just fixing them again, built prevention for each:
   drift, force-pushes a fix to one reused branch and opens or updates a PR
   - `ci-unbound.yml`'s own `pull_request` path filter already covers
   `rootguard-unbound/**`, so the real build tests the fix before anyone
-  merges it, same as any other PR.
+  merges it, same as any other PR. **That only holds with the
+  `PIN_REFRESH_TOKEN` repository secret set** (#697, fine-grained PAT,
+  this repo only, Contents + Pull requests: read and write): GitHub never
+  triggers workflows from `GITHUB_TOKEN` pushes or PRs, so without it the
+  workflow falls back to that token, warns, and every check on the PR sits
+  in `action_required` until approved by hand - exactly what happened to
+  #689 (2026-09-30 to 2026-10-04, superseded by #691).
 
 **2026-08-18, same day:** `site/docs.html`'s preflight step and "Port 53
 is already in use" FAQ entry only described the old `docker ps`-based
