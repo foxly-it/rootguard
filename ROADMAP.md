@@ -54,6 +54,14 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Move WebApp's runtime stage from `distroless/base-debian12` to
+      `distroless/static-debian12`
+      ([#695](https://github.com/foxly-it/rootguard/issues/695)) - the
+      binary is `CGO_ENABLED=0` and statically linked, so base's glibc,
+      libssl3 and OpenSSL were never loaded, only scanner surface
+      (CVE-2026-84782 needed a suppression for exactly that, #694). The
+      image now carries five OS packages (base-files, ca-certificates,
+      media-types, netbase, tzdata), and that suppression is gone.
 - [x] Add `rootguard-docker-proxy` to `release-alpha.yml`'s own publish
       matrix ([#666](https://github.com/foxly-it/rootguard/issues/666)) -
       found cutting `1.0.2`: this component was never added when it

@@ -35,7 +35,11 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH \
     -o rootguard-webapp \
     ./cmd/rootguard-webapp
 
-FROM gcr.io/distroless/base-debian12@sha256:62730825d3cf03571e0a1b8f014748de94d0404500f063593b614c23da38841d
+# static, not base (#695): the binary is CGO_ENABLED=0 and statically
+# linked, so base-debian12's glibc/libssl3/OpenSSL were never loaded - only
+# scanner surface (CVE-2026-84782 needed a suppression for exactly that).
+# static still ships CA certificates, tzdata and the nonroot user.
+FROM gcr.io/distroless/static-debian12@sha256:d75cdd72874d4790092fcb1b058493ecf6bb5bf2b2b897045b00ff01d91843f2
 
 # ARGs don't cross FROM boundaries - re-declared here (already used above
 # for stage 2's -X main.version/-X main.commit ldflags) so the same build
