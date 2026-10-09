@@ -34,6 +34,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The push token only reaches git push/gh below - never persisted
+          # in .git/config, and stripped from check-debian-pins.sh's env.
+          persist-credentials: false
 
       - name: Check pinned Debian packages
         id: check
@@ -61,14 +65,26 @@ jobs:
       # Reuses one deterministic branch, force-pushed, rather than opening
       # a new PR on every drifted run before a human gets to review the
       # last one - the same convention dependabot itself uses.
+      #
+      # Found live, 2026-10-04 (#697): pushes and PRs made with GITHUB_TOKEN
+      # never trigger workflows, so #689's checks all sat in
+      # `action_required` while main's Unbound CI stayed red. PIN_REFRESH_TOKEN
+      # (fine-grained PAT, this repo only, Contents + Pull requests: read and
+      # write) makes the PR's CI run. Deliberately not RELEASE_PAT: that one
+      # lacks Pull requests: write and is the admin-owned token for release
+      # pushes to main, which has no business in a daily cron job.
       - name: Apply the fix and open or update a PR
         if: steps.check.outputs.drift == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PIN_REFRESH_TOKEN || github.token }}
+          HAS_PIN_REFRESH_TOKEN: ${{ secrets.PIN_REFRESH_TOKEN != '' }}
           DRIFT_REPORT: ${{ steps.check.outputs.report }}
         run: |
           set -euo pipefail
-          ./scripts/check-debian-pins.sh --fix
+          if [ "$HAS_PIN_REFRESH_TOKEN" != "true" ]; then
+            echo "::warning::PIN_REFRESH_TOKEN is not set - falling back to GITHUB_TOKEN, so CI on the fix PR won't start until each workflow run is approved by hand"
+          fi
+          env -u GH_TOKEN ./scripts/check-debian-pins.sh --fix
           if git diff --quiet -- rootguard-unbound/Dockerfile; then
             echo "Repository changed while checking; no stale pins remain and no PR is needed"
             exit 0
@@ -79,11 +95,11 @@ jobs:
           git checkout -B "$branch"
           git add rootguard-unbound/Dockerfile
           git commit -m "chore(unbound): refresh drifted Debian package pins" -m "${DRIFT_REPORT}"
-          git push --force origin "$branch"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$branch"
           if gh pr view "$branch" --json state -q .state 2>/dev/null | grep -q OPEN; then
             echo "PR already open for $branch, force-push updated it"
           else
             gh pr create --title "chore(unbound): refresh drifted Debian package pins" \
-              --body "Opened automatically by the Debian pin freshness workflow - one or more exact-pinned package versions in \`rootguard-unbound/Dockerfile\` are no longer available from the live Debian repository (Debian only serves the latest point release of each package). \`Unbound CI\` runs on this PR automatically; merge once it's green." \
+              --body "Opened automatically by the Debian pin freshness workflow - one or more exact-pinned package versions in \`rootguard-unbound/Dockerfile\` are no longer available from the live Debian repository (Debian only serves the latest point release of each package). Merge once \`Unbound CI\` is green." \
               --head "$branch" --base main
           fi
