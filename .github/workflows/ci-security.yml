@@ -63,6 +63,8 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
       - name: Test image-scan argument handling
         run: ./scripts/ci/trivy-image-scan.test.sh
+      - name: Test local CI-equivalent scan helper
+        run: ./scripts/ci/scan-images.test.sh
       - name: Test Debian pin checker
         run: ./scripts/check-debian-pins.test.sh
       - name: Test suppression expiry checker
