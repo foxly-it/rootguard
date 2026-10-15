@@ -65,6 +65,8 @@ jobs:
         run: ./scripts/ci/trivy-image-scan.test.sh
       - name: Test Debian pin checker
         run: ./scripts/check-debian-pins.test.sh
+      - name: Test suppression expiry checker
+        run: ./scripts/ci/check-trivyignore-expiry.test.sh
       # Found in review: this used to be its own, simpler copy of
       # trivy-image-scan.sh's install logic - hardcoded amd64, and
       # reinstalled unconditionally instead of skipping an already-

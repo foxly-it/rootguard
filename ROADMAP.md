@@ -54,6 +54,12 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Warn ahead of expiring `.trivyignore.yaml` suppressions
+      ([#710](https://github.com/foxly-it/rootguard/issues/710)) - trivy
+      silently stops honoring an entry once `expired_at` passes, and 61 of
+      62 entries shared one date. `scripts/ci/check-trivyignore-expiry.sh`
+      plus the daily `trivyignore-expiry.yml` keep one tracking issue
+      current from 14 days ahead.
 - [x] Bump Core/Updater's `docker:29-cli` base
       ([#703](https://github.com/foxly-it/rootguard/issues/703)) to the
       2026-10-09 build: Docker CLI 29.9.0 (Go 1.26.9), compose 5.6.0,
