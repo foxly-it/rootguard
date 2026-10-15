@@ -54,6 +54,13 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Extend the daily pin-freshness bot to the Alpine `apk` pins in
+      Core, Updater and Blockpage
+      ([#712](https://github.com/foxly-it/rootguard/issues/712)) - those
+      broke CI by hand four times. `scripts/check-alpine-pins.sh` checks
+      each pin against `apk policy` inside the exact pinned base, and
+      `debian-pin-freshness.yml` (now "Package pin freshness") puts Debian
+      and Alpine fixes into one PR.
 - [x] Warn ahead of expiring `.trivyignore.yaml` suppressions
       ([#710](https://github.com/foxly-it/rootguard/issues/710)) - trivy
       silently stops honoring an entry once `expired_at` passes, and 61 of

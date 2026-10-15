@@ -1529,7 +1529,12 @@ of just fixing them again, built prevention for each:
   triggers workflows from `GITHUB_TOKEN` pushes or PRs, so without it the
   workflow falls back to that token, warns, and every check on the PR sits
   in `action_required` until approved by hand - exactly what happened to
-  #689 (2026-09-30 to 2026-10-04, superseded by #691).
+  #689 (2026-09-30 to 2026-10-04, superseded by #691). Since #712 the
+  same workflow (display name "Package pin freshness") also runs
+  `scripts/check-alpine-pins.sh` over the exact `apk add` pins in Core,
+  Updater and Blockpage - final-stage base resolved from `FROM` or its
+  `ARG` default, newest build read via `apk policy` inside that base -
+  and puts both checkers' fixes into the same PR.
 
 **2026-08-18, same day:** `site/docs.html`'s preflight step and "Port 53
 is already in use" FAQ entry only described the old `docker ps`-based
