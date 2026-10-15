@@ -270,6 +270,27 @@ vulnerabilities:
       Go stdlib crypto/tls CVE in the bundled upstream binaries' toolchain;
       docker/compose use no TLS here and cosign only reaches the attestation
       proxy's allowlisted hosts - see the comment above.
+  # Found live, 2026-10-14 (#709): trivy rated another Go 1.26.9 / x/net
+  # 0.60.0 fix HIGH - HTTP/2 DoS via excessive SETTINGS frames, both in
+  # x/net/http2 and Go's bundled net/http copy. Still no newer cosign
+  # (v3.1.3) or compose (5.6.0) release. compose speaks plain HTTP/1.1 to
+  # tcp://docker-proxy:2375 (no TLS, so no HTTP/2 negotiation); cosign's
+  # only HTTPS peers are the attestation proxy's allowlist above.
+  - id: CVE-2026-78669
+    purls:
+      - "pkg:golang/golang.org/x/net@v0.56.0"
+      - "pkg:golang/golang.org/x/net@v0.58.0"
+      - "pkg:golang/stdlib@v1.26.4"
+      - "pkg:golang/stdlib@v1.26.8"
+    paths:
+      - "usr/local/bin/cosign"
+      - "usr/local/libexec/docker/cli-plugins/docker-compose"
+    expired_at: 2026-11-30
+    statement: >-
+      HTTP/2 SETTINGS-flood DoS in the bundled cosign/compose binaries'
+      x/net and stdlib; compose never negotiates HTTP/2 here and cosign
+      only reaches allowlisted GitHub/Sigstore hosts - see the comment
+      above.
 
   # Found in review, round 14: Unbound's debian:13-slim-based image
   # wasn't scanned by any CI job at all until this round's own
