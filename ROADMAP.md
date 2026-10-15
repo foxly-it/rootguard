@@ -54,6 +54,13 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Local image scan that matches CI exactly
+      ([#714](https://github.com/foxly-it/rootguard/issues/714)) -
+      `scripts/ci/scan-images.sh [--preview] [component...]` builds the
+      images and scans them with the CI-pinned trivy (its digest-pinned
+      container image, so macOS and Linux run the same binary), the same
+      gate and ignore file, plus `trivy fs`. `--preview` lists UNKNOWN
+      findings, i.e. what is likely to turn CI red next.
 - [x] Extend the daily pin-freshness bot to the Alpine `apk` pins in
       Core, Updater and Blockpage
       ([#712](https://github.com/foxly-it/rootguard/issues/712)) - those
