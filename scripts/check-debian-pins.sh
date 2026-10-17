@@ -25,9 +25,10 @@ dockerfile="rootguard-unbound/Dockerfile"
 fix=0
 [[ "${1:-}" == "--fix" ]] && fix=1
 
-base_image="$(grep -oE 'DEBIAN_IMAGE="[^"]+"' "${dockerfile}" | head -1 | sed -E 's/DEBIAN_IMAGE="([^"]+)"/\1/')"
+# Runtime stage's base: the final literal FROM line.
+base_image="$(awk '/^FROM / {b=$2} END {print b}' "${dockerfile}")"
 if [[ -z "${base_image}" ]]; then
-  echo "Could not find DEBIAN_IMAGE in ${dockerfile}" >&2
+  echo "Could not find a FROM line in ${dockerfile}" >&2
   exit 1
 fi
 

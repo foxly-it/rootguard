@@ -54,6 +54,15 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Dependabot for every shipped ecosystem
+      ([#721](https://github.com/foxly-it/rootguard/issues/721)) - all five
+      Go modules, the webapp frontend's npm dependencies and the base image
+      digests of all seven component Dockerfiles now get weekly Dependabot
+      PRs (minor/patch/digest grouped per ecosystem, majors separate) with
+      a 3-day cooldown on version updates. Minor/major base image series
+      changes stay deliberate. Unbound and Blockpage use literal `FROM`
+      lines instead of `ARG` defaults, which Dependabot cannot resolve; the
+      apt/apk pin checks read the final `FROM` line.
 - [x] Decouple upstream vulnerability data from the PR gate
       ([#719](https://github.com/foxly-it/rootguard/issues/719)) - nearly
       every red PR between 2026-09-21 and 2026-10-16 was red only because

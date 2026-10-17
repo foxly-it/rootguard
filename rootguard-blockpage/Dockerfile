@@ -2,9 +2,7 @@
 # RootGuard Blockpage - static nginx image, no external assets
 ############################################################
 
-ARG NGINX_IMAGE="nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de"
-
-FROM ${NGINX_IMAGE}
+FROM nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
 
 ARG VERSION=dev
 ARG COMMIT=unknown

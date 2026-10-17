@@ -2,11 +2,11 @@
 # RootGuard Unbound - reproducible upstream build on Debian 13
 ############################################################
 
-ARG DEBIAN_IMAGE="debian:13-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd"
 ARG UNBOUND_VERSION="1.25.2"
 ARG UNBOUND_SHA256="0d92275c703d5f5f8baba3dab22117dd8c29b495588a5c229768ed6581566600"
 
-FROM ${DEBIAN_IMAGE} AS builder
+# Literal FROM lines (not an ARG) so Dependabot can bump the digest (#721).
+FROM debian:13-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd AS builder
 
 ARG UNBOUND_VERSION
 ARG UNBOUND_SHA256
@@ -53,7 +53,7 @@ RUN ./configure \
     && make DESTDIR=/out install \
     && /out/usr/sbin/unbound -V | grep -F "Version ${UNBOUND_VERSION}"
 
-FROM ${DEBIAN_IMAGE}
+FROM debian:13-slim@sha256:020c0d20b9880058cbe785a9db107156c3c75c2ac944a6aa7ab59f2add76a7bd
 
 ARG UNBOUND_VERSION
 ARG UNBOUND_SHA256

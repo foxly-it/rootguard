@@ -41,8 +41,7 @@ RUN apk add --no-cache \
     && true
 EOF
   cat >"$tmp/repo/b/Dockerfile" <<'EOF'
-ARG NGINX_IMAGE="nginx:1-alpine@sha256:nginx"
-FROM ${NGINX_IMAGE}
+FROM nginx:1-alpine@sha256:nginx
 RUN apk add --no-cache \
         tiff=4.7.2-r0
 EOF
