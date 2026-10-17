@@ -54,6 +54,16 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Decouple upstream vulnerability data from the PR gate
+      ([#719](https://github.com/foxly-it/rootguard/issues/719)) - nearly
+      every red PR between 2026-09-21 and 2026-10-16 was red only because
+      upstream rated a new CVE. `scripts/ci/pr-gate.sh` now makes image
+      scans, `npm audit`, govulncheck and `trivy fs` gate a PR only when
+      it touches what they cover (otherwise: warning annotation); push,
+      schedule and release runs always gate. The new nightly
+      `nightly-security.yml` runs the full set on `main` and keeps one
+      tracking issue open while anything fails. No job is skipped, so the
+      required checks are unchanged.
 - [x] Local image scan that matches CI exactly
       ([#714](https://github.com/foxly-it/rootguard/issues/714)) -
       `scripts/ci/scan-images.sh [--preview] [component...]` builds the

@@ -34,6 +34,8 @@ on:
 
 permissions:
   contents: read
+  # pr-gate.sh lists the PR's changed files (#719).
+  pull-requests: read
 
 # Found in review: repeated pushes to the same PR used to stack full runs
 # instead of superseding the stale one.
@@ -82,6 +84,9 @@ jobs:
       # closes.
       - name: Scan image for vulnerabilities
         run: ./scripts/ci/trivy-image-scan.sh rootguard-unbound:test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCAN_GATE_PATHS: rootguard-unbound/*
 
       - name: Validate Unbound configuration
         run: >-

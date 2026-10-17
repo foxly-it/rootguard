@@ -31,6 +31,8 @@ on:
 
 permissions:
   contents: read
+  # pr-gate.sh lists the PR's changed files (#719).
+  pull-requests: read
 
 # Found in review: repeated pushes to the same PR used to stack full runs
 # instead of superseding the stale one.
@@ -88,6 +90,9 @@ jobs:
       # built - see trivy-image-scan.sh's own header comment for the full
       # gap this closes.
       - run: ./scripts/ci/trivy-image-scan.sh rootguard-core:test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCAN_GATE_PATHS: rootguard-core/*
 
   # Exercises the pre-update snapshot/rollback path (Manager.backup,
   # Manager.rollback, and the SHA-256 checksum verification guarding it) and
