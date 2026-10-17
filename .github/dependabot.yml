@@ -1,13 +1,63 @@
 version: 2
+# Every ecosystem the repo ships (#721). Minor/patch/digest bumps are
+# grouped into one PR per ecosystem; majors stay separate PRs. The cooldown
+# keeps day-one releases (the window in which yanked or hijacked versions
+# are usually caught) out of version updates; security updates skip it.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 3
     groups:
       actions:
         patterns: ["*"]
+
   - package-ecosystem: gomod
-    directory: /rootguard-updater
+    directories:
+      - /rootguard-core
+      - /rootguard-updater
+      - /rootguard-webapp/backend
+      - /rootguard-attestation-proxy
+      - /rootguard-docker-proxy
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      go:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /rootguard-webapp/frontend
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    groups:
+      npm:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories:
+      - /rootguard-core
+      - /rootguard-updater
+      - /rootguard-webapp
+      - /rootguard-unbound
+      - /rootguard-blockpage
+      - /rootguard-attestation-proxy
+      - /rootguard-docker-proxy
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 3
+    # Digest refreshes and patch tags only: a new Go, Node, Debian, Alpine,
+    # nginx or Docker CLI series is a deliberate change (go.mod toolchain,
+    # apt/apk pins), not a weekly bump.
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major, version-update:semver-minor]
+    groups:
+      base-images:
+        patterns: ["*"]

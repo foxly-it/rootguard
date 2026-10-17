@@ -55,7 +55,8 @@ export PATH="$tmp_dir/bin:$PATH"
 
 write_fixture() {
   cat >"$tmp_dir/repo/rootguard-unbound/Dockerfile" <<'EOF'
-ARG DEBIAN_IMAGE="debian:13-slim@example"
+FROM debian:13-slim@example AS builder
+FROM debian:13-slim@example
 RUN apt-get install -y \
         ca-certificates=20250419 \
         curl=8.14.1-2+deb13u3 \

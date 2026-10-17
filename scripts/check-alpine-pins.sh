@@ -18,11 +18,8 @@ fix=0
 
 status=0
 for dockerfile in "$@"; do
-  # Final stage's base: a literal FROM, or ${VAR} resolved from its ARG default.
+  # Final stage's base: the last literal FROM line.
   base="$(awk '/^FROM / {b=$2} END {print b}' "${dockerfile}")"
-  if [[ "${base}" =~ ^\$\{([A-Z_]+)\}$ ]]; then
-    base="$(sed -nE "s/^ARG ${BASH_REMATCH[1]}=\"?([^\"]+)\"?$/\1/p" "${dockerfile}")"
-  fi
   mapfile -t pins < <(grep -vE '^[[:space:]]*#' "${dockerfile}" \
     | grep -oE '[a-z0-9][a-z0-9._+-]*=[0-9][A-Za-z0-9._+~]*-r[0-9]+' | sort -u)
   if [[ -z "${base}" || "${#pins[@]}" -eq 0 ]]; then
