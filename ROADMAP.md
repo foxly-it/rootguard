@@ -54,6 +54,14 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Bot PRs merge themselves once CI is green
+      ([#727](https://github.com/foxly-it/rootguard/issues/727)) - the pin
+      refresh workflow and the new `dependabot-auto-merge.yml` enable
+      squash auto-merge; semver-major Dependabot updates stay manual
+      (Docker is exempt from that check: only digest/patch updates are
+      configured, and fetch-metadata misreads digest bumps as major). Uses
+      `PIN_REFRESH_TOKEN` so the merge triggers main's CI; Dependabot runs
+      need it as a Dependabot secret too.
 - [x] Cache trivy's vulnerability DB across scan jobs
       ([#723](https://github.com/foxly-it/rootguard/issues/723)) - every
       scan job restores the newest DB (`.github/actions/trivy-db-cache`)

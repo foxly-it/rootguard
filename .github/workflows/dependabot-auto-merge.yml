@@ -1,0 +1,39 @@
+name: Dependabot auto-merge
+
+# Dependabot PRs merge themselves once every required check is green
+# (#727): grouped minor/patch/digest updates are verified by the same CI as
+# any other PR. Semver-major updates stay a manual decision.
+#
+# The merge is enabled with PIN_REFRESH_TOKEN so the merge commit is a
+# regular push that triggers main's CI - one performed via GITHUB_TOKEN
+# would not. Dependabot-triggered runs only see Dependabot secrets, so the
+# token has to be stored there too (Settings -> Secrets and variables ->
+# Dependabot); without it, GITHUB_TOKEN is the fallback.
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  enable:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      # docker: dependabot.yml already ignores minor/major tag bumps, so only
+      # digest and patch updates exist - and digest-only updates often carry
+      # no update-type, which fetch-metadata then derives from the short
+      # digests ("4973467" -> "78cd8de") as semver-major.
+      - if: >-
+          steps.metadata.outputs.package-ecosystem == 'docker'
+          || steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.PIN_REFRESH_TOKEN || github.token }}
+          PR: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr merge --auto --squash "$PR" \
+            || echo "::warning::Could not enable auto-merge - is \"Allow auto-merge\" enabled in the repository settings?"

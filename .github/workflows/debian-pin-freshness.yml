@@ -112,6 +112,9 @@ jobs:
             echo "PR already open for $branch, force-push updated it"
           else
             gh pr create --title "chore: refresh drifted package pins" \
-              --body "Opened automatically by the package pin freshness workflow - one or more exact-pinned Debian (\`rootguard-unbound\`) or Alpine (\`rootguard-core\`, \`rootguard-updater\`, \`rootguard-blockpage\`) package versions are no longer the newest build their pinned base image's repository serves; mirrors drop superseded builds, so the old pin stops installing. Merge once CI is green." \
+              --body "Opened automatically by the package pin freshness workflow - one or more exact-pinned Debian (\`rootguard-unbound\`) or Alpine (\`rootguard-core\`, \`rootguard-updater\`, \`rootguard-blockpage\`) package versions are no longer the newest build their pinned base image's repository serves; mirrors drop superseded builds, so the old pin stops installing. Auto-merge is enabled: it merges itself once CI is green." \
               --head "$branch" --base main
           fi
+          # Merges itself once CI is green (#727).
+          gh pr merge --auto --squash "$branch" \
+            || echo "::warning::Could not enable auto-merge - is \"Allow auto-merge\" enabled in the repository settings?"
