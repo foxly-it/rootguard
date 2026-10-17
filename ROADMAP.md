@@ -54,6 +54,17 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Test the documented upgrade path instead of bypassing the upgrade gate
+      ([#725](https://github.com/foxly-it/rootguard/issues/725)) -
+      `upgrade-test` was bypassed for 1.0.3, 1.0.4 and 1.0.5, each time for
+      a docker-proxy bug in the previous release that self-update can't fix
+      (#670). `scripts/ci/upgrade-prerequisites.txt` now lists the manual
+      step the release notes give operators per previous version; the test
+      performs it and then runs the unchanged self-update and checks.
+      Polling timeouts name the cause (last updater status, docker-proxy
+      rejections) instead of failing silently. Verified locally with the
+      workflow's own step scripts: 1.0.4 -> 1.0.5 fails without the step
+      (rename rejected) and succeeds with it.
 - [x] Stop compiling arm64 images under QEMU
       ([#736](https://github.com/foxly-it/rootguard/issues/736)) - Unbound's
       jobs shared one gha cache scope, so whichever amd64-only job finished

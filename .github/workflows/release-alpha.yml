@@ -1251,6 +1251,21 @@ jobs:
     permissions:
       contents: read
       packages: read
+    # Interpolation values for every docker compose call against the
+    # previous release's compose file below. No *_IMAGE overrides - that
+    # file already pins its own images by digest. Only the *_UPDATE_IMAGE
+    # pair points at the candidate image publish just built (not yet the
+    # final version tag - that doesn't exist until promotion, after this
+    # test passes), so the upgrade step has something real to move to.
+    env:
+      ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.candidate_tag }}
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.candidate_tag }}
+      ROOTGUARD_API_TOKEN: alpha-upgrade-test-token-not-a-real-secret-32
+      ROOTGUARD_ADMIN_USER: admin
+      ROOTGUARD_ADMIN_PASSWORD: alpha-upgrade-test-password
+      ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token-not-a-real-secret-32
+      ROOTGUARD_WEB_BIND: 127.0.0.1
+      ROOTGUARD_WEB_PORT: "18082"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -1362,21 +1377,6 @@ jobs:
 
       - name: Deploy the previous release exactly as it shipped
         if: steps.previous.outputs.skip != 'true'
-        env:
-          # No *_IMAGE overrides here - the previous release's own compose
-          # file already pins its own images by digest. Only the *_UPDATE_IMAGE
-          # pair is overridden, to the candidate image publish just built
-          # (not yet the final version tag - that doesn't exist until
-          # promotion, after this test passes), so the upgrade step below
-          # has something real to move to.
-          ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.candidate_tag }}
-          ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.candidate_tag }}
-          ROOTGUARD_API_TOKEN: alpha-upgrade-test-token-not-a-real-secret-32
-          ROOTGUARD_ADMIN_USER: admin
-          ROOTGUARD_ADMIN_PASSWORD: alpha-upgrade-test-password
-          ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token-not-a-real-secret-32
-          ROOTGUARD_WEB_BIND: 127.0.0.1
-          ROOTGUARD_WEB_PORT: "18082"
         run: docker compose -f compose.release.yaml up -d
 
       - name: Wait for WebApp
@@ -1423,10 +1423,55 @@ jobs:
         if: steps.previous.outputs.skip != 'true'
         run: test -n "$(dig +short +time=5 +tries=2 @127.0.0.1 -p 1055 good.rgtest-ci.internal A)"
 
+      # Replaces the temporary bypasses of this whole job (#671, #678,
+      # #685): when the previous release has a bug self-update can't fix -
+      # typically in docker-proxy, which has no self-update channel (#670) -
+      # its release notes tell operators to refresh that service by hand
+      # first. Do exactly that, then run the unchanged self-update and every
+      # check after it (#725).
+      - name: Apply the previous release's documented manual upgrade steps
+        if: steps.previous.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          previous="${{ steps.previous.outputs.version }}"
+          services="$(sed 's/#.*//' scripts/ci/upgrade-prerequisites.txt \
+            | awk -v v="$previous" '$1 == v { $1 = ""; print }')"
+          for service in $services; do
+            variable="ROOTGUARD_$(tr 'a-z-' 'A-Z_' <<<"$service")_IMAGE"
+            echo "::notice::Upgrading from ${previous}: refreshing ${service} by hand first, as its release notes instruct (scripts/ci/upgrade-prerequisites.txt)"
+            env "${variable}=ghcr.io/${{ github.repository_owner }}/rootguard-${service}:${{ needs.version.outputs.candidate_tag }}" \
+              docker compose -f compose.release.yaml up -d --no-deps --wait "$service"
+          done
+
       - name: Upgrade in place through the real control-plane updater
         if: steps.previous.outputs.skip != 'true'
         run: |
           set -euo pipefail
+          # Found cutting 1.0.5: a timeout here used to end in a bare
+          # `test`, failing with no message while the cause (docker-proxy
+          # rejecting compose's container rename, #683) sat unseen in the
+          # proxy's own log.
+          fail() {
+            echo "::error::$1" >&2
+            [ -n "${status:-}" ] && echo "$status"
+            docker logs rootguard-docker-proxy 2>&1 | grep -i rejected | tail -20 || true
+            exit 1
+          }
+          wait_idle() {
+            state="" status=""
+            # attempt is a retry-loop counter, never read in the body
+            # shellcheck disable=SC2034
+            for attempt in {1..90}; do
+              polled="$(poll_status)"
+              if [ -z "$polled" ]; then sleep 2; continue; fi
+              status="$polled"
+              state="$(jq -r .state <<<"$status")"
+              if [ "$state" = idle ]; then return 0; fi
+              if [ "$state" = failed ]; then fail "control-plane $1 failed"; fi
+              sleep 2
+            done
+            fail "control-plane $1 never returned to idle within ~3 minutes (last state: ${state:-WebApp unreachable})"
+          }
           poll_status() {
             local body code curl_status
             set +e
@@ -1496,18 +1541,7 @@ jobs:
             --header='Content-Type: application/json' \
             --post-data="$target_body" \
             http://updater:8082/api/control-plane/check >/dev/null
-          state=""
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..90}; do
-            status="$(poll_status)"
-            if [ -z "$status" ]; then sleep 2; continue; fi
-            state="$(jq -r .state <<<"$status")"
-            if [ "$state" = idle ]; then break; fi
-            if [ "$state" = failed ]; then echo "$status"; exit 1; fi
-            sleep 2
-          done
-          test "$state" = idle
+          wait_idle check
           docker exec rootguard-core wget -qO- \
             --header='Authorization: Bearer alpha-upgrade-test-token-not-a-real-secret-32' \
             --header='Content-Type: application/json' \
@@ -1516,20 +1550,10 @@ jobs:
           # The install swaps the Core and WebApp containers themselves, so
           # the WebApp is expected to be briefly unreachable mid-poll here -
           # unlike everywhere else in this step, that's not a failure.
-          state=""
-          # attempt is a retry-loop counter, never read in the body
-          # shellcheck disable=SC2034
-          for attempt in {1..90}; do
-            status="$(poll_status)"
-            if [ -z "$status" ]; then sleep 2; continue; fi
-            state="$(jq -r .state <<<"$status")"
-            if [ "$state" = idle ]; then break; fi
-            if [ "$state" = failed ]; then echo "$status"; exit 1; fi
-            sleep 2
-          done
-          test "$state" = idle
+          wait_idle update
           echo "$status"
-          echo "$status" | jq -r '.history[0].outcome' | grep -qx success || { echo "$status"; exit 1; }
+          jq -r '.history[0].outcome' <<<"$status" | grep -qx success \
+            || fail "control-plane update finished, but not with outcome success"
 
       - name: Verify the running images match the newly built candidate
         if: steps.previous.outputs.skip != 'true'
@@ -1593,26 +1617,8 @@ jobs:
 
       - name: Show logs after failure
         if: failure() && steps.previous.outputs.skip != 'true'
-        env:
-          ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.candidate_tag }}
-          ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.candidate_tag }}
-          ROOTGUARD_API_TOKEN: alpha-upgrade-test-token-not-a-real-secret-32
-          ROOTGUARD_ADMIN_USER: admin
-          ROOTGUARD_ADMIN_PASSWORD: alpha-upgrade-test-password
-          ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token-not-a-real-secret-32
-          ROOTGUARD_WEB_BIND: 127.0.0.1
-          ROOTGUARD_WEB_PORT: "18082"
         run: docker compose -f compose.release.yaml logs --no-color
 
       - name: Stop stack
         if: always() && steps.previous.outputs.skip != 'true'
-        env:
-          ROOTGUARD_CORE_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-core:${{ needs.version.outputs.candidate_tag }}
-          ROOTGUARD_WEBAPP_UPDATE_IMAGE: ghcr.io/${{ github.repository_owner }}/rootguard-webapp:${{ needs.version.outputs.candidate_tag }}
-          ROOTGUARD_API_TOKEN: alpha-upgrade-test-token-not-a-real-secret-32
-          ROOTGUARD_ADMIN_USER: admin
-          ROOTGUARD_ADMIN_PASSWORD: alpha-upgrade-test-password
-          ROOTGUARD_RECOVERY_TOKEN: alpha-upgrade-test-recovery-token-not-a-real-secret-32
-          ROOTGUARD_WEB_BIND: 127.0.0.1
-          ROOTGUARD_WEB_PORT: "18082"
         run: docker compose -f compose.release.yaml down --volumes

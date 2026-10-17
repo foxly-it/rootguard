@@ -120,6 +120,17 @@ changed in the release being tested - relying on it here would test the
 new release's ability to discover itself, not the upgrade path a real
 operator running the previous release would actually take.
 
+When the previous release has a bug that self-update can't fix - in
+practice docker-proxy, which has no self-update channel (#670), so a fix
+to it never reaches a running install on its own - its release notes give
+operators a manual step instead (refresh that one service by hand, against
+the real Docker socket). `scripts/ci/upgrade-prerequisites.txt` lists those
+steps per previous version, and `upgrade-test` performs them before the
+unchanged self-update and every check after it (#725). Add the entry in
+the same PR that writes the manual step into `docs/release-history.md`.
+This replaced the temporary per-release bypasses of the whole job (#671,
+#678, #685), which skipped exactly the path operators were told to take.
+
 ## What's deliberately not extracted (yet)
 
 The pin-update, compose-verification, and release-notes generation logic

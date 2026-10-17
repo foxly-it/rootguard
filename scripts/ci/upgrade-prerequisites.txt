@@ -1,0 +1,20 @@
+# Manual steps an operator upgrading FROM a given release must take before
+# the WebGUI self-update works - the same steps that release's upgrade
+# notes in docs/release-history.md give. release-alpha.yml's upgrade test
+# performs them, then runs the unchanged self-update and every check after
+# it, instead of a temporary bypass of the whole gate (#671, #678, #685;
+# replaced by this file in #725).
+#
+# Format: <previous version> <compose service>...  # <reason>
+# Each service is refreshed by hand to the candidate image with
+# `docker compose up -d --no-deps <service>` against the real Docker
+# socket, the way the release notes tell operators to. Typical case:
+# docker-proxy, which has no self-update channel (#670), so a fix to it
+# can never reach a running install through self-update.
+#
+# Add an entry in the PR that documents the manual step in the release
+# notes; the upgrade test only ever starts from the release directly
+# before the candidate, so older entries stay as a record.
+1.0.2 docker-proxy  # rejects the self-referential compose bind mount (#668, #670)
+1.0.3 docker-proxy  # stale docker-proxy pin (#666)
+1.0.4 docker-proxy  # rejects compose's container rename (#683)
