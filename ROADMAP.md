@@ -54,6 +54,14 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Stop compiling arm64 images under QEMU
+      ([#736](https://github.com/foxly-it/rootguard/issues/736)) - Unbound's
+      jobs shared one gha cache scope, so whichever amd64-only job finished
+      last hid the native `Test arm64` layers and build-push recompiled
+      Unbound under emulation (14-21 min on every base image or pin
+      change). Per-architecture scopes make that build a cache hit from the
+      native leg. The Go and Node builder stages run on the build platform
+      and cross-compile (`--platform=$BUILDPLATFORM`).
 - [x] Bot PRs merge themselves once CI is green
       ([#727](https://github.com/foxly-it/rootguard/issues/727)) - the pin
       refresh workflow and the new `dependabot-auto-merge.yml` enable
