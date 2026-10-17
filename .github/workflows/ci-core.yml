@@ -15,6 +15,7 @@ on:
       - "scripts/ci/install-trivy.sh"
       - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
+      - ".github/actions/trivy-db-cache/**"
   # No paths filter on pull_request, unlike push above - found in review:
   # this job ("Core unit tests") is a required branch-protection status
   # check. A PR that never touches rootguard-core/** used to never
@@ -86,6 +87,7 @@ jobs:
       # dedicated push job, so a future one would share this cache too.
       - working-directory: rootguard-core
         run: docker buildx build --load --cache-from type=gha,scope=core --cache-to type=gha,mode=max,scope=core -t rootguard-core:test .
+      - uses: ./.github/actions/trivy-db-cache
       # Found in review: nothing ever scanned the image this step just
       # built - see trivy-image-scan.sh's own header comment for the full
       # gap this closes.

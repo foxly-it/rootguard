@@ -4,9 +4,9 @@
 # and 2026-10-16 nearly every red PR was red for that reason alone. So a
 # scan gates on push, schedule, dispatch and release runs, but on a pull
 # request only when the PR touches what the scan covers: the given globs,
-# .trivyignore.yaml, scripts/ci/*, or the calling workflow file. Otherwise
-# the caller reports findings without failing; main's push and nightly
-# scans still gate on them.
+# .trivyignore.yaml, scripts/ci/*, the trivy DB cache action, or the
+# calling workflow file. Otherwise the caller reports findings without
+# failing; main's push and nightly scans still gate on them.
 #
 # Usage: pr-gate.sh <glob>...   (globs relative to the repository root)
 # Exit codes: 0 = gate, 1 = report only. Any doubt (e.g. the changed-file
@@ -26,7 +26,7 @@ if ! changed="$(gh pr diff "${pr}" --name-only --repo "${GITHUB_REPOSITORY}" 2>/
   exit 0
 fi
 
-patterns=("$@" ".trivyignore.yaml" "scripts/ci/*" "${workflow}")
+patterns=("$@" ".trivyignore.yaml" "scripts/ci/*" ".github/actions/trivy-db-cache/*" "${workflow}")
 while read -r file; do
   for pattern in "${patterns[@]}"; do
     # shellcheck disable=SC2053 # unquoted on purpose: glob match

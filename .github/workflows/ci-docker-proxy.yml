@@ -11,6 +11,7 @@ on:
       - "scripts/ci/install-trivy.sh"
       - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
+      - ".github/actions/trivy-db-cache/**"
   # No paths filter on pull_request - see ci-core.yml's identical
   # comment for the full rationale: a required branch-protection status
   # check must run on every PR, not just ones that happen to touch this
@@ -62,6 +63,7 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - working-directory: rootguard-docker-proxy
         run: docker buildx build --load --cache-from type=gha,scope=docker-proxy --cache-to type=gha,mode=max,scope=docker-proxy -t rootguard-docker-proxy:test .
+      - uses: ./.github/actions/trivy-db-cache
       - run: ./scripts/ci/trivy-image-scan.sh rootguard-docker-proxy:test
         env:
           GH_TOKEN: ${{ github.token }}

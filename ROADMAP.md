@@ -54,6 +54,14 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Cache trivy's vulnerability DB across scan jobs
+      ([#723](https://github.com/foxly-it/rootguard/issues/723)) - every
+      scan job restores the newest DB (`.github/actions/trivy-db-cache`)
+      instead of downloading ~128 MB from the registry; trivy still
+      refreshes it once the DB's `NextUpdate` has passed, so results are
+      never staler than with a fresh download. `nightly-security.yml` is
+      the only writer and keeps a single entry, so the DB doesn't evict the
+      buildx layer caches from the 10 GB Actions cache.
 - [x] Dependabot for every shipped ecosystem
       ([#721](https://github.com/foxly-it/rootguard/issues/721)) - all five
       Go modules, the webapp frontend's npm dependencies and the base image

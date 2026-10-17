@@ -434,6 +434,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: ./.github/actions/trivy-db-cache
       - name: Scan candidate image for vulnerabilities
         run: >-
           ./scripts/ci/trivy-image-scan.sh --platform ${{ matrix.platform }}
