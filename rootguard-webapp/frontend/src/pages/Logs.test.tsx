@@ -1,4 +1,4 @@
-import { render, screen, act, fireEvent } from "@testing-library/react";
+import { render, screen, act, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import type { ReactNode } from "react";
@@ -50,6 +50,9 @@ describe("Logs download report", () => {
     render(<Logs />, { wrapper });
 
     const downloadButton = await screen.findByRole("button", { name: /Diagnostic report/i });
+    // The button renders disabled until the logs have loaded; clicking it
+    // earlier is a no-op - which made this test flaky on a loaded CI runner.
+    await waitFor(() => expect(downloadButton).toBeEnabled());
 
     // fireEvent dispatches synchronously - unlike userEvent.click, whose
     // own internal implementation awaits enough microtasks that a
