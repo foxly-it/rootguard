@@ -26,6 +26,8 @@ on:
 
 permissions:
   contents: read
+  # pr-gate.sh lists the PR's changed files (#719).
+  pull-requests: read
   packages: write
 
 # Found in review: repeated pushes to the same PR used to stack full runs
@@ -115,6 +117,9 @@ jobs:
       # closes.
       - name: Scan image for vulnerabilities
         run: ./scripts/ci/trivy-image-scan.sh ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCAN_GATE_PATHS: rootguard-blockpage/*
 
       - name: Verify the page serves and enforces its security headers
         run: |

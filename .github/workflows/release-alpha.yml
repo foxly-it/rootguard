@@ -245,6 +245,9 @@ jobs:
       ref: ${{ needs.version.outputs.source_ref }}
     permissions:
       contents: read
+      # ci-security.yml requests it for pr-gate.sh (#719); a called workflow
+      # can't get more than its caller grants. Unused here: releases gate.
+      pull-requests: read
 
   publish:
     needs: [version, test, test-frontend, security]

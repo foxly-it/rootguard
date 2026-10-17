@@ -48,9 +48,21 @@ if [[ -n "$platform" ]]; then
   platform_args=(--platform "$platform")
 fi
 
-trivy image \
+# SCAN_GATE_PATHS (space-separated globs) opts into pr-gate.sh (#719): on a
+# PR that touches none of them, findings are reported but don't fail.
+gate=1
+if [[ -n "${SCAN_GATE_PATHS:-}" ]]; then
+  read -r -a gate_paths <<<"${SCAN_GATE_PATHS}"
+  "${script_dir}/pr-gate.sh" "${gate_paths[@]}" || gate=0
+fi
+
+if trivy image \
   --severity HIGH,CRITICAL \
   --ignorefile .trivyignore.yaml \
   --exit-code 1 \
   "${platform_args[@]}" \
-  "$image"
+  "$image"; then
+  exit 0
+fi
+(( gate )) && exit 1
+echo "::warning title=Not gating::HIGH/CRITICAL findings in ${image} (listed above), but this PR doesn't touch it - main's push and nightly scans still gate on them."

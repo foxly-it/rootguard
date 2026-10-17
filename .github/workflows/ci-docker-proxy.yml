@@ -21,6 +21,8 @@ on:
 
 permissions:
   contents: read
+  # pr-gate.sh lists the PR's changed files (#719).
+  pull-requests: read
 
 concurrency:
   group: ci-docker-proxy-${{ github.ref }}
@@ -61,6 +63,9 @@ jobs:
       - working-directory: rootguard-docker-proxy
         run: docker buildx build --load --cache-from type=gha,scope=docker-proxy --cache-to type=gha,mode=max,scope=docker-proxy -t rootguard-docker-proxy:test .
       - run: ./scripts/ci/trivy-image-scan.sh rootguard-docker-proxy:test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCAN_GATE_PATHS: rootguard-docker-proxy/*
 
   build:
     name: Build and push docker proxy image

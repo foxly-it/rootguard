@@ -1,0 +1,78 @@
+name: Nightly security scan
+
+# The PR gate only fails a scan when the PR touches what it covers
+# (scripts/ci/pr-gate.sh, #719), so new upstream findings for untouched
+# components surface here instead: the full scan set on main every night,
+# with one tracking issue kept open while anything fails and closed once
+# main is clean again.
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: nightly-security
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: rootguard-core/go.mod
+          cache: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 22
+
+      - name: Run the full scan set
+        run: |
+          set -uo pipefail
+          failed=()
+          ./scripts/ci/scan-images.sh 2>&1 | tee scan.log || failed+=("image and repository scans (scan-images.sh)")
+          for module in rootguard-core rootguard-updater rootguard-webapp/backend rootguard-attestation-proxy rootguard-docker-proxy; do
+            (cd "$module" && go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...) 2>&1 | tee -a scan.log \
+              || failed+=("govulncheck ${module}")
+          done
+          audit=1
+          for _ in 1 2 3; do
+            (cd rootguard-webapp/frontend && npm audit --audit-level=high) 2>&1 | tee -a scan.log && { audit=0; break; }
+            sleep 15
+          done
+          (( audit )) && failed+=("npm audit (rootguard-webapp/frontend)")
+          printf '%s\n' "${failed[@]}" >failed.txt
+          sed -i '/^$/d' failed.txt
+
+      - name: Open, update or close the tracking issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: Nightly security scan failing
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          number="$(gh issue list --state open --limit 200 --json number,title \
+            -q 'map(select(.title == env.TITLE))[0].number // empty')"
+          if [ ! -s failed.txt ]; then
+            [ -n "$number" ] && gh issue close "$number" --comment "Clean again as of $(date -u +%Y-%m-%d): ${RUN_URL}"
+            exit 0
+          fi
+          # shellcheck disable=SC2016 # literal backticks: Markdown
+          body="$(printf 'The nightly full scan of `main` failed on %s.\n\n**Failing checks:**\n%s\n\nPR scans only gate on components a PR touches (`pr-gate.sh`, #719), so these findings do not block unrelated PRs. Fix them (bump, pin, or a reviewed `.trivyignore.yaml` entry) in a PR that touches the affected component.\n\nFull output: %s\n\n<details><summary>Finding summary</summary>\n\n```\n%s\n```\n</details>' \
+            "$(date -u +%Y-%m-%d)" "$(sed 's/^/- /' failed.txt)" "$RUN_URL" \
+            "$(grep -E '^== |Total: [1-9]|Vulnerability #|high severity|FAILED' scan.log | head -80)")"
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body"
+          fi
+          exit 1

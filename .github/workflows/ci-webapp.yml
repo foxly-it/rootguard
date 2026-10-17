@@ -23,6 +23,8 @@ on:
 
 permissions:
   contents: read
+  # pr-gate.sh lists the PR's changed files (#719).
+  pull-requests: read
 
 # Found in review: repeated pushes to the same PR used to stack full runs
 # instead of superseding the stale one.
@@ -111,6 +113,8 @@ jobs:
       # audit).
       - name: Audit frontend dependencies
         working-directory: rootguard-webapp/frontend
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           for attempt in 1 2 3; do
             if npm audit --audit-level=high; then
@@ -119,7 +123,9 @@ jobs:
             echo "::warning::npm audit failed (attempt ${attempt}/3), retrying..."
             sleep 15
           done
-          exit 1
+          # Gates only when the PR touches the frontend (#719).
+          "$GITHUB_WORKSPACE/scripts/ci/pr-gate.sh" "rootguard-webapp/frontend/*" && exit 1
+          echo "::warning title=Not gating::npm audit findings (listed above), but this PR doesn't touch the frontend - main's push and nightly scans still gate on them."
 
       - name: Lint frontend
         working-directory: rootguard-webapp/frontend
@@ -149,6 +155,9 @@ jobs:
       # See ci-core.yml's identical step for the full gap this closes.
       - name: Scan image for vulnerabilities
         run: ./scripts/ci/trivy-image-scan.sh rootguard-webapp:test
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SCAN_GATE_PATHS: rootguard-webapp/*
 
   # See ci-blockpage.yml's identical job for the full rationale - this
   # job id ("build") used to collide with an identically-named,
