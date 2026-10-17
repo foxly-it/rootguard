@@ -315,6 +315,19 @@ vulnerabilities:
   # scoped to this Unbound image's own base - never assume the same
   # ignore is still correct for some other, future Debian-based image
   # this repo might add.
+  - id: CVE-2026-9538
+    purls: ["pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1"]
+    expired_at: 2026-11-30
+    statement: >-
+      Debian fix_deferred, no fix planned for trixie. The flaw is in
+      Archive::Tar (shipped in perl-modules-5.40), which this image does
+      not contain: perl-base is Essential in the debian:13-slim base, has
+      no Archive/Tar.pm, and none of the runtime stage's apt packages pull
+      in a perl module package (confirmed with `apt-get install -s`).
+      Trivy attributes the CVE to every binary of the perl source package.
+      Surfaced by the Debian 13.7 base bump (perl-base 5.40.1-6 ->
+      5.40.1-6+deb13u1); the version-scoped purl makes the next perl-base
+      change re-check it.
   - id: CVE-2019-16224
     purls: ["pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"]
     expired_at: 2026-11-30

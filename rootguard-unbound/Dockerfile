@@ -104,8 +104,8 @@ RUN apt-get update \
     # confirmed live against packages.debian.org, not merely a
     # trixie-security-only fix. The unpinned package didn't pick up the
     # fix on its own even after a same-day rebuild: this RUN
-    # instruction's own cache scope in ci-unbound.yml
-    # (`--cache-from type=gha,scope=unbound`) keys purely on this
+    # instruction's own gha cache layer (ci-unbound.yml; scopes
+    # `unbound-amd64`/`unbound-arm64` since #736) keys purely on this
     # command's literal text, so as long as no pinned version on this
     # line changes, Buildx keeps reusing the layer from whenever it was
     # last actually executed against a live mirror - "apt-get update"
