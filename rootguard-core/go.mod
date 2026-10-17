@@ -3,8 +3,8 @@ module github.com/foxly-it/rootguard-core
 go 1.26.9
 
 require (
-	filippo.io/age v1.3.1
-	golang.org/x/mod v0.40.0
+	filippo.io/age v1.3.2
+	golang.org/x/mod v0.42.0
 )
 
 require (
