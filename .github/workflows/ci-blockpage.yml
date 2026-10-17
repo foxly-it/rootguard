@@ -11,6 +11,7 @@ on:
       - "scripts/ci/install-trivy.sh"
       - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
+      - ".github/actions/trivy-db-cache/**"
   # No paths filter on pull_request, unlike push above - found in review,
   # round 15: "Build and push blockpage image" carries the only image
   # scan for Blockpage that runs on every PR (ci-blockpage.yml's own
@@ -110,6 +111,7 @@ jobs:
           cache-from: type=gha,scope=blockpage
           cache-to: type=gha,mode=max,scope=blockpage
 
+      - uses: ./.github/actions/trivy-db-cache
       # Found in review, round 14: this is one of the two published
       # images (Unbound is the other, see ci-unbound.yml) that
       # trivy-image-scan.sh (round 13) never covered - see

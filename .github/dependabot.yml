@@ -5,7 +5,8 @@ version: 2
 # are usually caught) out of version updates; security updates skip it.
 updates:
   - package-ecosystem: github-actions
-    directory: /
+    # Composite actions pin actions too (trivy-db-cache, #723).
+    directories: ["/", "/.github/actions/*"]
     schedule:
       interval: weekly
     cooldown:

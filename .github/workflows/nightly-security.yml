@@ -14,6 +14,8 @@ on:
 permissions:
   contents: read
   issues: write
+  # Deletes superseded trivy DB cache entries (#723).
+  actions: write
 
 concurrency:
   group: nightly-security
@@ -34,12 +36,13 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22
+      - uses: ./.github/actions/trivy-db-cache
 
       - name: Run the full scan set
         run: |
           set -uo pipefail
           failed=()
-          ./scripts/ci/scan-images.sh 2>&1 | tee scan.log || failed+=("image and repository scans (scan-images.sh)")
+          TRIVY_CACHE_DIR="$HOME/.cache/trivy" ./scripts/ci/scan-images.sh 2>&1 | tee scan.log || failed+=("image and repository scans (scan-images.sh)")
           for module in rootguard-core rootguard-updater rootguard-webapp/backend rootguard-attestation-proxy rootguard-docker-proxy; do
             (cd "$module" && go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...) 2>&1 | tee -a scan.log \
               || failed+=("govulncheck ${module}")
@@ -52,6 +55,32 @@ jobs:
           (( audit )) && failed+=("npm audit (rootguard-webapp/frontend)")
           printf '%s\n' "${failed[@]}" >failed.txt
           sed -i '/^$/d' failed.txt
+
+      # The single writer of the trivy DB cache that every scan job restores
+      # (.github/actions/trivy-db-cache): keyed by the DB's own build time,
+      # older entries dropped so only one ~90 MB copy competes with the
+      # buildx layer caches.
+      - name: Key the trivy DB by its build time
+        id: trivy-db
+        # No DB (e.g. every build failed before trivy ran): skip caching
+        # rather than failing ahead of the tracking-issue step.
+        run: |
+          db=~/.cache/trivy/db/metadata.json
+          [ -f "$db" ] && echo "key=trivy-db-$(jq -r .UpdatedAt "$db")" >>"$GITHUB_OUTPUT" || true
+      - if: steps.trivy-db.outputs.key != ''
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/trivy/db
+          key: ${{ steps.trivy-db.outputs.key }}
+      - name: Drop superseded trivy DB cache entries
+        if: steps.trivy-db.outputs.key != ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ steps.trivy-db.outputs.key }}
+        run: |
+          gh cache list --key trivy-db- --limit 100 --json id,key \
+            -q '.[] | select(.key != env.KEY) | .id' | xargs -r -n1 gh cache delete
 
       - name: Open, update or close the tracking issue
         env:

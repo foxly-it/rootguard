@@ -81,6 +81,7 @@ jobs:
       # correct version. Both now share install-trivy.sh.
       - name: Install trivy
         run: ./scripts/ci/install-trivy.sh
+      - uses: ./.github/actions/trivy-db-cache
       - name: Scan for vulnerabilities, secrets, and Dockerfile misconfigurations
         env:
           GH_TOKEN: ${{ github.token }}

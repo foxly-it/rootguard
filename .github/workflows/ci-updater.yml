@@ -11,6 +11,7 @@ on:
       - "scripts/ci/install-trivy.sh"
       - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
+      - ".github/actions/trivy-db-cache/**"
   # No paths filter on pull_request - see ci-core.yml's identical
   # comment for the full rationale: "Updater unit tests" is a required
   # branch-protection status check, and a path filter here meant a PR
@@ -76,6 +77,7 @@ jobs:
       # See ci-core.yml's identical step for the full rationale.
       - working-directory: rootguard-updater
         run: docker buildx build --load --cache-from type=gha,scope=updater --cache-to type=gha,mode=max,scope=updater -t rootguard-updater:test .
+      - uses: ./.github/actions/trivy-db-cache
       - run: ./scripts/ci/trivy-image-scan.sh rootguard-updater:test
         env:
           GH_TOKEN: ${{ github.token }}

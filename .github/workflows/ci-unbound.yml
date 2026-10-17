@@ -14,6 +14,7 @@ on:
       - "scripts/ci/install-trivy.sh"
       - "scripts/ci/trivy-version.env"
       - ".trivyignore.yaml"
+      - ".github/actions/trivy-db-cache/**"
   # No paths filter here, unlike push above - found in review: "Test
   # amd64"/"Test arm64"/"Guided-settings scenario tests" are required
   # branch-protection status checks (round 11), and a path filter meant
@@ -77,6 +78,7 @@ jobs:
         working-directory: rootguard-unbound
         run: docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:test .
 
+      - uses: ./.github/actions/trivy-db-cache
       # Found in review, round 14: this is one of the two published
       # images (Blockpage is the other, see ci-blockpage.yml) that
       # trivy-image-scan.sh (round 13) never covered - see
