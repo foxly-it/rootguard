@@ -44,6 +44,12 @@ func startScenarioContainer(t *testing.T) {
 	// and "docker run --name" fails outright against a stale survivor
 	// rather than just reusing or replacing it.
 	_, _ = exec.Command("docker", "rm", "-f", scenarioContainer).CombinedOutput()
+	// ...and wait until the name is actually free: a removal still in
+	// flight makes the rm above return early, and "docker run --name"
+	// then fails with "Conflict ... already in use" (#740).
+	for i := 0; i < 50 && exec.Command("docker", "inspect", scenarioContainer).Run() == nil; i++ {
+		time.Sleep(200 * time.Millisecond)
+	}
 	// Found in review: TestScenarioDNSSECFailures used to dig real
 	// internet domains (dnssec-failed.org, example.com) directly, so a
 	// transient DNS/network hiccup on the runner's own connection failed
@@ -53,8 +59,10 @@ func startScenarioContainer(t *testing.T) {
 	// below points it at ci.yml's own scripts/ci/dnssec-test-zone/setup.sh
 	// authority instead, via the container's own network gateway.
 	run(t, "docker", "run", "--rm", "--detach", "--name", scenarioContainer, scenarioImage)
+	// rm -f, not stop: stop returns before the daemon has removed the
+	// --rm container, racing the next scenario's start (#740).
 	t.Cleanup(func() {
-		_, _ = exec.Command("docker", "stop", scenarioContainer).CombinedOutput()
+		_, _ = exec.Command("docker", "rm", "-f", scenarioContainer).CombinedOutput()
 	})
 	waitHealthy(t)
 	wireUpLocalDNSSECTestZone(t)
