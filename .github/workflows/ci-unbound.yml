@@ -69,14 +69,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
-      # See ci-core.yml's identical step for the full rationale. Same
-      # scope the "Build and push image" job below uses, so this and that
-      # job's cache warm each other - safe to share across this job's own
-      # amd64/arm64 matrix legs too, the same way that job's own single
-      # multi-platform build already shares one scope across both arches.
+      # build-push-action, not an inline `docker buildx build`: only the
+      # action passes the Actions runtime token to buildx, and without it
+      # buildx silently drops a type=gha cache - inline builds never read
+      # or wrote one (#736). One scope per architecture: the gha backend
+      # keeps one cache index per scope and the last writer wins, so the
+      # native arm64 layers this leg compiles would otherwise be hidden by
+      # an amd64-only write. "Build and push image" below reads both
+      # scopes, so its arm64 build is a cache hit instead of a QEMU
+      # recompile of Unbound (14-21 min, #690).
       - name: Build validation image
-        working-directory: rootguard-unbound
-        run: docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:test .
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: rootguard-unbound
+          load: true
+          tags: rootguard-unbound:test
+          cache-from: type=gha,scope=unbound-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=unbound-${{ matrix.arch }}
 
       - uses: ./.github/actions/trivy-db-cache
       # Found in review, round 14: this is one of the two published
@@ -216,12 +225,15 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
-      # See the `test` job's identical step above for the full rationale -
-      # same scope, so a matrix leg there and this job's own build warm
-      # each other's cache too.
+      # See the `test` job's identical step above - shares its amd64 scope.
       - name: Build validation image
-        working-directory: rootguard-unbound
-        run: docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:test .
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: rootguard-unbound
+          load: true
+          tags: rootguard-unbound:test
+          cache-from: type=gha,scope=unbound-amd64
+          cache-to: type=gha,mode=max,scope=unbound-amd64
 
       # Found in review: this was still on setup-go v5 (GitHub already
       # warns about its Node.js 20 runtime, soon to be enforced as
@@ -314,14 +326,20 @@ jobs:
       # real "Build and push image" step further down - which already
       # uses buildx with the gha cache under this exact same scope - never
       # populated or reused that cache, rebuilding every layer from
-      # scratch just to read the version string out of it. buildx --load
-      # with the same scope makes this build warm-start from (and warm)
-      # the real build's own cache instead.
+      # scratch just to read the version string out of it. Built from the
+      # native `Test amd64` leg's cache scope (see that step for why this
+      # is build-push-action, #736).
+      - name: Build version-check image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: rootguard-unbound
+          load: true
+          tags: rootguard-unbound:versioncheck
+          cache-from: type=gha,scope=unbound-amd64
+          cache-to: type=gha,mode=max,scope=unbound-amd64
       - name: Extract installed Unbound version
         id: version
-        working-directory: rootguard-unbound
         run: |
-          docker buildx build --load --cache-from type=gha,scope=unbound --cache-to type=gha,mode=max,scope=unbound -t rootguard-unbound:versioncheck .
           VERSION="$(docker run --rm --entrypoint unbound rootguard-unbound:versioncheck -V 2>&1 | awk '/^Version / {print $2; exit}')"
           MAJORMINOR="$(echo "$VERSION" | cut -d'.' -f1,2)"
           echo "Detected upstream version: $VERSION"
@@ -348,5 +366,8 @@ jobs:
           build-args: |
             COMMIT=${{ github.sha }}
             CREATED=${{ steps.build-time.outputs.value }}
-          cache-from: type=gha,scope=unbound
-          cache-to: type=gha,mode=max,scope=unbound
+          # Read-only: the native Test amd64/arm64 legs this job needs have
+          # just written both scopes for this exact commit (#736).
+          cache-from: |
+            type=gha,scope=unbound-amd64
+            type=gha,scope=unbound-arm64

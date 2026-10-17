@@ -359,7 +359,12 @@ jobs:
           # QEMU-emulated arm64 leg. Same scope names as each component's
           # own ci-*.yml build (core has none - it never publishes outside a
           # release), so a release can reuse layers CI already warmed on main.
-          cache-from: type=gha,scope=${{ matrix.component }}
+          # Per-arch scopes: Unbound's native CI legs (#736); a miss for
+          # the other components.
+          cache-from: |
+            type=gha,scope=${{ matrix.component }}
+            type=gha,scope=${{ matrix.component }}-amd64
+            type=gha,scope=${{ matrix.component }}-arm64
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
       - name: Attest published image provenance
         if: steps.existing.outputs.exists != 'true'

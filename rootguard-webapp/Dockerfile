@@ -1,7 +1,9 @@
 # Digest-pinned, not just tag-pinned - see the backend-builder stage
 # below for why this applies to a builder stage too, even though it
 # never ships in the final image.
-FROM node:22-bookworm@sha256:8a34c4ab3ea2c5cd194f07e317b2a8f09461d3c8b05c4e34c8ccd56d56024c4d AS frontend-builder
+# Both builder stages run natively on the build host (#736): the frontend
+# bundle is architecture-independent, the backend is cross-compiled.
+FROM --platform=$BUILDPLATFORM node:22-bookworm@sha256:8a34c4ab3ea2c5cd194f07e317b2a8f09461d3c8b05c4e34c8ccd56d56024c4d AS frontend-builder
 
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
@@ -16,7 +18,7 @@ RUN npm run build
 # compromised/re-pushed upstream tag would be pulled with no change to
 # this file. Same reasoning already applied to the runtime stage's own
 # gcr.io/distroless base a few lines down.
-FROM golang:1.26-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c AS backend-builder
 
 ARG VERSION=dev
 ARG COMMIT=unknown

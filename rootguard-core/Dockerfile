@@ -3,13 +3,16 @@
 # between them, and a compromised/re-pushed upstream tag would be pulled
 # without any change to this file. Same reasoning already applied to
 # cosign below and to rootguard-unbound/rootguard-blockpage's base images.
-FROM golang:1.26-alpine@sha256:c95332c2af86b6d89b91bd0500f4b9529ccbd090a0d1855c6d1ceaa142ae8615 AS builder
+# Compiles natively on the build host, cross-compiled for the target
+# platform, instead of under QEMU for arm64 (#736).
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:c95332c2af86b6d89b91bd0500f4b9529ccbd090a0d1855c6d1ceaa142ae8615 AS builder
+ARG TARGETOS TARGETARCH
 
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /rootguard-core ./cmd/rootguard
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /rootguard-core ./cmd/rootguard
 
 # Bumped from v3.0.6 - found live via the new trivy-image-scan.sh step
 # (round 13): that pin's own bundled binary carried 39 HIGH findings of

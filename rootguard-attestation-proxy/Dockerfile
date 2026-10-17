@@ -1,11 +1,14 @@
 # Digest-pinned, not just tag-pinned - see rootguard-core/Dockerfile's
 # identical comment for why.
-FROM golang:1.26-alpine@sha256:c95332c2af86b6d89b91bd0500f4b9529ccbd090a0d1855c6d1ceaa142ae8615 AS builder
+# Compiles natively on the build host, cross-compiled for the target
+# platform, instead of under QEMU for arm64 (#736).
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:c95332c2af86b6d89b91bd0500f4b9529ccbd090a0d1855c6d1ceaa142ae8615 AS builder
+ARG TARGETOS TARGETARCH
 
 WORKDIR /src
 COPY go.mod ./
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /rootguard-attestation-proxy .
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /rootguard-attestation-proxy .
 
 # scratch, not alpine/distroless: this binary is a pure TCP CONNECT
 # tunnel that never terminates TLS itself, so it needs zero CA
