@@ -3,7 +3,7 @@
 # never ships in the final image.
 # Both builder stages run natively on the build host (#736): the frontend
 # bundle is architecture-independent, the backend is cross-compiled.
-FROM --platform=$BUILDPLATFORM node:22-bookworm@sha256:8a34c4ab3ea2c5cd194f07e317b2a8f09461d3c8b05c4e34c8ccd56d56024c4d AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-bookworm@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8 AS frontend-builder
 
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
