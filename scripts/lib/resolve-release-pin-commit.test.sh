@@ -36,6 +36,12 @@ cd "$repo"
 git init -q -b main
 git config user.name "test"
 git config user.email "test@example.com"
+# No detached auto-maintenance/auto-gc: a background `git maintenance`
+# spawned by the commits below kept writing into .git while the EXIT trap
+# deleted it ("rm: cannot remove .../repo/.git: Directory not empty"),
+# failing CI after every scenario had passed.
+git config maintenance.auto false
+git config gc.auto 0
 
 commit() {
   local message="$1"
