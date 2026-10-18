@@ -44,6 +44,7 @@ function renderPage() {
 class MockIntersectionObserver implements IntersectionObserver {
   readonly root = null;
   readonly rootMargin = "";
+  readonly scrollMargin = ""; // in lib.dom since TypeScript 6
   readonly thresholds: number[] = [];
   observe() {}
   unobserve() {}
