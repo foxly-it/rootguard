@@ -96,9 +96,13 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     29.9.0 (Go 1.26.9), compose 5.6.0 and Alpine 3.24.2. That base
 #     already carries libexpat 2.8.5-r0 and pcre2 10.49-r0, so both pins
 #     are gone; it still ships OpenSSL 3.5.8-r0, so that pin stays.
+#   - #745, 2026-10-18: trivy now rates CVE-2026-77214 (expat heap
+#     information disclosure) HIGH for the base's libexpat 2.8.5-r0;
+#     Alpine 3.24 `main` published the fix, 2.9.0-r0, on 2026-10-17.
+#     libexpat pinned again.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 \
+        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 
