@@ -41,6 +41,10 @@ updates:
       # 8.71.2 peers on typescript <6.1.0, so 7.x fails npm ci (#749).
       - dependency-name: typescript
         versions: [">=7"]
+      # Node's type definitions move with the Node runtime (22, see
+      # package.json engines and the webapp Dockerfile), not ahead of it (#757).
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
     groups:
       npm:
         update-types: [minor, patch]
