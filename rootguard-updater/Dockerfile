@@ -44,11 +44,11 @@ LABEL org.opencontainers.image.title="RootGuard Updater" \
 # the full CVE-2026-14456 and unused-buildx-plugin rationale - this exact
 # pinned digest is the same one Core uses, so both stopgaps apply here
 # too. OpenSSH is removed because RootGuard never uses ssh:// Docker
-# contexts. Since the #703 digest bump only the OpenSSL pin remains - the
-# base itself now ships the fixed libexpat and pcre2.
+# contexts. The #703 digest bump left only the OpenSSL pin; libexpat is
+# pinned again for CVE-2026-77214 (#745).
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 \
+        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx
 
 COPY --from=builder /rootguard-updater /usr/local/bin/rootguard-updater

@@ -111,6 +111,17 @@ vulnerabilities:
       14) in cosign's own dependency tree, fixed upstream at x/text
       v0.39.0 but not yet what cosign v3.1.3 (the newest release,
       confirmed live) bundles.
+  - id: CVE-2026-56851
+    purls: ["pkg:golang/golang.org/x/text@v0.38.0"]
+    paths: ["usr/local/bin/cosign"]
+    expired_at: 2026-11-30
+    statement: >-
+      GO-2026-6629, a panic in golang.org/x/text/secure/precis (fixed in
+      x/text v0.41.0). Not reachable: `govulncheck -mode=binary` on the
+      checksum-verified cosign v3.1.3 linux-amd64 release binary reports it
+      at module level only - the precis package is not compiled into
+      cosign (unlike CVE-2026-56852 above, which has symbol matches).
+      v3.1.3 is still the newest cosign release (2026-10-18).
   - id: CVE-2026-56853
     purls: ["pkg:golang/stdlib@v1.26.4"]
     paths: ["usr/local/bin/cosign"]
