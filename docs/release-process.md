@@ -108,6 +108,28 @@ after every check above has already passed - a failed E2E test used to
 still leave a real, publicly visible Release behind (auto-discoverable by
 any live installation's own update check) needing manual cleanup.
 
+## Automatic security releases
+
+`security-release.yml` (#772) runs daily after the nightly scan and asks
+one question: would a new release make the people running the latest one
+safer? It scans the latest *published* release's images
+(`scripts/ci/scan-release.sh`, both platforms, with `main`'s reviewed
+`.trivyignore.yaml`) and proposes a release only when all of these hold:
+
+- that release has HIGH/CRITICAL findings `main`'s ignore file doesn't cover;
+- `main` is clean - no open "Nightly security scan failing" issue and a
+  successful nightly full scan within 30 h - and every check on its HEAD
+  finished green;
+- the latest release is at least 24 h old, and there are commits to ship.
+
+It then waits for approval on the `security-release` environment (a
+required reviewer) and dispatches `release-version-bump.yml`, so the
+release runs through every gate described here like any other. The
+approval page shows the job summary with the findings the release would
+fix. The release job refuses to dispatch if that environment has no
+required-reviewer rule: GitHub creates a referenced environment on first
+use without protection, which would otherwise skip the approval.
+
 ## Upgrade testing
 
 `upgrade-test` doesn't synthesize a fixture - it deploys the actual
