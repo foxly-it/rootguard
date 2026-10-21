@@ -1,3 +1,3 @@
 module github.com/foxly-it/rootguard-docker-proxy
 
-go 1.26.9
+go 1.26.10

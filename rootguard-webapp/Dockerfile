@@ -18,7 +18,7 @@ RUN npm run build
 # compromised/re-pushed upstream tag would be pulled with no change to
 # this file. Same reasoning already applied to the runtime stage's own
 # gcr.io/distroless base a few lines down.
-FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:d9c68c2c51161e12fd77e4c6320687c9cd86e1af1e3ad6e6cd63ff970641453c AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:fe3da92a5cb2881e4aa75e625cb0b7c50571632fb4cf340cbe53e6ccdcffdd51 AS backend-builder
 
 ARG VERSION=dev
 ARG COMMIT=unknown
