@@ -18,7 +18,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         build-essential=12.12 \
-        ca-certificates=20250419 \
+        ca-certificates=20250419+deb13u1 \
         curl=8.14.1-2+deb13u7 \
         libevent-dev=2.1.13-stable-1~deb13u1 \
         libexpat1-dev=2.9.0-1~deb13u1 \
@@ -80,7 +80,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bind9-dnsutils=1:9.20.29-1~deb13u1 \
         bind9-libs=1:9.20.29-1~deb13u1 \
-        ca-certificates=20250419 \
+        ca-certificates=20250419+deb13u1 \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.13-stable-1~deb13u1 \
         libexpat1=2.9.0-1~deb13u1 \
