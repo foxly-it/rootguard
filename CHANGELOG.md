@@ -3,6 +3,69 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.6] - 2026-10-21
+
+### Added
+
+- Move runtime stage to distroless/static-debian12 (#695) ([#696](https://github.com/foxly-it/rootguard/pull/696))
+- Bump docker:29-cli base, narrow bundled-binary suppressions (#703) ([#706](https://github.com/foxly-it/rootguard/pull/706))
+
+### CI
+
+- Push and open the fix PR with PIN_REFRESH_TOKEN ([#698](https://github.com/foxly-it/rootguard/pull/698))
+- Warn ahead of expiring .trivyignore.yaml suppressions (#710) ([#711](https://github.com/foxly-it/rootguard/pull/711))
+- Also cover the Alpine apk pins (#712) ([#713](https://github.com/foxly-it/rootguard/pull/713))
+- Add scan-images.sh, a local image scan that matches CI exactly (#714) ([#715](https://github.com/foxly-it/rootguard/pull/715))
+- Gate upstream vulnerability findings only on PRs that touch them (#719) ([#720](https://github.com/foxly-it/rootguard/pull/720))
+- Let Dependabot cover every shipped ecosystem (#721) ([#722](https://github.com/foxly-it/rootguard/pull/722))
+- Restore trivy's vulnerability DB from a nightly-seeded cache (#723) ([#724](https://github.com/foxly-it/rootguard/pull/724))
+- Auto-merge bot PRs once CI is green (#727) ([#734](https://github.com/foxly-it/rootguard/pull/734))
+- Stop compiling arm64 images under QEMU ([#737](https://github.com/foxly-it/rootguard/pull/737))
+- Test the documented upgrade path instead of bypassing upgrade-test (#725) ([#726](https://github.com/foxly-it/rootguard/pull/726))
+- Hold TypeScript at <7 until typescript-eslint supports it (#749) ([#750](https://github.com/foxly-it/rootguard/pull/750))
+- Keep @types/node majors with the Node runtime (#757) ([#758](https://github.com/foxly-it/rootguard/pull/758))
+
+### Fixed
+
+- Suppress unfixed libexpat CVE-2026-93990 (#687) ([#688](https://github.com/foxly-it/rootguard/pull/688))
+- Unblock CI after upstream Debian/Alpine/npm security updates ([#691](https://github.com/foxly-it/rootguard/pull/691))
+- Unblock CI after Go 1.26.9 and upstream package security updates ([#704](https://github.com/foxly-it/rootguard/pull/704))
+- Curl pin refresh for Unbound + suppress CVE-2026-78669 in bundled cosign/compose ([#708](https://github.com/foxly-it/rootguard/pull/708))
+- Libexpat 2.9.0 (DSA-6566-1) + bridge trivy's DB lag ([#716](https://github.com/foxly-it/rootguard/pull/716))
+- Suppress unreachable CVE-2026-9538 in perl-base (#743) ([#744](https://github.com/foxly-it/rootguard/pull/744))
+- Pin libexpat 2.9.0-r0, suppress unreachable x/text CVE in cosign (#745) ([#746](https://github.com/foxly-it/rootguard/pull/746))
+- Drop 22 trivy suppressions that no longer match anything (#718) ([#748](https://github.com/foxly-it/rootguard/pull/748))
+- Match whole name=version tokens in the pin bots (#767) ([#768](https://github.com/foxly-it/rootguard/pull/768))
+- Go 1.26.10 for all binaries, cosign v3.1.4, docker:29-cli 29.9.1 (#766) ([#769](https://github.com/foxly-it/rootguard/pull/769))
+
+### Maintenance
+
+- Bump the actions group with 3 updates ([#707](https://github.com/foxly-it/rootguard/pull/707))
+- Bump the base-images group across 6 directories with 3 updates ([#735](https://github.com/foxly-it/rootguard/pull/735))
+- Refresh drifted package pins ([#747](https://github.com/foxly-it/rootguard/pull/747))
+- Bump the go group across 2 directories with 2 updates ([#728](https://github.com/foxly-it/rootguard/pull/728))
+- Bump the npm group across 1 directory with 10 updates ([#729](https://github.com/foxly-it/rootguard/pull/729))
+- Bump jsdom in /rootguard-webapp/frontend ([#730](https://github.com/foxly-it/rootguard/pull/730))
+- Bump vitest in /rootguard-webapp/frontend ([#731](https://github.com/foxly-it/rootguard/pull/731))
+- Bump globals in /rootguard-webapp/frontend ([#732](https://github.com/foxly-it/rootguard/pull/732))
+- Bump vitest ([#751](https://github.com/foxly-it/rootguard/pull/751))
+- Bump vite to 8 together with @vitejs/plugin-react 6 (#759) ([#760](https://github.com/foxly-it/rootguard/pull/760))
+- Bump typescript in /rootguard-webapp/frontend ([#752](https://github.com/foxly-it/rootguard/pull/752))
+- Bump @types/node ([#763](https://github.com/foxly-it/rootguard/pull/763))
+- Bump lucide-react in /rootguard-webapp/frontend ([#765](https://github.com/foxly-it/rootguard/pull/765))
+- Refresh drifted package pins ([#770](https://github.com/foxly-it/rootguard/pull/770))
+
+### Other
+
+- Revert the temporary 1.0.5 upgrade-test bypass ([#686](https://github.com/foxly-it/rootguard/pull/686))
+
+### Testing
+
+- Wait for the enabled download button in the Logs test (#738) ([#739](https://github.com/foxly-it/rootguard/pull/739))
+- Free the scenario container name before reusing it (#740) ([#741](https://github.com/foxly-it/rootguard/pull/741))
+- Add scrollMargin to the IntersectionObserver mock (#755) ([#756](https://github.com/foxly-it/rootguard/pull/756))
+- Disable git auto-maintenance in the pin resolver's scratch repo (#761) ([#762](https://github.com/foxly-it/rootguard/pull/762))
+
 ## [1.0.5] - 2026-09-22
 
 ### Other
