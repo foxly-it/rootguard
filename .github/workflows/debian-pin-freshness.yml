@@ -19,7 +19,9 @@ name: Package pin freshness
 
 on:
   schedule:
-    - cron: "15 4 * * *"
+    # Every 6 h, not daily (#775): a dropped build breaks the image build
+    # on every PR until this runs, and it fixes and merges drift itself.
+    - cron: "15 */6 * * *"
   workflow_dispatch: {}
 
 permissions:
