@@ -18,6 +18,8 @@ for arg in "$@"; do
       libssl3:*) v=3.5.10-r0 ;;
       libcrypto3:current|libcrypto3:missing) v=3.5.9-r0 ;;
       libcrypto3:*) v=3.5.10-r0 ;;
+      curl:curl-only) v=8.23.0-r0 ;;
+      curl:*|libcurl:*) v=8.22.0-r0 ;;
       tiff:missing) v="" ;;
       tiff:*) v=4.7.2-r0 ;;
       *) exit 3 ;;
@@ -43,6 +45,7 @@ EOF
   cat >"$tmp/repo/b/Dockerfile" <<'EOF'
 FROM nginx:1-alpine@sha256:nginx
 RUN apk add --no-cache \
+        libcurl=8.22.0-r0 curl=8.22.0-r0 \
         tiff=4.7.2-r0
 EOF
   : >"$PIN_TEST_IMAGES"
@@ -67,6 +70,13 @@ run drift --fix >/dev/null || fail "--fix should exit 0"
 grep -q "libssl3=3.5.10-r0 libcrypto3=3.5.10-r0 \\\\" "$tmp/repo/a/Dockerfile" || fail "multi-pin line not rewritten"
 grep -q "libssl3=3.5.0-r0 in a comment" "$tmp/repo/a/Dockerfile" || fail "comment was rewritten"
 grep -q "tiff=4.7.2-r0" "$tmp/repo/b/Dockerfile" || fail "current pin changed"
+
+# #767: a pin must only match its own name - "curl=" also occurs inside
+# "libcurl=", and only curl moves here.
+write_fixtures
+run curl-only --fix >/dev/null || fail "curl-only --fix should exit 0"
+grep -q "libcurl=8.22.0-r0 curl=8.23.0-r0 \\\\" "$tmp/repo/b/Dockerfile" \
+  || fail "curl fix touched libcurl: $(grep curl "$tmp/repo/b/Dockerfile")"
 
 write_fixtures
 set +e; run missing --fix >/dev/null 2>&1; rc=$?; set -e
