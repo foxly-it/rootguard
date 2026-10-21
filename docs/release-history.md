@@ -8,11 +8,9 @@ the security-review finding/fix journal.
 
 ## Release status
 
-`v1.0.5` is the current public release, published with digest-pinned
-`amd64`/`arm64` images for **all seven** RootGuard components -
-`rootguard-docker-proxy` joined `release-alpha.yml`'s own publish matrix
-this release (`#666`, fixed after its manually-maintained pin had gone
-stale twice, see the `1.0.3`/`1.0.4` entries below). All milestones
+`v1.0.6` is the current public release, published with digest-pinned
+`amd64`/`arm64` images for **all seven** RootGuard components
+(`rootguard-docker-proxy` joined the publish matrix in `v1.0.5`, `#666`). All milestones
 through `1.0.0` are complete and verified - see `ROADMAP.md` for the
 closing checklist.
 
@@ -20,8 +18,45 @@ closing checklist.
 `1.0.0` shipped** (a lot of real work landed in between that was never
 backfilled here - `CHANGELOG.md` and `git log` are the authoritative
 record for that window, not this narrative). The
-`1.0.1`/`1.0.2`/`1.0.3`/`1.0.4`/`1.0.5` entries below are current and
-complete.
+`1.0.1` through `1.0.6` entries below are current and complete.
+
+## `v1.0.6` (2026-10-21)
+
+A security-maintenance release: four weeks of fixes that had landed on
+`main` since `1.0.5` without shipping, plus the reworked CI that keeps
+them coming.
+
+- **Security (RootGuard's own binaries)**: built with Go **1.26.10**
+  (`GO-2026-6809` / `CVE-2026-111943`, `crypto/x509` distrust of
+  compromised intermediate CAs; [#766](https://github.com/foxly-it/rootguard/issues/766)).
+- **Security (bundled tools in Core/Updater)**: cosign **v3.1.4**
+  (`CVE-2026-63209` in klauspost/compress), Docker CLI **29.9.1** base,
+  libexpat **2.9.0-r0** (`CVE-2026-77214`). The bundled docker/compose/
+  cosign binaries still predate Go 1.26.10 upstream; that finding is
+  documented as unreachable in `.trivyignore.yaml` (plain-TCP daemon
+  access, cosign trust anchored in Sigstore's TUF root, not TLS) and
+  expires 2026-11-21 for a re-check.
+- **Security (Unbound/Blockpage)**: Debian **13.7** base, libexpat
+  `2.9.0-1~deb13u1` (DSA-6566-1), ca-certificates `20250419+deb13u1`,
+  curl pin refresh; Blockpage's Alpine libexpat 2.9.0-r0.
+- **WebApp**: runtime stage on `distroless/static-debian12` (#696);
+  frontend tooling on vite 8, TypeScript 6, vitest 5 (build-time only).
+- **Suppressions**: 39 `.trivyignore.yaml` entries that no longer matched
+  any finding were removed (#748, #769) - 27 remain, each version- and
+  path-scoped.
+- **Process**: `upgrade-test` passed on both architectures **without a
+  bypass** - the first release since `1.0.2` - now that it performs the
+  previous release's documented manual steps instead (#726; none needed
+  from `1.0.5`). Nightly full scans, a trivy DB cache, Dependabot for all
+  ecosystems and bot auto-merge landed alongside (#720-#737).
+- **Action for existing installations**: none required - update Core and
+  WebApp through the WebGUI as usual. **Optional**: `rootguard-docker-proxy`
+  has no self-update channel (#670), so it only picks up its Go 1.26.10
+  rebuild with a manual `docker compose pull docker-proxy && docker
+  compose up -d docker-proxy`; the x509 flaw is not reachable there (it
+  only talks to the local Docker socket, no TLS). Installations still on
+  `1.0.4` or older need that step anyway - see the `1.0.3`-`1.0.5`
+  entries below.
 
 ## `v1.0.5` (2026-09-22)
 
