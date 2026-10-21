@@ -5,7 +5,7 @@
 # cosign below and to rootguard-unbound/rootguard-blockpage's base images.
 # Compiles natively on the build host, cross-compiled for the target
 # platform, instead of under QEMU for arm64 (#736).
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS builder
 ARG TARGETOS TARGETARCH
 
 WORKDIR /src
@@ -25,10 +25,11 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # stack.RequireAttestation (rootguard-core/internal/stack) calls at
 # deploy time to verify a published image's attestation before trusting
 # it. release-alpha.yml's own cosign-installer pin must move with this
-# one - see its identical comment.
-FROM ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 AS cosign
+# one - see its identical comment. v3.1.4 (#766): bundles
+# klauspost/compress v1.20.1, fixing CVE-2026-63209.
+FROM ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d AS cosign
 
-FROM docker:29-cli@sha256:1a4c7cb63513f349bdad01fcc6e0f3f2f67d37b9da86f14dc0d4a0942eecda00
+FROM docker:29-cli@sha256:6fae2214c3121a28d5aa639d09032f61310b7c9c75ffbad1025f261a1b621800
 
 ARG VERSION=dev
 ARG COMMIT=unknown
@@ -100,6 +101,10 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     information disclosure) HIGH for the base's libexpat 2.8.5-r0;
 #     Alpine 3.24 `main` published the fix, 2.9.0-r0, on 2026-10-17.
 #     libexpat pinned again.
+#   - #766, 2026-10-21: digest bumped to the Docker CLI 29.9.1 build (same
+#     Alpine 3.24.2, so the pins above still apply). Its docker (Go
+#     1.26.9) and compose (Go 1.26.8) binaries still predate the
+#     crypto/x509 fix in Go 1.26.10 - see .trivyignore.yaml.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
         libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 \

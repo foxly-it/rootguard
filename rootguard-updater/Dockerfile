@@ -2,7 +2,7 @@
 # identical comment for why.
 # Compiles natively on the build host, cross-compiled for the target
 # platform, instead of under QEMU for arm64 (#736).
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:3082400e369fa24d5fc60bca20edab3f6d604e0c5a690ec66b295eff4dd87ade AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS builder
 ARG TARGETOS TARGETARCH
 
 WORKDIR /src
@@ -12,10 +12,11 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 
 # Bumped from v3.0.6 - see rootguard-core/Dockerfile's identical comment
 # for the full rationale (39 HIGH findings in the old pin's own binary,
-# plus a real signature-verification-bypass fix in v3.1.3).
-FROM ghcr.io/sigstore/cosign/cosign:v3.1.3@sha256:9e5c2f2edc34351160407ca3416c61855bdf9403c3c5936e0f0be7fc261611b8 AS cosign
+# plus a real signature-verification-bypass fix in v3.1.3; v3.1.4 for
+# CVE-2026-63209 in klauspost/compress, #766).
+FROM ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d AS cosign
 
-FROM docker:29-cli@sha256:1a4c7cb63513f349bdad01fcc6e0f3f2f67d37b9da86f14dc0d4a0942eecda00
+FROM docker:29-cli@sha256:6fae2214c3121a28d5aa639d09032f61310b7c9c75ffbad1025f261a1b621800
 
 ARG VERSION=dev
 ARG COMMIT=unknown
