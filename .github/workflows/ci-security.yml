@@ -69,6 +69,8 @@ jobs:
         run: ./scripts/ci/scan-images.test.sh
       - name: Test PR scan gate
         run: ./scripts/ci/pr-gate.test.sh
+      - name: Test release image scan
+        run: ./scripts/ci/scan-release.test.sh
       - name: Test Debian pin checker
         run: ./scripts/check-debian-pins.test.sh
       - name: Test suppression expiry checker

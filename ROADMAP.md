@@ -54,6 +54,19 @@ features without weakening RootGuard's validation, recovery, or appliance
 security model. This work is explicitly deferred until after 1.0 and carries no
 current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/186)).
 
+- [x] Security releases without waiting for a manual cut
+      ([#772](https://github.com/foxly-it/rootguard/issues/772)) - daily,
+      `security-release.yml` scans the latest published release's images;
+      when they carry HIGH/CRITICAL findings that `main` has already fixed
+      (main clean and green, last release >= 24 h old), it proposes the
+      next patch release behind a required-reviewer approval, then runs
+      the normal release pipeline with all its gates.
+- [ ] Opt-in automatic installation of security releases - a WebGUI
+      setting so an installation applies a new security release on its
+      own (attestation check, maintenance window, existing rollback)
+      instead of waiting for the operator's click. docker-proxy still
+      needs its own update channel first
+      ([#670](https://github.com/foxly-it/rootguard/issues/670)).
 - [x] Test the documented upgrade path instead of bypassing the upgrade gate
       ([#725](https://github.com/foxly-it/rootguard/issues/725)) -
       `upgrade-test` was bypassed for 1.0.3, 1.0.4 and 1.0.5, each time for

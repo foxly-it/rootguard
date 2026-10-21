@@ -1,0 +1,134 @@
+name: Security release
+
+# Ships security fixes to users without waiting for a manual release
+# (#772). Dependabot, the pin bot and auto-merge keep main patched; this
+# turns that into a release once it actually helps the people running the
+# latest one: daily, after the nightly scan, it scans the images of the
+# latest *published* release with main's reviewed .trivyignore.yaml and,
+# if they carry HIGH/CRITICAL findings while main is clean and green,
+# cuts the next patch release - after an explicit approval through the
+# `security-release` environment (required reviewer). Every release gate
+# (tests, security, smoke, upgrade on both architectures) still applies.
+
+on:
+  schedule:
+    - cron: "30 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-release
+  cancel-in-progress: false
+
+jobs:
+  assess:
+    name: Assess the latest release
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.decide.outputs.release }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: ./.github/actions/trivy-db-cache
+      - name: Install trivy
+        run: ./scripts/ci/install-trivy.sh
+
+      - name: Determine the latest published release
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view --repo "$GITHUB_REPOSITORY" --json tagName,publishedAt \
+            -q '"tag=\(.tagName)\npublished=\(.publishedAt)"' >>"$GITHUB_OUTPUT"
+
+      - name: Scan the latest release's images
+        env:
+          TAG: ${{ steps.latest.outputs.tag }}
+        # pipefail: the default `bash -e` would let a failed scan pass
+        # through tee and decide on partial data.
+        run: |
+          set -euo pipefail
+          ./scripts/ci/scan-release.sh "${TAG#v}" | tee findings.tsv
+
+      - name: Decide
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.latest.outputs.tag }}
+          PUBLISHED: ${{ steps.latest.outputs.published }}
+        run: |
+          set -euo pipefail
+          now="$(date +%s)"
+          blockers=()
+          findings="$(grep -c . findings.tsv || true)"
+          (( findings > 0 )) || blockers+=("${TAG} has no unreviewed HIGH/CRITICAL findings")
+          # main must be clean: no open nightly tracking issue, and a
+          # successful nightly full scan within the last 30 h.
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search 'in:title "Nightly security scan failing"' --json number -q length)"
+          (( open == 0 )) || blockers+=("main has open findings (nightly tracking issue)")
+          last_ok="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly-security.yml \
+            --branch main --status success --limit 1 --json createdAt -q '.[0].createdAt // empty')"
+          if [ -z "$last_ok" ] || (( now - $(date -d "$last_ok" +%s) > 30 * 3600 )); then
+            blockers+=("no successful nightly scan of main in the last 30 h")
+          fi
+          # Every other check on main's HEAD finished green.
+          unfinished="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
+            -q '[.check_runs[] | select(.name != "Assess the latest release" and .name != "Cut the security release")
+                 | select(.status != "completed" or (.conclusion | IN("success", "skipped", "neutral") | not))] | length')"
+          (( unfinished == 0 )) || blockers+=("main has ${unfinished} failing or unfinished checks")
+          (( now - $(date -d "$PUBLISHED" +%s) >= 24 * 3600 )) || blockers+=("${TAG} is less than 24 h old")
+          [ -n "$(git log --oneline "${TAG}..HEAD")" ] || blockers+=("no commits since ${TAG}")
+
+          {
+            echo "## Security release assessment for ${TAG}"
+            echo
+            echo "**${findings}** unreviewed HIGH/CRITICAL finding(s) in the published images."
+            if (( findings > 0 )); then
+              echo
+              echo '| Component | Platform | Target | Package | Version | ID |'
+              echo '|---|---|---|---|---|---|'
+              sed 's/\t/ | /g; s/^/| /; s/$/ |/' findings.tsv
+            fi
+            echo
+            if (( ${#blockers[@]} )); then
+              echo "**No release:**"
+              printf -- '- %s\n' "${blockers[@]}"
+            else
+              echo "**Release proposed** - approve the \`security-release\` environment to cut it."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+          (( ${#blockers[@]} )) && echo "release=false" >>"$GITHUB_OUTPUT" || echo "release=true" >>"$GITHUB_OUTPUT"
+
+  release:
+    name: Cut the security release
+    needs: assess
+    if: needs.assess.outputs.release == 'true'
+    environment: security-release
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      # GitHub creates a referenced environment on first use - without any
+      # protection rule, so this job would run unapproved. Refuse unless a
+      # required reviewer guards it.
+      - name: Require an approval-protected environment
+        run: |
+          set -euo pipefail
+          rules="$(curl -fsS "https://api.github.com/repos/${GITHUB_REPOSITORY}/environments/security-release" \
+            | jq -r '[.protection_rules[]?.type] | join(",")')"
+          if [[ ",${rules}," != *,required_reviewers,* ]]; then
+            echo "::error::The security-release environment has no required reviewer - add one under Settings -> Environments before automatic releases can run."
+            exit 1
+          fi
+      - name: Cut the next release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release-version-bump.yml --repo "$GITHUB_REPOSITORY" --ref main
