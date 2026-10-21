@@ -100,16 +100,23 @@ cleanup() {
 trap cleanup EXIT
 cp -p "${dockerfile}" "${temporary_dockerfile}"
 
+# ERE pattern for one whole "name=version" token. Whole tokens only: the
+# old version can be a prefix of the new one (20250419 ->
+# 20250419+deb13u1, #767), which a substring match finds inside the new
+# pin. '.' and '+' are the only ERE metacharacters the parser above lets
+# through.
+pin_token() {
+  local name="${1//./\\.}" version="${2//./\\.}"
+  printf '(^|[[:space:]])%s=%s([[:space:]]|$)' "${name//+/\\+}" "${version//+/\\+}"
+}
+
 for update in "${updates[@]}"; do
   IFS='|' read -r pinned_name pinned_version candidate <<<"${update}"
-  # Basic sed regexes treat '+' literally; only dots need escaping for
-  # the package/version character set accepted by the parser above.
-  escaped_name="${pinned_name//./\\.}"
-  escaped_version="${pinned_version//./\\.}"
-  sed -i.bak "s#${escaped_name}=${escaped_version}#${pinned_name}=${candidate}#g" "${temporary_dockerfile}"
+  old_token="$(pin_token "${pinned_name}" "${pinned_version}")"
+  sed -E -i.bak "s#${old_token}#\\1${pinned_name}=${candidate}\\2#g" "${temporary_dockerfile}"
   rm -f -- "${temporary_dockerfile}.bak"
-  if grep -Fq "${pinned_name}=${pinned_version}" "${temporary_dockerfile}" \
-    || ! grep -Fq "${pinned_name}=${candidate}" "${temporary_dockerfile}"; then
+  if grep -Eq "${old_token}" "${temporary_dockerfile}" \
+    || ! grep -Eq "$(pin_token "${pinned_name}" "${candidate}")" "${temporary_dockerfile}"; then
     echo "ERROR  ${pinned_name}: automatic replacement did not modify ${dockerfile}" >&2
     exit 2
   fi

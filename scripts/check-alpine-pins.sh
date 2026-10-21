@@ -46,14 +46,16 @@ for dockerfile in "$@"; do
     [[ "${candidate}" == "${pinned}" ]] && continue
     echo "DRIFT  ${name}: pinned=${pinned} newest=${candidate}"
     (( status )) || status=1
-    expressions+=(-e "s#${name//./\\.}=${pinned//./\\.}#${name}=${candidate}#g")
+    # Whole tokens only (#767): "curl=" also occurs inside "libcurl=".
+    pattern="${name//./\\.}=${pinned//./\\.}"
+    expressions+=(-e "s#(^|[[:space:]])${pattern//+/\\+}([[:space:]]|\$)#\\1${name}=${candidate}\\2#g")
   done
 
   # Rewrite via a same-directory temp file so a failed run never leaves a
   # half-edited Dockerfile behind.
   if (( fix && ${#expressions[@]} )) && [[ "${status}" -ne 2 ]]; then
     tmp="$(mktemp "${dockerfile}.tmp.XXXXXX")"
-    sed "${expressions[@]}" "${dockerfile}" >"${tmp}" && mv -- "${tmp}" "${dockerfile}"
+    sed -E "${expressions[@]}" "${dockerfile}" >"${tmp}" && mv -- "${tmp}" "${dockerfile}"
     echo "FIXED  ${dockerfile}"
   fi
 done

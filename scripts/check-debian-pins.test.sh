@@ -32,12 +32,14 @@ for argument in "$@"; do
     ca-certificates)
       if [[ "$PIN_TEST_MODE" == "missing-candidate" ]]; then
         candidate=""
+      elif [[ "$PIN_TEST_MODE" == "prefix-candidate" ]]; then
+        candidate="20250419+deb13u1"
       else
         candidate="20250419"
       fi
       ;;
     curl)
-      if [[ "$PIN_TEST_MODE" == "current" ]]; then
+      if [[ "$PIN_TEST_MODE" == "current" || "$PIN_TEST_MODE" == "prefix-candidate" ]]; then
         candidate="8.14.1-2+deb13u3"
       else
         candidate="8.14.1-2+deb13u4"
@@ -92,6 +94,19 @@ if grep -Fq 'curl=8.14.1-2+deb13u3' "$tmp_dir/repo/rootguard-unbound/Dockerfile"
   echo "stale curl pin remained after --fix" >&2
   exit 1
 fi
+
+# #767: the new version extends the old one (20250419 -> 20250419+deb13u1);
+# the old pin is a prefix of the new pin and must not count as "still there".
+write_fixture
+export PIN_TEST_MODE=prefix-candidate
+expect_status 0 --fix
+grep -Fq 'ca-certificates=20250419+deb13u1 ' "$tmp_dir/repo/rootguard-unbound/Dockerfile"
+if grep -Eq 'ca-certificates=20250419([[:space:]]|$)' "$tmp_dir/repo/rootguard-unbound/Dockerfile"; then
+  echo "stale ca-certificates pin remained after --fix" >&2
+  exit 1
+fi
+expect_status 0 --fix
+[[ "$(grep -Fc 'ca-certificates=20250419+deb13u1 ' "$tmp_dir/repo/rootguard-unbound/Dockerfile")" -eq 1 ]]
 
 write_fixture
 export PIN_TEST_MODE=missing-candidate
