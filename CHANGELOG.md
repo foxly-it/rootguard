@@ -3,6 +3,22 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.7] - 2026-10-23
+
+### CI
+
+- Propose a security release when the published one has fixed findings (#772) ([#773](https://github.com/foxly-it/rootguard/pull/773))
+- Run the pin bot every 6 hours (#775) ([#776](https://github.com/foxly-it/rootguard/pull/776))
+
+### Documentation
+
+- Release history for v1.0.6 ([#771](https://github.com/foxly-it/rootguard/pull/771))
+
+### Maintenance
+
+- Refresh drifted package pins ([#774](https://github.com/foxly-it/rootguard/pull/774))
+- Refresh drifted package pins ([#777](https://github.com/foxly-it/rootguard/pull/777))
+
 ## [1.0.6] - 2026-10-21
 
 ### Added
