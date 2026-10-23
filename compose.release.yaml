@@ -25,7 +25,7 @@ services:
     # step's own real digest the moment a real release actually
     # promotes this component, same as every other component's own
     # first-ever pin.
-    image: "${ROOTGUARD_ATTESTATION_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.6@sha256:fd5bf339d7c88656fb04a921015e2f2eb6ff955ef2511dfb4cbec65f2b078c9a}"
+    image: "${ROOTGUARD_ATTESTATION_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.7@sha256:6bc3422fdf374d838d7c0d9d019d39cdbdf269ca8009b9db83fc066d5db41674}"
     container_name: rootguard-attestation-proxy
     restart: unless-stopped
     read_only: true
@@ -57,7 +57,7 @@ services:
     # docs/release-history.md for both). Gets superseded by
     # update-alpha-pins' own real digest the moment the next real release
     # promotes it, same as every other component's own first-ever pin.
-    image: "${ROOTGUARD_DOCKER_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-docker-proxy:1.0.6@sha256:2c515d08600b315c5f988d2b8d89315bb01809d4a5d84a349ed30cf0570bd5cf}"
+    image: "${ROOTGUARD_DOCKER_PROXY_IMAGE:-ghcr.io/foxly-it/rootguard-docker-proxy:1.0.7@sha256:634f96ab63cb341e8b61d0712aea40a3e3df4a9739cec923613e54c8a3999c8b}"
     container_name: rootguard-docker-proxy
     restart: unless-stopped
     read_only: true
@@ -81,7 +81,7 @@ services:
       retries: 5
 
   core:
-    image: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.6@sha256:f6bba769ae71d40a2919688097814a989e63c78d8bfce1a9349fdff73bb8e355}"
+    image: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.7@sha256:8492052145a089967c29d499703610f8509b97fb3cb6a2406bd627c4e649b7c6}"
     container_name: rootguard-core
     restart: unless-stopped
     depends_on:
@@ -116,7 +116,7 @@ services:
       # why. Never set outside an E2E fixture; defaults to enforcing.
       ROOTGUARD_SKIP_ATTESTATION: "${ROOTGUARD_SKIP_ATTESTATION:-false}"
       ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
-      ROOTGUARD_UNBOUND_IMAGE: "${ROOTGUARD_UNBOUND_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.6@sha256:57cf2e81d3c594402076c5af12eee343ebbb347773aa54dfd357361828fbeee7}"
+      ROOTGUARD_UNBOUND_IMAGE: "${ROOTGUARD_UNBOUND_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.7@sha256:7c45c4fdad85a0dfd370bc14fc76fcb6980cba8018acfaed5a99da8fd1ed7354}"
       ROOTGUARD_ADGUARD_IMAGE: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0}"
       ROOTGUARD_ADGUARD_BETA_IMAGE: "${ROOTGUARD_ADGUARD_BETA_IMAGE:-adguard/adguardhome:beta@sha256:2b77703b27730d5c0c7045fcd6c98834169cd5c69af5f86a43947425f2d367fd}"
       ROOTGUARD_ADGUARD_UPDATE_IMAGE: "${ROOTGUARD_ADGUARD_UPDATE_IMAGE:-adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0}"
@@ -125,7 +125,7 @@ services:
       # silently fell back to its own code default of a mutable :latest
       # tag with no digest pin and no attestation ever checked, unlike
       # core/webapp/unbound/the updater.
-      ROOTGUARD_BLOCKPAGE_IMAGE: "${ROOTGUARD_BLOCKPAGE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:1.0.6@sha256:fb8bb00dbf74184f0b2e8fea15bd4e2395070b6f3098ba3a1a229e38431c3376}"
+      ROOTGUARD_BLOCKPAGE_IMAGE: "${ROOTGUARD_BLOCKPAGE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:1.0.7@sha256:aeda97dd20648317d6315e562fc94e5a0299b7174cb6ccadc84c605e7e04594f}"
       # Found in review: Blockpage had no ServiceSpec in either update
       # manager at all, so an installation could only ever get a
       # Blockpage fix via reinstall or a manual compose refresh - unlike
@@ -133,8 +133,8 @@ services:
       # refreshed-every-release treatment as ROOTGUARD_UNBOUND_UPDATE_IMAGE
       # right below (live GitHub Releases discovery is the primary
       # source; this pin is only the fallback for when that lookup fails).
-      ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE: "${ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:1.0.6@sha256:fb8bb00dbf74184f0b2e8fea15bd4e2395070b6f3098ba3a1a229e38431c3376}"
-      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.6@sha256:57cf2e81d3c594402076c5af12eee343ebbb347773aa54dfd357361828fbeee7}"
+      ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE: "${ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-blockpage:1.0.7@sha256:aeda97dd20648317d6315e562fc94e5a0299b7174cb6ccadc84c605e7e04594f}"
+      ROOTGUARD_UNBOUND_UPDATE_IMAGE: "${ROOTGUARD_UNBOUND_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.7@sha256:7c45c4fdad85a0dfd370bc14fc76fcb6980cba8018acfaed5a99da8fd1ed7354}"
       ROOTGUARD_UPDATE_DIR: /var/lib/rootguard/updates
       ROOTGUARD_CONTROL_PLANE_UPDATER_URL: http://updater:8082
       ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
@@ -146,12 +146,12 @@ services:
       # digest-pinned. Live GitHub Releases discovery
       # (ROOTGUARD_SELF_UPDATE_DIR below) is still the primary source;
       # this pin is only the fallback for when that lookup fails.
-      ROOTGUARD_UPDATER_UPDATE_IMAGE: "${ROOTGUARD_UPDATER_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-updater:1.0.6@sha256:bb63d4401f3c236dadf3982fc831d6444a42be47ae9c4966bc4deb2134b8df48}"
+      ROOTGUARD_UPDATER_UPDATE_IMAGE: "${ROOTGUARD_UPDATER_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-updater:1.0.7@sha256:1ce5ba5ed12cddec8d4670d03179cde28b2499bd92a692796ec0f584c52f99a3}"
       # Same fallback rationale as ROOTGUARD_UPDATER_UPDATE_IMAGE above -
       # live GitHub Releases discovery is the primary source
       # (rootguard#481: the attestation proxy joined self-update
       # management, no longer static/manually-pinned only).
-      ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE: "${ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.6@sha256:fd5bf339d7c88656fb04a921015e2f2eb6ff955ef2511dfb4cbec65f2b078c9a}"
+      ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE: "${ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.7@sha256:6bc3422fdf374d838d7c0d9d019d39cdbdf269ca8009b9db83fc066d5db41674}"
       ROOTGUARD_SELF_UPDATE_DIR: /var/lib/rootguard/updater-self-update
       # Core replaces the updater's own container the same way it already
       # replaces AdGuard/Unbound - via `docker compose ... up -d --no-deps
@@ -213,7 +213,7 @@ services:
       retries: 5
 
   webapp:
-    image: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:1.0.6@sha256:11af2d33b648e6613154316e745a3d8c376cb73456ed6331cab22fa0c922caf1}"
+    image: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:1.0.7@sha256:7ecad8ab1bd7399cd658d6d111a902cf04e8844d2b810080a7acaa67484817c6}"
     container_name: rootguard-webapp
     restart: unless-stopped
     depends_on:
@@ -248,7 +248,7 @@ services:
       retries: 5
 
   updater:
-    image: "${ROOTGUARD_UPDATER_IMAGE:-ghcr.io/foxly-it/rootguard-updater:1.0.6@sha256:bb63d4401f3c236dadf3982fc831d6444a42be47ae9c4966bc4deb2134b8df48}"
+    image: "${ROOTGUARD_UPDATER_IMAGE:-ghcr.io/foxly-it/rootguard-updater:1.0.7@sha256:1ce5ba5ed12cddec8d4670d03179cde28b2499bd92a692796ec0f584c52f99a3}"
     container_name: rootguard-updater
     restart: unless-stopped
     depends_on:
@@ -269,16 +269,16 @@ services:
       ROOTGUARD_UPDATER_DATA_DIR: /var/lib/rootguard/control-plane-updater
       ROOTGUARD_COMPOSE_FILE: /opt/rootguard/compose.release.yaml
       ROOTGUARD_COMPOSE_PROJECT: rootguard
-      ROOTGUARD_CORE_UPDATE_IMAGE: "${ROOTGUARD_CORE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.6@sha256:f6bba769ae71d40a2919688097814a989e63c78d8bfce1a9349fdff73bb8e355}"
-      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "${ROOTGUARD_WEBAPP_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:1.0.6@sha256:11af2d33b648e6613154316e745a3d8c376cb73456ed6331cab22fa0c922caf1}"
+      ROOTGUARD_CORE_UPDATE_IMAGE: "${ROOTGUARD_CORE_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.7@sha256:8492052145a089967c29d499703610f8509b97fb3cb6a2406bd627c4e649b7c6}"
+      ROOTGUARD_WEBAPP_UPDATE_IMAGE: "${ROOTGUARD_WEBAPP_UPDATE_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:1.0.7@sha256:7ecad8ab1bd7399cd658d6d111a902cf04e8844d2b810080a7acaa67484817c6}"
       ROOTGUARD_API_TOKEN: "${ROOTGUARD_API_TOKEN:?set ROOTGUARD_API_TOKEN in .env}"
       ROOTGUARD_ADMIN_USER: "${ROOTGUARD_ADMIN_USER:-admin}"
       ROOTGUARD_ADMIN_PASSWORD: "${ROOTGUARD_ADMIN_PASSWORD:?set ROOTGUARD_ADMIN_PASSWORD in .env}"
       ROOTGUARD_RECOVERY_TOKEN: "${ROOTGUARD_RECOVERY_TOKEN:?set ROOTGUARD_RECOVERY_TOKEN in .env}"
       ROOTGUARD_WEB_BIND: "${ROOTGUARD_WEB_BIND:-0.0.0.0}"
       ROOTGUARD_WEB_PORT: "${ROOTGUARD_WEB_PORT:-8080}"
-      ROOTGUARD_CORE_IMAGE: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.6@sha256:f6bba769ae71d40a2919688097814a989e63c78d8bfce1a9349fdff73bb8e355}"
-      ROOTGUARD_WEBAPP_IMAGE: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:1.0.6@sha256:11af2d33b648e6613154316e745a3d8c376cb73456ed6331cab22fa0c922caf1}"
+      ROOTGUARD_CORE_IMAGE: "${ROOTGUARD_CORE_IMAGE:-ghcr.io/foxly-it/rootguard-core:1.0.7@sha256:8492052145a089967c29d499703610f8509b97fb3cb6a2406bd627c4e649b7c6}"
+      ROOTGUARD_WEBAPP_IMAGE: "${ROOTGUARD_WEBAPP_IMAGE:-ghcr.io/foxly-it/rootguard-webapp:1.0.7@sha256:7ecad8ab1bd7399cd658d6d111a902cf04e8844d2b810080a7acaa67484817c6}"
       ROOTGUARD_SESSION_DIR: /var/lib/rootguard-sessions
       # See the matching PWD/${PWD} comments on the core service above - the
       # same self-referential-mount hazard applies here now that Core can
