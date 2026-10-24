@@ -105,9 +105,12 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     Alpine 3.24.2, so the pins above still apply). Its docker (Go
 #     1.26.9) and compose (Go 1.26.8) binaries still predate the
 #     crypto/x509 fix in Go 1.26.10 - see .trivyignore.yaml.
+#   - #778, 2026-10-24: trivy rates CVE-2026-111497 HIGH for the base's
+#     brotli-libs 1.2.0-r1; Alpine 3.24 `main` ships 1.2.1-r0 since
+#     2026-10-22. Pinned like libexpat; the pin bot keeps it current.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 \
+        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 brotli-libs=1.2.1-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 

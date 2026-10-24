@@ -46,10 +46,11 @@ LABEL org.opencontainers.image.title="RootGuard Updater" \
 # pinned digest is the same one Core uses, so both stopgaps apply here
 # too. OpenSSH is removed because RootGuard never uses ssh:// Docker
 # contexts. The #703 digest bump left only the OpenSSL pin; libexpat is
-# pinned again for CVE-2026-77214 (#745).
+# pinned again for CVE-2026-77214 (#745), brotli-libs for CVE-2026-111497
+# (#778).
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 \
+        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 brotli-libs=1.2.1-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx
 
 COPY --from=builder /rootguard-updater /usr/local/bin/rootguard-updater
