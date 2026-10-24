@@ -3,6 +3,12 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.8] - 2026-10-24
+
+### Fixed
+
+- Pin brotli-libs 1.2.1-r0, update undici and zod (#778) ([#779](https://github.com/foxly-it/rootguard/pull/779))
+
 ## [1.0.7] - 2026-10-23
 
 ### CI
