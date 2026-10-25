@@ -2,7 +2,7 @@
 # identical comment for why.
 # Compiles natively on the build host, cross-compiled for the target
 # platform, instead of under QEMU for arm64 (#736).
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS builder
 ARG TARGETOS TARGETARCH
 
 WORKDIR /src

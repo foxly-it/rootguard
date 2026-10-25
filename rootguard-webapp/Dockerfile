@@ -3,7 +3,7 @@
 # never ships in the final image.
 # Both builder stages run natively on the build host (#736): the frontend
 # bundle is architecture-independent, the backend is cross-compiled.
-FROM --platform=$BUILDPLATFORM node:22-bookworm@sha256:0e5f906573693feaa1e21057ebdcfdb5bd5021f050b2dc7c9deceb629c7da2a8 AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-bookworm@sha256:63538dfe497cc29dfafdda25ada09b46db68a3f4cc205abf1f5d6bf0913f3384 AS frontend-builder
 
 WORKDIR /frontend
 COPY frontend/package.json frontend/package-lock.json ./
@@ -18,7 +18,7 @@ RUN npm run build
 # compromised/re-pushed upstream tag would be pulled with no change to
 # this file. Same reasoning already applied to the runtime stage's own
 # gcr.io/distroless base a few lines down.
-FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:fe3da92a5cb2881e4aa75e625cb0b7c50571632fb4cf340cbe53e6ccdcffdd51 AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm@sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af AS backend-builder
 
 ARG VERSION=dev
 ARG COMMIT=unknown

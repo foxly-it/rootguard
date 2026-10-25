@@ -5,7 +5,7 @@
 # cosign below and to rootguard-unbound/rootguard-blockpage's base images.
 # Compiles natively on the build host, cross-compiled for the target
 # platform, instead of under QEMU for arm64 (#736).
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:27f2d3b83cfc5803c8078f8e730af0f7c431bf067afaec8f60a36fb763187cba AS builder
 ARG TARGETOS TARGETARCH
 
 WORKDIR /src
@@ -29,7 +29,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # klauspost/compress v1.20.1, fixing CVE-2026-63209.
 FROM ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d AS cosign
 
-FROM docker:29-cli@sha256:6fae2214c3121a28d5aa639d09032f61310b7c9c75ffbad1025f261a1b621800
+FROM docker:29-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
 
 ARG VERSION=dev
 ARG COMMIT=unknown
