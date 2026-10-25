@@ -66,8 +66,8 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # at 4.7.2-r0 for CVE-2026-4775 (HIGH), fixable on Alpine 3.23's `main`.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.9-r0 \
-        curl=8.22.0-r0 \
-        libcurl=8.22.0-r0 \
+        curl=8.23.0-r0 \
+        libcurl=8.23.0-r0 \
         libcrypto3=3.5.9-r0 \
         libssl3=3.5.9-r0 \
         libexpat=2.9.0-r0 \
