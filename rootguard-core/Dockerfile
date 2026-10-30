@@ -108,9 +108,13 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #   - #778, 2026-10-24: trivy rates CVE-2026-111497 HIGH for the base's
 #     brotli-libs 1.2.0-r1; Alpine 3.24 `main` ships 1.2.1-r0 since
 #     2026-10-22. Pinned like libexpat; the pin bot keeps it current.
+#   - #784, 2026-10-30: trivy rates CVE-2026-92392 (HTTP/2 upload
+#     use-after-free) HIGH for the base's libcurl 8.22.0-r0 (pulled in by
+#     its git); Alpine 3.24 `main` ships 8.23.0-r0. Pinned the same way.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
         libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.9.0-r0 brotli-libs=1.2.1-r0 \
+        libcurl=8.23.0-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 

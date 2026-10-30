@@ -296,6 +296,17 @@ fi
 # reachable from a Docker Desktop host itself: container-to-container
 # traffic on Docker's default bridge stays inside the Docker daemon's own
 # network regardless of which OS that daemon runs on.
-split_authority_ip="$(docker inspect --format '{{.NetworkSettings.IPAddress}}' rgtest-split-authority)"
+#
+# Found live, 2026-10-27: read from the per-network entry, not the
+# top-level .NetworkSettings.IPAddress - that legacy field is gone from
+# newer Docker Engine inspect output (ubuntu-latest's move to Ubuntu 26),
+# and the template then aborts with "map has no entry for key IPAddress".
+# The per-network form is what inject.sh already uses and works on both.
+# The container only ever joins the default bridge, so this is one IP.
+split_authority_ip="$(docker inspect --format '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' rgtest-split-authority)"
+if [[ ! "$split_authority_ip" =~ ^[0-9]+(\.[0-9]+){3}$ ]]; then
+  echo "::error::Could not determine the split-DNS test authority's IP (got: '${split_authority_ip}')" >&2
+  exit 1
+fi
 printf '%s' "$split_authority_ip" >"${out_dir}/split-authority-ip"
 echo "Split-DNS test authority is up at ${split_authority_ip}:53, serving ${split_zone}"
