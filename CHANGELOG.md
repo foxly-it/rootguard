@@ -3,6 +3,19 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.9] - 2026-10-31
+
+### Fixed
+
+- Unbreak Unbound CI on Ubuntu 26 runners, pin libcurl 8.23.0-r0 ([#786](https://github.com/foxly-it/rootguard/pull/786))
+
+### Maintenance
+
+- Refresh drifted package pins ([#780](https://github.com/foxly-it/rootguard/pull/780))
+- Bump the npm group ([#781](https://github.com/foxly-it/rootguard/pull/781))
+- Bump the base-images group across 6 directories with 4 updates ([#782](https://github.com/foxly-it/rootguard/pull/782))
+- Bump actions/setup-python ([#783](https://github.com/foxly-it/rootguard/pull/783))
+
 ## [1.0.8] - 2026-10-24
 
 ### Fixed
