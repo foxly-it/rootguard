@@ -37,6 +37,9 @@ RUN curl --fail --show-error --silent --location \
 
 WORKDIR /build/source
 
+# Found live, 2026-11-05 (#790): unbound-anchor is removed from the install
+# below - see the runtime stage's libexpat1 comment for why. configure still
+# insists on expat.h, so libexpat1-dev stays in this builder stage.
 RUN ./configure \
         --prefix=/usr \
         --sysconfdir=/etc \
@@ -51,7 +54,8 @@ RUN ./configure \
         --disable-static \
     && make -j"$(nproc)" \
     && make DESTDIR=/out install \
-    && /out/usr/sbin/unbound -V | grep -F "Version ${UNBOUND_VERSION}"
+    && /out/usr/sbin/unbound -V | grep -F "Version ${UNBOUND_VERSION}" \
+    && rm -f /out/usr/sbin/unbound-anchor /out/usr/share/man/man8/unbound-anchor.8
 
 FROM debian:13-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
@@ -83,9 +87,18 @@ RUN apt-get update \
         ca-certificates=20250419+deb13u1 \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.13-stable-1~deb13u1 \
-        libexpat1=2.9.0-1~deb13u1 \
         libpcre2-8-0=10.46-1~deb13u3 \
         libssl3t64=3.5.7-1~deb13u3 \
+    # Found live, 2026-11-05 (#790): libexpat1 used to be pinned here, and
+    # is deliberately gone. Of everything Unbound installs, only
+    # unbound-anchor links it (the one -lexpat in Unbound's Makefile.in;
+    # confirmed against the 1.25.2 source), and this image never runs that
+    # tool - docker-entrypoint.sh seeds root.key from dns-root-data and
+    # Unbound keeps it current through auto-trust-anchor-file. No package in
+    # this stage depends on libexpat1 either (confirmed against the trixie
+    # package index), so it only ever gave the scanner something to find:
+    # CVE-2026-113351/-117610/-118370, unfixed in trixie. Same reasoning as
+    # Core's removal of OpenSSH and the buildx plugin.
     # Found live, 2026-09-18: bind9-dnsutils' own pin went stale on its
     # own - Debian shipped a bind9 security update (bind9-libs
     # 1:9.20.29-1~deb13u1 on trixie-security, superseding the
@@ -128,8 +141,14 @@ RUN apt-get update \
     # "shadow" source package, later folded into util-linux's own build -
     # keeps its own upstream version number with the util-linux release
     # appended ("+really2.41.5-0+deb13u1").
+    # Found live, 2026-11-05 (#790): the base's apt 3.0.3 has CVE-2026-109518
+    # (an on-path attacker turns a retried package download into root code
+    # execution), fixed by DSA-6607-1 in 3.0.4 on trixie-security. Same
+    # explicit upgrade as the util-linux family, with apt's own library.
     && apt-get install -y --no-install-recommends \
+        apt=3.0.4 \
         bsdutils=1:2.41.5-0+deb13u1 \
+        libapt-pkg7.0=3.0.4 \
         libblkid1=2.41.5-0+deb13u1 \
         liblastlog2-2=2.41.5-0+deb13u1 \
         libmount1=2.41.5-0+deb13u1 \

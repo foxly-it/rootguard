@@ -2,12 +2,17 @@ vulnerabilities:
   - id: GO-2026-5932
     paths:
       - "rootguard-core/go.mod"
-    expired_at: 2026-11-11
+    expired_at: 2026-12-05
     statement: >-
       RootGuard uses x/crypto through age but does not import the affected,
       unmaintained openpgp package. govulncheck and the complete Go dependency
-      graph confirm that no vulnerable code is reachable. Recheck this scoped
-      exception when age or x/crypto is updated.
+      graph confirm that no vulnerable code is reachable. Rechecked 2026-11-05
+      (#785): neither age v1.3.2 nor any RootGuard module imports it, and
+      govulncheck reports it for the required module only. The fix sits in an
+      untagged x/crypto commit (v0.58.1-0.20261009181718-2f1f834330b2); the
+      newest release is still v0.58.0. Bump to the first tagged release after
+      that and drop this entry, rather than pinning a backup-encryption
+      dependency to an untagged commit for code that never runs.
 
   # Bundled upstream Go binaries in Core/Updater (docker CLI, its compose
   # plugin, cosign): RootGuard can't rebuild them, so findings in their Go
@@ -383,6 +388,32 @@ vulnerabilities:
       util-linux: restricted bind mounts do not pin propagation - unfixed
       in trixie, this image never creates bind mounts at runtime - see the
       comment above this block.
+
+  # Found live, 2026-11-05 (#790): the two scheduled-scan findings with no
+  # build to pin to - the Debian Security Tracker lists both as vulnerable in
+  # trixie, fixed only in sid. The same run's apt and libexpat1 findings
+  # were fixed in rootguard-unbound/Dockerfile instead.
+  - id: CVE-2026-119373
+    purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
+    expired_at: 2026-12-05
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - fixed only in sid. FTS5 heap overflow
+      that needs an attacker to populate a detail=none FTS5 table and run a
+      prefix MATCH. libsqlite3-0 arrives only as liblastlog2-2's dependency
+      (util-linux, confirmed against the trixie package index): Unbound's
+      source has no sqlite3_ call, and nothing here runs lastlog2 or accepts
+      SQL.
+  - id: CVE-2026-76844
+    purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"]
+    expired_at: 2026-12-05
+    statement: >-
+      Unfixed in trixie, fixed only in sid (trivy's title wrongly names
+      webpack-dev-middleware; the tracker confirms zlib). Heap overflow in
+      gz_write after a failed write(), so only gzFile callers can reach it.
+      Neither Unbound 1.25.2 nor BIND 9.20.30 (dig) calls any gz* write
+      function (confirmed against both sources) - BIND uses zlib only for
+      deflate in libisc's httpd, which dig does not run. apt and dpkg, the
+      remaining zlib users, run at image build time only.
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so
