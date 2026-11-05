@@ -3,6 +3,19 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.10] - 2026-11-05
+
+### Fixed
+
+- Clear the image's HIGH findings, recheck GO-2026-5932 ([#792](https://github.com/foxly-it/rootguard/pull/792))
+
+### Maintenance
+
+- Bump the npm group ([#787](https://github.com/foxly-it/rootguard/pull/787))
+- Bump the base-images group across 6 directories with 3 updates ([#788](https://github.com/foxly-it/rootguard/pull/788))
+- Bump docker/login-action ([#789](https://github.com/foxly-it/rootguard/pull/789))
+- Refresh drifted package pins ([#791](https://github.com/foxly-it/rootguard/pull/791))
+
 ## [1.0.9] - 2026-10-31
 
 ### Fixed
