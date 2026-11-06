@@ -116,6 +116,19 @@ func checkBlockpageHealthyAt(ctx context.Context, url string) error {
 	return nil
 }
 
+// adguardReleaseImage is the AdGuard Home build this Core ships with. Self-
+// update never rewrites an installation's compose file or .env, so the pins
+// in there stay at whatever was current on install day. The Core image is
+// what does arrive through self-update, which makes this the one place a new
+// AdGuard release can reach an existing installation from - see
+// docs/release-process.md. Has to match the pins in compose.release.yaml and
+// .env.release.example.
+const adguardReleaseImage = "adguard/adguardhome:v0.107.80@sha256:e2e1b48c832f7705be915873f95de0d5114de573736441d7f2923a8a6293027c"
+
+func adguardUpdateImage() string {
+	return updater.NewerPinnedImage(envOrDefault("ROOTGUARD_ADGUARD_UPDATE_IMAGE", "adguard/adguardhome:latest"), adguardReleaseImage)
+}
+
 func main() {
 	token := os.Getenv("ROOTGUARD_API_TOKEN")
 	if token == "" {
@@ -196,7 +209,7 @@ func main() {
 		DataDir:             envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
 		CoreContainer:       envOrDefault("ROOTGUARD_CORE_CONTAINER", "rootguard-core"),
 		UnboundImage:        envOrDefault("ROOTGUARD_UNBOUND_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
-		AdGuardImage:        envOrDefault("ROOTGUARD_ADGUARD_IMAGE", "adguard/adguardhome:v0.107.80"),
+		AdGuardImage:        envOrDefault("ROOTGUARD_ADGUARD_IMAGE", adguardReleaseImage),
 		AdGuardBetaImage:    envOrDefault("ROOTGUARD_ADGUARD_BETA_IMAGE", "adguard/adguardhome:beta"),
 		BlockpageImage:      envOrDefault("ROOTGUARD_BLOCKPAGE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
 		DNSNetworkCIDR:      "172.29.53.0/24",
@@ -223,7 +236,7 @@ func main() {
 			{
 				Name: "adguard", DisplayName: "AdGuard Home",
 				Container:   "rootguard-adguard",
-				TargetImage: envOrDefault("ROOTGUARD_ADGUARD_UPDATE_IMAGE", "adguard/adguardhome:latest"),
+				TargetImage: adguardUpdateImage(),
 				BackupPaths: []string{"/opt/adguardhome/conf", "/opt/adguardhome/work"},
 			},
 			{

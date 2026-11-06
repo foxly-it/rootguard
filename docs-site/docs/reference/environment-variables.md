@@ -33,7 +33,7 @@ Diese Werte legen fest, worauf ein Update aktualisiert - sie werden nie vom Brow
 | `ROOTGUARD_CORE_UPDATE_IMAGE` | Serverseitiges Ziel für Core-Updates. |
 | `ROOTGUARD_WEBAPP_UPDATE_IMAGE` | Serverseitiges Ziel für WebApp-Updates. |
 | `ROOTGUARD_UNBOUND_UPDATE_IMAGE` | Serverseitiges Ziel für Unbound-Updates. |
-| `ROOTGUARD_ADGUARD_UPDATE_IMAGE` | Serverseitiges Ziel für AdGuard-Updates. |
+| `ROOTGUARD_ADGUARD_UPDATE_IMAGE` | Serverseitiges Ziel für AdGuard-Updates. Ein älterer Pin desselben Images weicht der Version, die der laufende Core mitbringt. |
 | `ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE` | Serverseitiges Ziel für Blockpage-Updates. |
 | `ROOTGUARD_UPDATER_UPDATE_IMAGE` | Serverseitiges Ziel für Updater-Selbst-Updates. |
 | `ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE` | Serverseitiges Ziel für Attestation-Proxy-Updates. |

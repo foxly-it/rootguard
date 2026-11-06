@@ -92,6 +92,41 @@ func resolveTargetImage(ctx context.Context, spec ServiceSpec) string {
 	return spec.TargetImage
 }
 
+// NewerPinnedImage picks the update target for a third-party image, which has
+// no RootGuard release to discover. configured comes from the installation's
+// compose file or .env, which self-update never rewrites, so it stays at
+// whatever was current on install day; shipped moves with every Core image.
+// Without this, an installation would keep reporting that image as up to date
+// forever. Only an older pin of the same repository gives way: a floating tag
+// or another registry is the operator's own choice, and either way the update
+// itself still starts by hand.
+func NewerPinnedImage(configured, shipped string) string {
+	configuredRepo, configuredVersion, ok := pinnedVersion(configured)
+	if !ok {
+		return configured
+	}
+	shippedRepo, shippedVersion, ok := pinnedVersion(shipped)
+	if !ok || configuredRepo != shippedRepo {
+		return configured
+	}
+	if semver.Compare(configuredVersion, shippedVersion) < 0 {
+		return shipped
+	}
+	return configured
+}
+
+// pinnedVersion splits a "repo:vX.Y.Z[@sha256:...]" reference. ok is false
+// for anything without a semantic version tag.
+func pinnedVersion(image string) (repo, version string, ok bool) {
+	reference, _, _ := strings.Cut(image, "@")
+	repo, ok = imageRepo(reference)
+	if !ok {
+		return "", "", false
+	}
+	version = strings.TrimPrefix(reference, repo+":")
+	return repo, version, semver.IsValid(version)
+}
+
 // digestQualify turns a bare "repo:tag" reference - what live release
 // discovery produces - into an immutable "repo@sha256:..." one, using the
 // digest the image was just pulled at. Cosign attestation verification
