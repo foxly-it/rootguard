@@ -44,7 +44,7 @@ Diese Werte legen fest, worauf ein Update aktualisiert - sie werden nie vom Brow
     ROOTGUARD_WEBAPP_IMAGE=ghcr.io/foxly-it/rootguard-webapp:1.0.0@sha256:fda7b2b50a56a8a95851b59642a6543e76f8bb4dc4104df1b249916f3da2c45e
     ROOTGUARD_UPDATER_IMAGE=ghcr.io/foxly-it/rootguard-updater:1.0.0@sha256:99c9edd94d9f6b5fcb1f52ea291a37076a3803c02d8e4b4c8352e7c85908d9d4
     ROOTGUARD_UNBOUND_IMAGE=ghcr.io/foxly-it/rootguard-unbound:1.0.0@sha256:962d247fc4c125f37e3cac4f7f4c8902814f2d204fb64ceb7ccd1fbde65dfb58
-    ROOTGUARD_ADGUARD_IMAGE=adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0
+    ROOTGUARD_ADGUARD_IMAGE=adguard/adguardhome:v0.107.80@sha256:e2e1b48c832f7705be915873f95de0d5114de573736441d7f2923a8a6293027c
     ROOTGUARD_BLOCKPAGE_IMAGE=ghcr.io/foxly-it/rootguard-blockpage:1.0.0@sha256:26ff3e2687797c9bf02ca7969d4288f3bbf6517ff134dc30f484854ba367a097
     ROOTGUARD_ATTESTATION_PROXY_IMAGE=ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.0@sha256:1577ec69a34e0cd465b8ad05cdb0c64c75f684b95058858b1783a65efa2fc400
 

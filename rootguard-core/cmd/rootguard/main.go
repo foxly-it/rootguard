@@ -196,7 +196,7 @@ func main() {
 		DataDir:             envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
 		CoreContainer:       envOrDefault("ROOTGUARD_CORE_CONTAINER", "rootguard-core"),
 		UnboundImage:        envOrDefault("ROOTGUARD_UNBOUND_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
-		AdGuardImage:        envOrDefault("ROOTGUARD_ADGUARD_IMAGE", "adguard/adguardhome:v0.107.78"),
+		AdGuardImage:        envOrDefault("ROOTGUARD_ADGUARD_IMAGE", "adguard/adguardhome:v0.107.80"),
 		AdGuardBetaImage:    envOrDefault("ROOTGUARD_ADGUARD_BETA_IMAGE", "adguard/adguardhome:beta"),
 		BlockpageImage:      envOrDefault("ROOTGUARD_BLOCKPAGE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
 		DNSNetworkCIDR:      "172.29.53.0/24",
