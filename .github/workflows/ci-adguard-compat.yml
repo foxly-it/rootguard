@@ -45,9 +45,14 @@ jobs:
       matrix:
         include:
           - channel: stable
-            image: adguard/adguardhome:v0.107.80
+            image: adguard/adguardhome:v1.0.0-b.2
           - channel: beta
             image: adguard/adguardhome:beta
+          # The last release on the pre-1.0 UI. Real installations stay on
+          # it until they update, so the WebApp has to keep working against
+          # both - see adguardRoutes.ts.
+          - channel: previous
+            image: adguard/adguardhome:v0.107.80
     runs-on: ubuntu-latest
     env:
       ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
@@ -177,9 +182,8 @@ jobs:
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"
       ROOTGUARD_ADGUARD_IMAGE: adguard/adguardhome:v0.107.80
-      # Follows the next release, so the weekly run also shows whether a new
-      # beta can still read a configuration the old release wrote.
-      TARGET_IMAGE: adguard/adguardhome:beta
+      # The release installations are about to move to.
+      TARGET_IMAGE: adguard/adguardhome:v1.0.0-b.2
       USER_RULE: "||rootguard-upgrade-check.invalid^"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
