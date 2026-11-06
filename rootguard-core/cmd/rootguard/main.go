@@ -123,7 +123,7 @@ func checkBlockpageHealthyAt(ctx context.Context, url string) error {
 // AdGuard release can reach an existing installation from - see
 // docs/release-process.md. Has to match the pins in compose.release.yaml and
 // .env.release.example.
-const adguardReleaseImage = "adguard/adguardhome:v0.107.80@sha256:e2e1b48c832f7705be915873f95de0d5114de573736441d7f2923a8a6293027c"
+const adguardReleaseImage = "adguard/adguardhome:v1.0.0-b.2@sha256:4e4d3825c1d218a68d93cbb9a30070044ea8ec371ba42169b5b0d17524b72d2e"
 
 func adguardUpdateImage() string {
 	return updater.NewerPinnedImage(envOrDefault("ROOTGUARD_ADGUARD_UPDATE_IMAGE", "adguard/adguardhome:latest"), adguardReleaseImage)
