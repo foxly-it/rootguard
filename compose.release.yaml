@@ -117,9 +117,9 @@ services:
       ROOTGUARD_SKIP_ATTESTATION: "${ROOTGUARD_SKIP_ATTESTATION:-false}"
       ROOTGUARD_INSTALLATION_DIR: /var/lib/rootguard/installation
       ROOTGUARD_UNBOUND_IMAGE: "${ROOTGUARD_UNBOUND_IMAGE:-ghcr.io/foxly-it/rootguard-unbound:1.0.11@sha256:735e43b8b8559715cf2b993c14290f7730a7340ff30589d483eeb29ee724916d}"
-      ROOTGUARD_ADGUARD_IMAGE: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v0.107.80@sha256:e2e1b48c832f7705be915873f95de0d5114de573736441d7f2923a8a6293027c}"
-      ROOTGUARD_ADGUARD_BETA_IMAGE: "${ROOTGUARD_ADGUARD_BETA_IMAGE:-adguard/adguardhome:beta@sha256:2b77703b27730d5c0c7045fcd6c98834169cd5c69af5f86a43947425f2d367fd}"
-      ROOTGUARD_ADGUARD_UPDATE_IMAGE: "${ROOTGUARD_ADGUARD_UPDATE_IMAGE:-adguard/adguardhome:v0.107.80@sha256:e2e1b48c832f7705be915873f95de0d5114de573736441d7f2923a8a6293027c}"
+      ROOTGUARD_ADGUARD_IMAGE: "${ROOTGUARD_ADGUARD_IMAGE:-adguard/adguardhome:v1.0.0-b.2@sha256:4e4d3825c1d218a68d93cbb9a30070044ea8ec371ba42169b5b0d17524b72d2e}"
+      ROOTGUARD_ADGUARD_BETA_IMAGE: "${ROOTGUARD_ADGUARD_BETA_IMAGE:-adguard/adguardhome:beta@sha256:4e4d3825c1d218a68d93cbb9a30070044ea8ec371ba42169b5b0d17524b72d2e}"
+      ROOTGUARD_ADGUARD_UPDATE_IMAGE: "${ROOTGUARD_ADGUARD_UPDATE_IMAGE:-adguard/adguardhome:v1.0.0-b.2@sha256:4e4d3825c1d218a68d93cbb9a30070044ea8ec371ba42169b5b0d17524b72d2e}"
       # Digest-pinned like every other RootGuard-built component now -
       # found in review: this was unset here entirely before, so Core
       # silently fell back to its own code default of a mutable :latest
