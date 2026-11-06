@@ -2,11 +2,11 @@ vulnerabilities:
   - id: GO-2026-5932
     paths:
       - "rootguard-core/go.mod"
-    expired_at: 2026-12-05
+    expired_at: 2026-12-31
     statement: >-
       RootGuard uses x/crypto through age but does not import the affected,
       unmaintained openpgp package. govulncheck and the complete Go dependency
-      graph confirm that no vulnerable code is reachable. Rechecked 2026-11-05
+      graph confirm that no vulnerable code is reachable. Rechecked 2026-11-06
       (#785): neither age v1.3.2 nor any RootGuard module imports it, and
       govulncheck reports it for the required module only. The fix sits in an
       untagged x/crypto commit (v0.58.1-0.20261009181718-2f1f834330b2); the
@@ -22,89 +22,75 @@ vulnerabilities:
   # those binaries re-surfaces the finding for a fresh look. cosign v3.1.4
   # (#766) retired the 17 entries for v3.1.3's dependencies.
   #
-  # #766, 2026-10-21: Go 1.26.10/1.27.3 add a denylist of compromised
-  # intermediate CAs to crypto/x509's Certificate.Verify (GO-2026-6809).
-  # RootGuard's own binaries build with 1.26.10; the bundled ones can't be
-  # rebuilt here (docker 1.26.9 and compose 1.26.8 in the newest
-  # docker:29-cli build, cosign v3.1.4 on 1.27.1).
+  # Rechecked 2026-11-06 (#785) with trivy 0.73.0 against the 1.0.10 images.
+  # docker 29.9.2 and compose 5.6.1 build with Go 1.26.10 since #782, so
+  # their stdlib purls matched nothing any more and are gone. Left are
+  # cosign v3.1.4, the newest release, still on Go 1.27.1, and compose's
+  # x/net. cosign never serves anything: it runs for a single check under a
+  # 20 s timeout and only reaches ghcr.io, GHCR's blob storage and Sigstore's
+  # TUF CDN through the attestation proxy's allowlist (api.github.com is on
+  # that list for Core's release lookup, not for cosign). Recheck when
+  # cosign ships a build on Go >= 1.27.3.
   - id: CVE-2026-111943
     purls:
-      - "pkg:golang/stdlib@v1.26.9"
-      - "pkg:golang/stdlib@v1.26.8"
       - "pkg:golang/stdlib@v1.27.1"
     paths:
-      - "usr/local/bin/docker"
-      - "usr/local/libexec/docker/cli-plugins/docker-compose"
       - "usr/local/bin/cosign"
-    expired_at: 2026-11-21
+    expired_at: 2026-12-31
     statement: >-
-      docker and compose reach the daemon only over plain TCP
-      (DOCKER_HOST=tcp://docker-proxy:2375), so they never verify a
-      certificate chain; image pulls run in the host daemon. cosign's TLS
-      goes only to the attestation proxy's three allowlisted hosts, and its
-      trust in an attestation comes from Sigstore's TUF-signed root and
+      Go 1.26.10/1.27.3 add a denylist of compromised intermediate CAs to
+      crypto/x509's Certificate.Verify (GO-2026-6809). cosign's trust in an
+      attestation comes from Sigstore's TUF-signed root and
       signature/transparency-log verification, not from the TLS server
       certificate: a man-in-the-middle with a mis-issued certificate could
       withhold data, making verification fail closed, but not forge an
-      attestation. Recheck when cosign or docker:29-cli ship builds on
-      Go >= 1.26.10 / 1.27.3.
-  # Found live, 2026-10-09 (#699): Go 1.26.9's net/http fix. RootGuard's own
-  # binaries now build with 1.26.9, and so does the docker CLI since #703;
-  # the two remaining bundled binaries can't be rebuilt here - cosign v3.1.4
-  # (the newest, #766) is on Go 1.27.1, compose 5.6.0 (the newest) on Go
-  # 1.26.8. Both run as short-lived HTTP clients only (cosign via the
-  # attestation proxy, compose against the internal docker-proxy), never
-  # as an HTTP server.
+      attestation.
   - id: CVE-2026-78667
     purls:
       - "pkg:golang/stdlib@v1.27.1"
-      - "pkg:golang/stdlib@v1.26.8"
     paths:
       - "usr/local/bin/cosign"
-      - "usr/local/libexec/docker/cli-plugins/docker-compose"
-    expired_at: 2026-11-30
+    expired_at: 2026-12-31
     statement: >-
-      Go stdlib net/http CVE baked into the upstream toolchain of the
-      bundled cosign/compose binaries, used only as short-lived HTTP
-      clients - see the comment above.
-  # Same Go 1.26.9 release, surfaced by trivy's DB one day later (#699).
-  # docker/compose never speak TLS here (plain tcp://docker-proxy:2375);
-  # cosign's only TLS peers are the attestation proxy's fixed GitHub/
-  # Sigstore allowlist (ghcr.io, pkg-containers.githubusercontent.com,
-  # tuf-repo-cdn.sigstore.dev, api.github.com).
+      Server side only: a crafted Range header makes net/http's FileServer,
+      ServeContent and ServeFile burn CPU. cosign is a short-lived client and
+      serves nothing - see the comment above.
   - id: CVE-2026-97031
     purls:
       - "pkg:golang/stdlib@v1.27.1"
-      - "pkg:golang/stdlib@v1.26.8"
     paths:
       - "usr/local/bin/cosign"
-      - "usr/local/libexec/docker/cli-plugins/docker-compose"
-    expired_at: 2026-11-30
+    expired_at: 2026-12-31
     statement: >-
-      Go stdlib crypto/tls CVE in the bundled upstream binaries' toolchain;
-      docker/compose use no TLS here and cosign only reaches the attestation
-      proxy's allowlisted hosts - see the comment above.
-  # Found live, 2026-10-14 (#709): trivy rated another Go 1.26.9 / x/net
-  # 0.60.0 fix HIGH - HTTP/2 DoS via excessive SETTINGS frames, both in
-  # x/net/http2 and Go's bundled net/http copy. Still no newer compose
-  # (5.6.0) release; cosign v3.1.4 (#766) fixed its x/net copy. compose
-  # speaks plain HTTP/1.1 to tcp://docker-proxy:2375 (no TLS, so no
-  # HTTP/2 negotiation); cosign's only HTTPS peers are the attestation
-  # proxy's allowlist above.
+      Server side only: a client's malformed ECH extensions exhaust a
+      crypto/tls server's memory. cosign only dials out and never accepts a
+      TLS connection - see the comment above.
+  # Found live, 2026-10-14 (#709): HTTP/2 DoS via excessive SETTINGS frames,
+  # both in x/net/http2 and Go's bundled net/http copy. Unlike the two above
+  # this one also affects clients, hence the two separate reasonings below.
+  - id: CVE-2026-78669
+    purls:
+      - "pkg:golang/stdlib@v1.27.1"
+    paths:
+      - "usr/local/bin/cosign"
+    expired_at: 2026-12-31
+    statement: >-
+      A malicious HTTP/2 peer can burn a client's CPU, so this does reach
+      cosign, but only from the allowlisted hosts above, behind their TLS
+      certificates. The worst case is a check that runs into its 20 s timeout
+      and fails closed - see the comment above.
   - id: CVE-2026-78669
     purls:
       - "pkg:golang/golang.org/x/net@v0.58.0"
-      - "pkg:golang/stdlib@v1.27.1"
-      - "pkg:golang/stdlib@v1.26.8"
     paths:
-      - "usr/local/bin/cosign"
       - "usr/local/libexec/docker/cli-plugins/docker-compose"
     expired_at: 2026-11-30
     statement: >-
-      HTTP/2 SETTINGS-flood DoS in the bundled cosign/compose binaries'
-      x/net and stdlib; compose never negotiates HTTP/2 here and cosign
-      only reaches allowlisted GitHub/Sigstore hosts - see the comment
-      above.
+      compose speaks plain HTTP/1.1 to tcp://docker-proxy:2375, so it never
+      negotiates HTTP/2. compose 5.7.0 (x/net 0.60.0) fixes this, and trivy
+      finds nothing in compose in docker:29-cli@sha256:2357639ad1ea. That
+      build is still inside Dependabot's 3-day cooldown; drop this entry with
+      the digest bump.
 
   # Found in review, round 14: Unbound's debian:13-slim-based image
   # wasn't scanned by any CI job at all until this round's own
@@ -129,9 +115,16 @@ vulnerabilities:
   # scoped to this Unbound image's own base - never assume the same
   # ignore is still correct for some other, future Debian-based image
   # this repo might add.
+  #
+  # Rechecked 2026-11-06 (#785), covering every deb entry in this file: the
+  # Debian Security Tracker still lists each CVE as unfixed in trixie, none
+  # of these source packages is in the proposed-updates queue for the next
+  # point release, and a trivy 0.73.0 scan of the 1.0.10 images still matches
+  # each entry at the listed version. The purls are version-scoped, so a point
+  # release that moves a package re-surfaces its findings before this date.
   - id: CVE-2026-9538
     purls: ["pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian fix_deferred, no fix planned for trixie. The flaw is in
       Archive::Tar (shipped in perl-modules-5.40), which this image does
@@ -144,7 +137,7 @@ vulnerabilities:
       change re-check it.
   - id: CVE-2019-16224
     purls: ["pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, unfixed in trixie (confirmed live). liblmdb0
       arrives only as bind9-libs' own dependency (bind9-dnsutils, for
@@ -154,25 +147,25 @@ vulnerabilities:
       not the plain C library this image links.
   - id: CVE-2019-16225
     purls: ["pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
       statement above.
   - id: CVE-2019-16226
     purls: ["pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
       statement above.
   - id: CVE-2019-16227
     purls: ["pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
       statement above.
   - id: CVE-2019-16228
     purls: ["pkg:deb/debian/liblmdb0@0.9.31-1%2Bb2"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, unfixed in trixie - see CVE-2019-16224's identical
       statement above.
@@ -185,7 +178,7 @@ vulnerabilities:
       - "pkg:deb/debian/libtinfo6@6.5%2B20250216-2"
       - "pkg:deb/debian/ncurses-base@6.5%2B20250216-2"
       - "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2"
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, "Minor issue, Crash in CLI tool" - unfixed in
       trixie (confirmed live). Stack overflow in infocmp, a terminfo CLI
@@ -193,7 +186,7 @@ vulnerabilities:
       invokes.
   - id: CVE-2026-54369
     purls: ["pkg:deb/debian/libacl1@2.3.2-2%2Bb1"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Unfixed in trixie (confirmed live) - Debian's own tracker note
       says the fix lands "first in unstable, then point release update;
@@ -202,7 +195,7 @@ vulnerabilities:
       entrypoint/healthcheck never calls into libacl at all.
   - id: CVE-2026-6653
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, "minor issue" - unfixed in trixie (confirmed
       live). Use-after-free in libxml2's internal-subset parsing;
@@ -211,20 +204,20 @@ vulnerabilities:
       doesn't use it.
   - id: CVE-2026-86140
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Found live, 2026-09-08 (second external review round, unrelated CI
       failure on an otherwise unrelated PR - confirmed the same failure
       already broke main's own Unbound CI independently). Unfixed in
       trixie (confirmed live via the Debian Security Tracker; fixed only
-      in sid at 2.15.4). strcat stack-based buffer overflow in
+      in forky and sid at 2.15.4). strcat stack-based buffer overflow in
       xmlSnprintfElements; libxml2 arrives only as bind9-libs' own
       dependency - see CVE-2019-16224's/CVE-2026-6653's identical
       statement above on why Unbound's own resolver process is
       unaffected.
   - id: CVE-2026-74860
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Found live, 2026-09-11 (second full code-check round, blocking
       ci-unbound.yml on every unrelated PR). Trivy reports no fixed
@@ -248,28 +241,28 @@ vulnerabilities:
   # process never uses it.
   - id: CVE-2026-86138
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Integer overflow and resultant heap-based buffer overflow in
       xmlDictAddQString (dict.c) - unfixed in trixie (confirmed live) -
       see CVE-2019-16224's identical reachability statement above.
   - id: CVE-2026-86139
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Integer overflow in xmlURIEscapeStr (uri.c) - unfixed in trixie
       (confirmed live) - see CVE-2019-16224's identical reachability
       statement above.
   - id: CVE-2026-86142
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Heap-based buffer overflow in xmlXPtrEvalXPtrPart from xpointer
       length saturation - unfixed in trixie (confirmed live) - see
       CVE-2019-16224's identical reachability statement above.
   - id: CVE-2026-86143
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Negative lengths reaching xmlIO write callbacks from an
       xmlOutputWriteCallback/xmlBufUse inconsistency - unfixed in trixie
@@ -277,7 +270,7 @@ vulnerabilities:
       statement above.
   - id: CVE-2026-86144
     purls: ["pkg:deb/debian/libxml2@2.12.7%2Bdfsg%2Breally2.9.14-2.1%2Bdeb13u3"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       xmlXIncludeProcess/xmlXIncludeProcessTree not propagating
       parseFlags (e.g. XML_PARSE_NONET), relevant to XXE/SSRF for callers
@@ -287,7 +280,7 @@ vulnerabilities:
       statement above.
   - id: CVE-2026-16742
     purls: ["pkg:deb/debian/libsystemd0@257.13-1~deb13u1"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Local privilege escalation in systemd-homed via missing home-record
       signature verification - this image never runs systemd itself (no
@@ -296,7 +289,7 @@ vulnerabilities:
       is never invoked.
   - id: CVE-2026-16742
     purls: ["pkg:deb/debian/libudev1@257.13-1~deb13u1"]
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       Same finding, same reasoning as libsystemd0 immediately above -
       libudev1 is a linked dependency only, systemd-homed never runs in
@@ -335,7 +328,7 @@ vulnerabilities:
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       util-linux: failed external mount helper cleanup - unfixed in
       trixie, this image never invokes mount or any external mount helper
@@ -351,7 +344,7 @@ vulnerabilities:
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       util-linux: nsenter --join-cgroup root leak - unfixed in trixie,
       this image never invokes nsenter at runtime - see the comment above
@@ -367,7 +360,7 @@ vulnerabilities:
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       util-linux: X-mount.subdir detached-tree handling - unfixed in
       trixie, this image never mounts anything at runtime - see the
@@ -383,7 +376,7 @@ vulnerabilities:
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1"
-    expired_at: 2026-11-30
+    expired_at: 2027-01-31
     statement: >-
       util-linux: restricted bind mounts do not pin propagation - unfixed
       in trixie, this image never creates bind mounts at runtime - see the
@@ -395,7 +388,7 @@ vulnerabilities:
   # were fixed in rootguard-unbound/Dockerfile instead.
   - id: CVE-2026-119373
     purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
-    expired_at: 2026-12-05
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, "Minor issue" - fixed only in sid. FTS5 heap overflow
       that needs an attacker to populate a detail=none FTS5 table and run a
@@ -405,10 +398,10 @@ vulnerabilities:
       SQL.
   - id: CVE-2026-76844
     purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"]
-    expired_at: 2026-12-05
+    expired_at: 2027-01-31
     statement: >-
-      Unfixed in trixie, fixed only in sid (trivy's title wrongly names
-      webpack-dev-middleware; the tracker confirms zlib). Heap overflow in
+      Unfixed in trixie, fixed only in forky and sid (trivy's title wrongly
+      names webpack-dev-middleware; the tracker confirms zlib). Heap overflow in
       gz_write after a failed write(), so only gzFile callers can reach it.
       Neither Unbound 1.25.2 nor BIND 9.20.30 (dig) calls any gz* write
       function (confirmed against both sources) - BIND uses zlib only for
@@ -423,7 +416,7 @@ vulnerabilities:
   # only in sid, so there is still no build to pin to.
   - id: CVE-2026-119374
     purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
-    expired_at: 2026-12-05
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, "Minor issue" - fixed only in sid. Heap overflow in
       fts5DoSecureDelete() that needs a crafted database file with a corrupted
@@ -431,7 +424,7 @@ vulnerabilities:
       opens a database - see CVE-2026-119373's statement above.
   - id: CVE-2026-119379
     purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
-    expired_at: 2026-12-05
+    expired_at: 2027-01-31
     statement: >-
       Debian <no-dsa>, "Minor issue" - fixed only in sid. Heap overflow in
       sqlite3changeset_apply() from a crafted changeset, so a program must
@@ -439,10 +432,11 @@ vulnerabilities:
       a database at all - see CVE-2026-119373's statement above.
   - id: CVE-2026-85091
     purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"]
-    expired_at: 2026-12-05
+    expired_at: 2027-01-31
     statement: >-
-      Listed as vulnerable in trixie, fixed only in sid. Heap overflow in
-      gz_vacate() after a non-blocking gzwrite() stall. The CVE scopes it to
+      Listed as vulnerable in trixie, fixed only in forky and sid. Heap
+      overflow in gz_vacate() after a non-blocking gzwrite() stall. The CVE
+      scopes it to
       zlib 1.3.1.2 through 1.3.2 and the tracker dates the non-blocking code
       to 1.3.1.2, while trixie ships 1.3.1. Independently of that, it needs
       gzFile writes - see CVE-2026-76844's statement above.
