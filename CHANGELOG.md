@@ -3,6 +3,17 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.11] - 2026-11-06
+
+### Fixed
+
+- Review the new sqlite and zlib findings ([#793](https://github.com/foxly-it/rootguard/pull/793))
+- Update AdGuard Home to v0.107.80 ([#796](https://github.com/foxly-it/rootguard/pull/796))
+- Override minimatch to close GHSA-g3hv-75wg-m249 ([#797](https://github.com/foxly-it/rootguard/pull/797))
+- Follow AdGuard Home v1.0's filter route, test UI and updates ([#798](https://github.com/foxly-it/rootguard/pull/798))
+- Narrow the Go exceptions to cosign, recheck the Debian ones ([#799](https://github.com/foxly-it/rootguard/pull/799))
+- Offer new AdGuard Home pins on existing installations ([#800](https://github.com/foxly-it/rootguard/pull/800))
+
 ## [1.0.10] - 2026-11-05
 
 ### Fixed
