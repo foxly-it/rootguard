@@ -412,8 +412,40 @@ vulnerabilities:
       gz_write after a failed write(), so only gzFile callers can reach it.
       Neither Unbound 1.25.2 nor BIND 9.20.30 (dig) calls any gz* write
       function (confirmed against both sources) - BIND uses zlib only for
-      deflate in libisc's httpd, which dig does not run. apt and dpkg, the
-      remaining zlib users, run at image build time only.
+      deflate in libisc's httpd, which dig does not run. libxml2 has gz*
+      callers, but dig only runs xmlInitParser; BIND's one real libxml2 use
+      is named's statistics channel, and named is not in this image. apt
+      and dpkg run at image build time only.
+
+  # Found live, 2026-11-06 (scheduled ci-unbound.yml run on main, no code
+  # change involved): three more findings in the same two packages. The
+  # Debian Security Tracker lists all three as vulnerable in trixie, fixed
+  # only in sid, so there is still no build to pin to.
+  - id: CVE-2026-119374
+    purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
+    expired_at: 2026-12-05
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - fixed only in sid. Heap overflow in
+      fts5DoSecureDelete() that needs a crafted database file with a corrupted
+      FTS5 index, deleted from with secure-delete on. Nothing in this image
+      opens a database - see CVE-2026-119373's statement above.
+  - id: CVE-2026-119379
+    purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
+    expired_at: 2026-12-05
+    statement: >-
+      Debian <no-dsa>, "Minor issue" - fixed only in sid. Heap overflow in
+      sqlite3changeset_apply() from a crafted changeset, so a program must
+      apply attacker-supplied session changesets. Nothing in this image opens
+      a database at all - see CVE-2026-119373's statement above.
+  - id: CVE-2026-85091
+    purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"]
+    expired_at: 2026-12-05
+    statement: >-
+      Listed as vulnerable in trixie, fixed only in sid. Heap overflow in
+      gz_vacate() after a non-blocking gzwrite() stall. The CVE scopes it to
+      zlib 1.3.1.2 through 1.3.2 and the tracker dates the non-blocking code
+      to 1.3.1.2, while trixie ships 1.3.1. Independently of that, it needs
+      gzFile writes - see CVE-2026-76844's statement above.
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so
