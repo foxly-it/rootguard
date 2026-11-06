@@ -121,6 +121,31 @@ func TestPickLatestReleaseImageRejectsUnmatchedList(t *testing.T) {
 	}
 }
 
+func TestNewerPinnedImage(t *testing.T) {
+	const repo = "adguard/adguardhome"
+	shipped := repo + ":v0.107.80@sha256:bbb"
+	for name, test := range map[string]struct{ configured, shipped, want string }{
+		"older pin gives way":             {repo + ":v0.107.79@sha256:aaa", shipped, shipped},
+		"older pin without digest":        {repo + ":v0.107.79", shipped, shipped},
+		"across a major version":          {repo + ":v0.107.80@sha256:aaa", repo + ":v1.0.0@sha256:bbb", repo + ":v1.0.0@sha256:bbb"},
+		"prerelease gives way to final":   {repo + ":v1.0.0-b.2@sha256:aaa", repo + ":v1.0.0@sha256:bbb", repo + ":v1.0.0@sha256:bbb"},
+		"same version stays":              {repo + ":v0.107.80@sha256:aaa", shipped, repo + ":v0.107.80@sha256:aaa"},
+		"newer pin stays":                 {repo + ":v0.107.81@sha256:aaa", shipped, repo + ":v0.107.81@sha256:aaa"},
+		"newer prerelease stays":          {repo + ":v0.108.0-b.90@sha256:aaa", shipped, repo + ":v0.108.0-b.90@sha256:aaa"},
+		"floating tag stays":              {repo + ":latest", shipped, repo + ":latest"},
+		"channel tag stays":               {repo + ":beta@sha256:aaa", shipped, repo + ":beta@sha256:aaa"},
+		"digest only stays":               {repo + "@sha256:aaa", shipped, repo + "@sha256:aaa"},
+		"other registry stays":            {"registry.example:5000/adguard/adguardhome:v0.107.1", shipped, "registry.example:5000/adguard/adguardhome:v0.107.1"},
+		"unversioned shipped image stays": {repo + ":v0.107.79", repo + ":latest", repo + ":v0.107.79"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := NewerPinnedImage(test.configured, test.shipped); got != test.want {
+				t.Errorf("NewerPinnedImage(%q, %q) = %q, want %q", test.configured, test.shipped, got, test.want)
+			}
+		})
+	}
+}
+
 // TestCheckUsesResolveTargetWhenSet guards against check() silently falling
 // back to the static TargetImage pin instead of calling a configured
 // ResolveTarget: the static pin here points at an image the fake docker

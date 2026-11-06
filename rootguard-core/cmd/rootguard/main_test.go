@@ -5,8 +5,46 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
+	"regexp"
 	"testing"
 )
+
+// An AdGuard bump has to move adguardReleaseImage too, or existing
+// installations never see it.
+func TestAdGuardReleaseImageMatchesReleasePins(t *testing.T) {
+	for _, file := range []string{"compose.release.yaml", ".env.release.example"} {
+		content, err := os.ReadFile(filepath.Join("..", "..", "..", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, variable := range []string{"ROOTGUARD_ADGUARD_IMAGE", "ROOTGUARD_ADGUARD_UPDATE_IMAGE"} {
+			pin := regexp.MustCompile(variable + `(?::-|=)(adguard/adguardhome:[^}"\s]+)`).FindSubmatch(content)
+			if pin == nil {
+				t.Fatalf("%s: no AdGuard pin for %s", file, variable)
+			}
+			if got := string(pin[1]); got != adguardReleaseImage {
+				t.Errorf("%s: %s = %q, adguardReleaseImage = %q", file, variable, got, adguardReleaseImage)
+			}
+		}
+	}
+}
+
+func TestAdGuardUpdateImage(t *testing.T) {
+	for name, test := range map[string]struct{ configured, want string }{
+		"pin from an older release":  {"adguard/adguardhome:v0.107.78@sha256:aaa", adguardReleaseImage},
+		"floating tag":               {"adguard/adguardhome:latest", "adguard/adguardhome:latest"},
+		"unset keeps the dev target": {"", "adguard/adguardhome:latest"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("ROOTGUARD_ADGUARD_UPDATE_IMAGE", test.configured)
+			if got := adguardUpdateImage(); got != test.want {
+				t.Errorf("adguardUpdateImage() = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
 
 func TestGithubReleaseTransport(t *testing.T) {
 	t.Run("no proxy configured uses default transport", func(t *testing.T) {

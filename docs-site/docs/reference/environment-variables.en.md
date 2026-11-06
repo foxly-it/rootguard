@@ -33,7 +33,7 @@ These values determine what an update advances to - they are never accepted from
 | `ROOTGUARD_CORE_UPDATE_IMAGE` | Server-side target for Core updates. |
 | `ROOTGUARD_WEBAPP_UPDATE_IMAGE` | Server-side target for WebApp updates. |
 | `ROOTGUARD_UNBOUND_UPDATE_IMAGE` | Server-side target for Unbound updates. |
-| `ROOTGUARD_ADGUARD_UPDATE_IMAGE` | Server-side target for AdGuard updates. |
+| `ROOTGUARD_ADGUARD_UPDATE_IMAGE` | Server-side target for AdGuard updates. An older pin of the same image gives way to the version the running Core ships with. |
 | `ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE` | Server-side target for Blockpage updates. |
 | `ROOTGUARD_UPDATER_UPDATE_IMAGE` | Server-side target for Updater self-updates. |
 | `ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE` | Server-side target for Attestation Proxy updates. |

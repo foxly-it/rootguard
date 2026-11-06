@@ -198,3 +198,16 @@ mechanism - not something this change
 introduced, and not something worth solving here (making self-update
 topology-aware is a materially bigger, separate undertaking) - just
 worth knowing next time a release adds a new service or network.
+
+## AdGuard Home reaches installations through Core
+
+`ROOTGUARD_ADGUARD_UPDATE_IMAGE` lives in that same on-disk compose file and
+`.env`, so self-update never moves it either, and unlike Unbound and
+Blockpage, AdGuard has no RootGuard release to discover. Core therefore
+carries the tested pin itself as `adguardReleaseImage`
+(`rootguard-core/cmd/rootguard/main.go`). Once a release's Core image is
+running, `updater.NewerPinnedImage` prefers that pin over an older one of the
+same repository, and the WebGUI offers the update. The operator still starts
+it by hand. A floating tag or another repository stays as configured, and a
+test keeps the constant equal to the pins in `compose.release.yaml` and
+`.env.release.example`.
