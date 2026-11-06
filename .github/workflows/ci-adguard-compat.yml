@@ -7,14 +7,20 @@ on:
       - "rootguard-core/internal/adguard/**"
       - "rootguard-webapp/backend/internal/api/adguard.go"
       - "rootguard-webapp/backend/internal/coreclient/client.go"
+      - "rootguard-webapp/frontend/src/pages/AdGuard.tsx"
+      - "rootguard-webapp/frontend/src/utils/adguardRoutes.ts"
       - "compose.integration.yaml"
+      - "scripts/ci/adguard-*"
       - ".github/workflows/ci-adguard-compat.yml"
   pull_request:
     paths:
       - "rootguard-core/internal/adguard/**"
       - "rootguard-webapp/backend/internal/api/adguard.go"
       - "rootguard-webapp/backend/internal/coreclient/client.go"
+      - "rootguard-webapp/frontend/src/pages/AdGuard.tsx"
+      - "rootguard-webapp/frontend/src/utils/adguardRoutes.ts"
       - "compose.integration.yaml"
+      - "scripts/ci/adguard-*"
       - ".github/workflows/ci-adguard-compat.yml"
   workflow_dispatch: {}
   schedule:
@@ -126,6 +132,109 @@ jobs:
           report="$(curl --fail --silent --cookie /tmp/rootguard-ci-cookies.txt http://127.0.0.1:18080/api/adguard/filter-report)"
           test "$(jq -r '.expected >= 1' <<<"$report")" = "true" || { echo "Expected at least one filter check"; exit 1; }
           test "$(jq -r '.checks | length >= 1' <<<"$report")" = "true" || { echo "Expected per-host filter results"; exit 1; }
+
+      # See adguard-ui-smoke.cjs for why a browser is needed here at all.
+      - name: Install the browser driver
+        run: |
+          mkdir -p "$RUNNER_TEMP/adguard-ui"
+          npm install --prefix "$RUNNER_TEMP/adguard-ui" --ignore-scripts --no-audit --no-fund --no-save playwright-core@1.64.1
+
+      - name: Verify the native AdGuard UI in a real browser
+        env:
+          NODE_PATH: ${{ runner.temp }}/adguard-ui/node_modules
+          SCREENSHOT_DIR: ${{ runner.temp }}/adguard-ui/screenshots
+        run: node scripts/ci/adguard-ui-smoke.cjs
+
+      - name: Keep the UI screenshots
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: adguard-ui-${{ matrix.channel }}
+          path: ${{ runner.temp }}/adguard-ui/screenshots
+          if-no-files-found: ignore
+
+      - name: Show service logs after failure
+        if: failure()
+        run: docker compose -f compose.integration.yaml logs --no-color
+
+      - name: Stop RootGuard stack
+        if: always()
+        run: docker compose -f compose.integration.yaml down --volumes
+
+  # Every other job here starts from empty volumes. This one walks the path a
+  # real installation takes: configured on the old release, updated in place,
+  # and rolled back the way the updater does on a failed update.
+  upgrade:
+    name: Upgrade and roll back AdGuard
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    env:
+      ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
+      ROOTGUARD_ADMIN_USER: admin
+      ROOTGUARD_ADMIN_PASSWORD: ci-rootguard-password
+      ROOTGUARD_RECOVERY_TOKEN: ci-rootguard-recovery-token-not-a-real-secret-32
+      ROOTGUARD_WEB_PORT: "18080"
+      ROOTGUARD_DNS_BIND: 127.0.0.1
+      ROOTGUARD_DNS_PORT: "1053"
+      ROOTGUARD_ADGUARD_IMAGE: adguard/adguardhome:v0.107.80
+      # Follows the next release, so the weekly run also shows whether a new
+      # beta can still read a configuration the old release wrote.
+      TARGET_IMAGE: adguard/adguardhome:beta
+      USER_RULE: "||rootguard-upgrade-check.invalid^"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
+      - name: Build RootGuard stack
+        run: docker compose -f compose.integration.yaml build
+
+      - name: Start RootGuard stack on the old release
+        run: docker compose -f compose.integration.yaml up -d
+
+      - name: Wait for WebApp
+        uses: ./.github/actions/wait-for-webapp-login
+        with:
+          password: ci-rootguard-password
+          cookie-jar: /tmp/rootguard-ci-cookies.txt
+
+      - name: Bootstrap AdGuard Home
+        run: |
+          curl --fail --show-error --silent \
+            --cookie /tmp/rootguard-ci-cookies.txt \
+            --request POST \
+            http://127.0.0.1:18080/api/adguard/bootstrap
+
+      - name: Wire the resolver up to the local DNSSEC test zone
+        run: ./scripts/ci/dnssec-test-zone/inject.sh rootguard-unbound
+
+      - name: Wait for rootguard-unbound healthy
+        uses: ./.github/actions/wait-for-unbound-healthy
+        with:
+          container: rootguard-unbound
+
+      - name: Add operator state the update must keep
+        run: |
+          jq -n --arg rule "$USER_RULE" '{rules: [$rule]}' | curl --fail --show-error --silent \
+            --cookie /tmp/rootguard-ci-cookies.txt \
+            --header 'Content-Type: application/json' \
+            --data @- \
+            http://127.0.0.1:18080/adguard-ui/control/filtering/set_rules
+          ./scripts/ci/adguard-upgrade-check.sh "${ROOTGUARD_ADGUARD_IMAGE##*:}" /tmp/rootguard-ci-cookies.txt "$USER_RULE"
+
+      - name: Update AdGuard in place
+        run: |
+          # A channel tag like :beta doesn't name a version, the image does.
+          docker pull --quiet "$TARGET_IMAGE"
+          target_version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$TARGET_IMAGE")"
+          ROOTGUARD_ADGUARD_IMAGE="$TARGET_IMAGE" docker compose -f compose.integration.yaml up -d --no-deps adguard
+          ./scripts/ci/adguard-upgrade-check.sh "$target_version" /tmp/rootguard-ci-cookies.txt "$USER_RULE"
+
+      - name: Roll back to the old release
+        run: |
+          docker compose -f compose.integration.yaml up -d --no-deps adguard
+          ./scripts/ci/adguard-upgrade-check.sh "${ROOTGUARD_ADGUARD_IMAGE##*:}" /tmp/rootguard-ci-cookies.txt "$USER_RULE"
 
       - name: Show service logs after failure
         if: failure()

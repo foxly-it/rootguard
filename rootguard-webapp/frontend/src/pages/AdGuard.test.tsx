@@ -109,6 +109,34 @@ describe("AdGuard filtering switch", () => {
   });
 });
 
+describe("AdGuard native UI deep links", () => {
+  async function contextualLinks() {
+    const { container } = renderPage();
+    await screen.findByRole("checkbox", { name: /DNS-Filterung/i });
+    return Array.from(container.querySelectorAll("a.adguard-contextual-button")).map((link) => link.getAttribute("href"));
+  }
+
+  it("targets the pre-1.0 filter route on a 0.x AdGuard Home", async () => {
+    expect(await contextualLinks()).toEqual(["/adguard-ui/#/settings", "/adguard-ui/#/dns", "/adguard-ui/#filters"]);
+  });
+
+  it("targets the renamed filter route on AdGuard Home v1", async () => {
+    vi.spyOn(client, "fetchAdGuardStatus").mockResolvedValue({ ...baseStatus, version: "v1.0.0-b.2" });
+    expect(await contextualLinks()).toEqual(["/adguard-ui/#/settings", "/adguard-ui/#/dns", "/adguard-ui/#/blocklists"]);
+  });
+
+  it("targets the same route from the filter test's manage link", async () => {
+    vi.spyOn(client, "fetchAdGuardStatus").mockResolvedValue({ ...baseStatus, version: "v1.0.0-b.2" });
+    vi.spyOn(client, "fetchAdGuardFilterReport").mockResolvedValue({ checks: [], blocked: 0, expected: 0, passed: 0, checked_at: new Date().toISOString() });
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole("button", { name: /Filter jetzt prüfen/i }));
+
+    await waitFor(() => expect(document.querySelector("a.adguard-manage-filters-link")).toHaveAttribute("href", "/adguard-ui/#/blocklists"));
+  });
+});
+
 describe("AdGuard protection select", () => {
   it("triggers the chosen action with the right duration and resets back to the placeholder", async () => {
     const setProtection = vi

@@ -6,6 +6,7 @@ import ContentModal from "../components/ContentModal";
 import "../styles/adguard.css";
 import { useI18n } from "../i18n";
 import { useAdGuardData } from "../hooks/useAdGuardData";
+import { adguardFiltersHash } from "../utils/adguardRoutes";
 
 export default function AdGuard() {
   const { t } = useI18n();
@@ -72,14 +73,14 @@ export default function AdGuard() {
             <span className={`adguard-state ${ready ? "healthy" : ""}`}>{loading ? t("common.checking") : ready ? t("adguard.ready") : t("adguard.incomplete")}</span>
           </div>
           <div className="adguard-status-list">
-            <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} adguardHash="#settings" adguardHashLabel={t("adguard.openSettingsShort")} adguardHashAriaLabel={t("adguard.openSettings")} />
-            <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} adguardHash="#dns" adguardHashLabel={t("adguard.openDnsSettingsShort")} adguardHashAriaLabel={t("adguard.openDnsSettings")} />
+            <StatusRow label={t("adguard.config")} active={Boolean(status?.configured)} activeText={t("adguard.managed")} inactiveText={t("adguard.notSetup")} adguardHash="#/settings" adguardHashLabel={t("adguard.openSettingsShort")} adguardHashAriaLabel={t("adguard.openSettings")} />
+            <StatusRow label={t("adguard.bestPractices")} active={Boolean(status?.best_practices_ready)} activeText={t("adguard.bestPracticesActive")} inactiveText={t("adguard.bestPracticesPending")} adguardHash="#/dns" adguardHashLabel={t("adguard.openDnsSettingsShort")} adguardHashAriaLabel={t("adguard.openDnsSettings")} />
             <StatusRow
               label={t("adguard.filterLists")}
               active={Boolean(status?.filtering_enabled)}
               activeText={t("adguard.filterListsActive", { active: status?.active_filter_lists ?? 0, total: status?.total_filter_lists ?? 0 })}
               inactiveText={t("adguard.filterListsInactive")}
-              adguardHash="#filters"
+              adguardHash={adguardFiltersHash(status?.version)}
               adguardHashLabel={t("adguard.openFilterListsShort")}
               adguardHashAriaLabel={t("adguard.openFilterLists")}
             />
@@ -184,7 +185,7 @@ export default function AdGuard() {
                 {filterReport.checks.map((check) => <FilterCheck key={check.host} check={check} />)}
               </div>
               <small className="adguard-filter-note">{t("adguard.filterTestNote")}</small>
-              <a className="adguard-manage-filters-link" href="/adguard-ui/#filters" target="_blank" rel="noreferrer">
+              <a className="adguard-manage-filters-link" href={`/adguard-ui/${adguardFiltersHash(status?.version)}`} target="_blank" rel="noreferrer">
                 {t("adguard.manageFilters")} <ExternalLink size={14} aria-hidden="true" />
               </a>
             </>
