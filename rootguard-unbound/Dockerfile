@@ -6,7 +6,7 @@ ARG UNBOUND_VERSION="1.25.2"
 ARG UNBOUND_SHA256="0d92275c703d5f5f8baba3dab22117dd8c29b495588a5c229768ed6581566600"
 
 # Literal FROM lines (not an ARG) so Dependabot can bump the digest (#721).
-FROM debian:13-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4 AS builder
+FROM debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2 AS builder
 
 ARG UNBOUND_VERSION
 ARG UNBOUND_SHA256
@@ -57,7 +57,7 @@ RUN ./configure \
     && /out/usr/sbin/unbound -V | grep -F "Version ${UNBOUND_VERSION}" \
     && rm -f /out/usr/sbin/unbound-anchor /out/usr/share/man/man8/unbound-anchor.8
 
-FROM debian:13-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
+FROM debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
 ARG UNBOUND_VERSION
 ARG UNBOUND_SHA256
