@@ -140,7 +140,7 @@ current release commitment ([#186](https://github.com/foxly-it/rootguard/issues/
       silently stops honoring an entry once `expired_at` passes, and 61 of
       62 entries shared one date. `scripts/ci/check-trivyignore-expiry.sh`
       plus the daily `trivyignore-expiry.yml` keep one tracking issue
-      current from 14 days ahead.
+      current from 14 days ahead and close it once nothing is due.
 - [x] Bump Core/Updater's `docker:29-cli` base
       ([#703](https://github.com/foxly-it/rootguard/issues/703)) to the
       2026-10-09 build: Docker CLI 29.9.0 (Go 1.26.9), compose 5.6.0,
