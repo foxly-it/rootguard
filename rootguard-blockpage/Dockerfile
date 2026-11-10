@@ -64,6 +64,10 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 #
 # Found live, 2026-10-09 (#701): tiff (via the base's libgd) newly pinned
 # at 4.7.2-r0 for CVE-2026-4775 (HIGH), fixable on Alpine 3.23's `main`.
+#
+# Found live, 2026-11-09 (#801): musl-utils newly pinned at 1.2.5-r24 for
+# CVE-2026-107891 (HIGH). The base already ships musl 1.2.5-r24, only
+# musl-utils lagged at r23.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.9-r0 \
         curl=8.23.0-r0 \
@@ -73,6 +77,7 @@ RUN apk add --no-cache --upgrade \
         libexpat=2.10.0-r0 \
         libuuid=2.41.6-r1 \
         libxml2=2.13.9-r1 \
+        musl-utils=1.2.5-r24 \
         nghttp2-libs=1.69.0-r0 \
         pcre2=10.49-r0 \
         tiff=4.7.2-r0

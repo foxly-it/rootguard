@@ -29,7 +29,10 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # klauspost/compress v1.20.1, fixing CVE-2026-63209.
 FROM ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d52ca43edaa1d9e53e6510fa78a48f69c2d AS cosign
 
-FROM docker:29-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
+# #801, 2026-11-10: docker 29.9.3 with compose 5.7.0 (x/net 0.60.0). That
+# clears CVE-2026-78669 and four vulnerabilities govulncheck finds called in
+# compose 5.6.1 (GO-2026-6603, -6611, -6612, -6617).
+FROM docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d
 
 ARG VERSION=dev
 ARG COMMIT=unknown
