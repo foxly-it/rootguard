@@ -3,6 +3,21 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.12] - 2026-11-10
+
+### Fixed
+
+- Clear the nightly findings from 2026-11-09 ([#806](https://github.com/foxly-it/rootguard/pull/806))
+- Stop failing after a successful install ([#807](https://github.com/foxly-it/rootguard/pull/807))
+- Close the expiry tracking issue once nothing is due ([#808](https://github.com/foxly-it/rootguard/pull/808))
+
+### Maintenance
+
+- Bump the npm group ([#802](https://github.com/foxly-it/rootguard/pull/802))
+- Bump debian ([#804](https://github.com/foxly-it/rootguard/pull/804))
+- Bump jsdom in /rootguard-webapp/frontend ([#803](https://github.com/foxly-it/rootguard/pull/803))
+- Bump the actions group across 1 directory with 2 updates ([#805](https://github.com/foxly-it/rootguard/pull/805))
+
 ## [1.0.11] - 2026-11-06
 
 ### Fixed
