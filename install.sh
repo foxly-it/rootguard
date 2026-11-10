@@ -514,11 +514,9 @@ main() {
   # EXIT, not RETURN - see install_docker's identical fix above: a
   # RETURN trap never fires on a die() call, which is exactly the path
   # that needs this cleanup (e.g. either download below failing left the
-  # scratch directory behind in /tmp forever). Nothing else in this
-  # script sets its own EXIT trap after this point, so leaving it
-  # registered for the remainder of main() is correct, not just
-  # tolerated - it still fires whether the script goes on to succeed or
-  # die() later.
+  # scratch directory behind in /tmp forever). It only works while main()
+  # is still running, though, since $staging is local - see the cleanup
+  # right after the move below for why it is dropped there.
   trap 'rm -rf "$staging"' EXIT
 
   local raw_base="https://raw.githubusercontent.com/${RG_REPO}/${tag}"
@@ -542,6 +540,13 @@ main() {
   mkdir "$TARGET_DIR" \
     || die "'$TARGET_DIR' existiert bereits - vermutlich läuft hier schon eine Installation. Abgebrochen, um nichts zu überschreiben."
   mv "$staging/compose.release.yaml" "$staging/.env" "$TARGET_DIR/"
+  # Both files are in place, so the scratch dir is done. Found on a real
+  # install (2026-11-10): leaving the trap registered meant it ran after
+  # main() had returned, when the local $staging no longer existed, and
+  # under set -u every successful install ended with "staging: unbound
+  # variable" and exit status 1.
+  rm -rf "$staging"
+  trap - EXIT
   cd "$TARGET_DIR"
 
   # Values are passed through the environment, never interpolated into a
