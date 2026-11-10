@@ -12,6 +12,7 @@ on:
       - "compose.release.yaml"
       - ".env.release.example"
       - "scripts/verify-clean-install.sh"
+      - "install.sh"
       - ".github/workflows/clean-install.yml"
   workflow_dispatch:
 
@@ -70,3 +71,58 @@ jobs:
             echo "- Docker Engine: \`$(docker version --format '{{.Server.Version}}')\`"
             echo "- Docker Compose: \`$(docker compose version --short)\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # The job above starts the stack with docker compose directly, so nothing
+  # ran install.sh itself - until a real install showed it ending every
+  # successful run with "staging: unbound variable" and exit status 1. This
+  # runs it the way the README does, against the newest published release.
+  install-script:
+    name: install.sh, Linux amd64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # install.sh asks the GitHub API for the newest release without a
+      # token, and shared runner IPs can hit the anonymous rate limit. This
+      # wrapper adds the job's own token to that one host only, so the
+      # script itself runs unchanged.
+      - name: Authenticate install.sh's release lookup
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '%s\n' '#!/bin/sh' \
+            'case "$*" in *https://api.github.com/*) exec /usr/bin/curl -H "Authorization: Bearer ${GH_TOKEN}" "$@" ;; esac' \
+            'exec /usr/bin/curl "$@"' > "$RUNNER_TEMP/bin/curl"
+          chmod +x "$RUNNER_TEMP/bin/curl"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Run install.sh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROOTGUARD_ADMIN_USER: admin
+          ROOTGUARD_ADMIN_PASSWORD: install-script-ci-password
+          ROOTGUARD_WEB_PORT: "18080"
+        run: |
+          set -o pipefail
+          ./install.sh --non-interactive --dir="$RUNNER_TEMP/rootguard" 2>&1 | tee "$RUNNER_TEMP/install.log"
+          if grep -q 'unbound variable' "$RUNNER_TEMP/install.log"; then
+            echo "::error::install.sh used an unset variable"
+            exit 1
+          fi
+
+      - name: Wait for WebApp
+        uses: ./.github/actions/wait-for-webapp-login
+        with:
+          password: install-script-ci-password
+          cookie-jar: /tmp/rootguard-install-cookies.txt
+
+      - name: Stop the stack
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/rootguard/compose.release.yaml" ]; then
+            cd "$RUNNER_TEMP/rootguard"
+            docker compose -f compose.release.yaml logs --no-color --tail 50 || true
+            docker compose -f compose.release.yaml down --volumes
+          fi
