@@ -19,15 +19,21 @@ es läuft, so wie jede containerisierte Anwendung.
 
 ## Akteure und Vertrauensgrenzen
 
-### 1. Docker-Socket-Inhaber (Core, Updater)
+### 1. Docker-Socket-Inhaber (Docker-Proxy, Core, Updater)
 
-**Zugriff:** `rootguard-core` und `rootguard-updater` haben `/var/run/docker.sock`
-gemountet. Wer diesen Socket kontrolliert, kontrolliert effektiv den Host -
-ein neuer privilegierter Container mit beliebigem Bind-Mount ist daraus
-trivial erreichbar.
+**Zugriff:** Seit 1.0.2 mountet nur `rootguard-docker-proxy`
+`/var/run/docker.sock`; `rootguard-core` und `rootguard-updater` erreichen
+Docker über ihn (`DOCKER_HOST=tcp://docker-proxy:2375`). Installationen, die
+mit 1.0.0 oder 1.0.1 eingerichtet und nur per Self-Update aktualisiert
+wurden, mounten den Socket weiter direkt in Core und Updater (siehe unten).
+Wer den Socket kontrolliert, kontrolliert effektiv den Host - ein neuer
+privilegierter Container mit beliebigem Bind-Mount ist daraus trivial
+erreichbar.
 
-**Wenn kompromittiert:** Vollständige Host-Kompromittierung. Das ist die mit
-Abstand größte Einzel-Vertrauensgrenze im System.
+**Wenn kompromittiert:** Ein kompromittierter Docker-Proxy bedeutet
+vollständige Host-Kompromittierung; ein kompromittierter Core oder Updater
+ist auf das beschränkt, was der Proxy durchlässt. Das ist die mit Abstand
+größte Einzel-Vertrauensgrenze im System.
 
 **Bestehende Gegenmaßnahmen:**
 - Beide Images laufen aktuell als `root` (siehe die Begründung direkt im
