@@ -1,0 +1,44 @@
+name: Race detector
+
+# The Go unit tests under -race, once a day instead of on every PR. Core,
+# the Updater and the WebApp backend run background goroutines behind
+# mutexes (update managers, status polling, sessions), and no other job
+# ever ran them under the race detector. Measured in #812 (2026-11-11): no
+# race found, but -race more than doubled the Core and WebApp test jobs
+# (Core 1:43 -> 4:26 min), too slow for every PR.
+#
+# A red run here also blocks security-release.yml, which counts every
+# failing check on main's HEAD.
+
+on:
+  schedule:
+    - cron: "40 3 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  race:
+    name: Race detector (${{ matrix.module }})
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - rootguard-core
+          - rootguard-updater
+          - rootguard-webapp/backend
+          - rootguard-docker-proxy
+          - rootguard-attestation-proxy
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - working-directory: ${{ matrix.module }}
+        run: go test -race ./...
