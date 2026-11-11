@@ -5,7 +5,7 @@
 # cosign below and to rootguard-unbound/rootguard-blockpage's base images.
 # Compiles natively on the build host, cross-compiled for the target
 # platform, instead of under QEMU for arm64 (#736).
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine@sha256:30b1e546a9c7fa3b747c2bdba3a0c7bdf3a02ebb4c5b8405d2f948d7e8aac4ec AS builder
 ARG TARGETOS TARGETARCH
 
 WORKDIR /src
