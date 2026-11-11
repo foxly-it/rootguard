@@ -16,13 +16,14 @@ func TestReadServiceLogsUsesDedicatedManagedContainerAllowlist(t *testing.T) {
 		return []byte("ready\n"), nil
 	}
 
-	for _, service := range []string{"core", "webapp", "updater", "adguard", "unbound"} {
+	services := []string{"core", "webapp", "updater", "adguard", "unbound", "blockpage", "attestation-proxy", "docker-proxy"}
+	for _, service := range services {
 		logs, err := ReadServiceLogs(context.Background(), service)
 		if err != nil || logs.Service != service || len(logs.Lines) != 1 {
 			t.Fatalf("read %s logs: %+v, %v", service, logs, err)
 		}
 	}
-	for index, service := range []string{"core", "webapp", "updater", "adguard", "unbound"} {
+	for index, service := range services {
 		if called[index] != logContainers[service] {
 			t.Fatalf("service %s used container %q", service, called[index])
 		}

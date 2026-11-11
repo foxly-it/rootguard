@@ -30,6 +30,10 @@ var logContainers = map[string]string{
 	"unbound":           "rootguard-unbound",
 	"blockpage":         "rootguard-blockpage",
 	"attestation-proxy": "rootguard-attestation-proxy",
+	// The proxy logs every Docker call it rejects. Without this, an update
+	// that fails with "not on the allowlist" pointed at a reason the WebGUI
+	// had no way to show (found 2026-11-11, #809).
+	"docker-proxy": "rootguard-docker-proxy",
 }
 
 type ServiceLogs struct {

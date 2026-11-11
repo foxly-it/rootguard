@@ -98,4 +98,17 @@ describe("Overview page", () => {
     await user.click(screen.getByRole("button", { name: /AdGuard Home/i }));
     await waitFor(() => expect(client.serviceAction).toHaveBeenCalledWith("adguard", "restart"));
   });
+
+  it("offers restart only for services Core can restart, and hides a missing Docker proxy", async () => {
+    vi.spyOn(client, "fetchServices").mockResolvedValue([
+      adGuardService,
+      { ...adGuardService, name: "core", displayName: "RootGuard Core", image: "ghcr.io/foxly-it/rootguard-core:1.0.12" },
+      { ...adGuardService, name: "docker-proxy", displayName: "Docker Proxy", status: "stopped", image: undefined },
+    ]);
+    renderPage();
+    await waitFor(() => expect(screen.getByText("RootGuard Core")).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /AdGuard Home/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /RootGuard Core/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Docker Proxy")).not.toBeInTheDocument();
+  });
 });

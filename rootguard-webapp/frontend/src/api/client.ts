@@ -172,7 +172,7 @@ export async function fetchAuditLog(): Promise<AuditEvent[]> {
 }
 
 export interface ServiceInfo {
-  name: "core" | "webapp" | "updater" | "adguard" | "unbound" | "blockpage" | "attestation-proxy";
+  name: "core" | "webapp" | "updater" | "adguard" | "unbound" | "blockpage" | "attestation-proxy" | "docker-proxy";
   displayName: string;
   description: string;
   status: "running" | "stopped";

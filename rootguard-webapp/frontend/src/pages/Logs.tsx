@@ -7,7 +7,11 @@ import { useInterval } from "../hooks/useInterval";
 import "../styles/logs.css";
 
 type Level = "all" | "error" | "warning" | "info";
-const serviceOrder: ServiceInfo["name"][] = ["core", "webapp", "updater", "adguard", "unbound"];
+// Every service the API can return. Found 2026-11-11: blockpage and
+// attestation-proxy were missing here, so Stack's "Show logs" link for the
+// block page (/logs?service=blockpage) opened Core's logs instead, and both
+// sorted ahead of Core.
+const serviceOrder: ServiceInfo["name"][] = ["core", "webapp", "updater", "adguard", "unbound", "blockpage", "attestation-proxy", "docker-proxy"];
 
 export default function Logs() {
   const { t } = useI18n();

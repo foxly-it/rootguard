@@ -52,6 +52,7 @@ var attestationPolicies = map[string]attestationPolicy{
 	"unbound":           releasePolicy("rootguard-unbound"),
 	"blockpage":         releasePolicy("rootguard-blockpage"),
 	"attestation-proxy": releasePolicy("rootguard-attestation-proxy"),
+	"docker-proxy":      releasePolicy("rootguard-docker-proxy"),
 }
 
 type attestationResult struct {

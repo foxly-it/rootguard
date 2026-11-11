@@ -120,6 +120,7 @@ func CheckStackAttestations(ctx context.Context, status *StackStatus) {
 		{"unbound", &status.Unbound},
 		{"blockpage", &status.Blockpage},
 		{"attestation-proxy", &status.AttestationProxy},
+		{"docker-proxy", &status.DockerProxy},
 	}
 	var wait sync.WaitGroup
 	for _, item := range targets {
@@ -141,6 +142,10 @@ type StackStatus struct {
 	Unbound          ContainerInfo `json:"unbound"`
 	Blockpage        ContainerInfo `json:"blockpage"`
 	AttestationProxy ContainerInfo `json:"attestation_proxy"`
+	// DockerProxy is missing (Exists: false) on an installation set up
+	// before 1.0.2, which still mounts the Docker socket into Core and the
+	// Updater directly - see the threat model's section 1.
+	DockerProxy ContainerInfo `json:"docker_proxy"`
 }
 
 func CheckStackStatus() StackStatus {
@@ -153,6 +158,7 @@ func CheckStackStatus() StackStatus {
 		Unbound:          inspectContainer("rootguard-unbound"),
 		Blockpage:        inspectContainer("rootguard-blockpage"),
 		AttestationProxy: inspectContainer("rootguard-attestation-proxy"),
+		DockerProxy:      inspectContainer("rootguard-docker-proxy"),
 	}
 }
 

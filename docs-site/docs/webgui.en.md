@@ -64,6 +64,6 @@ Restore points for AdGuard Home and Unbound are created automatically before eve
 
 ## Logs & diagnostics
 
-Central searchable logs for Core, WebApp, Updater, AdGuard Home, Unbound, the block page, and the Attestation Proxy, with local filtering, optional auto-refresh, and a redacted diagnostic report you can download.
+Central searchable logs for Core, WebApp, Updater, AdGuard Home, Unbound, the block page, the Attestation Proxy, and the Docker proxy, with local filtering, optional auto-refresh, and a redacted diagnostic report you can download.
 
 ![Logs & Diagnostics with service selector](assets/screenshots/logs.png)

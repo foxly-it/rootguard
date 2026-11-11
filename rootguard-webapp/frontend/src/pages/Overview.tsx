@@ -6,6 +6,7 @@ import {
   Ban,
   Cpu,
   Filter,
+  Lock,
   MemoryStick,
   Network,
   PanelsTopLeft,
@@ -32,7 +33,13 @@ const serviceIcons: Record<ServiceInfo["name"], typeof Cpu> = {
   unbound: ShieldCheck,
   blockpage: ShieldAlert,
   "attestation-proxy": Waypoints,
+  "docker-proxy": Lock,
 };
+
+// Core only restarts the DNS data plane on request (serviceContainers in
+// rootguard-core/internal/stack/control.go). Found 2026-11-11: every other
+// card offered a restart button that could only ever end in an error.
+const restartableServices: ServiceInfo["name"][] = ["adguard", "unbound", "blockpage"];
 
 export default function Overview() {
   const { locale, t } = useI18n();
@@ -183,20 +190,25 @@ export default function Overview() {
       <section className="overview-panel system-panel">
         <PanelHeading eyebrow={t("overview.runtime")} title={t("overview.dnsServices")} />
         <div className="dashboard-services">
-          {services.map((service) => {
+          {/* No Docker proxy container at all means an installation that
+              predates it; Stack & Updates explains that, a "stopped" card
+              here would only alarm. */}
+          {services.filter((service) => service.name !== "docker-proxy" || service.image).map((service) => {
             const Icon = serviceIcons[service.name];
             return (
               <article className={`service-card ${runtimeTone(service)}`} key={service.name}>
-                <button
-                  className="service-card-restart"
-                  type="button"
-                  disabled={service.status !== "running" || busyService === service.name}
-                  onClick={() => restart(service.name)}
-                  aria-label={t("overview.restartService", { name: service.displayName })}
-                  title={t("overview.restartService", { name: service.displayName })}
-                >
-                  <RefreshCw size={13} className={busyService === service.name ? "spinning" : ""} />
-                </button>
+                {restartableServices.includes(service.name) && (
+                  <button
+                    className="service-card-restart"
+                    type="button"
+                    disabled={service.status !== "running" || busyService === service.name}
+                    onClick={() => restart(service.name)}
+                    aria-label={t("overview.restartService", { name: service.displayName })}
+                    title={t("overview.restartService", { name: service.displayName })}
+                  >
+                    <RefreshCw size={13} className={busyService === service.name ? "spinning" : ""} />
+                  </button>
+                )}
                 <span className="service-card-icon"><Icon size={19} /></span>
                 <strong>{service.displayName}</strong>
                 <span className="service-card-status">{healthLabel(service, t)}</span>

@@ -78,13 +78,14 @@ func TestReleaseAttestationPinsWebappSignerPolicy(t *testing.T) {
 }
 
 // TestReleaseAttestationCoversEveryReleasedComponent guards updater,
-// unbound, blockpage, and attestation-proxy against the same silent policy
-// gap webapp once had (see TestReleaseAttestationPinsWebappSignerPolicy) -
-// all 6 components are published by the identical release-alpha.yml matrix
-// build, so none of them should ever report not_applicable for a real,
-// correctly signed release image.
+// unbound, blockpage, attestation-proxy, and docker-proxy against the same
+// silent policy gap webapp once had (see
+// TestReleaseAttestationPinsWebappSignerPolicy) - all 7 components are
+// published by the identical release-alpha.yml matrix build, so none of them
+// should ever report not_applicable for a real, correctly signed release
+// image.
 func TestReleaseAttestationCoversEveryReleasedComponent(t *testing.T) {
-	for _, service := range []string{"updater", "unbound", "blockpage", "attestation-proxy"} {
+	for _, service := range []string{"updater", "unbound", "blockpage", "attestation-proxy", "docker-proxy"} {
 		resetAttestationCache()
 		var arguments []string
 		run := func(_ context.Context, name string, args ...string) ([]byte, error) {
