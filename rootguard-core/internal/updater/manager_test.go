@@ -1,6 +1,8 @@
 package updater
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"errors"
 	"os"
@@ -262,10 +264,12 @@ func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T)
 				return []byte("ok"), nil
 			case "image":
 				return []byte("sha256:new"), nil
-			case "run":
-				if strings.Contains(command, "--entrypoint /usr/bin/stat") {
-					return []byte("996:996\n"), nil
+			case "cp":
+				if arguments[len(arguments)-1] == "-" {
+					return unboundStateArchive(t, 996, 996), nil
 				}
+				return []byte("ok"), nil
+			case "run":
 				return []byte("changed"), nil
 			default:
 				return []byte("ok"), nil
@@ -282,11 +286,117 @@ func TestUpdateMigratesExplicitVolumeOwnershipWithRestrictedHelper(t *testing.T)
 	}
 	all := strings.Join(commands, "\n")
 	for _, expected := range []string{
-		"run --rm --network none --user 0:0 --read-only --cap-drop ALL --volume rootguard-unbound-state:/var/lib/unbound:ro --entrypoint /usr/bin/stat sha256:old --format=%u:%g /var/lib/unbound",
+		"cp rootguard-unbound:/var/lib/unbound -",
 		"run --rm --network none --user 0:0 --read-only --cap-drop ALL --cap-add CHOWN --security-opt no-new-privileges:true --volume rootguard-unbound-state:/var/lib/unbound --entrypoint /usr/bin/chown sha256:new --recursive 100:101 /var/lib/unbound",
 	} {
 		if !strings.Contains(all, expected) {
 			t.Fatalf("missing restricted ownership command %q in:\n%s", expected, all)
+		}
+	}
+	// rootguard-docker-proxy rejects any container whose entrypoint or
+	// command it doesn't know (knownProcessOverrides in its validate.go),
+	// and it has no self-update channel (#670), so this flow must stay
+	// within what the oldest supported proxy already allows. Found live
+	// 2026-11-11: a stat helper here failed every Unbound update.
+	for _, command := range commands {
+		if !strings.HasPrefix(command, "run ") || !strings.Contains(command, "--entrypoint") {
+			continue
+		}
+		if !strings.Contains(command, "--entrypoint /usr/bin/chown ") ||
+			!strings.HasSuffix(command, " --recursive 100:101 /var/lib/unbound") {
+			t.Fatalf("container process the docker-proxy does not allow: %q", command)
+		}
+	}
+}
+
+// unboundStateArchive mimics `docker cp rootguard-unbound:/var/lib/unbound -`:
+// the copied directory itself first, then its contents.
+func unboundStateArchive(t *testing.T, uid, gid int) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	writer := tar.NewWriter(&buffer)
+	for _, header := range []*tar.Header{
+		{Name: "unbound/", Typeflag: tar.TypeDir, Mode: 0o755, Uid: uid, Gid: gid},
+		{Name: "unbound/root.key", Typeflag: tar.TypeReg, Mode: 0o644, Uid: uid, Gid: gid, Size: 3},
+	} {
+		if err := writer.WriteHeader(header); err != nil {
+			t.Fatal(err)
+		}
+		if header.Size > 0 {
+			if _, err := writer.Write([]byte("key")); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func TestArchiveEntryOwner(t *testing.T) {
+	owner, err := archiveEntryOwner(unboundStateArchive(t, 100, 101), "unbound")
+	if err != nil || owner != "100:101" {
+		t.Fatalf("archiveEntryOwner = %q, %v; want 100:101", owner, err)
+	}
+	if _, err := archiveEntryOwner(unboundStateArchive(t, 100, 101), "missing"); err == nil {
+		t.Fatal("expected an error for a missing entry")
+	}
+	if _, err := archiveEntryOwner([]byte("not a tar stream"), "unbound"); err == nil {
+		t.Fatal("expected an error for a corrupt archive")
+	}
+}
+
+func TestUpdateSkipsOwnershipChangeWhenVolumeAlreadyMatches(t *testing.T) {
+	dataDir := t.TempDir()
+	composeDir := t.TempDir()
+	writeEmptyComposeFixture(t, composeDir)
+	var commands []string
+	composedUp := false
+	manager := NewManager(Options{
+		DataDir: dataDir, ComposeDir: composeDir,
+		Services: []ServiceSpec{{
+			Name: "unbound", DisplayName: "Unbound", Container: "rootguard-unbound",
+			TargetImage: "rootguard-unbound:latest",
+			OwnershipMigrations: []VolumeOwnershipMigration{{
+				Volume: "rootguard-unbound-state", Path: "/var/lib/unbound", UID: 100, GID: 101,
+			}},
+		}},
+		AttestationVerifier: noopAttestationVerifier,
+		Run: func(_ context.Context, arguments ...string) ([]byte, error) {
+			commands = append(commands, strings.Join(arguments, " "))
+			switch arguments[0] {
+			case "container":
+				if composedUp {
+					return []byte("rootguard-unbound:v1|sha256:new"), nil
+				}
+				return []byte("rootguard-unbound:v1|sha256:old"), nil
+			case "compose":
+				composedUp = true
+				return []byte("ok"), nil
+			case "image":
+				return []byte("sha256:new"), nil
+			case "cp":
+				if arguments[len(arguments)-1] == "-" {
+					return unboundStateArchive(t, 100, 101), nil
+				}
+				return []byte("ok"), nil
+			default:
+				return []byte("ok"), nil
+			}
+		},
+	})
+
+	if _, err := manager.StartUpdate("unbound"); err != nil {
+		t.Fatal(err)
+	}
+	waitForIdle(t, manager)
+	if manager.Status().State != StateIdle {
+		t.Fatalf("expected successful update, got %#v", manager.Status())
+	}
+	for _, command := range commands {
+		if strings.HasPrefix(command, "run ") {
+			t.Fatalf("volume already owned by 100:101, expected no helper container, got %q", command)
 		}
 	}
 }
@@ -316,10 +426,12 @@ func TestFailedUpdateRestoresPreviousVolumeOwnershipBeforeRollback(t *testing.T)
 				return []byte("rootguard-unbound:v1|sha256:old"), nil
 			case "image":
 				return []byte("sha256:new"), nil
-			case "run":
-				if strings.Contains(command, "--entrypoint /usr/bin/stat") {
-					return []byte("996:996\n"), nil
+			case "cp":
+				if arguments[len(arguments)-1] == "-" {
+					return unboundStateArchive(t, 996, 996), nil
 				}
+				return []byte("ok"), nil
+			case "run":
 				return []byte("changed"), nil
 			default:
 				return []byte("ok"), nil

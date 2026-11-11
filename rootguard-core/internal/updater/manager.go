@@ -1,11 +1,15 @@
 package updater
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -634,7 +638,7 @@ func (m *Manager) migrateVolumeOwnership(
 			_ = m.restoreVolumeOwnership(ctx, previous, currentImage)
 			return nil, fmt.Errorf("invalid ownership migration for %s", spec.Name)
 		}
-		owner, err := m.inspectVolumeOwnership(ctx, currentImage, migration)
+		owner, err := m.inspectVolumeOwnership(ctx, spec.Container, migration)
 		if err != nil {
 			_ = m.restoreVolumeOwnership(ctx, previous, currentImage)
 			return nil, err
@@ -670,38 +674,51 @@ func (m *Manager) restoreVolumeOwnership(
 	return nil
 }
 
+// inspectVolumeOwnership reads the owner of migration.Path from the tar
+// header `docker cp` streams for it out of the running container, which
+// mounts migration.Volume there (compose.release.yaml).
+//
+// Found live on a 1.0.10 -> 1.0.12 upgrade (2026-11-11): this used to start a
+// helper container with `--entrypoint /usr/bin/stat`, which
+// rootguard-docker-proxy has never allowed - its knownProcessOverrides only
+// cover the chown helper and the port probe - so every Unbound update through
+// the proxy failed right here, before touching anything. Allowing stat in the
+// proxy would not have helped: the proxy has no self-update channel (#670), so
+// existing installations would never get the new allowlist. Reading the
+// container's archive is already allowed, backup() makes the same call.
 func (m *Manager) inspectVolumeOwnership(
 	ctx context.Context,
-	image string,
+	container string,
 	migration VolumeOwnershipMigration,
 ) (string, error) {
-	output, err := m.run(ctx,
-		"run", "--rm",
-		"--network", "none",
-		"--user", "0:0",
-		"--read-only",
-		"--cap-drop", "ALL",
-		"--volume", migration.Volume+":"+migration.Path+":ro",
-		"--entrypoint", "/usr/bin/stat",
-		image,
-		"--format=%u:%g",
-		migration.Path,
-	)
+	output, err := m.run(ctx, "cp", container+":"+migration.Path, "-")
 	if err != nil {
 		return "", fmt.Errorf("inspect %s ownership: %w", migration.Volume, err)
 	}
-	owner := strings.TrimSpace(string(output))
-	parts := strings.Split(owner, ":")
-	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid ownership %q for %s", owner, migration.Volume)
-	}
-	if _, err := strconv.ParseUint(parts[0], 10, 32); err != nil {
-		return "", fmt.Errorf("invalid owner UID %q for %s", parts[0], migration.Volume)
-	}
-	if _, err := strconv.ParseUint(parts[1], 10, 32); err != nil {
-		return "", fmt.Errorf("invalid owner GID %q for %s", parts[1], migration.Volume)
+	owner, err := archiveEntryOwner(output, path.Base(migration.Path))
+	if err != nil {
+		return "", fmt.Errorf("inspect %s ownership: %w", migration.Volume, err)
 	}
 	return owner, nil
+}
+
+// archiveEntryOwner returns "uid:gid" of the entry called name in a
+// `docker cp <container>:<dir> -` stream, whose entries are named after the
+// copied directory itself ("unbound/", "unbound/root.key", ...).
+func archiveEntryOwner(archive []byte, name string) (string, error) {
+	reader := tar.NewReader(bytes.NewReader(archive))
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			return "", fmt.Errorf("archive has no entry for %q", name)
+		}
+		if err != nil {
+			return "", fmt.Errorf("read archive: %w", err)
+		}
+		if strings.TrimSuffix(header.Name, "/") == name {
+			return strconv.Itoa(header.Uid) + ":" + strconv.Itoa(header.Gid), nil
+		}
+	}
 }
 
 func (m *Manager) changeVolumeOwnership(
