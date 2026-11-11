@@ -11,11 +11,11 @@ invalid DNSSEC chain is rejected.
 
 ## Verification matrix
 
-| Platform | Architecture | Verification | Status |
+| Platform | Architecture | Verification | When |
 | --- | --- | --- | --- |
-| Linux, GitHub-hosted Ubuntu 24.04 | `amd64` | Native automated runner | Passed 2026-07-28 |
-| Linux, GitHub-hosted Ubuntu 24.04 | `arm64` | Native automated runner | Passed 2026-07-28 |
-| Docker Desktop 4.x on macOS | Apple Silicon / `arm64` | Same portable verifier | Passed 2026-07-28 |
+| Linux, GitHub-hosted Ubuntu 24.04 | `amd64` | Native automated runner | Every release, plus `clean-install.yml` on every PR |
+| Linux, GitHub-hosted Ubuntu 24.04 | `arm64` | Native automated runner | Every release, plus `clean-install.yml` on every PR |
+| Docker Desktop 4.x on macOS | Apple Silicon / `arm64` | Same portable verifier, run by hand | Last 2026-07-28 |
 
 The Docker Desktop result used Docker Engine 29.6.2 and Docker Compose 5.3.1.
 It installed the immutable `v0.1.0-alpha.2` images, completed the managed DNS
@@ -69,7 +69,8 @@ The first complete native matrix passed in
 
 - **Linux** (any distribution) with Docker Engine + Compose v2, `amd64` or
   `arm64` - the primary, fully verified target (native CI matrix above).
-- **Docker Desktop on macOS**, Apple Silicon (`arm64`) - verified; Intel
+- **Docker Desktop on macOS**, Apple Silicon (`arm64`) - verified by hand,
+  last on 2026-07-28; Intel
   Macs use the same published `amd64` manifests but aren't separately
   tested.
 - **Docker Desktop on Windows** (WSL2 backend) - not yet in the verification
@@ -130,10 +131,13 @@ profile's bigger caches.
 - **Single-node only.** No high availability, no failover between
   instances - see [the disaster-recovery runbook](disaster-recovery.md) for
   what to do when the one node fails.
-- **Upgrade compatibility is N-1 → N only** - see
-  [the compatibility matrix](compatibility-matrix.md). Skipping versions
-  when upgrading isn't tested or supported; upgrade through each release in
-  sequence.
+- **The release pipeline tests N-1 → N only** - see
+  [the compatibility matrix](compatibility-matrix.md). The WebGUI update,
+  though, always offers the newest release, so stepping through each
+  release in sequence isn't something an operator can do from there; if an
+  installation is several releases behind, read the skipped releases'
+  notes first (and `scripts/ci/upgrade-prerequisites.txt` for manual
+  steps).
 - **Restore is a clean-replacement operation, not an in-place merge** - see
   [the backup/restore docs](backup-export.md). It deploys into a fresh,
   never-installed target; it cannot be run against an already-installed

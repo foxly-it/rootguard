@@ -230,9 +230,10 @@ version_gt() {
 
 # Same picking logic as rootguard-core's own updater
 # (internal/updater/github_release.go): GitHub's own /releases/latest
-# excludes prereleases, and every RootGuard release is published as one -
-# so the full list is queried and ranked locally instead of trusting the
-# API's own order. That distinction matters live, not just in theory: a
+# excludes prereleases, and every RootGuard release before 1.0.0 was
+# published as one - so the full list is queried and ranked locally instead
+# of trusting the API's own order, which stays correct for final releases
+# too. That distinction matters live, not just in theory: a
 # direct query once returned v0.1.0-beta.9 *ahead of* v0.1.0-beta.12 on
 # this exact repository, so "the newest-first list" isn't actually
 # guaranteed - taking the first matching entry would have silently

@@ -18,15 +18,19 @@ system and Docker engine it runs on, like any containerized application.
 
 ## Actors and trust boundaries
 
-### 1. Docker socket holders (Core, Updater)
+### 1. Docker socket holders (Docker proxy, Core, Updater)
 
-**Access:** `rootguard-core` and `rootguard-updater` have
-`/var/run/docker.sock` mounted. Whoever controls this socket effectively
-controls the host - a new privileged container with an arbitrary bind
-mount is trivially reachable from there.
+**Access:** Since 1.0.2, only `rootguard-docker-proxy` mounts
+`/var/run/docker.sock`; `rootguard-core` and `rootguard-updater` reach
+Docker through it (`DOCKER_HOST=tcp://docker-proxy:2375`). Installations set
+up with 1.0.0 or 1.0.1 and only self-updated since still mount the socket
+directly into Core and the Updater (see below). Whoever controls the socket
+effectively controls the host - a new privileged container with an
+arbitrary bind mount is trivially reachable from there.
 
-**If compromised:** Full host compromise. This is by far the largest
-single trust boundary in the system.
+**If compromised:** A compromised Docker proxy means full host compromise;
+a compromised Core or Updater is limited to what the proxy lets through.
+This is by far the largest single trust boundary in the system.
 
 **Existing countermeasures:**
 - Both images currently run as `root` (see the reasoning directly in the
