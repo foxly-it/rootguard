@@ -23,10 +23,20 @@
 | `ROOTGUARD_ADGUARD_BETA_IMAGE` | Alternative, also allowlisted AdGuard beta image. |
 | `ROOTGUARD_BLOCKPAGE_IMAGE` | Image for the Blockpage container. |
 | `ROOTGUARD_ATTESTATION_PROXY_IMAGE` | Image for the Attestation Proxy container. |
+| `ROOTGUARD_DOCKER_PROXY_IMAGE` | Image for the Docker Proxy container. The WebGUI doesn't update it, see [Operations](../operations.md#docker-proxy). |
+
+## Docker connection
+
+| Variable | Description |
+| --- | --- |
+| `ROOTGUARD_DOCKER_SOCKET_PATH` | Path to the Docker socket on the host, defaults to `/var/run/docker.sock`. Only needed for rootless Docker (typically `/run/user/<uid>/docker.sock`); `install.sh` detects that and sets it itself. |
+
+!!! danger "`ROOTGUARD_SKIP_ATTESTATION` is for tests only"
+    `compose.release.yaml` passes this variable to Core so test environments can use locally built, unsigned images. Set to `true`, it turns off **every** signature and provenance check, for setup, updates, and self-update. Never set it on a real installation.
 
 ## Update targets
 
-These values determine what an update advances to - they are never accepted from the browser, only set server-side in `.env`.
+These values are never accepted from the browser, only set server-side in `.env`. For the RootGuard components, Core first asks GitHub for the newest published release and only falls back to these values when that fails. AdGuard Home follows the rule in the table.
 
 | Variable | Description |
 | --- | --- |
@@ -38,16 +48,8 @@ These values determine what an update advances to - they are never accepted from
 | `ROOTGUARD_UPDATER_UPDATE_IMAGE` | Server-side target for Updater self-updates. |
 | `ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE` | Server-side target for Attestation Proxy updates. |
 
-!!! example "Full example (release stack)"
+!!! example "The values you set yourself"
     ```ini title=".env"
-    ROOTGUARD_CORE_IMAGE=ghcr.io/foxly-it/rootguard-core:1.0.0@sha256:2fd43b4943cb5b26daf71e79eb9d6bec8e42d2b1e07d40ab7ed425b065113c41
-    ROOTGUARD_WEBAPP_IMAGE=ghcr.io/foxly-it/rootguard-webapp:1.0.0@sha256:fda7b2b50a56a8a95851b59642a6543e76f8bb4dc4104df1b249916f3da2c45e
-    ROOTGUARD_UPDATER_IMAGE=ghcr.io/foxly-it/rootguard-updater:1.0.0@sha256:99c9edd94d9f6b5fcb1f52ea291a37076a3803c02d8e4b4c8352e7c85908d9d4
-    ROOTGUARD_UNBOUND_IMAGE=ghcr.io/foxly-it/rootguard-unbound:1.0.0@sha256:962d247fc4c125f37e3cac4f7f4c8902814f2d204fb64ceb7ccd1fbde65dfb58
-    ROOTGUARD_ADGUARD_IMAGE=adguard/adguardhome:v0.107.80@sha256:e2e1b48c832f7705be915873f95de0d5114de573736441d7f2923a8a6293027c
-    ROOTGUARD_BLOCKPAGE_IMAGE=ghcr.io/foxly-it/rootguard-blockpage:1.0.0@sha256:26ff3e2687797c9bf02ca7969d4288f3bbf6517ff134dc30f484854ba367a097
-    ROOTGUARD_ATTESTATION_PROXY_IMAGE=ghcr.io/foxly-it/rootguard-attestation-proxy:1.0.0@sha256:1577ec69a34e0cd465b8ad05cdb0c64c75f684b95058858b1783a65efa2fc400
-
     ROOTGUARD_API_TOKEN=replace-with-a-long-random-token
     ROOTGUARD_ADMIN_USER=admin
     ROOTGUARD_ADMIN_PASSWORD=replace-with-a-strong-password
@@ -57,4 +59,4 @@ These values determine what an update advances to - they are never accepted from
     ROOTGUARD_WEB_PORT=8080
     ```
 
-    The full, current template with every update target lives at [`.env.release.example`](https://github.com/foxly-it/rootguard/blob/main/.env.release.example){: target="_blank" rel="noopener" } in the repository root.
+    Don't write the image lines by hand: each release's [`.env.release.example`](https://github.com/foxly-it/rootguard/blob/main/.env.release.example){: target="_blank" rel="noopener" } template has every image and update target, pinned to verified digests. The [manual installation](../getting-started.md#installation) downloads the one matching the current release.

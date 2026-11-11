@@ -24,10 +24,20 @@ Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entf
 !!! warning "Saubere Neuinstallation"
     Der Setup-Controller erzeugt zusätzliche benannte DNS-Volumes außerhalb der Control-Plane-Compose. Ein normales Stoppen löscht keine Daten. Entferne Container und Volumes nur bewusst nach einem Backup und anhand der versionsgleichen Release-Hinweise.
 
+## Docker-Proxy
+
+Core und Updater erreichen Docker nicht direkt, sondern über `rootguard-docker-proxy`, den einzigen Container mit Zugriff auf den Docker-Socket. Er lässt nur die Docker-API-Aufrufe durch, die RootGuard tatsächlich braucht, und lehnt alles andere ab.
+
+Der Docker-Proxy hat **keinen eigenen Update-Kanal**: Die WebGUI aktualisiert ihn nicht. Braucht ein Release einen neueren Proxy, nennen die Release-Hinweise den einen Befehl dafür. Abgelehnte Aufrufe stehen im Log des Proxys:
+
+```shell
+docker logs --tail=50 rootguard-docker-proxy
+```
+
 ## Häufige Probleme
 
 ??? question "Port 53 ist bereits belegt"
-    Die Vorprüfung erkennt das automatisch - auch bei lokalen Resolvern wie systemd-resolved oder dnsmasq, die nicht als Docker-Container sichtbar sind - und benennt die Ursache in der Fehlermeldung. Stoppe den blockierenden Dienst, oder verwende für Tests einen anderen `ROOTGUARD_DNS_PORT`; Routerbetrieb benötigt üblicherweise Port 53.
+    Die Vorprüfung erkennt das automatisch - auch bei lokalen Resolvern wie systemd-resolved oder dnsmasq, die nicht als Docker-Container sichtbar sind - und benennt die Ursache in der Fehlermeldung. Stoppe den blockierenden Dienst, oder wähle für Tests in der Einrichtung einen anderen DNS-Port; Routerbetrieb benötigt üblicherweise Port 53.
 
 ??? question "Die WebGUI ist erreichbar, aber APIs schlagen fehl"
     Prüfe `docker compose ps` und die Logs von Core und Updater. Nach Ablauf einer Sitzung meldest du dich erneut an. Ein 401 bedeutet eine fehlende Sitzung; ein 502 weist typischerweise auf einen internen Dienst hin.
@@ -40,3 +50,6 @@ Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entf
 
 ??? question "Ein Update wurde zurückgerollt"
     Lies die Meldung unter Stack & Updates und prüfe die Helper-/Core-Logs. Ein Rollback ist ein Schutzmechanismus: Die vorherigen Images bleiben aktiv, bis das Ziel-Image oder die Konfiguration korrigiert wurde.
+
+??? question "Eine Meldung enthält „is not on the allowlist“ oder „forbidden“"
+    Der [Docker-Proxy](#docker-proxy) hat einen Docker-Aufruf abgelehnt. Das passiert vor jeder Änderung, der laufende Stack bleibt unverändert. Prüfe `docker logs rootguard-docker-proxy` und die Release-Hinweise: Meist braucht das neue Release einen aktualisierten Proxy, oder es ist ein Fehler, den du als Issue melden kannst.

@@ -6,7 +6,7 @@
 - Empfohlen mindestens 2 vCPU und 2 GB RAM für den Docker-Host
 - Eine feste LAN-IP oder DHCP-Reservierung für den RootGuard-Host
 - Freier TCP- und UDP-Port 53 auf der gewählten Host-Adresse
-- Git für das Repository
+- `curl` und `openssl` für die manuelle Installation (ein Git-Checkout ist nicht nötig)
 - Ein starkes Admin-Passwort und ein zufälliges internes API-Token
 
 !!! success "Stable"
@@ -14,20 +14,20 @@
 
 ## Plattformen und Prüfung
 
-Jedes Release wird mit demselben geschützten Ende-zu-Ende-Test auf nativen Linux-amd64-/arm64-Runnern und Docker Desktop geprüft. Der Test umfasst Login, AIO-Bereitstellung, rekursive DNS-Auflösung und die Ablehnung einer ungültigen DNSSEC-Kette.
+Jedes Release durchläuft vor der Veröffentlichung einen geschützten Ende-zu-Ende-Test auf nativen Linux-Runnern für `amd64` und `arm64`. Der Test umfasst Login, AIO-Bereitstellung, rekursive DNS-Auflösung und die Ablehnung einer ungültigen DNSSEC-Kette.
 
-| Plattform | Architektur | Prüfung | Status |
+| Plattform | Architektur | Prüfung | Wann |
 | --- | --- | --- | --- |
-| Linux, GitHub-gehosteter Runner (Ubuntu 24.04) | `amd64` | Nativer automatischer Runner | Bestanden 2026-07-28 |
-| Linux, GitHub-gehosteter Runner (Ubuntu 24.04) | `arm64` | Nativer automatischer Runner | Bestanden 2026-07-28 |
-| Docker Desktop 4.x auf macOS | Apple Silicon / `arm64` | Derselbe portable Prüfer | Bestanden 2026-07-28 |
+| Linux, GitHub-gehosteter Runner (Ubuntu 24.04) | `amd64` | Nativer automatischer Runner | Bei jedem Release |
+| Linux, GitHub-gehosteter Runner (Ubuntu 24.04) | `arm64` | Nativer automatischer Runner | Bei jedem Release |
+| Docker Desktop 4.x auf macOS | Apple Silicon / `arm64` | Derselbe portable Prüfer, von Hand | Zuletzt 2026-07-28 |
 
-Upgrade (ein echtes N-1 → N-Upgrade über den Control-Plane-Updater) und Backup/Restore (echter Export → Teardown → Neuinstallation → Restore) laufen auf derselben nativen `amd64`/`arm64`-Matrix, nicht nur die Neuinstallation.
+Upgrade (ein echtes Upgrade von der direkten Vorversion über den Control-Plane-Updater) und Backup/Restore (echter Export → Teardown → Neuinstallation → Restore) laufen auf derselben nativen `amd64`/`arm64`-Matrix, nicht nur die Neuinstallation.
 
 **Unterstützte Plattformen:**
 
 - **Linux** (jede Distribution) mit Docker Engine + Compose v2, `amd64` oder `arm64` - das primäre, vollständig geprüfte Ziel.
-- **Docker Desktop auf macOS**, Apple Silicon (`arm64`) - geprüft; Intel-Macs verwenden dieselben veröffentlichten `amd64`-Manifeste, werden aber nicht separat getestet.
+- **Docker Desktop auf macOS**, Apple Silicon (`arm64`) - von Hand geprüft, zuletzt 2026-07-28; Intel-Macs verwenden dieselben veröffentlichten `amd64`-Manifeste, werden aber nicht separat getestet.
 - **Docker Desktop auf Windows** (WSL2-Backend) - noch nicht in der Prüfmatrix, aber erwartet zu funktionieren.
 
 Bare-Metal-/systemd-Installationen und Multi-Node-Deployments sind bewusst nicht unterstützt: RootGuard ist eine Single-Node-Docker-Appliance.
@@ -37,7 +37,7 @@ Bare-Metal-/systemd-Installationen und Multi-Node-Deployments sind bewusst nicht
 
 Der Installer erzwingt kein hartes Minimum, aber komfortabel läuft der volle Stack (Core, WebApp, Updater, AdGuard Home, Unbound) bereits mit 1 vCPU / 2 GB RAM bei leichter Last. Praktische Empfehlung: **2 vCPU, 2 GB RAM** als Grundausstattung für ein reales Heimnetzwerk.
 
-**Bekannte Grenzen:** nur Single-Node ohne Hochverfügbarkeit; Upgrade-Kompatibilität ist nur N-1 → N (Versionen überspringen ist nicht unterstützt); Restore ist eine Clean-Replacement-Operation, kein In-Place-Merge.
+**Bekannte Grenzen:** nur Single-Node ohne Hochverfügbarkeit; automatisch getestet wird nur das Upgrade von der direkten Vorversion, das Update in der WebGUI bietet aber immer das neueste Release an - wer mehrere Versionen zurückliegt, liest vorher die Release-Hinweise der übersprungenen Versionen; Restore ist eine Clean-Replacement-Operation, kein In-Place-Merge.
 
 ## Installation
 
@@ -47,8 +47,13 @@ Der Installer erzwingt kein hartes Minimum, aber komfortabel läuft der volle St
 ```shell
 mkdir rootguard && cd rootguard
 
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/.env.release.example
+# Aktuelles Release ermitteln
+version="$(curl -fsSL https://api.github.com/repos/foxly-it/rootguard/releases/latest \
+  | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
+echo "RootGuard ${version}"
+
+curl -LO "https://raw.githubusercontent.com/foxly-it/rootguard/${version}/compose.release.yaml"
+curl -Lo .env "https://raw.githubusercontent.com/foxly-it/rootguard/${version}/.env.release.example"
 
 # Zwei unabhängige Sicherheitsschlüssel erzeugen
 openssl rand -hex 32

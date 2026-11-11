@@ -14,7 +14,7 @@
 
 ## Live-Kennzahlen
 
-Das Dashboard aggregiert ausschließlich die CPU- und RAM-Nutzung der fünf fest freigegebenen RootGuard-Container. Zusätzlich liest Core über die intern authentifizierte AdGuard-Home-API die Gesamtzahl der DNS-Anfragen und blockierten Anfragen aus und berechnet daraus die Filterquote. Query-Namen und Clientdaten verlassen AdGuard dabei nicht. Die Anzeige aktualisiert sich automatisch alle zehn Sekunden.
+Das Dashboard aggregiert ausschließlich die CPU- und RAM-Nutzung der fünf fest freigegebenen Container Core, WebApp, Updater, AdGuard Home und Unbound. Zusätzlich liest Core über die intern authentifizierte AdGuard-Home-API die Gesamtzahl der DNS-Anfragen und blockierten Anfragen aus und berechnet daraus die Filterquote. Query-Namen und Clientdaten verlassen AdGuard dabei nicht. Die Anzeige aktualisiert sich automatisch alle zehn Sekunden.
 
 ## AdGuard Home: geschützte native Verwaltung
 
@@ -64,6 +64,6 @@ Wiederherstellungspunkte für AdGuard Home und Unbound entstehen automatisch vor
 
 ## Logs & Diagnose
 
-Zentrale, durchsuchbare Protokolle für alle fünf verwalteten Dienste, mit lokaler Filterung, optionaler automatischer Aktualisierung und einem redigierten Diagnosebericht zum Download.
+Zentrale, durchsuchbare Protokolle für Core, WebApp, Updater, AdGuard Home, Unbound, Blockseite und Attestation-Proxy, mit lokaler Filterung, optionaler automatischer Aktualisierung und einem redigierten Diagnosebericht zum Download.
 
 ![Logs & Diagnose mit Dienstauswahl](assets/screenshots/logs.png)
