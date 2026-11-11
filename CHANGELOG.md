@@ -3,6 +3,26 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.13] - 2026-11-11
+
+### Added
+
+- Show the Docker proxy in the WebGUI ([#813](https://github.com/foxly-it/rootguard/pull/813))
+
+### CI
+
+- Run the Go unit tests under the race detector nightly ([#812](https://github.com/foxly-it/rootguard/pull/812))
+
+### Documentation
+
+- Bring the website and public docs up to the 1.0.12 state ([#811](https://github.com/foxly-it/rootguard/pull/811))
+- Sync the internal docs with the Docker proxy and release reality ([#815](https://github.com/foxly-it/rootguard/pull/815))
+
+### Fixed
+
+- Build with Go 1.26.11 for GO-2026-6859 ([#810](https://github.com/foxly-it/rootguard/pull/810))
+- Read Unbound volume ownership without a stat container ([#809](https://github.com/foxly-it/rootguard/pull/809))
+
 ## [1.0.12] - 2026-11-10
 
 ### Fixed
