@@ -1,0 +1,99 @@
+name: Upgrade journey
+
+# Installs an older published release and takes every update the WebGUI
+# offers, through its own API and the real docker-proxy, up to the newest
+# release - see scripts/verify-upgrade-journey.sh for why. Uses published
+# images only, so it runs daily and by hand rather than gating PRs; a PR
+# that changes the script itself still runs it once.
+#
+# Two legs, one per architecture: from the release directly before the
+# newest one, and from three releases back, since the WebGUI always offers
+# the newest release and operators do skip versions. Releases before 1.0.5
+# are never picked - upgrading from them needs a manual docker-proxy refresh
+# first (scripts/ci/upgrade-prerequisites.txt).
+
+on:
+  schedule:
+    - cron: "10 5 * * *"
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "Start from this release instead (e.g. 1.0.10), on amd64 only"
+        required: false
+  pull_request:
+    paths:
+      - "scripts/verify-upgrade-journey.sh"
+      - "scripts/verification-common.sh"
+      - ".github/workflows/upgrade-journey.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upgrade-journey-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Pick start releases
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pick start releases
+        id: pick
+        env:
+          FROM: ${{ inputs.from }}
+        run: |
+          set -euo pipefail
+          if [ -n "${FROM:-}" ]; then
+            matrix="$(jq -cn --arg from "${FROM#v}" '[{from: $from, arch: "amd64", runner: "ubuntu-24.04"}]')"
+          else
+            # Final releases only, newest first; 1.0.5 is the floor (see top).
+            mapfile -t releases < <(git tag --list 'v*' | sed 's/^v//' \
+              | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V -r \
+              | awk '{ split($0, v, "."); if (v[1] > 1 || (v[1] == 1 && (v[2] > 0 || v[3] >= 5))) print }')
+            matrix="$(jq -cn --arg one "${releases[1]:-}" --arg three "${releases[3]:-}" '
+              [ (if $one != "" then {from: $one, arch: "amd64", runner: "ubuntu-24.04"} else empty end),
+                (if $three != "" then {from: $three, arch: "arm64", runner: "ubuntu-24.04-arm"} else empty end) ]')"
+          fi
+          echo "matrix=${matrix}" >>"$GITHUB_OUTPUT"
+          echo "Start releases: ${matrix}"
+
+  journey:
+    name: Upgrade ${{ matrix.from }} to latest, Linux ${{ matrix.arch }}
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install DNS test client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes dnsutils
+
+      # See verification-common.sh's comment on verify_dns.
+      - name: Start local DNSSEC test authority
+        run: ./scripts/ci/dnssec-test-zone/setup.sh
+
+      - name: Upgrade through the WebGUI API
+        env:
+          ROOTGUARD_UPGRADE_FROM: ${{ matrix.from }}
+          ROOTGUARD_TEST_ARCH: ${{ matrix.arch }}
+          ROOTGUARD_VERIFY_DNS_DOMAIN: good.rgtest-ci.internal
+          ROOTGUARD_VERIFY_DNS_DNSSEC_FAIL_DOMAIN: bad.rgtest-ci.internal
+        run: ./scripts/verify-upgrade-journey.sh
