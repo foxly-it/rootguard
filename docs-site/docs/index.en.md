@@ -2,7 +2,7 @@
 
 RootGuard combines AdGuard Home as a network filter with Unbound as a dedicated recursive, DNSSEC-validating resolver. WebApp and Core manage the stack; a separate updater safely replaces Core and WebApp as a pair.
 
-## Six components, clear responsibilities
+## Seven components, clear responsibilities
 
 | Component | Role | Description |
 | --- | --- | --- |
@@ -12,6 +12,7 @@ RootGuard combines AdGuard Home as a network filter with Unbound as a dedicated 
 | [Unbound](https://github.com/foxly-it/rootguard/tree/main/rootguard-unbound) | DNS | Hardened recursive and DNSSEC-validating resolver |
 | [Blockpage](https://github.com/foxly-it/rootguard/tree/main/rootguard-blockpage) | UI | Dedicated, plain-language block page instead of AdGuard's default response |
 | [Attestation Proxy](https://github.com/foxly-it/rootguard/tree/main/rootguard-attestation-proxy) | TRUST | Narrow egress path for signed release checks, itself managed via its own update channel |
+| [Docker Proxy](https://github.com/foxly-it/rootguard/tree/main/rootguard-docker-proxy) | TRUST | The only container holding the Docker socket; lets Core and Updater make only allowlisted Docker API calls. Has no update channel of its own (see [Operations](operations.md)) |
 
 !!! tip "Getting started"
     New here? Continue with [Getting started](getting-started.md).

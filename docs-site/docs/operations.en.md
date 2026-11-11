@@ -24,10 +24,20 @@ Configuration and installation state is stored in named Docker volumes. Do not r
 !!! warning "Clean reinstall"
     Setup creates additional named DNS volumes outside the control-plane Compose project. A normal stop deletes no data. Remove containers and volumes only intentionally, after a backup, and by following the matching release notes.
 
+## Docker proxy
+
+Core and Updater don't reach Docker directly but through `rootguard-docker-proxy`, the only container with access to the Docker socket. It lets through only the Docker API calls RootGuard actually needs and rejects everything else.
+
+The Docker proxy has **no update channel of its own**: the WebGUI doesn't update it. If a release needs a newer proxy, its release notes give the one command for it. Rejected calls show up in the proxy's log:
+
+```shell
+docker logs --tail=50 rootguard-docker-proxy
+```
+
 ## Common problems
 
 ??? question "Port 53 is already in use"
-    Preflight detects this automatically - including local resolvers such as systemd-resolved or dnsmasq that aren't visible as Docker containers - and names the cause in the error message. Stop the conflicting service, or use another `ROOTGUARD_DNS_PORT` for testing; router operation normally requires port 53.
+    Preflight detects this automatically - including local resolvers such as systemd-resolved or dnsmasq that aren't visible as Docker containers - and names the cause in the error message. Stop the conflicting service, or choose another DNS port during setup for testing; router operation normally requires port 53.
 
 ??? question "The UI loads, but APIs fail"
     Check `docker compose ps` and the Core and Updater logs. Sign in again after a session expires. A 401 means no valid session; a 502 usually points to an internal service.
@@ -40,3 +50,6 @@ Configuration and installation state is stored in named Docker volumes. Do not r
 
 ??? question "An update was rolled back"
     Read the message under Stack & Updates and inspect Helper/Core logs. A rollback is a safety mechanism: previous images remain active until the target image or configuration is corrected.
+
+??? question "A message contains \"is not on the allowlist\" or \"forbidden\""
+    The [Docker proxy](#docker-proxy) rejected a Docker call. That happens before anything changes, the running stack stays as it was. Check `docker logs rootguard-docker-proxy` and the release notes: usually the new release needs an updated proxy, or it's a bug you can report as an issue.

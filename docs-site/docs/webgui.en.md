@@ -14,7 +14,7 @@
 
 ## Live metrics
 
-The dashboard aggregates CPU and memory usage only for the five explicitly allowlisted RootGuard containers. Core also uses AdGuard Home's internally authenticated API to read total DNS queries and blocked requests and derives the filter rate. Query names and client data do not leave AdGuard. The display refreshes every ten seconds.
+The dashboard aggregates CPU and memory usage only for the five explicitly allowlisted containers Core, WebApp, Updater, AdGuard Home, and Unbound. Core also uses AdGuard Home's internally authenticated API to read total DNS queries and blocked requests and derives the filter rate. Query names and client data do not leave AdGuard. The display refreshes every ten seconds.
 
 ## AdGuard Home: protected native administration
 
@@ -64,6 +64,6 @@ Restore points for AdGuard Home and Unbound are created automatically before eve
 
 ## Logs & diagnostics
 
-Central searchable logs for all five managed services, with local filtering, optional auto-refresh, and a redacted diagnostic report you can download.
+Central searchable logs for Core, WebApp, Updater, AdGuard Home, Unbound, the block page, and the Attestation Proxy, with local filtering, optional auto-refresh, and a redacted diagnostic report you can download.
 
 ![Logs & Diagnostics with service selector](assets/screenshots/logs.png)

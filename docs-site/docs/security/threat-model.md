@@ -3,6 +3,7 @@
 ## Zusammenfassung
 
 - WebApp ohne Docker-Socket und ohne frei ausführbare Host-Befehle
+- Docker-Socket nur im Docker-Proxy, der für Core und Updater nur freigegebene Docker-API-Aufrufe durchlässt
 - HttpOnly-, SameSite-Strict-Sitzung und Same-Origin-Prüfung für Schreibzugriffe
 - Session-Inventar mit gezielter Sitzungs-Beendigung, Rate-Limiting und Audit-Log für Anmeldung und Passwort-Recovery
 - Core und Updater nur in internen Docker-Netzen und mit Bearer-Token
@@ -15,7 +16,7 @@
 
 Die folgenden Abschnitte gehen ins Detail: wem RootGuard wie weit vertraut, was ein kompromittierter Akteur jeweils erreichen kann, und welche Restrisiken bewusst offen sind.
 
-Stand: 2026-08-08. Ergänzt die Architekturbeschreibung um eine explizite Betrachtung, wem RootGuard wie weit vertraut, was ein kompromittierter Akteur jeweils erreichen kann, welche Gegenmaßnahmen bereits greifen und welche Restrisiken bewusst offen oder nicht Ziel dieses Projekts sind.
+Stand: 2026-11-11 (Abschnitt 1 für den Docker-Proxy aktualisiert). Ergänzt die Architekturbeschreibung um eine explizite Betrachtung, wem RootGuard wie weit vertraut, was ein kompromittierter Akteur jeweils erreichen kann, welche Gegenmaßnahmen bereits greifen und welche Restrisiken bewusst offen oder nicht Ziel dieses Projekts sind.
 
 ## Geltungsbereich
 
@@ -23,14 +24,15 @@ Betrachtet werden sechs Akteure/Grenzen: Docker-Socket-Inhaber, Browser, interne
 
 ## Akteure und Vertrauensgrenzen
 
-### 1. Docker-Socket-Inhaber (Core, Updater)
+### 1. Docker-Socket-Inhaber (Docker-Proxy, Core, Updater)
 
-**Zugriff:** `rootguard-core` und `rootguard-updater` haben `/var/run/docker.sock` gemountet. Wer diesen Socket kontrolliert, kontrolliert effektiv den Host - ein neuer privilegierter Container mit beliebigem Bind-Mount ist daraus trivial erreichbar.
+**Zugriff:** Seit 1.0.2 mountet nur noch `rootguard-docker-proxy` den `/var/run/docker.sock`. Core und Updater erreichen Docker über ihn im internen `control`-Netz (`DOCKER_HOST=tcp://docker-proxy:2375`). Wer den Socket selbst kontrolliert, kontrolliert effektiv den Host - ein neuer privilegierter Container mit beliebigem Bind-Mount ist daraus trivial erreichbar.
 
-**Wenn kompromittiert:** Vollständige Host-Kompromittierung. Das ist die mit Abstand größte Einzel-Vertrauensgrenze im System.
+**Wenn kompromittiert:** Ein kompromittierter Docker-Proxy bedeutet vollständige Host-Kompromittierung. Ein kompromittierter Core oder Updater ist auf das beschränkt, was der Proxy durchlässt: RootGuards eigene Container stoppen, ersetzen und neu starten sowie freigegebene Images ziehen - aber keine privilegierten Container starten, keine Host-Pfade mounten und keine eigenen Befehle in Containern ausführen. Das bleibt die größte Einzel-Vertrauensgrenze im System.
 
 **Bestehende Gegenmaßnahmen:**
 
+- Der Docker-Proxy lässt Docker-API-Aufrufe nur nach exakter Methode und exaktem Pfad durch und prüft bei jedem Aufruf, der etwas Neues gewähren kann (Container anlegen, Exec anlegen, Netzwerk verbinden), den Inhalt: Abgelehnt werden `Privileged`, geteilte Host-Namespaces, unbekannte Images, jeder Bind oder Mount außerhalb von RootGuards eigenen benannten Volumes sowie jeder Entrypoint, Befehl oder Healthcheck, den RootGuard selbst nicht verwendet. Ist der Proxy konfiguriert, aber nicht erreichbar, bricht Core beim Start mit einer klaren Meldung ab.
 - Beide Images laufen aktuell als `root` (siehe die Begründung direkt im jeweiligen `Dockerfile`) - kein zusätzlicher Privilege-Escalation-Schritt nötig, aber auch keine Reduktion der Angriffsfläche innerhalb des Containers selbst.
 - Core spricht nur mit einem fest definierten, kontrollierten Satz von Images, Volumes, Netzwerken und Befehlen; Browser-Anfragen können weder Image-Namen noch Compose-Argumente oder Container frei wählen. Ein kompromittierter Browser oder eine kompromittierte WebApp kann Core also nicht direkt zu beliebigen Docker-Befehlen bewegen - nur zu den engen, typisierten Operationen, die die Core-API tatsächlich anbietet.
 - Der Updater kennt ausschließlich `core` und `webapp` als Austauschziele, zieht nur konfigurierte Ziel-Images und bleibt vom Host aus nicht erreichbar.
@@ -39,8 +41,10 @@ Betrachtet werden sechs Akteure/Grenzen: Docker-Socket-Inhaber, Browser, interne
 
 **Bekannte Restrisiken / offen:**
 
-- Ein Bug oder eine Schwachstelle *innerhalb* von Core oder Updater, der einem Angreifer erlaubt, eigene Docker-API-Aufrufe statt der vorgesehenen engen Operationen abzusetzen, würde direkt zur Host-Kompromittierung führen - es gibt keine zweite Verteidigungslinie zwischen „Code-Fehler in Core" und „voller Docker-Zugriff".
-- Konkreter geplanter Härtungsschritt: ein dediziertes `docker-socket-proxy`-Sidecar, das den Socket selbst hält und nur eine eng allowlistete Teilmenge der Docker-API durchlässt, während Core und Updater selbst unprivilegiert laufen. Noch nicht umgesetzt.
+- Der Docker-Proxy ist jetzt die zweite Verteidigungslinie zwischen „Code-Fehler in Core" und „voller Docker-Zugriff" - ein Fehler im Proxy selbst würde sie aufheben. Er ist bewusst klein und umfassend getestet, läuft aber als `root` oder mit der Docker-Gruppe des Hosts, um den Socket zu erreichen.
+- **Installationen, die mit 1.0.0 oder 1.0.1 eingerichtet** und seitdem nur über die WebGUI aktualisiert wurden, mounten den Socket weiter direkt in Core und Updater: Das Self-Update ändert nie die Compose-Topologie. Eine Neuinstallation oder das Ersetzen von `compose.release.yaml` und `.env` durch die Dateien des aktuellen Releases bringt den Proxy dazu.
+- Der Docker-Proxy hat keinen eigenen Update-Kanal; ein Fix daran erreicht eine Installation nur über den manuellen Schritt in den Release-Hinweisen.
+- Noch offen: Core und Updater könnten ohne `root` laufen, seit keiner von beiden den Socket hält (dafür braucht es zuerst eine Migration der Volume-Berechtigungen), und Rootless Docker bleibt eine spätere Phase.
 
 ### 2. Browser / authentifizierter Nutzer
 

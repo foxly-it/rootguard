@@ -6,7 +6,7 @@
 - At least 2 vCPUs and 2 GB RAM recommended for the Docker host
 - A fixed LAN IP or DHCP reservation for the RootGuard host
 - Available TCP and UDP port 53 on the selected host address
-- Git for the repository
+- `curl` and `openssl` for the manual installation (no Git checkout needed)
 - A strong admin password and a random internal API token
 
 !!! success "Stable"
@@ -14,20 +14,20 @@
 
 ## Platforms and verification
 
-Every release is verified with the same guarded end-to-end test on native Linux amd64/arm64 runners and Docker Desktop. It covers login, AIO deployment, recursive DNS resolution, and rejection of an invalid DNSSEC chain.
+Before it is published, every release goes through a guarded end-to-end test on native Linux runners for `amd64` and `arm64`. It covers login, AIO deployment, recursive DNS resolution, and rejection of an invalid DNSSEC chain.
 
-| Platform | Architecture | Verification | Status |
+| Platform | Architecture | Verification | When |
 | --- | --- | --- | --- |
-| Linux, GitHub-hosted runner (Ubuntu 24.04) | `amd64` | Native automated runner | Passed 2026-07-28 |
-| Linux, GitHub-hosted runner (Ubuntu 24.04) | `arm64` | Native automated runner | Passed 2026-07-28 |
-| Docker Desktop 4.x on macOS | Apple Silicon / `arm64` | Same portable verifier | Passed 2026-07-28 |
+| Linux, GitHub-hosted runner (Ubuntu 24.04) | `amd64` | Native automated runner | Every release |
+| Linux, GitHub-hosted runner (Ubuntu 24.04) | `arm64` | Native automated runner | Every release |
+| Docker Desktop 4.x on macOS | Apple Silicon / `arm64` | Same portable verifier, run by hand | Last 2026-07-28 |
 
-Upgrade (a real N-1 → N upgrade through the control-plane updater) and backup/restore (a real export → teardown → fresh install → restore cycle) run on the same native `amd64`/`arm64` matrix, not just clean install.
+Upgrade (a real upgrade from the release directly before, through the control-plane updater) and backup/restore (a real export → teardown → fresh install → restore cycle) run on the same native `amd64`/`arm64` matrix, not just clean install.
 
 **Supported platforms:**
 
 - **Linux** (any distribution) with Docker Engine + Compose v2, `amd64` or `arm64` - the primary, fully verified target.
-- **Docker Desktop on macOS**, Apple Silicon (`arm64`) - verified; Intel Macs use the same published `amd64` manifests but aren't separately tested.
+- **Docker Desktop on macOS**, Apple Silicon (`arm64`) - verified by hand, last on 2026-07-28; Intel Macs use the same published `amd64` manifests but aren't separately tested.
 - **Docker Desktop on Windows** (WSL2 backend) - not yet in the verification matrix, but expected to work.
 
 Bare-metal/systemd installs and multi-node deployments are deliberately unsupported: RootGuard is a single-node Docker appliance.
@@ -37,7 +37,7 @@ Bare-metal/systemd installs and multi-node deployments are deliberately unsuppor
 
 No hard minimum is enforced by the installer, but the full stack (Core, WebApp, Updater, AdGuard Home, Unbound) already runs comfortably at 1 vCPU / 2 GB RAM under light load. Practical recommendation: **2 vCPU, 2 GB RAM** as a comfortable floor for a real household network.
 
-**Known limitations:** single-node only, no high availability; upgrade compatibility is N-1 → N only (skipping versions isn't supported); restore is a clean-replacement operation, not an in-place merge.
+**Known limitations:** single-node only, no high availability; only the upgrade from the release directly before is tested automatically, while the WebGUI update always offers the newest release - if you are several versions behind, read the release notes of the versions you skip first; restore is a clean-replacement operation, not an in-place merge.
 
 ## Installation
 
@@ -47,8 +47,13 @@ No hard minimum is enforced by the installer, but the full stack (Core, WebApp, 
 ```shell
 mkdir rootguard && cd rootguard
 
-curl -LO https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/compose.release.yaml
-curl -Lo .env https://raw.githubusercontent.com/foxly-it/rootguard/v1.0.0/.env.release.example
+# Find the current release
+version="$(curl -fsSL https://api.github.com/repos/foxly-it/rootguard/releases/latest \
+  | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')"
+echo "RootGuard ${version}"
+
+curl -LO "https://raw.githubusercontent.com/foxly-it/rootguard/${version}/compose.release.yaml"
+curl -Lo .env "https://raw.githubusercontent.com/foxly-it/rootguard/${version}/.env.release.example"
 
 # Generate two independent security keys
 openssl rand -hex 32
