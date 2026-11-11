@@ -6,6 +6,7 @@ import {
   Download,
   FileText,
   LoaderCircle,
+  Lock,
   RefreshCw,
   RotateCcw,
   ServerCog,
@@ -44,6 +45,15 @@ export default function Stack() {
     startManualCleanup,
     control,
   } = useStackData();
+  const dockerProxyRuntime = services.find((runtime) => runtime.name === "docker-proxy");
+  // Core answering while the proxy has no container at all means Core still
+  // holds the Docker socket itself: an installation set up with 1.0.0 or
+  // 1.0.1 that only ever self-updated, which never changes the Compose
+  // topology. A proxy that existed but stopped would leave Core unable to
+  // inspect anything, so this can't be confused with an outage.
+  const legacyDockerTopology = Boolean(
+    dockerProxyRuntime && !dockerProxyRuntime.image && services.some((runtime) => runtime.name === "core" && runtime.image),
+  );
 
   return (
     <div className="stack-page">
@@ -156,7 +166,24 @@ export default function Stack() {
                 t={t}
               />
             )}
+            {dockerProxyRuntime && !legacyDockerTopology && (
+              <ControlPlaneService
+                icon={<Lock />}
+                name={t("stack.dockerProxyName")}
+                updateLabel={t("stack.dockerProxyManual")}
+                runtime={dockerProxyRuntime}
+                t={t}
+              />
+            )}
           </div>
+          {legacyDockerTopology && (
+            <div className="stack-feedback warning" role="status">
+              <span>
+                {t("stack.dockerProxyLegacy")}{" "}
+                <a href={t("stack.dockerProxyDocsUrl")} target="_blank" rel="noreferrer">{t("stack.dockerProxyDocsLink")}</a>
+              </span>
+            </div>
+          )}
           <p className="control-plane-note"><RotateCcw size={15} /> {t("stack.controlPlaneRollback")}</p>
         </section>
       )}

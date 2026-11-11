@@ -667,6 +667,7 @@ func servicesHandler(w http.ResponseWriter, r *http.Request) {
 		serviceRuntimeResponse("unbound", "Unbound DNS", "Recursive resolver with DNSSEC validation", status.Unbound),
 		serviceRuntimeResponse("blockpage", "RootGuard Blockpage", "Landing page shown for blocked requests", status.Blockpage),
 		serviceRuntimeResponse("attestation-proxy", "Attestation Proxy", "Egress bridge for release signature verification", status.AttestationProxy),
+		serviceRuntimeResponse("docker-proxy", "Docker Proxy", "Only holder of the Docker socket, allowlists every Docker call", status.DockerProxy),
 	})
 }
 

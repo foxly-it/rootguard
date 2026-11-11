@@ -64,6 +64,6 @@ Wiederherstellungspunkte für AdGuard Home und Unbound entstehen automatisch vor
 
 ## Logs & Diagnose
 
-Zentrale, durchsuchbare Protokolle für Core, WebApp, Updater, AdGuard Home, Unbound, Blockseite und Attestation-Proxy, mit lokaler Filterung, optionaler automatischer Aktualisierung und einem redigierten Diagnosebericht zum Download.
+Zentrale, durchsuchbare Protokolle für Core, WebApp, Updater, AdGuard Home, Unbound, Blockseite, Attestation-Proxy und Docker-Proxy, mit lokaler Filterung, optionaler automatischer Aktualisierung und einem redigierten Diagnosebericht zum Download.
 
 ![Logs & Diagnose mit Dienstauswahl](assets/screenshots/logs.png)

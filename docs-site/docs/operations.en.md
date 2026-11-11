@@ -28,11 +28,13 @@ Configuration and installation state is stored in named Docker volumes. Do not r
 
 Core and Updater don't reach Docker directly but through `rootguard-docker-proxy`, the only container with access to the Docker socket. It lets through only the Docker API calls RootGuard actually needs and rejects everything else.
 
-The Docker proxy has **no update channel of its own**: the WebGUI doesn't update it. If a release needs a newer proxy, its release notes give the one command for it. Rejected calls show up in the proxy's log:
+The Docker proxy has **no update channel of its own**: the WebGUI doesn't update it. If a release needs a newer proxy, its release notes give the one command for it. **Stack & Updates** lists it with its version and signature status, and **Logs & Diagnostics** shows the calls it rejected. On the host, this works too:
 
 ```shell
 docker logs --tail=50 rootguard-docker-proxy
 ```
+
+**Installations from 1.0.0 or 1.0.1** don't have the Docker proxy yet: Core and the Updater reach the Docker socket directly there, and the WebGUI update doesn't change that, because it never replaces the Compose file. Stack & Updates points this out. The tested way to the current layout: export a full backup on the [Backups page](webgui.md#backups) and restore it on a fresh installation.
 
 ## Common problems
 

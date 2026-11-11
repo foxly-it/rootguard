@@ -28,11 +28,13 @@ Konfigurations- und Installationszustand liegt in benannten Docker-Volumes. Entf
 
 Core und Updater erreichen Docker nicht direkt, sondern über `rootguard-docker-proxy`, den einzigen Container mit Zugriff auf den Docker-Socket. Er lässt nur die Docker-API-Aufrufe durch, die RootGuard tatsächlich braucht, und lehnt alles andere ab.
 
-Der Docker-Proxy hat **keinen eigenen Update-Kanal**: Die WebGUI aktualisiert ihn nicht. Braucht ein Release einen neueren Proxy, nennen die Release-Hinweise den einen Befehl dafür. Abgelehnte Aufrufe stehen im Log des Proxys:
+Der Docker-Proxy hat **keinen eigenen Update-Kanal**: Die WebGUI aktualisiert ihn nicht. Braucht ein Release einen neueren Proxy, nennen die Release-Hinweise den einen Befehl dafür. Unter **Stack & Updates** steht er mit Version und Signaturstatus, unter **Logs & Diagnose** stehen die Aufrufe, die er abgelehnt hat. Auf dem Host geht es auch so:
 
 ```shell
 docker logs --tail=50 rootguard-docker-proxy
 ```
+
+**Installationen aus 1.0.0 oder 1.0.1** haben noch keinen Docker-Proxy: Core und Updater greifen dort direkt auf den Docker-Socket zu, und das Update in der WebGUI ändert daran nichts, weil es die Compose-Datei nie austauscht. Stack & Updates weist darauf hin. Der geprüfte Weg zum aktuellen Aufbau: auf der [Backup-Seite](webgui.md#backups) ein Vollbackup exportieren und es auf einer frischen Installation wiederherstellen.
 
 ## Häufige Probleme
 
