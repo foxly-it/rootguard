@@ -3,6 +3,16 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.14] - 2026-11-13
+
+### CI
+
+- Test the operator's upgrade path end to end ([#814](https://github.com/foxly-it/rootguard/pull/814))
+
+### Fixed
+
+- Pin git and libxslt, document four new krb5 CVEs ([#817](https://github.com/foxly-it/rootguard/pull/817))
+
 ## [1.0.13] - 2026-11-11
 
 ### Added
