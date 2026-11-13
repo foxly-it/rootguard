@@ -68,6 +68,10 @@ LABEL org.opencontainers.image.title="RootGuard Blockpage" \
 # Found live, 2026-11-09 (#801): musl-utils newly pinned at 1.2.5-r24 for
 # CVE-2026-107891 (HIGH). The base already ships musl 1.2.5-r24, only
 # musl-utils lagged at r23.
+#
+# Found live, 2026-11-12 (#816): libxslt newly pinned at 1.1.43-r4 for
+# CVE-2026-125350, CVE-2026-87636 and CVE-2026-9947 (all HIGH), fixable on
+# Alpine 3.23's `main` for both architectures.
 RUN apk add --no-cache --upgrade \
         c-ares=1.34.9-r0 \
         curl=8.23.0-r0 \
@@ -77,6 +81,7 @@ RUN apk add --no-cache --upgrade \
         libexpat=2.10.0-r0 \
         libuuid=2.41.6-r1 \
         libxml2=2.13.9-r1 \
+        libxslt=1.1.43-r4 \
         musl-utils=1.2.5-r24 \
         nghttp2-libs=1.69.0-r0 \
         pcre2=10.49-r0 \

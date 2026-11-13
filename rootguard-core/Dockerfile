@@ -114,10 +114,16 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #   - #784, 2026-10-30: trivy rates CVE-2026-92392 (HTTP/2 upload
 #     use-after-free) HIGH for the base's libcurl 8.22.0-r0 (pulled in by
 #     its git); Alpine 3.24 `main` ships 8.23.0-r0. Pinned the same way.
+#   - #816, 2026-11-13: trivy rates CVE-2026-105437, CVE-2026-111760 and
+#     CVE-2026-114466 HIGH for the base's git and git-init-template
+#     2.54.0-r0; Alpine 3.24 `main` ships 2.54.1-r0 for both
+#     architectures. Pinned the same way. Nothing in RootGuard runs git,
+#     it only comes with the base image.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
         libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.10.0-r0 brotli-libs=1.2.1-r0 \
         libcurl=8.23.0-r0 \
+        git=2.54.1-r0 git-init-template=2.54.1-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
     && mkdir -p /var/lib/rootguard/unbound
 

@@ -566,6 +566,63 @@ vulnerabilities:
       in this image. The attack targets a KDC with an unauthenticated request;
       a client would only hit it while talking Kerberos to an attacker's KDC,
       and nothing in this image talks Kerberos - see the comment above.
+
+  # Found live, 2026-11-11/12 (#816): four more CVEs from the same MIT
+  # advisory (MITKRB5-SA-2026-001, krb5 1.22.3), again reported against all
+  # four client libraries. The Debian Security Tracker lists them as
+  # vulnerable in trixie and unfixed in sid (bug 1153598). Each statement
+  # names the file upstream's fix commit touches. The package list of the
+  # 1.0.13 image still shows only the four libraries, required only by
+  # bind9-libs and bind9-dnsutils - no krb5-kdc, krb5-pkinit, libgssrpc,
+  # kadm5 or kdb5.
+  - id: CVE-2026-107364
+    purls:
+      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
+    expired_at: 2026-12-10
+    statement: >-
+      KDC read overrun in fetch_asn1_field(), src/kdc/kdc_util.c (upstream
+      cf44b06588). That is the KDC binary itself, which isn't in this image -
+      see the comment above.
+  - id: CVE-2026-118380
+    purls:
+      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
+    expired_at: 2026-12-10
+    statement: >-
+      Unverified RPCSEC_GSS service level in src/lib/rpc/svc_auth_gss.c
+      (upstream 2cda39a6c0), the RPC server side of libgssrpc. That library
+      isn't in this image - see the comment above.
+  - id: CVE-2026-71199
+    purls:
+      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
+    expired_at: 2026-12-10
+    statement: >-
+      Unkeyed checksums accepted in CAMMAC verifiers (upstream 18142c9c3a):
+      src/kdc/cammac.c in the KDC, and check_svcver() in
+      src/lib/krb5/krb/cammac_util.c, which is in libkrb5. Its only library
+      caller is the authdata code a service runs when it accepts a Kerberos
+      ticket, and the attacker needs a valid ticket for that service. Nothing
+      in this image accepts Kerberos tickets - see the comment above.
+  - id: CVE-2026-71200
+    purls:
+      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
+      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
+    expired_at: 2026-12-10
+    statement: >-
+      NULL dereference in PKINIT CMS processing on a KDC that allows PKINIT,
+      src/plugins/preauth/pkinit/pkinit_crypto_openssl.c (upstream
+      6a5d772002). That is the pkinit plugin from krb5-pkinit, which isn't in
+      this image, and there is no KDC here either - see the comment above.
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so
