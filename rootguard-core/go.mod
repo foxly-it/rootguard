@@ -4,7 +4,7 @@ go 1.26.11
 
 require (
 	filippo.io/age v1.3.2
-	golang.org/x/mod v0.42.0
+	golang.org/x/mod v0.43.0
 )
 
 require (
