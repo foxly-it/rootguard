@@ -82,10 +82,10 @@ func TestCheckSendsResolvedTargetImages(t *testing.T) {
 
 	client := NewClient(server.URL, "token")
 	client.WithTargetResolver("core", func(context.Context) (string, error) {
-		return "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.5", nil
+		return "ghcr.io/foxly-it/rootguard-core:1.0.14", nil
 	})
 	client.WithTargetResolver("webapp", func(context.Context) (string, error) {
-		return "", errors.New("github unavailable")
+		return "ghcr.io/foxly-it/rootguard-webapp:1.0.14", nil
 	})
 
 	if _, err := client.Check(t.Context()); err != nil {
@@ -98,11 +98,39 @@ func TestCheckSendsResolvedTargetImages(t *testing.T) {
 	if err := json.Unmarshal(receivedBody, &payload); err != nil {
 		t.Fatalf("decode request body: %v (body: %s)", err, receivedBody)
 	}
-	if payload.TargetImages["core"] != "ghcr.io/foxly-it/rootguard-core:0.1.0-beta.5" {
-		t.Fatalf("expected the resolved core image in the request, got %#v", payload.TargetImages)
+	if payload.TargetImages["core"] != "ghcr.io/foxly-it/rootguard-core:1.0.14" ||
+		payload.TargetImages["webapp"] != "ghcr.io/foxly-it/rootguard-webapp:1.0.14" {
+		t.Fatalf("expected both resolved images in the request, got %#v", payload.TargetImages)
 	}
-	if _, ok := payload.TargetImages["webapp"]; ok {
-		t.Fatalf("expected the failed webapp resolution to be omitted, got %#v", payload.TargetImages)
+}
+
+// TestUpdateSendsNoTargetsWhenOneResolverFails is the regression test for the
+// upgrade journey failure of 2026-11-13: Core's lookup worked, WebApp's
+// didn't, and passing on just Core's override moved Core to 1.0.14 while
+// WebApp stayed on 1.0.13 - reported as a successful update. One failed
+// resolver must leave both components on the updater's own pins.
+func TestUpdateSendsNoTargetsWhenOneResolverFails(t *testing.T) {
+	var receivedLength int64 = -1
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedLength = r.ContentLength
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"updating","message":"","services":[],"updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(server.URL, "token")
+	client.WithTargetResolver("core", func(context.Context) (string, error) {
+		return "ghcr.io/foxly-it/rootguard-core:1.0.14", nil
+	})
+	client.WithTargetResolver("webapp", func(context.Context) (string, error) {
+		return "", errors.New("GitHub API rate limit reached")
+	})
+
+	if _, err := client.Update(t.Context()); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if receivedLength > 0 {
+		t.Fatalf("expected no target overrides after a failed resolver, got Content-Length %d", receivedLength)
 	}
 }
 

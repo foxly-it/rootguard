@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -67,8 +68,9 @@ func NewClient(baseURL, token string) *Client {
 // updater as an override for that component; the updater's own network
 // is deliberately isolated (no outbound internet) so it cannot resolve
 // this itself - Core does, and passes the result through. A resolver
-// error is not fatal: the component just falls back to the updater's own
-// static pin for that run, same as if no resolver were registered.
+// error is not fatal, but it drops every override for that run, not just
+// the failed one: Core and WebApp then both stay on the updater's own
+// static pins, same as if no resolver were registered.
 func (c *Client) WithTargetResolver(component string, resolve func(context.Context) (string, error)) {
 	if c.resolvers == nil {
 		c.resolvers = map[string]func(context.Context) (string, error){}
@@ -92,11 +94,20 @@ func (c *Client) resolveTargets(ctx context.Context) map[string]string {
 	if len(c.resolvers) == 0 {
 		return nil
 	}
+	// All or nothing (found live 2026-11-13): passing on only the overrides
+	// that resolved moved Core to the new release and left WebApp on the
+	// installed one, and the updater reported that as a successful update.
 	targets := make(map[string]string, len(c.resolvers))
 	for component, resolve := range c.resolvers {
-		if image, err := resolve(ctx); err == nil && image != "" {
-			targets[component] = image
+		image, err := resolve(ctx)
+		if err == nil && image == "" {
+			err = fmt.Errorf("no image reference")
 		}
+		if err != nil {
+			log.Printf("control-plane update target for %s unavailable, keeping the updater's own pins for every component: %v", component, err)
+			return nil
+		}
+		targets[component] = image
 	}
 	return targets
 }

@@ -36,7 +36,7 @@
 
 ## Update-Ziele
 
-Diese Werte werden nie vom Browser gesetzt, nur serverseitig in `.env`. Für die RootGuard-Komponenten fragt Core zuerst das neueste veröffentlichte Release bei GitHub ab und nimmt diese Werte nur, wenn das nicht klappt. Bei AdGuard Home gilt die Regel in der Tabelle.
+Diese Werte werden nie vom Browser gesetzt, nur serverseitig in `.env`. Für die RootGuard-Komponenten fragt Core zuerst das neueste veröffentlichte Release bei GitHub ab, einmal für alle Komponenten gemeinsam. Die Antwort gilt 10 Minuten. Scheitert die Abfrage, etwa am Anfragelimit von GitHub, nimmt Core das zuletzt erkannte Release. Kennt Core noch keins, gelten diese Werte, und die Update-Prüfung weist darauf hin. Bei AdGuard Home gilt die Regel in der Tabelle.
 
 | Variable | Beschreibung |
 | --- | --- |

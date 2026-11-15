@@ -3,8 +3,184 @@ package updater
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 )
+
+// pickLatestReleaseImage keeps the ranking tests below readable: the newest
+// tag, turned into component's image reference the way ReleaseResolver does.
+func pickLatestReleaseImage(body []byte, component string) (string, error) {
+	tag, err := pickLatestReleaseTag(body)
+	if err != nil {
+		return "", err
+	}
+	return releaseImage(component, tag), nil
+}
+
+// fakeReleases serves a GitHub release list with an ETag and counts the
+// requests; answer, when set, overrides the response for one test. The
+// handler runs on the server's goroutine, so every field sits behind mu
+// (the nightly race detector would flag plain fields).
+type fakeReleases struct {
+	mu           sync.Mutex
+	requests     int
+	conditionals int
+	body         string
+	answer       func(w http.ResponseWriter) bool
+}
+
+func (f *fakeReleases) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.requests++
+	if f.answer != nil && f.answer(w) {
+		return
+	}
+	etag := `W/"` + strconv.Itoa(len(f.body)) + `"` // the bodies below differ in length
+	if r.Header.Get("If-None-Match") == etag {
+		f.conditionals++
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("ETag", etag)
+	_, _ = w.Write([]byte(f.body))
+}
+
+func (f *fakeReleases) set(body string, answer func(w http.ResponseWriter) bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.body, f.answer = body, answer
+}
+
+func (f *fakeReleases) counts() (requests, conditionals int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.requests, f.conditionals
+}
+
+func newTestResolver(t *testing.T, fake *fakeReleases, clock *time.Time) *ReleaseResolver {
+	t.Helper()
+	server := httptest.NewServer(fake)
+	t.Cleanup(server.Close)
+	resolver := NewReleaseResolver(server.Client())
+	resolver.url = server.URL
+	resolver.now = func() time.Time { return *clock }
+	return resolver
+}
+
+// TestReleaseResolverSharesOneLookup is the regression test for the upgrade
+// journey failure of 2026-11-13: every component used to ask GitHub on its
+// own, so one check round cost six lookups and components could end up on
+// different releases. Within the cache window, one request serves all of
+// them.
+func TestReleaseResolverSharesOneLookup(t *testing.T) {
+	clock := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	fake := &fakeReleases{body: `[{"tag_name":"v1.0.13"},{"tag_name":"v1.0.14"}]`}
+	resolver := newTestResolver(t, fake, &clock)
+
+	for _, component := range []string{"core", "webapp", "updater", "attestation-proxy", "unbound", "blockpage"} {
+		image, err := resolver.Image(t.Context(), component)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if image != "ghcr.io/foxly-it/rootguard-"+component+":1.0.14" {
+			t.Fatalf("%s: unexpected image %q", component, image)
+		}
+	}
+	if requests, _ := fake.counts(); requests != 1 {
+		t.Fatalf("expected one GitHub request for all components, got %d", requests)
+	}
+}
+
+// TestReleaseResolverRefreshesConditionally guards the rate-limit saving:
+// after the cache window the refresh carries the last ETag, an unchanged
+// list answers 304 (free under GitHub's limit), and a new release still
+// shows up on the next refresh.
+func TestReleaseResolverRefreshesConditionally(t *testing.T) {
+	clock := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	fake := &fakeReleases{body: `[{"tag_name":"v1.0.13"}]`}
+	resolver := newTestResolver(t, fake, &clock)
+
+	if _, err := resolver.Image(t.Context(), "core"); err != nil {
+		t.Fatal(err)
+	}
+	clock = clock.Add(releaseCacheTTL + time.Second)
+	image, err := resolver.Image(t.Context(), "core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, conditionals := fake.counts(); image != "ghcr.io/foxly-it/rootguard-core:1.0.13" || conditionals != 1 {
+		t.Fatalf("expected a 304 to keep 1.0.13, got %q after %d conditional requests", image, conditionals)
+	}
+
+	fake.set(`[{"tag_name":"v1.0.13"},{"tag_name":"v1.0.14"}]`, nil)
+	clock = clock.Add(releaseCacheTTL + time.Second)
+	image, err = resolver.Image(t.Context(), "core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image != "ghcr.io/foxly-it/rootguard-core:1.0.14" {
+		t.Fatalf("expected the new release after the cache window, got %q", image)
+	}
+	if requests, _ := fake.counts(); requests != 3 {
+		t.Fatalf("expected 3 requests in total, got %d", requests)
+	}
+}
+
+// TestReleaseResolverNamesTheRateLimit guards that a rate-limited first
+// lookup fails with a reason an operator can act on, and that the other
+// components of the same check round don't repeat the failed request.
+func TestReleaseResolverNamesTheRateLimit(t *testing.T) {
+	clock := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	reset := time.Date(2026, 11, 13, 12, 47, 0, 0, time.UTC)
+	fake := &fakeReleases{answer: func(w http.ResponseWriter) bool {
+		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(reset.Unix(), 10))
+		w.WriteHeader(http.StatusForbidden)
+		return true
+	}}
+	resolver := newTestResolver(t, fake, &clock)
+
+	for _, component := range []string{"core", "webapp"} {
+		_, err := resolver.Image(t.Context(), component)
+		if err == nil || !strings.Contains(err.Error(), "rate limit reached until 12:47 UTC") {
+			t.Fatalf("%s: expected the rate limit and its reset time, got %v", component, err)
+		}
+	}
+	if requests, _ := fake.counts(); requests != 1 {
+		t.Fatalf("expected the failed lookup not to be repeated right away, got %d requests", requests)
+	}
+}
+
+// TestReleaseResolverKeepsTheLastReleaseOnFailure guards against a failed
+// refresh dropping every component back to its install-day pin: the last
+// release seen is still the best answer.
+func TestReleaseResolverKeepsTheLastReleaseOnFailure(t *testing.T) {
+	clock := time.Date(2026, 11, 13, 12, 0, 0, 0, time.UTC)
+	fake := &fakeReleases{body: `[{"tag_name":"v1.0.14"}]`}
+	resolver := newTestResolver(t, fake, &clock)
+	if _, err := resolver.Image(t.Context(), "core"); err != nil {
+		t.Fatal(err)
+	}
+
+	fake.set(`[{"tag_name":"v1.0.14"}]`, func(w http.ResponseWriter) bool {
+		w.WriteHeader(http.StatusBadGateway)
+		return true
+	})
+	clock = clock.Add(releaseCacheTTL + time.Second)
+	image, err := resolver.Image(t.Context(), "webapp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if image != "ghcr.io/foxly-it/rootguard-webapp:1.0.14" {
+		t.Fatalf("expected the last known release, got %q", image)
+	}
+}
 
 func TestPickLatestReleaseImagePicksNewestMatchingTag(t *testing.T) {
 	body := []byte(`[
@@ -258,7 +434,9 @@ func TestUpdateUsesResolveTargetWhenSet(t *testing.T) {
 // transient GitHub Releases lookup failure (network issue, rate limit)
 // blocking the whole check - it must degrade to today's static-pin
 // behavior instead, since the actual running-container comparison is
-// still meaningful without a live-discovered target.
+// still meaningful without a live-discovered target. It must not be silent,
+// though (found live 2026-11-13): the check's message says the newest
+// release couldn't be looked up, or "no update" looks like the real answer.
 func TestCheckFallsBackToStaticPinWhenResolveTargetFails(t *testing.T) {
 	manager := NewManager(Options{
 		DataDir: t.TempDir(), ComposeDir: t.TempDir(),
@@ -289,12 +467,16 @@ func TestCheckFallsBackToStaticPinWhenResolveTargetFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitForIdle(t, manager)
-	service := manager.Status().Services[0]
+	status := manager.Status()
+	service := status.Services[0]
 	if service.Error != "" {
-		t.Fatalf("expected no error - a resolve failure should fall back silently, got %#v", service)
+		t.Fatalf("expected no service error - a resolve failure falls back to the pin, got %#v", service)
 	}
 	if service.TargetImage != "unbound:static-pin" {
 		t.Fatalf("expected the static pin to be reported, got %q", service.TargetImage)
+	}
+	if !strings.Contains(status.Message, "nicht bei GitHub abfragen") || !strings.Contains(status.Message, "boom") {
+		t.Fatalf("expected the check message to name the failed lookup, got %q", status.Message)
 	}
 }
 
