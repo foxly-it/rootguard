@@ -3,6 +3,23 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.15] - 2026-11-19
+
+### Added
+
+- Switch to AdGuard Home v1.0.0 ([#794](https://github.com/foxly-it/rootguard/pull/794))
+
+### Fixed
+
+- Bump docker:29-cli for CVE-2026-97054, document cosign ([#824](https://github.com/foxly-it/rootguard/pull/824))
+- Resolve the newest release once and never update half the control plane ([#818](https://github.com/foxly-it/rootguard/pull/818))
+
+### Maintenance
+
+- Bump the go group across 2 directories with 1 update ([#819](https://github.com/foxly-it/rootguard/pull/819))
+- Bump node ([#820](https://github.com/foxly-it/rootguard/pull/820))
+- Bump the npm group ([#821](https://github.com/foxly-it/rootguard/pull/821))
+
 ## [1.0.14] - 2026-11-13
 
 ### CI
