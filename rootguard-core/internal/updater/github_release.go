@@ -3,21 +3,40 @@ package updater
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"golang.org/x/mod/semver"
+)
+
+const (
+	releasesURL = "https://api.github.com/repos/foxly-it/rootguard/releases"
+	// releaseCacheTTL is how long one successful lookup serves every
+	// component. Long enough that a check and the install that follows it
+	// see the same release; short enough that a new release shows up
+	// without restarting Core.
+	releaseCacheTTL = 10 * time.Minute
+	// releaseRetryAfter keeps a failed lookup from being repeated for every
+	// component of the same check round.
+	releaseRetryAfter = time.Minute
+	// maxReleasesBody bounds the response read (30 releases with notes are
+	// well under 1 MiB).
+	maxReleasesBody = 8 << 20
 )
 
 type githubRelease struct {
 	TagName string `json:"tag_name"`
 }
 
-// pickLatestReleaseImage scans a GitHub Releases API response body for the
-// newest RootGuard release tag and returns the matching ghcr.io image
-// reference for component. Ranks every valid semantic-version tag itself
+// pickLatestReleaseTag scans a GitHub Releases API response body for the
+// newest RootGuard release tag. Ranks every valid semantic-version tag itself
 // via golang.org/x/mod/semver rather than trusting the API response's own
 // ordering - found via a real CI failure: querying the live API directly
 // showed v0.1.0-beta.9 listed *ahead of* v0.1.0-beta.12, on a repository
@@ -31,7 +50,7 @@ type githubRelease struct {
 // own isOlderReleaseVersion (a different Go module, so its own copy).
 // release.TagName is used as-is (GitHub returns it with the leading "v",
 // e.g. "v0.1.0-beta.14" - exactly what semver.IsValid/Compare expect).
-func pickLatestReleaseImage(body []byte, component string) (string, error) {
+func pickLatestReleaseTag(body []byte) (string, error) {
 	var releases []githubRelease
 	if err := json.Unmarshal(body, &releases); err != nil {
 		return "", fmt.Errorf("parse GitHub releases response: %w", err)
@@ -48,48 +67,163 @@ func pickLatestReleaseImage(body []byte, component string) (string, error) {
 	if bestTag == "" {
 		return "", fmt.Errorf("no matching RootGuard release found")
 	}
-	return fmt.Sprintf("ghcr.io/foxly-it/rootguard-%s:%s", component, strings.TrimPrefix(bestTag, "v")), nil
+	return bestTag, nil
 }
 
-// ResolveLatestReleaseImage queries the public GitHub Releases API for
-// foxly-it/rootguard and resolves the newest published release to
-// component's image reference. Every release here is created with
-// --prerelease, so GitHub's /releases/latest (which excludes prereleases)
-// can't be used - the full list is queried instead and ranked locally (see
-// pickLatestReleaseImage).
-func ResolveLatestReleaseImage(ctx context.Context, client *http.Client, component string) (string, error) {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/repos/foxly-it/rootguard/releases", nil)
+// releaseImage is component's image reference in the release tagged tag
+// ("v1.0.14" -> "ghcr.io/foxly-it/rootguard-core:1.0.14").
+func releaseImage(component, tag string) string {
+	return fmt.Sprintf("ghcr.io/foxly-it/rootguard-%s:%s", component, strings.TrimPrefix(tag, "v"))
+}
+
+// ReleaseResolver finds the newest published RootGuard release on GitHub and
+// derives every component's update target from that one answer.
+//
+// Found live, 2026-11-13 (upgrade journey 1.0.13 -> 1.0.14): every component
+// used to query GitHub on its own, unauthenticated, on every check and every
+// update - a dozen lookups for one round of updates, against a limit of 60 an
+// hour per IP that GitHub-hosted runners and households behind carrier-grade
+// NAT share. When the second of Core's and WebApp's lookups failed, Core moved
+// to 1.0.14 while WebApp kept the installed 1.0.13 pin, the update still
+// reported success, and every check after it silently offered nothing.
+//
+// One lookup now serves all components for releaseCacheTTL, so they always
+// agree on the release, and a check and the install after it see the same
+// one. Refreshes are conditional requests with the last ETag, which GitHub
+// doesn't count against the limit when nothing changed. A failed refresh keeps
+// the last release seen instead of dropping back to the install-day pins, and
+// is not repeated for releaseRetryAfter.
+//
+// The full release list is ranked locally rather than asking for
+// /releases/latest, see pickLatestReleaseTag.
+type ReleaseResolver struct {
+	client     *http.Client
+	url        string
+	ttl        time.Duration
+	retryAfter time.Duration
+	now        func() time.Time
+
+	mu        sync.Mutex
+	tag       string
+	etag      string
+	err       error
+	checkedAt time.Time
+}
+
+func NewReleaseResolver(client *http.Client) *ReleaseResolver {
+	return &ReleaseResolver{
+		client:     client,
+		url:        releasesURL,
+		ttl:        releaseCacheTTL,
+		retryAfter: releaseRetryAfter,
+		now:        time.Now,
+	}
+}
+
+// Image returns component's image reference in the newest published release.
+func (r *ReleaseResolver) Image(ctx context.Context, component string) (string, error) {
+	tag, err := r.latestTag(ctx)
+	if err != nil {
+		return "", err
+	}
+	return releaseImage(component, tag), nil
+}
+
+func (r *ReleaseResolver) latestTag(ctx context.Context) (string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	now := r.now()
+	if r.err == nil && r.tag != "" && now.Sub(r.checkedAt) < r.ttl {
+		return r.tag, nil
+	}
+	if r.err != nil && now.Sub(r.checkedAt) < r.retryAfter {
+		return r.lastKnownLocked()
+	}
+	tag, err := r.fetchLocked(ctx)
+	r.checkedAt = now
+	r.err = err
+	if err != nil {
+		if r.tag != "" {
+			log.Printf("GitHub release lookup failed, keeping the last known release %s: %v", r.tag, err)
+		} else {
+			log.Printf("GitHub release lookup failed, update checks fall back to the installed pins: %v", err)
+		}
+		return r.lastKnownLocked()
+	}
+	r.tag = tag
+	return tag, nil
+}
+
+// lastKnownLocked answers from the last successful lookup when there was one,
+// otherwise with the error of the failed one.
+func (r *ReleaseResolver) lastKnownLocked() (string, error) {
+	if r.tag != "" {
+		return r.tag, nil
+	}
+	return "", r.err
+}
+
+func (r *ReleaseResolver) fetchLocked(ctx context.Context) (string, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, r.url, nil)
 	if err != nil {
 		return "", err
 	}
 	request.Header.Set("Accept", "application/vnd.github+json")
-	response, err := client.Do(request)
+	if r.tag != "" && r.etag != "" {
+		request.Header.Set("If-None-Match", r.etag)
+	}
+	response, err := r.client.Do(request)
 	if err != nil {
 		return "", fmt.Errorf("query GitHub releases: %w", err)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GitHub releases API returned %s", response.Status)
+	switch {
+	case response.StatusCode == http.StatusNotModified && r.tag != "":
+		return r.tag, nil
+	case response.StatusCode != http.StatusOK:
+		return "", releaseLookupError(response)
 	}
-	body, err := io.ReadAll(response.Body)
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxReleasesBody))
 	if err != nil {
 		return "", fmt.Errorf("read GitHub releases response: %w", err)
 	}
-	return pickLatestReleaseImage(body, component)
+	tag, err := pickLatestReleaseTag(body)
+	if err != nil {
+		return "", err
+	}
+	r.etag = response.Header.Get("ETag")
+	return tag, nil
+}
+
+// releaseLookupError names GitHub's rate limit explicitly - by far the most
+// likely reason for a 403 or 429 here, and the one an operator can wait out.
+func releaseLookupError(response *http.Response) error {
+	if response.Header.Get("X-RateLimit-Remaining") == "0" {
+		if reset, err := strconv.ParseInt(response.Header.Get("X-RateLimit-Reset"), 10, 64); err == nil {
+			return fmt.Errorf("GitHub API rate limit reached until %s", time.Unix(reset, 0).UTC().Format("15:04 MST"))
+		}
+		return errors.New("GitHub API rate limit reached")
+	}
+	return fmt.Errorf("GitHub releases API returned %s", response.Status)
 }
 
 // resolveTargetImage returns spec.ResolveTarget's live-discovered image when
-// set and successful, falling back to the static TargetImage pin otherwise -
-// a transient GitHub Releases lookup failure degrades to today's
-// static-pin behavior instead of blocking the check/update.
-func resolveTargetImage(ctx context.Context, spec ServiceSpec) string {
+// set and successful. Otherwise it returns the static TargetImage pin, so a
+// failed GitHub lookup degrades to comparing against the installed release
+// instead of blocking the check or update, together with the reason, which
+// the check reports in its status message.
+func resolveTargetImage(ctx context.Context, spec ServiceSpec) (string, error) {
 	if spec.ResolveTarget == nil {
-		return spec.TargetImage
+		return spec.TargetImage, nil
 	}
-	if image, err := spec.ResolveTarget(ctx); err == nil && image != "" {
-		return image
+	image, err := spec.ResolveTarget(ctx)
+	if err == nil && image == "" {
+		err = errors.New("release lookup returned no image")
 	}
-	return spec.TargetImage
+	if err != nil {
+		return spec.TargetImage, err
+	}
+	return image, nil
 }
 
 // NewerPinnedImage picks the update target for a third-party image, which has

@@ -366,10 +366,14 @@ func (m *Manager) check() {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
+	var lookupErr error
 	for _, service := range m.serviceNames() {
 		spec := m.specs[service]
 		m.setProgress(service, "Prüfe "+spec.DisplayName+".")
-		targetImage := resolveTargetImage(ctx, spec)
+		targetImage, err := resolveTargetImage(ctx, spec)
+		if err != nil && lookupErr == nil {
+			lookupErr = err
+		}
 		currentImage, currentID, err := m.inspectContainer(ctx, spec)
 		if err != nil {
 			// Found in a v1.0.0 correctness review: an Optional service
@@ -414,10 +418,17 @@ func (m *Manager) check() {
 		m.setServiceResult(service, result)
 	}
 
+	message := "Update-Prüfung abgeschlossen."
+	if lookupErr != nil {
+		// Without this, a failed GitHub lookup looked exactly like "no update
+		// available" (found live 2026-11-13, see ReleaseResolver).
+		message = "Update-Prüfung abgeschlossen, aber die neueste RootGuard-Version ließ sich nicht bei GitHub abfragen. " +
+			"Verglichen wurde nur mit den installierten Versionen (" + lookupErr.Error() + ")."
+	}
 	m.mu.Lock()
 	m.status.State = StateIdle
 	m.status.ActiveService = ""
-	m.status.Message = "Update-Prüfung abgeschlossen."
+	m.status.Message = message
 	m.status.UpdatedAt = time.Now().UTC()
 	_ = m.persistLocked()
 	m.mu.Unlock()
@@ -433,7 +444,9 @@ func (m *Manager) update(service string) {
 		m.fail(service, err)
 		return
 	}
-	targetImage := resolveTargetImage(ctx, spec)
+	// A failed lookup was already logged by the resolver; the update then goes
+	// to the installed pin, which usually ends as "no change".
+	targetImage, _ := resolveTargetImage(ctx, spec)
 	m.setProgress(service, "Erstelle eine Sicherung der persistenten Dienstdaten.")
 	backupDir, err := m.backup(ctx, spec)
 	if err != nil {

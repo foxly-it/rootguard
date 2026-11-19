@@ -227,6 +227,8 @@ func main() {
 		},
 	})
 	githubClient := &http.Client{Timeout: 8 * time.Second, Transport: githubReleaseTransport()}
+	// One shared lookup for every component, see updater.ReleaseResolver.
+	releases := updater.NewReleaseResolver(githubClient)
 	updateManager := updater.NewManager(updater.Options{
 		DataDir:             envOrDefault("ROOTGUARD_UPDATE_DIR", "/var/lib/rootguard/updates"),
 		ComposeDir:          envOrDefault("ROOTGUARD_INSTALLATION_DIR", "/var/lib/rootguard/installation"),
@@ -244,7 +246,7 @@ func main() {
 				Container:   "rootguard-unbound",
 				TargetImage: envOrDefault("ROOTGUARD_UNBOUND_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-unbound:latest"),
 				ResolveTarget: func(ctx context.Context) (string, error) {
-					return updater.ResolveLatestReleaseImage(ctx, githubClient, "unbound")
+					return releases.Image(ctx, "unbound")
 				},
 				BackupPaths: []string{"/etc/unbound/unbound.d", "/var/lib/unbound"},
 				OwnershipMigrations: []updater.VolumeOwnershipMigration{{
@@ -266,7 +268,7 @@ func main() {
 				Container:   "rootguard-blockpage",
 				TargetImage: envOrDefault("ROOTGUARD_BLOCKPAGE_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-blockpage:latest"),
 				ResolveTarget: func(ctx context.Context) (string, error) {
-					return updater.ResolveLatestReleaseImage(ctx, githubClient, "blockpage")
+					return releases.Image(ctx, "blockpage")
 				},
 				// Blockpage can be disabled at install time
 				// (installer.Config.BlockpageEnabled), in which case no
@@ -305,10 +307,10 @@ func main() {
 		envOrDefault("ROOTGUARD_CONTROL_PLANE_UPDATER_TOKEN", token),
 	)
 	controlPlaneClient.WithTargetResolver("core", func(ctx context.Context) (string, error) {
-		return updater.ResolveLatestReleaseImage(ctx, githubClient, "core")
+		return releases.Image(ctx, "core")
 	})
 	controlPlaneClient.WithTargetResolver("webapp", func(ctx context.Context) (string, error) {
-		return updater.ResolveLatestReleaseImage(ctx, githubClient, "webapp")
+		return releases.Image(ctx, "webapp")
 	})
 	// The RootGuard Updater can't safely replace its own running container
 	// (it would kill itself mid-operation), so Core manages that update
@@ -347,7 +349,7 @@ func main() {
 				Container:   "rootguard-updater",
 				TargetImage: envOrDefault("ROOTGUARD_UPDATER_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-updater:latest"),
 				ResolveTarget: func(ctx context.Context) (string, error) {
-					return updater.ResolveLatestReleaseImage(ctx, githubClient, "updater")
+					return releases.Image(ctx, "updater")
 				},
 			},
 			{
@@ -357,7 +359,7 @@ func main() {
 				Container:   "rootguard-attestation-proxy",
 				TargetImage: envOrDefault("ROOTGUARD_ATTESTATION_PROXY_UPDATE_IMAGE", "ghcr.io/foxly-it/rootguard-attestation-proxy:latest"),
 				ResolveTarget: func(ctx context.Context) (string, error) {
-					return updater.ResolveLatestReleaseImage(ctx, githubClient, "attestation-proxy")
+					return releases.Image(ctx, "attestation-proxy")
 				},
 			},
 		},

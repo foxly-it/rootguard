@@ -36,7 +36,7 @@
 
 ## Update targets
 
-These values are never accepted from the browser, only set server-side in `.env`. For the RootGuard components, Core first asks GitHub for the newest published release and only falls back to these values when that fails. AdGuard Home follows the rule in the table.
+These values are never accepted from the browser, only set server-side in `.env`. For the RootGuard components, Core first asks GitHub for the newest published release, once for all components together. The answer holds for 10 minutes. If the lookup fails, for example on GitHub's request limit, Core uses the last release it found. If it has none yet, these values apply, and the update check says so. AdGuard Home follows the rule in the table.
 
 | Variable | Description |
 | --- | --- |
