@@ -32,7 +32,11 @@ FROM ghcr.io/sigstore/cosign/cosign:v3.1.4@sha256:0f06154836d2de34f887a5c273506d
 # #801, 2026-11-10: docker 29.9.3 with compose 5.7.0 (x/net 0.60.0). That
 # clears CVE-2026-78669 and four vulnerabilities govulncheck finds called in
 # compose 5.6.1 (GO-2026-6603, -6611, -6612, -6617).
-FROM docker:29-cli@sha256:2357639ad1ea7d0194134bf3292622fd4e562483966ed674e5d7c945b5f3b28d
+# #822, 2026-11-19: docker 29.10.0 with compose 5.7.1, both built with Go
+# 1.27.4, which clears CVE-2026-97054 (GO-2026-6859) in both binaries.
+# govulncheck finds nothing in docker; compose keeps x/net 0.60.0, see
+# .trivyignore.yaml. The base now ships git 2.54.1-r0 itself.
+FROM docker:29-cli@sha256:34507eb5069d8be82c95dd3b6987d4250fd5fee49b82e2509b7d7a7030740d6d
 
 ARG VERSION=dev
 ARG COMMIT=unknown
@@ -121,7 +125,7 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     it only comes with the base image.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.10.0-r0 brotli-libs=1.2.1-r0 \
+        libssl3=3.5.9-r1 libcrypto3=3.5.9-r1 libexpat=2.10.0-r0 brotli-libs=1.2.1-r0 \
         libcurl=8.23.0-r0 \
         git=2.54.1-r0 git-init-template=2.54.1-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \

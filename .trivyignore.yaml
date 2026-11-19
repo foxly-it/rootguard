@@ -32,6 +32,24 @@ vulnerabilities:
   # that list for Core's release lookup, not for cosign). Recheck when
   # cosign ships a build on Go >= 1.27.3. compose's x/net entry for
   # CVE-2026-78669 went with the compose 5.7.0 digest bump (#801).
+  #
+  # Rechecked 2026-11-19 (#822): the docker:29-cli digest bump brings docker
+  # 29.10.0 and compose 5.7.1, both on Go 1.27.4, so CVE-2026-97054 needs no
+  # entry for them. cosign v3.1.4 is still the newest release.
+  - id: CVE-2026-97054
+    purls:
+      - "pkg:golang/stdlib@v1.27.1"
+    paths:
+      - "usr/local/bin/cosign"
+    expired_at: 2026-12-31
+    statement: >-
+      Server side only: an HTTP/1 server whose handler reads a body behind
+      MaxBytesReader while it writes headers can crash on a header race
+      (GO-2026-6859, fixed in Go 1.27.4). cosign's binary links net/http's
+      server code, but RootGuard only ever runs `cosign verify-attestation`
+      (rootguard-core/internal/stack/attestation.go,
+      rootguard-updater/attestation.go), which opens no listener - see the
+      comment above.
   - id: CVE-2026-111943
     purls:
       - "pkg:golang/stdlib@v1.27.1"
@@ -86,7 +104,9 @@ vulnerabilities:
   # golang.org/x/net/html at all: `go tool nm` finds no symbol of the package
   # in either, and govulncheck's binary mode doesn't report it as called.
   # The docker:29-cli bump in the same PR retired the compose entry for
-  # CVE-2026-78669 (compose 5.7.0 ships x/net 0.60.0).
+  # CVE-2026-78669 (compose 5.7.0 ships x/net 0.60.0). Rechecked 2026-11-19
+  # (#822): compose 5.7.1 still ships x/net 0.60.0, and govulncheck again
+  # reports the html package only as required, not as imported.
   - id: CVE-2026-78661
     purls:
       - "pkg:golang/golang.org/x/net@v0.60.0"
