@@ -121,7 +121,7 @@ LABEL org.opencontainers.image.title="RootGuard Core" \
 #     it only comes with the base image.
 RUN apk del openssh-client \
     && apk add --no-cache --upgrade \
-        libssl3=3.5.9-r0 libcrypto3=3.5.9-r0 libexpat=2.10.0-r0 brotli-libs=1.2.1-r0 \
+        libssl3=3.5.9-r1 libcrypto3=3.5.9-r1 libexpat=2.10.0-r0 brotli-libs=1.2.1-r0 \
         libcurl=8.23.0-r0 \
         git=2.54.1-r0 git-init-template=2.54.1-r0 \
     && rm -f /usr/local/libexec/docker/cli-plugins/docker-buildx \
