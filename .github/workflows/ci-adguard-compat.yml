@@ -45,9 +45,14 @@ jobs:
       matrix:
         include:
           - channel: stable
-            image: adguard/adguardhome:v0.107.80
+            image: adguard/adguardhome:v1.0.0
           - channel: beta
             image: adguard/adguardhome:beta
+          # The last release on the pre-1.0 UI. Real installations stay on
+          # it until they update, so the WebApp has to keep working against
+          # both - see adguardRoutes.ts.
+          - channel: previous
+            image: adguard/adguardhome:v0.107.80
     runs-on: ubuntu-latest
     env:
       ROOTGUARD_API_TOKEN: ci-rootguard-token-not-a-real-secret-32
@@ -177,9 +182,8 @@ jobs:
       ROOTGUARD_DNS_BIND: 127.0.0.1
       ROOTGUARD_DNS_PORT: "1053"
       ROOTGUARD_ADGUARD_IMAGE: adguard/adguardhome:v0.107.80
-      # Follows the next release, so the weekly run also shows whether a new
-      # beta can still read a configuration the old release wrote.
-      TARGET_IMAGE: adguard/adguardhome:beta
+      # The release installations are about to move to.
+      TARGET_IMAGE: adguard/adguardhome:v1.0.0
       USER_RULE: "||rootguard-upgrade-check.invalid^"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -223,18 +227,33 @@ jobs:
             http://127.0.0.1:18080/adguard-ui/control/filtering/set_rules
           ./scripts/ci/adguard-upgrade-check.sh "${ROOTGUARD_ADGUARD_IMAGE##*:}" /tmp/rootguard-ci-cookies.txt "$USER_RULE"
 
+      # The updater snapshots these paths before every swap and copies them
+      # back on rollback (updater.Manager.backup and .rollback, BackupPaths of
+      # the adguard ServiceSpec). Without that, a release that bumps the
+      # config schema can't be rolled back at all: v1.0.0 migrates
+      # AdGuardHome.yaml to schema 35, and v0.107.80 refuses to start on it.
       - name: Update AdGuard in place
         run: |
+          mkdir -p "$RUNNER_TEMP/adguard-backup"
+          for path in /opt/adguardhome/conf /opt/adguardhome/work; do
+            docker cp "rootguard-adguard:$path" "$RUNNER_TEMP/adguard-backup"
+          done
           # A channel tag like :beta doesn't name a version, the image does.
           docker pull --quiet "$TARGET_IMAGE"
           target_version="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.version" }}' "$TARGET_IMAGE")"
           ROOTGUARD_ADGUARD_IMAGE="$TARGET_IMAGE" docker compose -f compose.integration.yaml up -d --no-deps adguard
           ./scripts/ci/adguard-upgrade-check.sh "$target_version" /tmp/rootguard-ci-cookies.txt "$USER_RULE"
+          docker exec rootguard-adguard grep '^schema_version' /opt/adguardhome/conf/AdGuardHome.yaml
 
       - name: Roll back to the old release
         run: |
           docker compose -f compose.integration.yaml up -d --no-deps adguard
+          for path in /opt/adguardhome/conf /opt/adguardhome/work; do
+            docker cp "$RUNNER_TEMP/adguard-backup/$(basename "$path")/." "rootguard-adguard:$path"
+          done
+          docker restart rootguard-adguard
           ./scripts/ci/adguard-upgrade-check.sh "${ROOTGUARD_ADGUARD_IMAGE##*:}" /tmp/rootguard-ci-cookies.txt "$USER_RULE"
+          docker exec rootguard-adguard grep '^schema_version' /opt/adguardhome/conf/AdGuardHome.yaml
 
       - name: Show service logs after failure
         if: failure()
