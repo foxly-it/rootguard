@@ -3,6 +3,17 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.16] - 2026-11-20
+
+### Documentation
+
+- Fix the AdGuard + Unbound Docker guide for AdGuard Home v1.0.0 ([#827](https://github.com/foxly-it/rootguard/pull/827))
+
+### Fixed
+
+- Update AdGuard filter probes to the current default list ([#825](https://github.com/foxly-it/rootguard/pull/825))
+- Never redeploy AdGuard older than the running version ([#826](https://github.com/foxly-it/rootguard/pull/826))
+
 ## [1.0.15] - 2026-11-19
 
 ### Added
