@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -17,6 +18,7 @@ import (
 	"github.com/foxly-it/rootguard-core/internal/atomicfile"
 	"github.com/foxly-it/rootguard-core/internal/dockercli"
 	"github.com/foxly-it/rootguard-core/internal/stack"
+	"golang.org/x/mod/semver"
 )
 
 const (
@@ -768,12 +770,79 @@ func (m *Manager) waitForUnbound(ctx context.Context) error {
 }
 
 func (m *Manager) writeCompose(config Config, unboundImage, blockpageImage string) (string, error) {
+	return m.writeComposeWithAdGuard(config, unboundImage, m.configuredAdGuardImage(config), blockpageImage)
+}
+
+// configuredAdGuardImage is the AdGuard Home image this installation is
+// configured with for config's release channel.
+func (m *Manager) configuredAdGuardImage(config Config) string {
+	if config.AdGuardChannel == "beta" {
+		return m.adGuardBetaImage
+	}
+	return m.adGuardImage
+}
+
+const adGuardContainer = "rootguard-adguard"
+
+// keepNewerRunningAdGuard returns the image of the AdGuard Home container
+// that is already running when it is newer than candidate, and candidate
+// otherwise.
+//
+// Running setup again on an installed stack (to switch the AdGuard channel or
+// turn on the blockpage) recreates AdGuard from this stack definition. The
+// version an AdGuard update installed is recorded only in the updater's own
+// override file, and the configured images stay at the pins the installation
+// started with. So that redeploy used to take AdGuard back to its install-day
+// version. That was harmless while the configuration schema stayed the same.
+// Since v1.0.0 (schema 35) it takes AdGuard and DNS down: AdGuard migrates its
+// configuration forward on start, and v0.107.x then exits with "unknown
+// current schema version 35" (found 2026-11-20 on an installation that had
+// taken the offered v1.0.0 update).
+//
+// Versions come from the images' org.opencontainers.image.version label,
+// because a channel tag such as :beta names none. Anything that doesn't
+// compare cleanly keeps candidate: no AdGuard container yet (first install,
+// restore), or a missing or non-semver label. A channel switch to an older
+// beta therefore keeps the newer running build until the channel catches up.
+func (m *Manager) keepNewerRunningAdGuard(ctx context.Context, candidate string) string {
+	// "container inspect", not bare "inspect": see waitForUnbound.
+	output, err := m.run(ctx, "container", "inspect", "--format", `{{.Config.Image}}|{{index .Config.Labels "org.opencontainers.image.version"}}`, adGuardContainer)
+	if err != nil {
+		return candidate
+	}
+	runningImage, runningLabel, ok := strings.Cut(strings.TrimSpace(string(output)), "|")
+	runningVersion := semverFromLabel(runningLabel)
+	if !ok || runningImage == "" || runningImage == candidate || runningVersion == "" {
+		return candidate
+	}
+	output, err = m.run(ctx, "image", "inspect", "--format", `{{index .Config.Labels "org.opencontainers.image.version"}}`, candidate)
+	if err != nil {
+		return candidate
+	}
+	candidateVersion := semverFromLabel(string(output))
+	if candidateVersion == "" || semver.Compare(candidateVersion, runningVersion) >= 0 {
+		return candidate
+	}
+	log.Printf("installer: keeping AdGuard Home %s (%s) instead of the configured %s (%s): AdGuard cannot read a configuration a newer version has migrated", runningVersion, runningImage, candidateVersion, candidate)
+	return runningImage
+}
+
+// semverFromLabel normalizes an image version label such as "v1.0.0" or
+// "1.0.0-b.2" for semver.Compare, or returns "" when it isn't one.
+func semverFromLabel(label string) string {
+	version := strings.TrimSpace(label)
+	if version != "" && !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
+	if !semver.IsValid(version) {
+		return ""
+	}
+	return version
+}
+
+func (m *Manager) writeComposeWithAdGuard(config Config, unboundImage, adGuardImage, blockpageImage string) (string, error) {
 	if err := os.MkdirAll(m.dataDir, 0700); err != nil {
 		return "", fmt.Errorf("create installation data directory: %w", err)
-	}
-	adGuardImage := m.adGuardImage
-	if config.AdGuardChannel == "beta" {
-		adGuardImage = m.adGuardBetaImage
 	}
 	content, err := renderCompose(config, unboundImage, adGuardImage, blockpageImage, m.dnsNetworkCIDR)
 	if err != nil {
@@ -907,7 +976,8 @@ func (m *Manager) resolveAndPinDigests(ctx context.Context, config Config) (comp
 	if config.BlockpageEnabled {
 		blockpageImage = m.resolveDigest(ctx, m.blockpageImage)
 	}
-	composePath, err = m.writeCompose(config, unboundImage, blockpageImage)
+	adGuardImage := m.keepNewerRunningAdGuard(ctx, m.configuredAdGuardImage(config))
+	composePath, err = m.writeComposeWithAdGuard(config, unboundImage, adGuardImage, blockpageImage)
 	if err != nil {
 		return "", "", "", fmt.Errorf("pin attested image digests into the stack definition: %w", err)
 	}

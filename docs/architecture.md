@@ -88,6 +88,14 @@ other values are rejected by Core. Image names, container privileges,
 volumes, networks, and commands come from the controlled Core
 specification and cannot be freely chosen via the browser API.
 
+Running setup again on an installed stack, for example to switch the
+channel or turn on the blockpage, recreates AdGuard from that
+specification. Core never takes AdGuard back to an older version than the
+one running: AdGuard migrates its configuration forward on start, and an
+older release cannot read it any more (v0.107.x refuses the schema v1.0.0
+writes). Core compares the images' version labels and keeps the running
+image when the configured one is older.
+
 The controller is connected to the private DNS network after
 installation. On restart or replacement of the Core container, it
 re-establishes this connection based on the persisted installation state.

@@ -67,6 +67,83 @@ func TestWriteComposeSelectsBetaImage(t *testing.T) {
 	}
 }
 
+const (
+	testAdGuard079 = "adguard/adguardhome:v0.107.79@sha256:aba9e3bf0613be3ba3755e1fc311b126e2c24bec25e18b6483894a88283074f0"
+	testAdGuard080 = "adguard/adguardhome:v0.107.80@sha256:e2e1b48c832f0000000000000000000000000000000000000000000000000000"
+	testAdGuard100 = "adguard/adguardhome:v1.0.0@sha256:f00a586f0d1caa74f149340bfb225014960310488ffa838406b89256900a96c2"
+	testAdGuardB2  = "adguard/adguardhome:beta@sha256:2b77703b27730000000000000000000000000000000000000000000000000000"
+)
+
+// adGuardVersionRun fakes the two lookups keepNewerRunningAdGuard makes.
+// running is "<Config.Image>|<version label>" of rootguard-adguard, or "" for
+// no such container.
+func adGuardVersionRun(running string) CommandRunner {
+	labels := map[string]string{testAdGuard079: "v0.107.79", testAdGuard080: "v0.107.80", testAdGuard100: "v1.0.0", testAdGuardB2: "v1.0.0-b.2"}
+	return func(_ context.Context, arguments ...string) ([]byte, error) {
+		last := arguments[len(arguments)-1]
+		switch {
+		case arguments[0] == "container" && arguments[1] == "inspect" && last == "rootguard-adguard":
+			if running == "" {
+				return []byte("Error: No such container: rootguard-adguard"), errors.New("exit status 1")
+			}
+			return []byte(running + "\n"), nil
+		case arguments[0] == "image" && arguments[1] == "inspect" && strings.Contains(strings.Join(arguments, " "), "org.opencontainers.image.version"):
+			return []byte(labels[last] + "\n"), nil
+		}
+		return []byte("ok"), nil
+	}
+}
+
+// TestRedeployNeverTakesAdGuardBackToAnOlderVersion covers keepNewerRunningAdGuard:
+// setup run again on an installed stack must not recreate AdGuard from an
+// install-day pin older than what an update installed, since AdGuard v0.107.x
+// cannot read the schema v1.0.0 migrates to.
+func TestRedeployNeverTakesAdGuardBackToAnOlderVersion(t *testing.T) {
+	tests := map[string]struct {
+		channel, stable, beta, running, want string
+	}{
+		"stable redeploy keeps the updated v1":       {channel: "stable", stable: testAdGuard079, running: testAdGuard100 + "|v1.0.0", want: testAdGuard100},
+		"beta switch keeps v1 over an older beta":    {channel: "beta", stable: testAdGuard079, beta: testAdGuardB2, running: testAdGuard100 + "|v1.0.0", want: testAdGuard100},
+		"a newer configured image still upgrades":    {channel: "stable", stable: testAdGuard100, running: testAdGuard080 + "|v0.107.80", want: testAdGuard100},
+		"the same version keeps the configured pin":  {channel: "stable", stable: testAdGuard100, running: testAdGuard100 + "|v1.0.0", want: testAdGuard100},
+		"no container yet uses the configured image": {channel: "stable", stable: testAdGuard079, running: "", want: testAdGuard079},
+		"an unlabelled container changes nothing":    {channel: "stable", stable: testAdGuard079, running: "custom/adguard:mine|", want: testAdGuard079},
+		"unknown output changes nothing":             {channel: "stable", stable: testAdGuard079, running: "healthy", want: testAdGuard079},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			manager := NewManager(Options{
+				DataDir: t.TempDir(), AdGuardImage: test.stable, AdGuardBetaImage: test.beta,
+				Run: adGuardVersionRun(test.running),
+			})
+			config := Config{AdGuardChannel: test.channel}
+			if got := manager.keepNewerRunningAdGuard(context.Background(), manager.configuredAdGuardImage(config)); got != test.want {
+				t.Fatalf("got %s, want %s", got, test.want)
+			}
+		})
+	}
+}
+
+// TestResolveAndPinDigestsWritesTheKeptAdGuardImage proves the redeploy path
+// actually writes keepNewerRunningAdGuard's choice into the stack definition.
+func TestResolveAndPinDigestsWritesTheKeptAdGuardImage(t *testing.T) {
+	manager := NewManager(Options{
+		DataDir: t.TempDir(), UnboundImage: "unbound:test", AdGuardImage: testAdGuard079,
+		DNSNetworkCIDR: "172.29.53.0/24", Run: adGuardVersionRun(testAdGuard100 + "|v1.0.0"),
+	})
+	path, _, _, err := manager.resolveAndPinDigests(context.Background(), Config{DNSBindAddress: "0.0.0.0", DNSPort: 53, AdGuardChannel: "stable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "  adguard:\n    image: "+testAdGuard100+"\n") || strings.Contains(string(content), testAdGuard079) {
+		t.Fatalf("expected the running v1.0.0 image in the stack definition, got:\n%s", content)
+	}
+}
+
 // noopAttestationVerifier lets tests that aren't specifically about the
 // attestation gate itself exercise a real deploy()/restoreDeploy() flow
 // without needing actual cosign infrastructure - stack.RequireAttestation
