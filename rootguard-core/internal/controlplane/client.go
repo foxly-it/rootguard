@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -52,6 +53,12 @@ type Client struct {
 	token     string
 	http      *http.Client
 	resolvers map[string]func(context.Context) (string, error)
+
+	// lookupNotice explains why the last check or update compared against
+	// the installed pins only. It is kept until the next lookup succeeds, so
+	// the status the WebGUI polls after a check carries it too.
+	mu           sync.Mutex
+	lookupNotice string
 }
 
 func NewClient(baseURL, token string) *Client {
@@ -79,15 +86,47 @@ func (c *Client) WithTargetResolver(component string, resolve func(context.Conte
 }
 
 func (c *Client) Status(ctx context.Context) (Status, error) {
-	return c.do(ctx, http.MethodGet, "/api/control-plane/status", nil)
+	status, err := c.do(ctx, http.MethodGet, "/api/control-plane/status", nil)
+	return c.withLookupNotice(status), err
 }
 
 func (c *Client) Check(ctx context.Context) (Status, error) {
-	return c.do(ctx, http.MethodPost, "/api/control-plane/check", c.resolveTargets(ctx))
+	targets := c.resolveTargets(ctx)
+	status, err := c.do(ctx, http.MethodPost, "/api/control-plane/check", targets)
+	return c.withLookupNotice(status), err
 }
 
 func (c *Client) Update(ctx context.Context) (Status, error) {
-	return c.do(ctx, http.MethodPost, "/api/control-plane/update", c.resolveTargets(ctx))
+	targets := c.resolveTargets(ctx)
+	status, err := c.do(ctx, http.MethodPost, "/api/control-plane/update", targets)
+	return c.withLookupNotice(status), err
+}
+
+// withLookupNotice appends why the newest release is unknown to the
+// updater's own message. Found in the upgrade journey of 2026-11-20: with
+// GitHub's rate limit reached, Core 1.0.15 logged the reason, but the WebGUI
+// only said "Control-Plane-Prüfung abgeschlossen." and showed no update,
+// which reads as "up to date" although 1.0.16 was out. The data-plane check
+// already says so (updater.Manager's check message); this is the same text.
+func (c *Client) withLookupNotice(status Status) Status {
+	c.mu.Lock()
+	notice := c.lookupNotice
+	c.mu.Unlock()
+	if notice != "" && !strings.Contains(status.Message, notice) {
+		status.Message = strings.TrimSpace(status.Message + " " + notice)
+	}
+	return status
+}
+
+func (c *Client) setLookupNotice(err error) {
+	notice := ""
+	if err != nil {
+		notice = "Die neueste RootGuard-Version ließ sich nicht bei GitHub abfragen. " +
+			"Verglichen wurde nur mit den installierten Versionen (" + err.Error() + ")."
+	}
+	c.mu.Lock()
+	c.lookupNotice = notice
+	c.mu.Unlock()
 }
 
 func (c *Client) resolveTargets(ctx context.Context) map[string]string {
@@ -105,10 +144,12 @@ func (c *Client) resolveTargets(ctx context.Context) map[string]string {
 		}
 		if err != nil {
 			log.Printf("control-plane update target for %s unavailable, keeping the updater's own pins for every component: %v", component, err)
+			c.setLookupNotice(err)
 			return nil
 		}
 		targets[component] = image
 	}
+	c.setLookupNotice(nil)
 	return targets
 }
 
