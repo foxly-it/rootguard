@@ -77,13 +77,21 @@ type filterProbe struct {
 	expectedBlocked bool
 }
 
+// filterProbes with expectedBlocked must stay blocked by AdGuard's default
+// list, the "AdGuard DNS filter" (HostlistsRegistry filter_1.txt), the only
+// list AdGuard Home enables on a fresh install. Otherwise every install shows a
+// filter warning that has nothing to do with its own setup. The list changes
+// upstream: on 2026-11-20 it no longer blocked googlesyndication.com (only its
+// ad-serving subdomains) or connect.facebook.net, so those two were swapped
+// for pagead2.googlesyndication.com and google-analytics.com. To recheck, look
+// for an "||<host or parent domain>^" line in that list.
 var filterProbes = []filterProbe{
-	{host: "googlesyndication.com", category: "advertising", expectedBlocked: true},
+	{host: "pagead2.googlesyndication.com", category: "advertising", expectedBlocked: true},
 	{host: "doubleverify.com", category: "tracking", expectedBlocked: true},
 	{host: "bid.g.doubleclick.net", category: "advertising", expectedBlocked: true},
 	{host: "amazon-adsystem.com", category: "advertising", expectedBlocked: true},
 	{host: "tiktok.com", category: "service", expectedBlocked: false},
-	{host: "connect.facebook.net", category: "tracking", expectedBlocked: true},
+	{host: "google-analytics.com", category: "tracking", expectedBlocked: true},
 	{host: "mc.yandex.ru", category: "tracking", expectedBlocked: true},
 	{host: "samsungcloudplatform.com", category: "telemetry", expectedBlocked: false},
 	{host: "microsoft.com", category: "service", expectedBlocked: false},

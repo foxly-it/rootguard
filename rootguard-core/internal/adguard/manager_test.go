@@ -362,7 +362,7 @@ func TestFilterReportClassifiesExpectedAndInformationalHosts(t *testing.T) {
 			return
 		}
 		host := r.URL.Query().Get("name")
-		if host == "googlesyndication.com" || host == "connect.facebook.net" {
+		if host == "pagead2.googlesyndication.com" || host == "google-analytics.com" {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"reason": "FilteredBlackList",
 				"rules":  []map[string]any{{"text": "||" + host + "^", "filter_list_id": 1}},
@@ -386,7 +386,7 @@ func TestFilterReportClassifiesExpectedAndInformationalHosts(t *testing.T) {
 	if report.Blocked != 2 || report.Expected != 6 || report.Passed != 2 {
 		t.Fatalf("unexpected report summary: %+v", report)
 	}
-	if report.Checks[0].Host != "googlesyndication.com" || !report.Checks[0].Blocked {
+	if report.Checks[0].Host != "pagead2.googlesyndication.com" || !report.Checks[0].Blocked {
 		t.Fatalf("unexpected first filter result: %+v", report.Checks[0])
 	}
 	for _, check := range report.Checks {
