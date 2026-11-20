@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -131,6 +132,55 @@ func TestUpdateSendsNoTargetsWhenOneResolverFails(t *testing.T) {
 	}
 	if receivedLength > 0 {
 		t.Fatalf("expected no target overrides after a failed resolver, got Content-Length %d", receivedLength)
+	}
+}
+
+// TestFailedReleaseLookupIsReportedInTheMessage: when the release lookup
+// fails, the check, the update and the status the WebGUI polls afterwards must
+// say so instead of a bare "Prüfung abgeschlossen", and a later successful
+// lookup must clear it again.
+func TestFailedReleaseLookupIsReportedInTheMessage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"idle","message":"Control-Plane-Prüfung abgeschlossen.","services":[],"updated_at":"2026-01-01T00:00:00Z"}`))
+	}))
+	defer server.Close()
+
+	lookupErr := errors.New("GitHub API rate limit reached until 12:13 UTC")
+	client := NewClient(server.URL, "token")
+	client.WithTargetResolver("core", func(context.Context) (string, error) {
+		if lookupErr != nil {
+			return "", lookupErr
+		}
+		return "ghcr.io/foxly-it/rootguard-core:1.0.16", nil
+	})
+
+	type step struct {
+		name string
+		call func(context.Context) (Status, error)
+	}
+	const notice = "Die neueste RootGuard-Version ließ sich nicht bei GitHub abfragen."
+	// Order matters: Status reports what the last Check or Update found.
+	for _, s := range []step{{"Check", client.Check}, {"Status", client.Status}, {"Update", client.Update}} {
+		status, err := s.call(t.Context())
+		if err != nil {
+			t.Fatalf("%s() error = %v", s.name, err)
+		}
+		if !strings.HasPrefix(status.Message, "Control-Plane-Prüfung abgeschlossen. "+notice) ||
+			!strings.Contains(status.Message, "rate limit reached until 12:13 UTC") {
+			t.Fatalf("%s() message = %q, want the updater's message plus the lookup notice", s.name, status.Message)
+		}
+	}
+
+	lookupErr = nil
+	for _, s := range []step{{"Check", client.Check}, {"Status", client.Status}} {
+		status, err := s.call(t.Context())
+		if err != nil {
+			t.Fatalf("%s() error = %v", s.name, err)
+		}
+		if status.Message != "Control-Plane-Prüfung abgeschlossen." {
+			t.Fatalf("%s() after a successful lookup: message = %q, want the notice cleared", s.name, status.Message)
+		}
 	}
 }
 
