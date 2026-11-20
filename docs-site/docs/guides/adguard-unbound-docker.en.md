@@ -2,6 +2,8 @@
 
 This guide manually rebuilds exactly what RootGuard automates internally: AdGuard Home filters ads and trackers, Unbound resolves recursively with DNSSEC validation. Both images work independently of RootGuard itself - `adguard/adguardhome` is the official AdGuard image, `ghcr.io/foxly-it/rootguard-unbound` is RootGuard's own hardened Unbound image (non-root, `read_only`, `cap_drop: ALL`, DNSSEC validation baked in).
 
+Tested with AdGuard Home v1.0.0 (November 2026).
+
 ## Requirements
 
 - Docker Engine with the Compose plugin (`docker compose version`).
@@ -58,13 +60,13 @@ volumes:
    ```shell
    docker compose exec unbound dig @127.0.0.1 -p 5335 example.com A
    ```
-3. Open the AdGuard Home setup wizard at `http://<host-ip>:3000` and create an admin account.
-4. In the wizard, under **Upstream DNS servers**, enter:
-   ```
-   [/]unbound:5335
-   ```
-   The service name `unbound` resolves within the shared `dns` Docker network - no fixed IP needed.
-5. Finish setup, then test:
+3. Open the AdGuard Home setup wizard at `http://<host-ip>:3000` and create an admin account. Under **Web UI settings**, set the port to `3000`: the wizard suggests `80`, but the compose file only publishes `3000`.
+4. After the wizard, go to **Settings → DNS** and enter:
+   - **Upstream DNS servers:** `unbound:5335`
+   - **Bootstrap DNS servers:** `127.0.0.11`
+
+   Check with **Test upstreams** (result `OK`), then **Save**. The service name `unbound` resolves within the shared `dns` Docker network, but only through Docker's internal DNS server `127.0.0.11`. AdGuard Home resolves upstream names through its bootstrap servers, and the default public resolvers don't know `unbound`.
+5. Test:
    ```shell
    dig @<host-ip> example.com A
    dig @<host-ip> +dnssec cloudflare.com A
@@ -76,7 +78,9 @@ volumes:
 
 **AdGuard Home won't start, port 53 is in use:** usually `systemd-resolved`. Check with `ss -tulpn | grep :53`. Either disable `systemd-resolved`'s own stub listener (`DNSStubListener=no` in `/etc/systemd/resolved.conf`, then `systemctl restart systemd-resolved`) or put AdGuard Home on a different host port.
 
-**AdGuard Home isn't resolving anything even though both containers are running:** usually a misconfigured upstream. It must read exactly `unbound:5335` (the service name, not `localhost` or `127.0.0.1` - from inside the AdGuard container, that would be the wrong host).
+**AdGuard Home isn't resolving anything even though both containers are running:** usually a misconfigured upstream or bootstrap server. The upstream must read exactly `unbound:5335` (the service name, not `localhost` or `127.0.0.1` - from inside the AdGuard container, that would be the wrong host). **Bootstrap DNS servers** must contain `127.0.0.11`; without it, the AdGuard log shows `dialing unbound:5335 over udp: no addresses` and every query ends in `SERVFAIL`.
+
+**Admin interface unreachable after the wizard:** the wizard's suggested port `80` was kept. Also publish `"80:80/tcp"` under `ports` and run `docker compose up -d` again; the interface is then at `http://<host-ip>`.
 
 ## See also
 
