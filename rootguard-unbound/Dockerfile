@@ -22,7 +22,7 @@ RUN apt-get update \
         curl=8.14.1-2+deb13u7 \
         libevent-dev=2.1.13-stable-1~deb13u1 \
         libexpat1-dev=2.9.0-1~deb13u1 \
-        libssl-dev=3.5.7-1~deb13u3 \
+        libssl-dev=3.5.9-1~deb13u1 \
         pkg-config=1.8.1-4 \
     && rm -rf /var/lib/apt/lists/*
 
@@ -88,7 +88,19 @@ RUN apt-get update \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.13-stable-1~deb13u1 \
         libpcre2-8-0=10.46-1~deb13u3 \
-        libssl3t64=3.5.7-1~deb13u3 \
+        libssl3t64=3.5.9-1~deb13u1 \
+        openssl=3.5.9-1~deb13u1 \
+        openssl-provider-legacy=3.5.9-1~deb13u1 \
+    # Found live, 2026-11-21 (#830): Debian's trixie point release moved
+    # openssl to 3.5.9-1~deb13u1 ("Import 3.5.9", superseding the
+    # 3.5.7-1~deb13u3 security update this line used to pin). openssl and
+    # openssl-provider-legacy were unpinned (ca-certificates depends on
+    # openssl), so the nightly build had already picked up the 3.5.9
+    # command on top of the pinned 3.5.7 library. Every package from the
+    # openssl source package (libssl-dev in the builder) is now pinned to
+    # the same version so they cannot drift apart again - same reasoning as
+    # bind9-libs below. CVE-2026-124709 (OpenSSL's QUIC server) is unfixed
+    # in every Debian release; see .trivyignore.yaml.
     # Found live, 2026-11-05 (#790): libexpat1 used to be pinned here, and
     # is deliberately gone. Of everything Unbound installs, only
     # unbound-anchor links it (the one -lexpat in Unbound's Makefile.in;
