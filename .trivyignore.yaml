@@ -643,6 +643,30 @@ vulnerabilities:
       src/plugins/preauth/pkinit/pkinit_crypto_openssl.c (upstream
       6a5d772002). That is the pkinit plugin from krb5-pkinit, which isn't in
       this image, and there is no KDC here either - see the comment above.
+
+  # Found live, 2026-11-21 (#830): OpenSSL's 2026-11-17 advisory. The Debian
+  # Security Tracker lists CVE-2026-124709 as vulnerable in every release
+  # (trixie 3.5.9-1~deb13u1, trixie-security 3.5.7-1~deb13u3, forky, sid), so
+  # there is no build to pin to. The same change moved every openssl package
+  # in rootguard-unbound/Dockerfile to 3.5.9-1~deb13u1, the newest trixie
+  # build, which is what these purls name.
+  - id: CVE-2026-124709
+    purls:
+      - "pkg:deb/debian/libssl3t64@3.5.9-1~deb13u1"
+      - "pkg:deb/debian/openssl@3.5.9-1~deb13u1"
+      - "pkg:deb/debian/openssl-provider-legacy@3.5.9-1~deb13u1"
+    expired_at: 2026-12-31
+    statement: >-
+      Memory exhaustion in OpenSSL's own QUIC server: a stream the server
+      rejects is never freed if the peer resets it first. Only a program that
+      runs an OpenSSL QUIC listener (SSL_new_listener with
+      OSSL_QUIC_server_method) can reach it. Unbound 1.25.2 calls none of
+      OpenSSL's QUIC API (confirmed against the source); its only QUIC support
+      is DNS over QUIC through ngtcp2, and this image is built without
+      --with-libngtcp2 (confirmed with unbound -V on the 1.0.16 image).
+      Unbound listens on 5335 only. dig is a client, and nothing in the image
+      runs the openssl command, which is here only as ca-certificates'
+      dependency.
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so
