@@ -3,6 +3,17 @@
 All notable changes to RootGuard are documented here, generated from the
 commit history at release time. See [ROADMAP.md](ROADMAP.md) for what's
 still ahead.
+## [1.0.17] - 2026-11-22
+
+### Documentation
+
+- Refresh the AdGuard screenshot for RootGuard 1.0.16 and AdGuard Home v1.0.0 ([#828](https://github.com/foxly-it/rootguard/pull/828))
+
+### Fixed
+
+- Say why a control-plane check found no update ([#829](https://github.com/foxly-it/rootguard/pull/829))
+- Pin openssl 3.5.9, document CVE-2026-124709 ([#831](https://github.com/foxly-it/rootguard/pull/831))
+
 ## [1.0.16] - 2026-11-20
 
 ### Documentation
