@@ -76,8 +76,8 @@ RUN apk add --no-cache --upgrade \
         c-ares=1.34.9-r0 \
         curl=8.23.0-r0 \
         libcurl=8.23.0-r0 \
-        libcrypto3=3.5.9-r0 \
-        libssl3=3.5.9-r0 \
+        libcrypto3=3.5.9-r1 \
+        libssl3=3.5.9-r1 \
         libexpat=2.10.0-r0 \
         libuuid=2.41.6-r1 \
         libxml2=2.13.9-r1 \
