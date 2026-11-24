@@ -57,6 +57,11 @@ jobs:
       - name: Test inject.sh's error paths
         run: ./scripts/ci/dnssec-test-zone/inject.test.sh
 
+      # Found live, 2026-11-24: the website's project data had silently stopped
+      # updating once the releases response no longer fit into one argument.
+      - name: Test build-project-data.sh with a large releases response
+        run: ./scripts/ci/build-project-data.test.sh
+
   # Found in review: see unit-tests' own comment above - this used to be
   # two more sequential steps ahead of validate's Docker-based test,
   # independent of it and of unit-tests above.
