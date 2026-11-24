@@ -35,16 +35,19 @@ jobs:
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
 
       - name: Refresh public project data
+        id: project-data
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
         run: |
-          releases="$(gh api "repos/$REPOSITORY/releases?per_page=100")"
-          pulls="$(gh api "repos/$REPOSITORY/pulls?state=open&per_page=100")"
-          commits="$(gh api "repos/$REPOSITORY/commits?per_page=5")"
+          api="$RUNNER_TEMP/project-data"
+          mkdir -p "$api"
+          gh api "repos/$REPOSITORY/releases?per_page=100" > "$api/releases.json"
+          gh api "repos/$REPOSITORY/pulls?state=open&per_page=100" > "$api/pulls.json"
+          gh api "repos/$REPOSITORY/commits?per_page=5" > "$api/commits.json"
 
-          # Generated into a scratch file first, not straight into
+          # Generated into a scratch file outside site/ first, not straight into
           # site/project-data.json - found in a v1.0.0 correctness
           # review: a plain "> site/project-data.json" redirect truncates
           # the destination the moment the shell opens it, before jq
@@ -59,47 +62,18 @@ jobs:
           # once jq has actually produced non-empty output, so a failed
           # generation instead just leaves the previous, still-good
           # committed copy in place.
-          jq -n \
-            --arg generated_at "$(date -u +%FT%TZ)" \
-            --argjson releases "$releases" \
-            --argjson pulls "$pulls" \
-            --argjson commits "$commits" \
-            '{
-              generated_at: $generated_at,
-              current_version: (($releases | map(select(.draft == false)) | first | .tag_name) // "unreleased"),
-              pull_requests: ($pulls | map({
-                number: .number,
-                title: .title,
-                updated_at: .updated_at,
-                html_url: .html_url
-              })),
-              commits: ($commits | map({
-                sha: .sha[0:7],
-                message: (.commit.message | split("\n")[0]),
-                date: .commit.author.date,
-                html_url: .html_url
-              })),
-              releases: ($releases | map({
-                tag: .tag_name,
-                name: (.name // .tag_name),
-                published_at: .published_at,
-                html_url: .html_url,
-                prerelease: .prerelease,
-                summary: (([.body | split("\n")[] | select(
-                  length > 0 and
-                  (startswith("#") | not) and
-                  (startswith("- ") | not) and
-                  (startswith("```") | not)
-                )][0]) // ""),
-                highlights: ([.body | split("\n")[] | select(startswith("- ")) | ltrimstr("- ")][0:4])
-              }))
-            }' > site/project-data.json.new
-          if [ -s site/project-data.json.new ]; then
-            mv site/project-data.json.new site/project-data.json
-          else
-            echo "::warning::generated project-data.json was empty - keeping the previous committed copy"
-            rm -f site/project-data.json.new
-          fi
+          ./scripts/ci/build-project-data.sh "$api/releases.json" "$api/pulls.json" "$api/commits.json" \
+            > "$api/project-data.json"
+          mv "$api/project-data.json" site/project-data.json
+
+      # The step above may fail without taking the site down with it, but it
+      # must not do so unnoticed: from 2026-11-19 to 2026-11-24 every run was
+      # green while the project section of the site had no data. Only a
+      # warning, because security-release.yml waits for every check on HEAD.
+      - name: Warn about stale project data
+        if: steps.project-data.outcome == 'failure'
+        run: |
+          echo "::warning title=Project data not refreshed::The website is being deployed with the committed site/project-data.json, so its project section shows no live data. See the 'Refresh public project data' step."
 
       - name: Set up Python
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
