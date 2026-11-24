@@ -667,6 +667,31 @@ vulnerabilities:
       Unbound listens on 5335 only. dig is a client, and nothing in the image
       runs the openssl command, which is here only as ca-certificates'
       dependency.
+
+  # Found live, 2026-11-23 (#836): another QUIC CVE in the same three packages,
+  # again unfixed in every Debian release (bookworm, trixie, trixie-security,
+  # forky, sid), so there is no build to pin to. Unlike CVE-2026-124709 above it
+  # also affects QUIC clients, so "dig is only a client" is not an argument here.
+  # What holds for both: OpenSSL's QUIC stack can only be entered through an
+  # OSSL_QUIC_*_method function. All ~700 ELF files of the published 1.0.17
+  # image (amd64 and arm64) were checked for such an import, shared libraries
+  # included, not just the programs.
+  - id: CVE-2026-107494
+    purls:
+      - "pkg:deb/debian/libssl3t64@3.5.9-1~deb13u1"
+      - "pkg:deb/debian/openssl@3.5.9-1~deb13u1"
+      - "pkg:deb/debian/openssl-provider-legacy@3.5.9-1~deb13u1"
+    expired_at: 2026-12-31
+    statement: >-
+      Memory exhaustion by a malicious QUIC peer: OpenSSL queues a
+      RETIRE_CONNECTION_ID frame for every retransmitted NEW_CONNECTION_ID frame
+      (incomplete fix for CVE-2026-84784). Only a program that opens an OpenSSL
+      QUIC connection, as client or server, can reach it. In this image only
+      /usr/bin/openssl imports a QUIC method (OSSL_QUIC_client_method, for
+      `openssl s_client -quic`), and nothing runs that command: not the
+      entrypoint or health check, not Core (no call site), and the docker
+      proxy's exec allowlist has no such command. unbound, libunbound and BIND's
+      libisc (dig) import no QUIC method.
 misconfigurations:
   # AVD-DS-0002 (missing USER instruction) and AVD-DS-0026 (missing
   # HEALTHCHECK) are whole-file absence checks with no associated line, so
