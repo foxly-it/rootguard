@@ -25,7 +25,7 @@ jobs:
     timeout-minutes: 10
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deploy-1.outputs.page_url || steps.deploy-2.outputs.page_url || steps.deploy-3.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -93,6 +93,37 @@ jobs:
         with:
           path: site
 
+      # Found live, 2026-11-24/25: GitHub lists a freshly uploaded artifact late,
+      # so a deploy right after the upload stops with "No artifacts named
+      # github-pages were found" (actions/deploy-pages#451). Never seen in the 138
+      # runs before, then 4 of 5 deploys within a day, with the same half second
+      # between upload and lookup as before. Reports there put the delay at up to 6 seconds, once
+      # at 46, hence one wait and three attempts over about 100 seconds instead of
+      # a longer fixed sleep. Re-running by hand is not a substitute: a red run on
+      # HEAD blocks security-release.yml. The last attempt still fails the run.
+      - name: Wait for the artifact to be listed
+        run: sleep 10
+
       - name: Deploy to GitHub Pages
-        id: deployment
+        id: deploy-1
+        continue-on-error: true
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+      - name: Wait before the second attempt
+        if: steps.deploy-1.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy to GitHub Pages (second attempt)
+        id: deploy-2
+        if: steps.deploy-1.outcome == 'failure'
+        continue-on-error: true
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
+
+      - name: Wait before the last attempt
+        if: steps.deploy-2.outcome == 'failure'
+        run: sleep 60
+
+      - name: Deploy to GitHub Pages (last attempt)
+        id: deploy-3
+        if: steps.deploy-2.outcome == 'failure'
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5
