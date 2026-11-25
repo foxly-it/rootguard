@@ -78,7 +78,7 @@ RUN apk add --no-cache --upgrade \
         libcurl=8.23.0-r0 \
         libcrypto3=3.5.9-r1 \
         libssl3=3.5.9-r1 \
-        libexpat=2.10.0-r0 \
+        libexpat=2.11.0-r0 \
         libuuid=2.41.6-r1 \
         libxml2=2.13.9-r1 \
         libxslt=1.1.43-r4 \
