@@ -80,7 +80,7 @@ RUN apk add --no-cache --upgrade \
         libssl3=3.5.9-r1 \
         libexpat=2.11.0-r0 \
         libuuid=2.41.6-r1 \
-        libxml2=2.13.9-r1 \
+        libxml2=2.13.9-r2 \
         libxslt=1.1.43-r4 \
         musl-utils=1.2.5-r24 \
         nghttp2-libs=1.69.0-r0 \
