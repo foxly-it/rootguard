@@ -410,10 +410,13 @@ vulnerabilities:
       in trixie, this image never creates bind mounts at runtime - see the
       comment above this block.
 
-  # Found live, 2026-11-05 (#790): the two scheduled-scan findings with no
-  # build to pin to - the Debian Security Tracker lists both as vulnerable in
-  # trixie, fixed only in sid. The same run's apt and libexpat1 findings
-  # were fixed in rootguard-unbound/Dockerfile instead.
+  # Found live, 2026-11-05 (#790): a scheduled-scan finding with no build to
+  # pin to - the Debian Security Tracker lists it as vulnerable in trixie,
+  # fixed only in sid. The same run's apt and libexpat1 findings were fixed
+  # in rootguard-unbound/Dockerfile instead. Its zlib1g companion,
+  # CVE-2026-76844, went on 2026-11-28: the tracker now files that ID under
+  # webpack-dev-middleware, and the zlib bug it described is CVE-2026-85091,
+  # fixed by DSA-6613-1 and pinned in the Dockerfile.
   - id: CVE-2026-119373
     purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
     expired_at: 2027-01-31
@@ -424,24 +427,13 @@ vulnerabilities:
       (util-linux, confirmed against the trixie package index): Unbound's
       source has no sqlite3_ call, and nothing here runs lastlog2 or accepts
       SQL.
-  - id: CVE-2026-76844
-    purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"]
-    expired_at: 2027-01-31
-    statement: >-
-      Unfixed in trixie, fixed only in forky and sid (trivy's title wrongly
-      names webpack-dev-middleware; the tracker confirms zlib). Heap overflow in
-      gz_write after a failed write(), so only gzFile callers can reach it.
-      Neither Unbound 1.25.2 nor BIND 9.20.30 (dig) calls any gz* write
-      function (confirmed against both sources) - BIND uses zlib only for
-      deflate in libisc's httpd, which dig does not run. libxml2 has gz*
-      callers, but dig only runs xmlInitParser; BIND's one real libxml2 use
-      is named's statistics channel, and named is not in this image. apt
-      and dpkg run at image build time only.
 
   # Found live, 2026-11-06 (scheduled ci-unbound.yml run on main, no code
-  # change involved): three more findings in the same two packages. The
-  # Debian Security Tracker lists all three as vulnerable in trixie, fixed
-  # only in sid, so there is still no build to pin to.
+  # change involved): two more libsqlite3-0 findings. The Debian Security
+  # Tracker lists both as vulnerable in trixie, fixed only in sid, so there
+  # is still no build to pin to. The same run's zlib1g finding,
+  # CVE-2026-85091, is fixed since DSA-6613-1 and pinned in the Dockerfile
+  # (2026-11-28).
   - id: CVE-2026-119374
     purls: ["pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2"]
     expired_at: 2027-01-31
@@ -458,191 +450,6 @@ vulnerabilities:
       sqlite3changeset_apply() from a crafted changeset, so a program must
       apply attacker-supplied session changesets. Nothing in this image opens
       a database at all - see CVE-2026-119373's statement above.
-  - id: CVE-2026-85091
-    purls: ["pkg:deb/debian/zlib1g@1.3.dfsg%2Breally1.3.1-1%2Bb1"]
-    expired_at: 2027-01-31
-    statement: >-
-      Listed as vulnerable in trixie, fixed only in forky and sid. Heap
-      overflow in gz_vacate() after a non-blocking gzwrite() stall. The CVE
-      scopes it to zlib 1.3.1.2 through 1.3.2 and the tracker dates the
-      non-blocking code to 1.3.1.2, while trixie ships 1.3.1. Independently
-      of that, it needs gzFile writes - see CVE-2026-76844's statement above.
-
-  # Found live, 2026-11-09/10 (#801): ten krb5 CVEs from MIT's 2026q4
-  # announcement, reported against every krb5 binary package in the image.
-  # The Debian Security Tracker lists all ten as vulnerable in trixie and
-  # sid, with no fix anywhere yet. The image carries only the four client
-  # libraries below, pulled in by bind9-libs and bind9-dnsutils for dig: no
-  # libgssrpc, no kadm5 or kdb5 library, no kadmind and no KDC (checked
-  # against the 1.0.11 image's package list). Nine of the ten sit in exactly
-  # that missing code, mapped through upstream's Makefiles. Unbound doesn't
-  # use Kerberos, and dig doesn't do GSS-TSIG (that is nsupdate -g, which
-  # nothing runs). A DSA would change the package version, so these
-  # version-scoped entries stop matching on their own.
-  - id: CVE-2026-112315
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Memory leak in kadmind from crafted RPCSEC_GSS messages,
-      lib/rpc/authgss_prot.c. Upstream builds lib/rpc into libgssrpc, which
-      this image doesn't contain - see the comment above.
-  - id: CVE-2026-112316
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Memory leak in kadmind, lib/kadm5/kadm_rpc_xdr.c, which is part of the
-      kadm5 client and server libraries. Neither is in this image - see the
-      comment above.
-  - id: CVE-2026-112317
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Memory leak in the KDC or kadmind, lib/kdb/keytab.c, which upstream
-      builds into libkdb5. That library isn't in this image - see the comment
-      above.
-  - id: CVE-2026-112318
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      kadmind crash on a NULL policy name, kadmin/server/server_stubs.c, which
-      is kadmind itself. kadmind isn't in this image - see the comment above.
-  - id: CVE-2026-112319
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Unbounded XDR allocations in kadmind's GSS-RPC layer, which is
-      libgssrpc. That library isn't in this image - see the comment above.
-  - id: CVE-2026-112320
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Memory exhaustion in kadmind when a client switches auth flavors on one
-      connection, again the GSS-RPC transport in libgssrpc, which isn't in
-      this image - see the comment above.
-  - id: CVE-2026-112321
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Memory leak in kadmind's AUTH_GSSAPI handler, lib/rpc/svc_auth_gssapi.c
-      in libgssrpc, which this image doesn't contain - see the comment above.
-  - id: CVE-2026-112322
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Quadratic CPU in kadmind's clean_client(), also lib/rpc/svc_auth_gssapi.c
-      in libgssrpc, which isn't in this image - see the comment above.
-  - id: CVE-2026-112323
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Memory exhaustion in kadmind from repeated failed AUTH_GSSAPI_INIT
-      requests, again lib/rpc/svc_auth_gssapi.c in libgssrpc, which isn't in
-      this image - see the comment above.
-  - id: CVE-2026-119079
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Quadratic CPU in decode_sequence_of(), which does sit in libkrb5 and so
-      in this image. The attack targets a KDC with an unauthenticated request;
-      a client would only hit it while talking Kerberos to an attacker's KDC,
-      and nothing in this image talks Kerberos - see the comment above.
-
-  # Found live, 2026-11-11/12 (#816): four more CVEs from the same MIT
-  # advisory (MITKRB5-SA-2026-001, krb5 1.22.3), again reported against all
-  # four client libraries. The Debian Security Tracker lists them as
-  # vulnerable in trixie and unfixed in sid (bug 1153598). Each statement
-  # names the file upstream's fix commit touches. The package list of the
-  # 1.0.13 image still shows only the four libraries, required only by
-  # bind9-libs and bind9-dnsutils - no krb5-kdc, krb5-pkinit, libgssrpc,
-  # kadm5 or kdb5.
-  - id: CVE-2026-107364
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      KDC read overrun in fetch_asn1_field(), src/kdc/kdc_util.c (upstream
-      cf44b06588). That is the KDC binary itself, which isn't in this image -
-      see the comment above.
-  - id: CVE-2026-118380
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Unverified RPCSEC_GSS service level in src/lib/rpc/svc_auth_gss.c
-      (upstream 2cda39a6c0), the RPC server side of libgssrpc. That library
-      isn't in this image - see the comment above.
-  - id: CVE-2026-71199
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      Unkeyed checksums accepted in CAMMAC verifiers (upstream 18142c9c3a):
-      src/kdc/cammac.c in the KDC, and check_svcver() in
-      src/lib/krb5/krb/cammac_util.c, which is in libkrb5. Its only library
-      caller is the authdata code a service runs when it accepts a Kerberos
-      ticket, and the attacker needs a valid ticket for that service. Nothing
-      in this image accepts Kerberos tickets - see the comment above.
-  - id: CVE-2026-71200
-    purls:
-      - "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u1"
-      - "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u1"
-    expired_at: 2026-12-10
-    statement: >-
-      NULL dereference in PKINIT CMS processing on a KDC that allows PKINIT,
-      src/plugins/preauth/pkinit/pkinit_crypto_openssl.c (upstream
-      6a5d772002). That is the pkinit plugin from krb5-pkinit, which isn't in
-      this image, and there is no KDC here either - see the comment above.
 
   # Found live, 2026-11-21 (#830): OpenSSL's 2026-11-17 advisory. The Debian
   # Security Tracker lists CVE-2026-124709 as vulnerable in every release

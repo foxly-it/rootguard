@@ -87,10 +87,25 @@ RUN apt-get update \
         ca-certificates=20250419+deb13u1 \
         dns-root-data=2025080400~deb13u1 \
         libevent-2.1-7t64=2.1.13-stable-1~deb13u1 \
+        libgssapi-krb5-2=1.21.3-5+deb13u2 \
+        libk5crypto3=1.21.3-5+deb13u2 \
+        libkrb5-3=1.21.3-5+deb13u2 \
+        libkrb5support0=1.21.3-5+deb13u2 \
         libpcre2-8-0=10.46-1~deb13u3 \
         libssl3t64=3.5.9-1~deb13u1 \
         openssl=3.5.9-1~deb13u1 \
         openssl-provider-legacy=3.5.9-1~deb13u1 \
+    # Found live, 2026-11-28: trixie-security fixed all 14 krb5 CVEs that
+    # .trivyignore.yaml carried since #801/#816 (1.21.3-5+deb13u2), and the
+    # same full scan of the 1.0.17 image showed two more fixes the published
+    # image lacked: zstd's CVE-2026-124851 (DSA-6657-1, which broke the
+    # nightly scan) and zlib's CVE-2026-85091 (DSA-6613-1). A fresh build
+    # would already pull the krb5 fix as bind9-libs' dependency, but this
+    # layer's gha cache only rebuilds when this line's text changes (see
+    # libpcre2-8-0 below), so the four krb5 client libraries bind9-libs
+    # needs are pinned here, all from the one krb5 source package.
+    # libzstd1 and zlib1g ship with the base image, so the second install
+    # below upgrades them explicitly, the same way as apt and util-linux.
     # Found live, 2026-11-21 (#830): Debian's trixie point release moved
     # openssl to 3.5.9-1~deb13u1 ("Import 3.5.9", superseding the
     # 3.5.7-1~deb13u3 security update this line used to pin). openssl and
@@ -166,9 +181,11 @@ RUN apt-get update \
         libmount1=2.41.5-0+deb13u1 \
         libsmartcols1=2.41.5-0+deb13u1 \
         libuuid1=2.41.5-0+deb13u1 \
+        libzstd1=1.5.7+dfsg-1+deb13u1 \
         login=1:4.16.0-2+really2.41.5-0+deb13u1 \
         mount=2.41.5-0+deb13u1 \
         util-linux=2.41.5-0+deb13u1 \
+        zlib1g=1:1.3.dfsg+really1.3.1-1+deb13u1 \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 101 unbound \
     && useradd --uid 100 --gid 101 --system --home-dir /var/lib/unbound --no-create-home --shell /usr/sbin/nologin unbound \
